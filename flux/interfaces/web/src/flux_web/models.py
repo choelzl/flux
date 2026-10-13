@@ -69,11 +69,23 @@ class RestoreIn(BaseModel):
     id: int
 
 
+class RejectIn(BaseModel):
+    """D1043: a result rejected by hand -- why; each measurement to clear ({stage, metric}) or the
+    stages to measure again; and whether to hide the design too (an invalidation, at rest)."""
+    key: str = Field(min_length=1, max_length=64)
+    name: str = Field(min_length=1, max_length=500)
+    reason: str = Field(min_length=3, max_length=2000)
+    clear: list[dict[str, str]] = Field(default_factory=list, max_length=500)
+    again: list[str] = Field(default_factory=list, max_length=100)
+    hide: bool = False
+
+
 class RunOptions(BaseModel):
     passes: int | None = Field(default=1, ge=1, le=1000)
     screen_only: bool = False
     rerun_baseline: bool = False         # D1005: pass 0 measured again, once
     reevaluate_of: int | None = None     # D1007: the designs of one invalidation by hand, measured again
+    remeasure: bool = False              # D1043: the R pass alone -- what rejections asked to measure again
     reevaluate: bool = False             # D988: every design on record checked and measured again
     document: str | None = None          # D787: which of the loop's problems, when it has several
 

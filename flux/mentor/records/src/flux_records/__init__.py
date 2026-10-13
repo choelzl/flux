@@ -274,10 +274,26 @@ class Records:
         except Exception:  # noqa: BLE001
             pass
 
-    def reject(self, key: str, name: str, *, why: str, wrong: list[str], by: str) -> None:
-        """D1040: a result a critic rejected -- marked with why and by whom, shown and never chosen;
-        the values it called wrong cleared. A typed event, read back by `recall("rejected")`."""
-        self.remember("rejected", {"key": key, "name": name, "why": why, "wrong": list(wrong), "by": by})
+    def reject(self, key: str, name: str, *, why: str, by: str, cleared: list[dict[str, Any]] | None = None,
+               again: list[str] | None = None) -> None:
+        """D1040, D1043: a result rejected -- marked with why and by whom, shown and never chosen; the
+        values called wrong cleared ({stage, metric, value}), the stages to measure again (R). A no-op
+        without a record."""
+        if self.store is None or not self.campaign_id:
+            return
+        try:
+            self.store.reject(self.campaign_id, key=key, name=name, why=why, by=by, cleared=cleared, again=again)
+        except Exception:  # noqa: BLE001
+            pass
+
+    def rejections(self) -> list[dict[str, Any]]:
+        """D1043: the rejections standing on the record (restored and re-measured ones are not); [] without one."""
+        if self.store is None:
+            return []
+        try:
+            return self.store.rejections()
+        except Exception:  # noqa: BLE001
+            return []
 
     def recall(self, kind: str) -> list[dict[str, Any]]:
         """Every remembered decision of `kind`, oldest first; [] without a record."""

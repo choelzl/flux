@@ -87,6 +87,62 @@ def _reevaluate_these(problem, state, of: int):
     return out
 
 
+def pending_remeasures(db: str) -> list[dict]:
+    """D1043: the rejections standing on the record at `db` that ask for a measurement again -- what
+    the next R pass measures; [] without a record."""
+    import os
+
+    if not db or not os.path.exists(db):
+        return []
+    from flux_store import CampaignStore
+
+    try:
+        with CampaignStore(db) as store:
+            return [r for r in store.rejections() if r["again"]]
+    except Exception:  # noqa: BLE001 -- an unreadable record asks for nothing
+        return []
+
+
+def run_remeasure(problem, state):
+    """D1043: the R pass -- the designs a rejection asked to measure again, checked and measured again
+    today (every stage, the cache off); their new numbers replace the rejected ones and the rejections
+    are resolved. The rest of the record stands and rejoins the decision."""
+    from .loop import _result
+    from .records import _reload_measured
+
+    state.request = dataclasses.replace(state.request, critique_rounds=0, screen_only=False)
+    state.cache = None
+    records = state.records
+    if records is None or records.store is None:
+        state.stopped = "nothing to measure again: the loop has no record"
+        return _result(problem, state, None, state.stopped, [], [])
+    store, cid = records.store, records.campaign_id
+    asked = [r for r in records.rejections() if r["again"]]
+    keys = {r["key"] for r in asked}
+    designs: dict[str, Candidate] = {}
+    for camp in store.list_campaigns():
+        for cand in designs_on_record(store, camp["campaign_id"]):
+            if cand.key() in keys:
+                designs[cand.key()] = cand
+    if not designs:
+        state.stopped = "nothing to measure again: no design a rejection names is on the record"
+        state.say(f"  {state.stopped}")
+        if asked:
+            store.remeasured(cid, [r["id"] for r in asked], sorted(keys))
+        return _result(problem, state, None, state.stopped, [], [])
+    _reload_measured(problem, state)                         # the record's other designs: still evidence
+    state.scored[:] = [s for s in state.scored if s.candidate.key() not in designs]     # the rejected numbers go
+    for s in state.scored:
+        state.on_stage.setdefault(s.stage, []).append(s)
+    order = list(problem.stages() or [])
+    if state.on_stage:
+        state.reached = max(state.on_stage, key=lambda st: order.index(st) if st in order else -1)
+    state.say(f"  R: measuring {len(designs)} rejected design(s) again: " + ", ".join(sorted(c.name for c in designs.values())))
+    out = _measure_again(problem, state, list(designs.values()))
+    store.remeasured(cid, [r["id"] for r in asked], sorted(designs))
+    return out
+
+
 def _measure_again(problem, state, designs):
     from .loop import _conclude, _judge, _publish, _result
 

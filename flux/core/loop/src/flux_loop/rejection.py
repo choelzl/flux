@@ -10,7 +10,8 @@ def reject(state: LoopState, got: Scored, why: str, wrong: list[str], by: str) -
     hidden: the record's rejection), the values it calls wrong cleared, never chosen; remembered
     for the passes after this one and in the lessons."""
     key = got.candidate.key()
-    state.rejected[key] = {"why": why, "wrong": wrong, "by": by, "name": got.name}
+    cleared = [{"stage": got.stage, "metric": m, "value": got.metrics.get(m)} for m in wrong if m in got.metrics]
+    state.rejected[key] = {"why": why, "cleared": cleared, "by": by, "name": got.name, "this_pass": True}
     for s in [got, *state.scored]:
         if s.candidate.key() == key:
             s.payload["rejected"] = why
@@ -21,6 +22,6 @@ def reject(state: LoopState, got: Scored, why: str, wrong: list[str], by: str) -
     state.say(f"  {by} rejected {got.name}: {why[:200]}")
     if state.records is not None:
         try:
-            state.records.reject(key, got.name, why=why, wrong=wrong, by=by)
+            state.records.reject(key, got.name, why=why, by=by, cleared=cleared)
         except Exception:  # noqa: BLE001
             pass

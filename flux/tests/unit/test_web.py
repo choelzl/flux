@@ -294,6 +294,29 @@ def test_a_loop_started_from_the_web_runs_stops_and_resumes(server, tmp_path):
         time.sleep(0.2)
     after = bob.get("/api/apps/sw/results").json()
     assert after["invalidated"][0]["reevaluated"] and (gone["key"], gone["base"]) in {(d["key"], d["base"]) for d in after["designs"]}
+    # D1043: a result rejected by hand stays shown, marked with why and by whom, its cleared value struck
+    # (out of its numbers, listed with its old value); Restore undoes it; a re-measure at rest is an R run
+    d = next(x for x in after["designs"] if not x["reference_only"])
+    stage, metric = d["shown"], next(iter(d["numbers"]))
+    body = {"key": d["key"], "name": d["base"], "reason": "the bench read the wrong clock", "clear": [{"stage": stage, "metric": metric}]}
+    got = bob.post("/api/apps/sw/results/reject", json=body, headers=H)
+    assert got.status_code == 200 and not got.json()["remeasure"], got.text
+    res = bob.get("/api/apps/sw/results").json()
+    r = next(x for x in res["designs"] if x["key"] == d["key"] and x["base"] == d["base"])
+    assert r["verdict"] == "rejected" and r["rejected"]["by"] == "bob" and r["rejected"]["why"] == "the bench read the wrong clock"
+    assert r["cleared"] == [{"stage": stage, "metric": metric, "value": d["numbers"][metric]}] and metric not in r["stages"][stage]
+    assert res["counts"]["rejected"] == 1 and not r["decision"]
+    assert bob.post("/api/apps/sw/results/unreject", json={"id": r["rejected"]["id"]}, headers=H).status_code == 200
+    r = next(x for x in bob.get("/api/apps/sw/results").json()["designs"] if x["key"] == d["key"] and x["base"] == d["base"])
+    assert r["verdict"] != "rejected" and metric in r["stages"][stage], "restored: counts again as measured"
+    got = bob.post("/api/apps/sw/results/reject", json={**body, "clear": [], "again": [stage]}, headers=H)
+    assert got.status_code == 200 and got.json()["remeasure"] and "measured again now" in got.json()["ok"], got.text
+    deadline = time.time() + 240
+    while time.time() < deadline and bob.get("/api/apps/sw/state").json()["running"]:
+        time.sleep(0.2)
+    r = next(x for x in bob.get("/api/apps/sw/results").json()["designs"] if x["key"] == d["key"] and x["base"] == d["base"])
+    assert r["verdict"] != "rejected" and metric in r["stages"][stage], "measured again by R: the rejection is resolved"
+    assert "R: the rejected designs, measured again" in bob.get("/api/apps/sw/log/raw").text
     pre = bob.get("/api/apps/sw/preflight").json()
     assert pre["changed"] is False and pre["options"]["passes"] == 1, "the last start's inputs and options"
     ada = _client(app, "ada", "correct horse battery")

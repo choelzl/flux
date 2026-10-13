@@ -318,7 +318,7 @@ def test_a_select_critic_rejects_the_pick_and_the_decision_is_made_again_without
     assert any("rejected by the select critic: the decision ignores width" in ln for ln in out.lessons)
     problem = PromptProblem(task)
     r = problem.open_records(request_for(task, db=str(tmp_path / "s.db")), lambda _m: None)
-    assert [(x["name"], x["by"]) for x in r.recall("rejected")] == [("digits#1", "the select critic")]
+    assert [(x["name"], x["by"]) for x in r.rejections()] == [("digits#1", "the select critic")]
 
 
 def test_a_measure_critic_marks_a_result_rejected_clears_the_wrong_value_and_it_is_never_chosen(tmp_path):
@@ -338,7 +338,7 @@ def test_a_measure_critic_marks_a_result_rejected_clears_the_wrong_value_and_it_
     assert any("rejected by the measure critic (bench): 1 cycle cannot hold ten lines (wrong: cycles)" in ln for ln in out.lessons)
     problem = PromptProblem(task)
     r = problem.open_records(request_for(task, db=str(tmp_path / "m.db")), lambda _m: None)
-    assert [(x["name"], x["wrong"]) for x in r.recall("rejected")] == [("digits#1", ["cycles"])]
+    assert [(x["name"], x["cleared"]) for x in r.rejections()] == [("digits#1", [{"stage": "bench", "metric": "cycles", "value": 1.0}])]
     rows = [t for t in r.store.trials(r.campaign_id) if t.stage == "bench"]
     assert rows and all("cycles" not in t.result.metrics and t.result.value_of("score") == 5 for t in rows), "the wrong value cleared"
 
@@ -732,3 +732,33 @@ def test_app_local_scripts_require_an_explicit_design_language():
     said = TaskSpec.from_dict(doc("{python} {home}/rtl.py test {artifact} --golden g.py", language="verilog"))
     assert (said.language, said.extension, said.language_inferred) == ("verilog", ".v", False)
     assert said.to_dict()["language"] == "verilog"
+
+
+def test_a_rejection_asking_for_numbers_again_is_measured_by_an_r_pass_before_the_next_pass(tmp_path, monkeypatch):
+    """D1043: a rejection standing on the record that asks for a measurement again is the next R pass:
+    marked between the passes (half-way), the design checked and measured again, the rejection resolved."""
+    from flux_loop import Candidate
+    from flux_loop import passes as passes_mod
+    from flux_store import CampaignStore
+
+    doc = load_task(DIGITS).to_dict()
+    flow = {**doc["flow"], "measure": {"bench": {"command": [sys.executable, "-c", "print('score=5')"], "metrics": ["score"]}}}
+    task = TaskSpec.from_dict({**doc, "flow": flow, "objectives": ["score"], "budget": {"steps": 1, "prototype": False}})
+    db = str(tmp_path / "r.db")
+    run_loop(PromptProblem(task), request_for(task, db=db), proposer=ScriptedProposer([_reply(GOOD)]), log=lambda m: None)
+    with CampaignStore(db) as store:
+        (camp,) = store.list_campaigns()
+        t = next(t for t in store.trials(camp["campaign_id"]) if t.stage == "bench")
+        store.reject(camp["campaign_id"], key=Candidate.from_record(dict(t.candidate)).key(), name="digits#1",
+                     why="the bench was stale", by="bob", again=["bench"])
+    marks = []
+    monkeypatch.setattr(passes_mod, "mark", lambda name, **what: marks.append((name, what)))
+    said: list[str] = []
+    passes_mod.run_passes(lambda req, fb: run_loop(PromptProblem(task), req, proposer=ScriptedProposer([_reply(GOOD)]), log=said.append),
+                          request_for(task, db=db), passes=1, say=said.append, notes=False)
+    assert [w for n, w in marks if n == "pass"][:2] == [{"n": 0.5, "remeasure": True}, {"n": 1, "explore": 0}]
+    assert any("R: measuring 1 rejected design(s) again: digits#1" in s for s in said)
+    with CampaignStore(db) as store:
+        assert store.rejections() == [] and [r["state"] for r in store.rejections(active=False)] == ["remeasured"]
+        rows = [t for t in store.trials(camp["campaign_id"]) if t.stage == "bench"]
+        assert len(rows) >= 2, "measured again: a new row"

@@ -296,6 +296,8 @@ def cmd_task_run(args: argparse.Namespace) -> int:
         overrides["reevaluate"] = True
     if getattr(args, "reevaluate_of", 0):
         overrides["reevaluate_of"] = int(args.reevaluate_of)
+    if getattr(args, "remeasure", False):
+        overrides["remeasure"] = True
     if getattr(args, "rerun_baseline", False):
         overrides["rerun_baseline"] = True
     if getattr(args, "regenerate", None):

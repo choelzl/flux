@@ -54,7 +54,11 @@ export function taskLabel(n) {
 }
 
 /** Which flow a pass draws: the setup (before pass 0 or 1), the baseline (pass 0), or a pass. */
-export const passKind = p => p == null ? "setup" : Number(p) === 0 ? "baseline" : "pass";
+export const passKind = p => p == null ? "setup" : Number(p) === 0 ? "baseline" : Number.isInteger(Number(p)) ? "pass" : "remeasure";
+/** D1043: a pass as people read it -- Setup, the baseline, Pass N, and R (the rejected designs measured
+    again between two passes; its number half-way between them). */
+export const passName = p => p == null ? "Setup" : Number(p) === 0 ? "Pass 0 · baseline" : Number.isInteger(Number(p)) ? `Pass ${p}` : "R · measured again";
+export const passShort = p => p == null ? "S" : Number.isInteger(Number(p)) ? String(p) : "R";
 
 // the boxes of each flow, in order; a pass shows the boxes it is still to reach as waiting
 const SETUP_BOXES = [["Document", n => /^(validate|gate)\b/i.test(n.name)], ["Library", n => /^(knowledge|records)\b/i.test(n.name)],
@@ -94,7 +98,7 @@ export function flowBoxes(rows, p, running) {
     for (const [n, k] of boxes.flatMap(b => b.runs.map(n => [n, b.key])).sort((a, b) => a[0].t0 - b[0].t0)) { if (k !== at) times[k] = (times[k] || 0) + 1; at = k; }
     return boxes.map(b => ({ ...finish(b), count: times[b.key] }));
   }
-  const kinds = kind === "baseline" ? ["check", "measure"] : PASS_KINDS;
+  const kinds = kind === "baseline" ? ["check", "measure"] : kind === "remeasure" ? ["check", "measure", "choose"] : PASS_KINDS;
   const present = new Set(rows.map(r => phaseKind(r.node)));
   const measured = Math.min(...rows.filter(r => phaseKind(r.node) === "measure").map(r => r.node.t0));
   const boxes = kinds.filter(k => present.has(k) || (running && kind === "pass"))

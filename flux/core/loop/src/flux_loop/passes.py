@@ -152,6 +152,20 @@ def _wave(run: Callable[[Any, Any], Any], request: Any, feedback: Any, nums: lis
     return outs
 
 
+def _remeasure_between(run: Callable[[Any, Any], Any], request: Any, feedback: Any, n: int, say: Callable[[str], None]) -> None:
+    """D1043: before the next pass, the R pass when a rejection standing on the record asks for a
+    measurement again -- by hand while the loop ran, or before it started. Not a pass of its own: the
+    count goes on."""
+    from .reevaluate import pending_remeasures
+
+    asked = pending_remeasures(getattr(request, "db", ""))
+    if not asked:
+        return
+    mark("pass", n=n + 0.5, remeasure=True)
+    say(f"\n── R: {len(asked)} rejected design(s) measured again ──")
+    run(dataclasses.replace(request, remeasure=True, baseline=False, baseline_only=False, explore=0), feedback)
+
+
 def run_passes(run: Callable[[Any, Any], Any], request: Any, *, passes: int | None = None, feedback: Any = None,
                proposer: Any = None, say: Callable[[str], None] = print, notes: bool = True) -> Any:
     """`run(request, feedback)` pass after pass, as `between_passes` says; the last result.
@@ -177,6 +191,12 @@ def run_passes(run: Callable[[Any, Any], Any], request: Any, *, passes: int | No
             out = run(dataclasses.replace(request, baseline=False, baseline_only=False, explore=0), feedback)
             mark("ended", why="re-evaluation done")
             return out
+        if getattr(request, "remeasure", False):            # D1043: at rest, an R pass alone, then rest
+            mark("pass", n=0.5, remeasure=True)
+            say("\n── R: the rejected designs, measured again ──")
+            out = run(dataclasses.replace(request, baseline=False, baseline_only=False, explore=0), feedback)
+            mark("ended", why="re-measure done")
+            return out
         if getattr(request, "baseline", False):
             from flux_profile import tagged
 
@@ -195,6 +215,7 @@ def run_passes(run: Callable[[Any, Any], Any], request: Any, *, passes: int | No
             request = dataclasses.replace(request, baseline=False, baseline_only=False)
             say("\n── pass 1 ──")
         while True:
+            _remeasure_between(run, request, feedback, n, say)    # D1043: a rejection asked for numbers again
             k = min(width, cap - n) if cap else width
             if k <= 1:
                 mark("pass", n=n + 1, explore=rests)

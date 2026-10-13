@@ -156,6 +156,10 @@ def run_loop(problem: Problem, request: LoopRequest, *, proposer: Any | None = N
         from .reevaluate import run_reevaluate
 
         return run_reevaluate(problem, state)
+    if request.remeasure:
+        from .reevaluate import run_remeasure
+
+        return run_remeasure(problem, state)
     if request.baseline:
         from .baseline import run_baseline
 
@@ -1384,9 +1388,12 @@ def _conclude(problem: Problem, state: LoopState, goals: list[str]) -> LoopResul
         # D895: parts measured, no whole yet: no decision -- a part is not the answer
         _note_once(state, "no whole design measured yet: the parts are measured, the decision waits for their composition")
         return _result(problem, state, None, "no whole design measured yet", [], [])
-    if state.records is not None:                     # D1040: rejected in an earlier pass of this run
-        for r in state.records.recall("rejected"):
-            state.rejected.setdefault(str(r.get("key")), r)
+    if state.records is not None:                     # D1040, D1043: rejected before, by a critic or by hand; a restore counts
+        standing = {str(r["key"]): r for r in state.records.rejections()}
+        for k in [k for k, r in state.rejected.items() if not r.get("this_pass") and k not in standing]:
+            state.rejected.pop(k)
+        for k, r in standing.items():
+            state.rejected.setdefault(k, r)
     rejected = [s for s in pool if s.payload.get("rejected") or s.candidate.key() in state.rejected]
     if rejected:                        # D1040: a rejected result stays on the record, never chosen
         pool = [s for s in pool if s not in rejected]

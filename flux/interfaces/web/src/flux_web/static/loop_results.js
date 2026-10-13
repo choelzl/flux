@@ -2,7 +2,7 @@
 // charts (D892: out of loopPage; D916: Results and Graphs two views).
 
 import { codeBlock } from "./highlight.js";
-import { act, ago, api, card, dialog, empty, enc, h, promptDialog, skeleton, toast } from "./ui.js";
+import { act, ago, api, card, dialog, empty, enc, h, skeleton, toast } from "./ui.js";
 import { bestChart, designPoints, directionOf, groupList, groupStyles, legend, paretoChart, scopesOf } from "./charts.js";
 import { diffView, lineDiff } from "./configure.js";
 import { viewerTools } from "./viewer.js";
@@ -23,17 +23,46 @@ function resultsView(ctx, r) {
   const limitOf = (m) => r.limits.find(l => l.metric === m);
   // D899: accepted only when it meets every requirement; pending while a later stage must judge one
   const verdictPill = (d) => d.verdict === "accepted" ? h("span", { class: "pill ok" }, "accepted")
-    : d.verdict === "pending" ? h("span", { class: "pill warn" }, "pending") : h("span", { class: "pill bad" }, "failed");
+    : d.verdict === "pending" ? h("span", { class: "pill warn" }, "pending")
+    : d.verdict === "rejected" ? h("span", { class: "pill rejected" }, `rejected · ${d.rejected?.by || "?"}`) : h("span", { class: "pill bad" }, "failed");
   const detail = h("div", { class: "detail" }, empty("Select a design."));
   // D1001: a design taken out of the evidence by hand, with why -- the loop at rest, by whoever may change it
   const canChange = () => ctx.mine && !ctx.st?.running;
   const reload = () => ctx.goTab("Results", ctx.curSub());
-  const invalidateBtn = (d) => canChange() && !d.reference_only ? act("Invalidate…", async () => {
-    const reason = await promptDialog(`Invalidate ${d.name}?`, "Why its results no longer count (kept with it; Restore undoes it)", { ok: "Invalidate", min: 3 });
-    if (!reason) return;
-    const got = await api(`/apps/${enc(name)}/results/invalidate${qs}`, { method: "POST", body: { key: d.key || "", name: d.base || d.name, reason } });
-    toast(got.ok, "ok"); reload();
-  }, { cls: "small invalidate-design", title: "Take this design's results out of the evidence, with a reason" }) : "";
+  // D1043: a result rejected by hand -- while the loop runs too: shown, marked, never chosen; each measurement
+  // measured again (by the next pass's R, or now at rest) or cleared; hidden as well (an invalidation, at rest)
+  const canReject = () => ctx.mine;
+  const rejectBtn = (d) => canReject() && !d.reference_only && !d.rejected ? act("Reject…", async () => {
+    const live = !!ctx.st?.running;
+    const reason = h("textarea", { class: "reject-reason", rows: 2, placeholder: "Why (kept with it; Restore undoes it)" });
+    const rows = Object.entries(d.stages || {}).flatMap(([stage, m]) => Object.entries(m).map(([metric, v]) => {
+      const pick = h("input", { type: "checkbox", "data-stage": stage, "data-metric": metric });
+      const how = h("select", { class: "reject-how", "aria-label": `${stage} ${metric}: measure again or clear` }, h("option", { value: "again" }, "measure again"), h("option", { value: "clear" }, "clear"));
+      return { pick, how, row: h("tr", {}, h("td", {}, pick), h("td", { class: "mono" }, `${stage} · ${metric}`), h("td", { class: "mono num" }, fmt(v)), h("td", {}, how)) };
+    }));
+    const hide = h("input", { type: "checkbox", class: "reject-hide", disabled: live });
+    const body = h("div", { class: "reject-form stack" }, reason,
+      rows.length ? h("div", { class: "scroll-x" }, h("table", { class: "list compact reject-measurements" },
+        h("thead", {}, h("tr", {}, h("th", {}, ""), h("th", {}, "measurement"), h("th", { class: "num" }, "value"), h("th", {}, "do"))),
+        h("tbody", {}, rows.map(x => x.row)))) : "",
+      h("p", { class: "muted small" }, "Ticked: measured again (the new number replaces this one) or cleared (struck through). None ticked: the result is only marked."),
+      h("label", { class: "row-inline" }, hide, h("span", {}, "Also hide the design", h("small", { class: "muted" }, live ? " -- stop the loop first: hiding takes it out of the evidence" : " -- out of the tables, listed under Invalidated by hand"))),
+      live ? h("p", { class: "note small" }, "The loop is running: what is measured again is measured before its next pass (R).") : "");
+    const got = await dialog(`Reject ${d.name}?`, body, [["Cancel", null], ["Reject", () => reason.value.trim().length >= 3 ? {
+      reason: reason.value.trim(), hide: hide.checked,
+      clear: rows.filter(x => x.pick.checked && x.how.value === "clear").map(x => ({ stage: x.pick.dataset.stage, metric: x.pick.dataset.metric })),
+      again: [...new Set(rows.filter(x => x.pick.checked && x.how.value === "again").map(x => x.pick.dataset.stage))] } : (toast("Say why it is rejected (3 characters or more).", "err"), null), "primary"]]);
+    if (!got) return;
+    const res = await api(`/apps/${enc(name)}/results/reject${qs}`, { method: "POST", body: { key: d.key || "", name: d.base || d.name, ...got } });
+    toast(res.ok, "ok"); reload();
+  }, { cls: "small reject-design", title: "Mark this result rejected, with why: it stays shown and is never chosen" }) : "";
+  const rejectedBlock = (d) => d.rejected ? h("div", { class: "blk rejected-blk" }, h("h3", {}, "Rejected"),
+    h("p", {}, d.rejected.why), h("p", { class: "muted small" }, `${d.rejected.by} · `, ago(Date.parse(d.rejected.at) / 1000),
+      (d.cleared || []).length ? ` · cleared ${d.cleared.map(c => `${c.stage} ${c.metric}`).join(", ")}` : ""),
+    (d.rejected.again || []).length ? h("span", { class: "pill warn" }, ctx.st?.running ? "measured again before the next pass" : "to be measured again") : "",
+    canReject() ? act("Restore", async () => {
+      toast((await api(`/apps/${enc(name)}/results/unreject${qs}`, { method: "POST", body: { id: d.rejected.id } })).ok, "ok"); reload();
+    }, { cls: "small", title: "It counts again as it was measured" }) : "") : "";
   const invalidated = (r.invalidated || []).length ? h("details", { class: "invalidated-list" },
     h("summary", {}, `Invalidated by hand (${r.invalidated.filter(x => !x.restored).length})`),
     h("table", { class: "list compact" }, h("tbody", {}, r.invalidated.map(x => h("tr", { class: x.restored ? "muted" : "" },
@@ -59,7 +88,8 @@ function resultsView(ctx, r) {
     const metrics = [...new Set(stages.flatMap(([, m]) => Object.keys(m)))];
     detail.replaceChildren(
       h("div", { class: "detail-head" }, h("h2", {}, d.name), verdictPill(d), d.decision ? h("span", { class: "pill ok" }, "★ decision") : "",
-        d.part ? h("span", { class: "muted" }, `part ${d.part}`) : "", invalidateBtn(d)),
+        d.part ? h("span", { class: "muted" }, `part ${d.part}`) : "", rejectBtn(d)),
+      rejectedBlock(d),
       d.why.length ? h("div", { class: "blk" }, h("h3", {}, d.verdict === "pending" ? "Waiting for" : "Not met"), h("ul", { class: "misses" }, d.why.map(w => h("li", {}, w)))) : "",
       stages.length ? h("div", { class: "blk" }, h("h3", {}, "Measurements"), h("table", { class: "list compact" },
         h("thead", {}, h("tr", {}, h("th", {}, "stage"), ...metrics.map(m => h("th", { class: "num" }, m)))),
@@ -168,6 +198,8 @@ function resultsView(ctx, r) {
           d.part && !(d.base || d.name).includes("#") ? h("div", { class: "muted small table-part", title: d.part }, d.part) : ""),
         h("td", { class: "status-column" }, verdictBadge(d.verdict, d.why.join("; "))),
         ...metrics.map(m => { const ok = d.meets[m];
+          const gone = (d.cleared || []).find(c => c.stage === d.shown && c.metric === m);      // D1043: struck through
+          if (gone) return h("td", { class: `mono num cleared${columns.hidden(m) ? " hidden-measurement" : ""}${dict.get(m) || ""}`, title: `${m} ${fmt(gone.value)}: cleared -- ${d.rejected?.why || "rejected"}` }, h("s", {}, fmt(gone.value)));
           const display = measurementText(d, m, comparison, fmt, table.dataset.values === "relative");
           return h("td", { class: `mono num${columns.hidden(m) ? " hidden-measurement" : ""}${dict.get(m) || ""}${ok === true ? " meets" : ok === false ? " misses" : ""}`, title: `${display.title}${unit[m] ? " · " + unit[m] : ""}${ok === true ? " · meets the limit" : ok === false ? " · misses the limit" : ""}` }, display.text); })); return tr; }))), more) : empty("No design matches."));
     if (sortFocus) { const btn = table.querySelector(`button.th-sort[data-key="${CSS.escape(sortFocus)}"]`); if (btn) btn.focus(); sortFocus = null; }
@@ -175,7 +207,7 @@ function resultsView(ctx, r) {
   const chip = (key, label) => h("button", { class: `chip${filter === key ? " on" : ""}`, onclick: () => { filter = key; pageN = PAGE; chips(); drawTable(); } }, label);
   const chipBox = h("div", { class: "chips" });
   function chips() {
-    chipBox.replaceChildren(chip("all", `All ${r.designs.length}`), chip("accepted", `Accepted ${r.counts.accepted}`), ...(r.counts.pending ? [chip("pending", `Pending ${r.counts.pending}`)] : []), chip("failed", `Failed ${r.counts.failed}`),
+    chipBox.replaceChildren(chip("all", `All ${r.designs.length}`), chip("accepted", `Accepted ${r.counts.accepted}`), ...(r.counts.pending ? [chip("pending", `Pending ${r.counts.pending}`)] : []), chip("failed", `Failed ${r.counts.failed}`), ...(r.counts.rejected ? [chip("rejected", `Rejected ${r.counts.rejected}`)] : []),
       h("span", { class: "grow" }), columns.controls, relativeButton, cmpBtn);
   }
   chips(); drawTable();

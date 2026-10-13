@@ -1,6 +1,6 @@
 :root {
   --bg: #f5f6f4; --panel: #ffffff; --ink: #1c1e22; --muted: #697079; --line: #e3e5e1; --soft: #f0f1ee;
-  --accent: #2c64d8; --accent-ink: #ffffff; --warn-ink: #ffffff; --ok: #1d8148; --bad: #c0352d; --warn: #9a6200; --run: #2c64d8;
+  --accent: #2c64d8; --accent-ink: #ffffff; --warn-ink: #ffffff; --ok: #1d8148; --bad: #c0352d; --warn: #9a6200; --run: #2c64d8; --rejected: #8a3fb8;
   --shadow: 0 1px 2px rgba(20, 24, 30, .06), 0 1px 1px rgba(20, 24, 30, .03);
   --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -12,13 +12,13 @@
 }
 /* dark: chosen, or the system's when nothing is chosen (D691) */
 :root[data-theme="dark"] { --bg: #131518; --panel: #1b1e22; --ink: #e5e7ea; --muted: #939aa3; --line: #2b3036; --soft: #22262b;
-  --accent: #6f9dff; --accent-ink: #0d1420; --warn-ink: #1a1205; --ok: #4cc27e; --bad: #ff6b61; --warn: #e3a53d; --run: #6f9dff;
+  --accent: #6f9dff; --accent-ink: #0d1420; --warn-ink: #1a1205; --ok: #4cc27e; --bad: #ff6b61; --warn: #e3a53d; --run: #6f9dff; --rejected: #c58cf0;
   --shadow: 0 1px 2px rgba(0, 0, 0, .4); color-scheme: dark;
   --tk-com: #7d8590; --tk-str: #a5d6a7; --tk-kw: #c792ea; --tk-num: #f2b36b; --tk-key: #82aaff; --tk-fn: #89ddff;
   --tk-deco: #f78c6c; --tk-sub: #ffcb6b; --tk-punc: #89929b; }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) { --bg: #131518; --panel: #1b1e22; --ink: #e5e7ea; --muted: #939aa3; --line: #2b3036; --soft: #22262b;
-  --accent: #6f9dff; --accent-ink: #0d1420; --warn-ink: #1a1205; --ok: #4cc27e; --bad: #ff6b61; --warn: #e3a53d; --run: #6f9dff;
+  --accent: #6f9dff; --accent-ink: #0d1420; --warn-ink: #1a1205; --ok: #4cc27e; --bad: #ff6b61; --warn: #e3a53d; --run: #6f9dff; --rejected: #c58cf0;
   --shadow: 0 1px 2px rgba(0, 0, 0, .4); color-scheme: dark;
   --tk-com: #7d8590; --tk-str: #a5d6a7; --tk-kw: #c792ea; --tk-num: #f2b36b; --tk-key: #82aaff; --tk-fn: #89ddff;
   --tk-deco: #f78c6c; --tk-sub: #ffcb6b; --tk-punc: #89929b; }
@@ -1372,3 +1372,13 @@ th.dict-test { padding-inline: 2px !important; }
 .dict-view button.on { background: color-mix(in srgb, var(--dict, #2fb0c6) 16%, var(--panel)); color: var(--ink); }
 /* D1016: the same task again in its pass, one line -- how many tries */
 .alt-again { font: 600 10.5px var(--mono, monospace); color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 0 6px; flex-shrink: 0; }
+
+/* D1043: a rejected result -- shown, marked, never chosen; its cleared values struck through */
+.pill.rejected { color: var(--rejected, #8a3fb8); background: color-mix(in srgb, var(--rejected, #8a3fb8) 13%, transparent); border-color: transparent; }
+table.designs tr.rejected td { background: color-mix(in srgb, var(--rejected, #8a3fb8) 5%, transparent); }
+td.cleared s { color: var(--muted); }
+.rejected-blk { border-left: 3px solid var(--rejected, #8a3fb8); padding-left: 10px; }
+.rejected-blk p { margin: 0 0 4px; }
+.reject-form textarea { width: 100%; box-sizing: border-box; font: inherit; }
+.reject-form .row-inline { display: flex; gap: 6px; align-items: baseline; }
+.reject-form .note { padding: 6px 8px; border-radius: 6px; background: color-mix(in srgb, var(--warn, #9a6200) 10%, transparent); margin: 0; }

@@ -294,7 +294,7 @@ export function measurementHeader(text, ...content) {
 }
 
 export function verdictBadge(verdict, reason = "") {
-  const color = verdict === "accepted" ? "ok" : verdict === "pending" ? "warn" : "bad";
-  const icon = verdict === "accepted" ? "✓" : verdict === "pending" ? "…" : "✗";
+  const color = verdict === "accepted" ? "ok" : verdict === "pending" ? "warn" : verdict === "rejected" ? "rejected" : "bad";
+  const icon = verdict === "accepted" ? "✓" : verdict === "pending" ? "…" : verdict === "rejected" ? "⊘" : "✗";
   return h("span", { class: `pill ${color} verdict-badge`, role: "img", "aria-label": verdict, title: reason ? `${verdict}: ${reason}` : verdict }, icon);
 }

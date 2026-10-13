@@ -15,7 +15,7 @@ from typing import Any
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, StreamingResponse
 
-from .models import InvalidateIn, RestoreIn
+from .models import InvalidateIn, RejectIn, RestoreIn
 from .runs import loop_files
 from .store import User
 from .workspace import Workspace, WorkspaceError
@@ -594,11 +594,11 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
             record.close()
 
     # ---- D1001: a design invalidated by hand, with why; undone by Restore
-    def _record_of(name: str, user: User, owner: str | None):
+    def _record_of(name: str, user: User, owner: str | None, running: bool = False):
         _w, _whose, _d, run = loop_of(name, user, owner, edit=True)
         if not run or not os.path.exists(run["db"]):
             raise HTTPException(404, "this loop has no record yet")
-        if runs.live(run):
+        if runs.live(run) and not running:          # D1043: a rejection is one event a running loop reads between passes
             raise HTTPException(409, "stop the loop first: a running loop holds its record")
         cid = runs.campaign(run)[0]
         if not cid:
@@ -641,6 +641,64 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
 
         ctx.start_loop(name, RunOptions(passes=1, reevaluate_of=body.id), owner, user)
         return {"ok": "re-evaluation started: Live shows it; the new numbers count when it ends"}
+
+    @app.post("/api/apps/{name}/results/reject")
+    def reject_design(name: str, body: RejectIn, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, Any]:
+        """D1043: a result rejected by hand, while the loop runs or at rest: marked with why and by whom,
+        shown, never chosen; the measurements named cleared (struck through) or measured again -- by the
+        running loop between its passes (R), or at rest by a start of its own; hidden too if asked (at rest)."""
+        from .results import content_key
+
+        reason = body.reason.strip()
+        if len(reason) < 3:
+            raise HTTPException(400, "say why it is rejected")
+        _w, _whose, _d, run = loop_of(name, user, owner, edit=True)
+        live = bool(run and runs.live(run))
+        if body.hide and live:
+            raise HTTPException(409, "hiding takes a design out of the evidence: stop the loop first, or reject it without hiding")
+        record, cid = _record_of(name, user, owner, running=True)
+        try:
+            rows = [t for t in record.trials(cid, current=True)
+                    if content_key(t.candidate or {}) == body.key and str((t.candidate or {}).get("name") or t.candidate_key) == body.name]
+            if not rows:
+                rows = [t for camp in record.list_campaigns() for t in record.trials(camp["campaign_id"], current=True)
+                        if content_key(t.candidate or {}) == body.key]
+            if not rows:
+                raise HTTPException(404, "no such design among the results")
+            latest: dict[str, dict[str, float]] = {}
+            for t in rows:
+                if t.result is not None and t.stage:
+                    latest[t.stage] = {m: t.result.value_of(m) for m in t.result.metrics}
+            cleared = [{"stage": c.get("stage", ""), "metric": c.get("metric", ""), "value": latest.get(c.get("stage", ""), {}).get(c.get("metric", ""))}
+                       for c in body.clear if c.get("metric") in latest.get(c.get("stage", ""), {})]
+            again = sorted({s for s in body.again if s in latest} or ({"*"} if body.again else set()))
+            event = record.reject(cid, key=body.key, name=body.name, why=reason, by=user.name, cleared=cleared, again=again)
+            if body.hide:
+                record.invalidate(cid, [t.seq for t in rows], reason=reason, by=user.name, names=[body.name])
+        finally:
+            record.close()
+        store.audit(user.name, "rejected a result", f"{owner or user.name}/{name}: {body.name} -- {reason}"[:500])
+        said = f"{body.name} rejected"
+        if again and live:
+            said += ": the running loop measures it again before its next pass (R)"
+        elif again:
+            from .models import RunOptions
+
+            ctx.start_loop(name, RunOptions(passes=1, remeasure=True), owner, user)
+            said += ": measured again now (R); Live shows it"
+        return {"ok": said, "id": event, "remeasure": bool(again), "live": live}
+
+    @app.post("/api/apps/{name}/results/unreject")
+    def unreject_design(name: str, body: RestoreIn, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, Any]:
+        """D1043: a rejection undone -- the result counts again as it was measured."""
+        record, cid = _record_of(name, user, owner, running=True)
+        try:
+            if not record.unreject(cid, body.id, by=user.name):
+                raise HTTPException(404, "no such rejection")
+        finally:
+            record.close()
+        store.audit(user.name, "restored a rejected result", f"{owner or user.name}/{name}: rejection {body.id}")
+        return {"ok": "restored: it counts again"}
 
     @app.post("/api/apps/{name}/results/restore")
     def restore_design(name: str, body: RestoreIn, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, Any]:

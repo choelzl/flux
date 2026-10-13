@@ -257,6 +257,54 @@ class CampaignStore:
         self.append_event(campaign_id, "decided:restored", {"of": event_id, "seqs": seqs, "by": by})
         return True
 
+    _REJECT = "kind IN ('decided:rejected', 'decided:unrejected', 'decided:remeasured')"
+
+    def reject(self, campaign_id: str, *, key: str, name: str, why: str, by: str,
+               cleared: list[dict[str, Any]] | None = None, again: list[str] | None = None) -> int:
+        """D1043: a result rejected -- by a critic or by hand -- with why and by whom: shown, marked and
+        never chosen; `cleared` the values it calls wrong ({stage, metric, value}, struck through),
+        `again` the stages to measure again (the next pass's re-measure, R). Nothing is deleted.
+        Returns the event's id."""
+        cur = self._conn.execute(
+            "INSERT INTO campaign_events (campaign_id, kind, detail_json, created_at) VALUES (?, ?, ?, ?)",
+            (campaign_id, "decided:rejected", json.dumps({"key": key, "name": name, "why": why, "by": by,
+                                                           "cleared": list(cleared or []), "again": list(again or [])}), _now()))
+        self._conn.commit()
+        return int(cur.lastrowid)
+
+    def unreject(self, campaign_id: str, event_id: int, *, by: str) -> bool:
+        """D1043: a rejection undone -- the result counts again as it was measured."""
+        if not any(r["id"] == event_id for r in self.rejections(active=False)):
+            return False
+        self.append_event(campaign_id, "decided:unrejected", {"of": event_id, "by": by})
+        return True
+
+    def remeasured(self, campaign_id: str, event_ids: list[int], keys: list[str]) -> None:
+        """D1043: the R pass measured these rejections' designs again: the new numbers stand, the
+        rejections are resolved."""
+        self.append_event(campaign_id, "decided:remeasured", {"of": sorted(set(event_ids)), "keys": sorted(set(keys))})
+
+    def rejections(self, *, active: bool = True) -> list[dict[str, Any]]:
+        """D1043: every rejection on the record, every campaign's, oldest first -- {id, at, key, name,
+        why, by, cleared, again, campaign, state}; `state` is "active", "restored" or "remeasured".
+        `active`: those still standing."""
+        out: dict[int, dict[str, Any]] = {}
+        for i, cid, kind, d, at in self._conn.execute(
+                f"SELECT id, campaign_id, kind, detail_json, created_at FROM campaign_events WHERE {self._REJECT} ORDER BY id").fetchall():
+            doc = json.loads(d)
+            if kind == "decided:rejected":
+                out[i] = {"id": i, "at": at, "campaign": cid, "key": str(doc.get("key") or ""), "name": doc.get("name") or "",
+                          "why": doc.get("why") or "", "by": doc.get("by") or "", "cleared": list(doc.get("cleared") or []),
+                          "again": list(doc.get("again") or []), "state": "active"}
+            elif kind == "decided:unrejected" and doc.get("of") in out:
+                out[doc["of"]]["state"] = "restored"
+            elif kind == "decided:remeasured":
+                for of in doc.get("of") or ():
+                    if of in out and out[of]["state"] == "active":
+                        out[of]["state"] = "remeasured"
+        rows = list(out.values())
+        return [r for r in rows if r["state"] == "active"] if active else rows
+
     def invalid_through(self, campaign_id: str) -> int:
         """D988: the last trial a re-evaluation invalidated -- rows at or before it are history,
         not evidence (0 when the campaign was never invalidated)."""

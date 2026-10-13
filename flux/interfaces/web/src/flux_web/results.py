@@ -403,6 +403,11 @@ def _designs(db: str, stages: list[dict[str, Any]], decision: str | None, limit:
                                                      "stages": {}, "first": t.created_at, "last": t.created_at})
                 d["stages"][t.stage] = numbers
                 d["last"] = t.created_at or d["last"]
+        rejected: dict[str, dict[str, Any]] = {}             # D1043: by a critic or by hand, the latest standing
+        for r in store.rejections():
+            if until is None or _when(r["at"]) <= until:
+                prior = rejected.get(r["key"])
+                rejected[r["key"]] = {**r, "cleared": (prior["cleared"] if prior else []) + r["cleared"]}
     finally:
         store.close()
     order = {st.get("name"): i for i, st in enumerate(stages)}
@@ -461,6 +466,13 @@ def _designs(db: str, stages: list[dict[str, Any]], decision: str | None, limit:
         d["eligible"], d["pending"], d["reasons"] = judged.eligible, judged.pending, list(judged.reasons)
         d["verdict"] = "accepted" if judged.eligible else "pending" if judged.pending else "failed"
         d["why"] = misses + list(judged.reasons)
+        r = rejected.get(d["key"])
+        if r is not None:                                  # D1043: shown, marked with why, never chosen
+            d["verdict"], d["eligible"] = "rejected", False
+            d["rejected"] = {k: r[k] for k in ("id", "at", "why", "by", "again")}
+            d["cleared"] = [c for c in r["cleared"] if c.get("stage") in d["stages"] or c.get("value") is not None]
+            for c in d["cleared"]:
+                d["stages"].get(c.get("stage"), {}).pop(c.get("metric"), None)
         d["meets"] = meets
         d["decision"] = False
         d["closest"] = False
@@ -474,6 +486,9 @@ def _designs(db: str, stages: list[dict[str, Any]], decision: str | None, limit:
             d["name"] = f"{d['base']}·{d['key'][:6]}"
     _rank(out, order, db, objectives=vector if campaign is not None or until is not None else None)
     closest = _decided(out, decision)                           # D900: after the ranking, its best is the closest
+    undone = next((d for d in out if d["decision"] and d.get("rejected")), None)
+    if undone is not None:                                      # D1043: rejected since: the next pass decides again
+        undone["decision"] = False
     out.sort(key=lambda d: d["last"] or "", reverse=True)       # newest first,
     out.sort(key=lambda d: not (d["decision"] or d["closest"]))  # the decided design (or the closest) on top
     metrics: list[str] = []
@@ -495,7 +510,8 @@ def _designs(db: str, stages: list[dict[str, Any]], decision: str | None, limit:
     main = next((o.metric for o in vector if o.goal is None), metrics[0] if metrics else None)
     result = {"_firsts": sorted(_when(d["first"]) for d in out),          # D901: for `this_start`, over every design
             "designs": out[:limit], "total": len(out), "feasible": any(d["decision"] for d in out), "closest": closest,
-            "counts": {k: sum(1 for d in out if d["verdict"] == k) for k in ("accepted", "pending", "failed")},
+            "counts": {k: sum(1 for d in out if d["verdict"] == k) for k in ("accepted", "pending", "failed", "rejected")},
+            "decision_rejected": undone["name"] if undone is not None else None,
             "metrics": metrics, "main_metrics": [main] if main else [],
             "limits": limits, "stages": [st.get("name") for st in stages],
             "metric_groups": groups,

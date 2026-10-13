@@ -1220,6 +1220,52 @@ def flows(r: Run) -> None:
             b.js("window.fetch = window.__labelFetch; delete window.__labelFetch; delete window.__labelFixture; delete window.__labelRequest; localStorage.removeItem('flux-results:[\"bob\",\"bob\",\"sw\"]'); return 1")
     r.step("design labels", design_labels)
 
+    def rejected_results():
+        """D1043: a rejected result stays in Results, marked, its cleared value struck; Reject… asks
+        per measurement whether to measure it again or clear it."""
+        fixture = json.loads(json.dumps(GRAPHS_RESULTS))
+        bad = next(d for d in fixture["designs"] if d["name"] == "w-bad")
+        bad.update(verdict="rejected", eligible=False, rejected={"id": 7, "at": "2026-10-13T10:00:00Z", "why": "the bench read the wrong clock", "by": "bob", "again": []},
+                   cleared=[{"stage": "confirm", "metric": "area_um2", "value": 12.5}])
+        del bad["stages"]["confirm"]["area_um2"]
+        fixture["counts"]["rejected"] = 1
+        b.js("window.__rejFetch = window.fetch.bind(window); window.__rejFixture = arguments[0]; window.__rejSent = null;"
+             " localStorage.removeItem('flux-results:[\"bob\",\"bob\",\"sw\"]');"
+             " window.fetch = (u, o) => String(u).startsWith('/api/apps/sw/results/reject') ? (window.__rejSent = JSON.parse(o.body), Promise.resolve(new Response('{\"ok\": \"w-good rejected\", \"remeasure\": false}', {headers: {'Content-Type': 'application/json'}})))"
+             " : String(u).startsWith('/api/apps/sw/results') ? Promise.resolve(new Response(JSON.stringify(window.__rejFixture), {headers: {'Content-Type': 'application/json'}}))"
+             " : String(u).startsWith('/api/apps/sw/design?') ? Promise.resolve(new Response('{\"artifact\": null}', {headers: {'Content-Type': 'application/json'}}))"
+             " : window.__rejFetch(u, o); return 1", fixture)
+        try:
+            r.page("#/app/sw/results", "document.querySelector('table.designs')", "rejected results")
+            r.check("a rejected result stays in the table, marked, its cleared value struck through", b.js(
+                "const tr = [...document.querySelectorAll('table.designs tbody tr')].find(t => t.textContent.includes('w-bad'));"
+                " return !!tr && tr.classList.contains('rejected') && !!tr.querySelector('.verdict-badge.rejected') && tr.querySelector('td.cleared s')?.textContent === '12.5'"
+                " && [...document.querySelectorAll('.chips .chip')].some(c => c.textContent === 'Rejected 1')"))
+            b.js("[...document.querySelectorAll('table.designs tbody tr')].find(t => t.textContent.includes('w-bad')).querySelector('.open-design').click(); return 1")
+            b.wait("document.querySelector('.rejected-blk')", what="the rejection in the detail")
+            r.check("its detail says why, by whom, what was cleared, and offers Restore -- not Reject", b.js(
+                "const k = document.querySelector('.rejected-blk'); return k.textContent.includes('the bench read the wrong clock') && k.textContent.includes('bob')"
+                " && k.textContent.includes('cleared confirm area_um2') && [...k.querySelectorAll('button')].some(x => x.textContent === 'Restore')"
+                " && !document.querySelector('.reject-design') && document.querySelector('.detail-head .pill.rejected')?.textContent === 'rejected · bob'"))
+            b.js("[...document.querySelectorAll('table.designs tbody tr')].find(t => t.textContent.includes('w-good')).querySelector('.open-design').click(); return 1")
+            b.wait("document.querySelector('.reject-design')", what="Reject on an accepted design")
+            b.click(".reject-design")
+            b.wait("document.querySelector('dialog[open] .reject-form')", what="the reject dialog")
+            r.check("the dialog lists each measurement with measure again or clear, and Also hide at rest", b.js(
+                "const d = document.querySelector('dialog[open]'); return d.querySelectorAll('.reject-measurements tbody tr').length === 2"
+                " && [...d.querySelectorAll('.reject-how option')].map(o => o.value).slice(0, 2).join() === 'again,clear' && !d.querySelector('.reject-hide').disabled"))
+            b.js("const d = document.querySelector('dialog[open]'); d.querySelector('.reject-reason').value = 'area read from the wrong corner';"
+                 " const row = [...d.querySelectorAll('.reject-measurements tbody tr')].find(t => t.textContent.includes('area_um2'));"
+                 " row.querySelector('input').checked = true; row.querySelector('select').value = 'clear'; d.querySelector('.dlg-actions .primary').click(); return 1")
+            b.wait("window.__rejSent", what="the rejection sent")
+            r.check("Reject sends why, the value to clear and nothing to measure again", b.js("return JSON.stringify(window.__rejSent)") ==
+                    json.dumps({"key": "k-w-good", "name": "w-good", "reason": "area read from the wrong corner", "hide": False,
+                                "clear": [{"stage": "confirm", "metric": "area_um2"}], "again": []}, separators=(",", ":")))
+            r.clean("rejected results")
+        finally:
+            b.js("window.fetch = window.__rejFetch; delete window.__rejFetch; delete window.__rejFixture; delete window.__rejSent; localStorage.removeItem('flux-results:[\"bob\",\"bob\",\"sw\"]'); return 1")
+    r.step("rejected results", rejected_results)
+
     def reset_loop():
         made = r.api("/apps/new-empty", "POST", {"name": "resettable"})
         r.check("create a separate loop to reset", made["status"] == 200, made["body"])

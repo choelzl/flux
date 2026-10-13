@@ -66,4 +66,4 @@ def test_the_results_no_longer_accept_a_design_missing_a_required_number(tmp_pat
     assert early["reasons"] == ["speed waits for the confirm stage"]
     assert (good["verdict"], good["eligible"], good["reasons"]) == ("accepted", True, [])
     counts = designs(db, stages)["counts"]
-    assert counts == {"accepted": 1, "pending": 1, "failed": 1}
+    assert counts == {"accepted": 1, "pending": 1, "failed": 1, "rejected": 0}

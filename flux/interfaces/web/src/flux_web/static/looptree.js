@@ -241,7 +241,7 @@
     };
     if (!hasParts) {
       order.forEach(function (p) {
-        out.push(branch("pass:" + p.n, p.conclude ? "Conclusion" : "Pass " + p.n, p.conclude ? "over every pass" : passWhy(p, p.visits), passBody(p, p.visits, "pass:" + p.n)));
+        out.push(branch("pass:" + p.n, p.conclude ? "Conclusion" : Number.isInteger(p.n) ? "Pass " + p.n : "R · measured again",   /* D1043 */ p.conclude ? "over every pass" : passWhy(p, p.visits), passBody(p, p.visits, "pass:" + p.n)));
       });
     } else {
       var byPart = new Map(), whole = [];

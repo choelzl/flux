@@ -5,7 +5,7 @@ import { sv } from "./charts.js";
 import { restoreScroll, scrollState } from "./scroll.js";
 import { campaignForStart, currentTask, taskScope, taskState as state, taskWindow } from "./live_alt_model.js";
 import { WORK_COLORS as COLORS, AGENT_COLOR, workLabel, phaseKind, ownSpans } from "./work_style.js";
-import { docNotes, flowBoxes, passKind, repaired, taskLabel, taskNote } from "./live_alt_views.js";
+import { docNotes, flowBoxes, passKind, passName, passShort, repaired, taskLabel, taskNote } from "./live_alt_views.js";
 import { passSummary } from "./live_alt_inspector.js";
 
 // D977: work is classified as Live's timeline classifies it, so a task sits in the same lane in both
@@ -80,7 +80,7 @@ export function liveAltTab(ctx) {
     visibleRows = scope.rows;
     if (startId !== "current" && pass === "current") pass = "all";         // D994: a past start has no current pass
     passSel.replaceChildren(startId === "current" ? h("option", { value: "current" }, `Current${scope.current.length ? " · " + scope.current.join(", ") : ""}`) : "",
-      h("option", { value: "all" }, "All passes"), ...scope.passes.map(n => h("option", { value: String(n) }, n === 0 ? "Pass 0 · baseline" : `Pass ${n}`)),
+      h("option", { value: "all" }, "All passes"), ...scope.passes.map(n => h("option", { value: String(n) }, passName(n))),
       !["current", "all"].includes(pass) && !scope.passes.includes(Number(pass)) ? h("option", { value: pass }, `Pass ${pass} · unavailable`) : "");
     passSel.value = pass;
     earlier.hidden = !(inspector.model.before || inspector.model.cut) || startId !== "current";
@@ -88,7 +88,7 @@ export function liveAltTab(ctx) {
     followBtn.classList.toggle("on", following); followBtn.setAttribute("aria-pressed", String(following));
     followBtn.title = following ? "Pause automatic task selection" : "Follow the latest task in the current pass";
     const counts = Object.fromEntries(["running", "done", "failed", "interrupted"].map(s => [s, scope.rows.filter(r => state(r.node) === s).length]));
-    const scopeName = pass === "all" ? "All passes" : pass === "current" ? scope.current.length ? `Pass ${scope.current.join(", ")}` : "Setup" : Number(pass) === 0 ? "Pass 0 · baseline" : `Pass ${pass}`;
+    const scopeName = pass === "all" ? "All passes" : pass === "current" ? scope.current.length ? scope.current.map(passName).join(", ") : "Setup" : passName(Number(pass));
     summary.replaceChildren(h("strong", {}, scopeName === "Pass 0" ? "Pass 0 · baseline" : scopeName),
       h("span", { class: "muted small" }, `${visibleRows.length} tasks`),
       ...Object.entries(counts).filter(([, n]) => n).map(([s, n]) => h("span", { class: `alt-count ${s}`, title: `All tasks in this scope: ${n} ${s}` }, `${n} ${s}`)));
@@ -126,7 +126,7 @@ export function liveAltTab(ctx) {
       detailHost.replaceChildren(h("div", { class: "detail alt-detail alt-box-detail", "data-box": boxView.key, "data-pass": String(boxView.p ?? "setup") },
         h("div", { class: "detail-head alt-ihead" }, h("span", { class: "alt-stripe", style: `background:${COLORS[b?.kind] || COLORS.setup}` }),
           h("h2", {}, b?.title || workLabel(boxView.key)), h("span", { class: "pill" }, b?.done ? "done" : b?.runs.length ? "recorded" : later ? "not recorded" : "waiting")),
-        h("p", { class: "muted small" }, boxView.p == null ? "Setup" : boxView.p === 0 ? "Pass 0 · baseline" : `Pass ${boxView.p}`),
+        h("p", { class: "muted small" }, passName(boxView.p)),
         b?.runs.length ? h("div", { class: "alt-steps" }, b.runs.map(n => h("button", { type: "button", class: "alt-step-row", onclick: () => select(n.id) }, taskLabel(n))))
           : h("p", { class: "muted" }, b?.done ? "Baseline stored as a reference." : later ? "No task was recorded for this phase in this pass." : "This phase has not started. No task output is available yet."),
         boxView.key === "record" && b?.done ? passSummary(boxView.p, rows.map(r => r.node), { pick: id => select(id) }).slice(1) : "",
@@ -301,7 +301,7 @@ export function liveAltTab(ctx) {
         const key = `pass:${g.p ?? "setup"}`, nodes = g.rows.map(r => r.node), finished = nodes.every(n => n.t1 != null);
         const collapsed = isFolded(key, finished, nodes.some(n => holds(n.id)));
         const failed = ended(nodes), t0 = Math.min(...nodes.map(n => n.t0)), t1 = Math.max(...nodes.map(n => n.t1 ?? now));
-        const name = g.p == null ? "Setup" : g.p === 0 ? "Pass 0 · baseline" : `Pass ${g.p}`;
+        const name = passName(g.p);
         out.push(h("div", { class: "alt-tree-row alt-pass-row", style: "--depth:0" }, fold(key, collapsed, name),
           h("button", { type: "button", class: `alt-task alt-pass-heading${passView === g.p ? " sel" : ""}`, "data-pass": String(g.p ?? "setup"), onclick: () => showPass(g.p) },
             finished ? doneMark(failed, nodes.some(n => n.failed || below.has(n.id))) : h("span", { class: "alt-spin", role: "img", "aria-label": "running" }),
@@ -341,7 +341,7 @@ export function liveAltTab(ctx) {
       const top = nodes.filter(n => n.parent == null || (membership.get(n.parent.id) ?? null) !== p);
       const st = nodes.some(n => n.t1 == null) ? "running" : ended(top.length ? top : nodes) ? "failed" : "done";   // D1031
       return h("button", { type: "button", class: `alt-chip ${st}${p === shown ? " sel" : ""}`, "data-chain": String(p ?? "S"), "aria-pressed": String(p === shown),
-        title: p == null ? "Setup" : p === 0 ? "Pass 0 · baseline" : `Pass ${p}`, onclick: () => { chainPass = p; showPass(p); } }, p == null ? "S" : String(p));
+        title: passName(p), onclick: () => { chainPass = p; showPass(p); } }, passShort(p));
     })) : "";
     const W = 300, X = 26, BW = W - 2 * X, GAP = 16, RH = 28, g = [];
     const at = {};
@@ -454,7 +454,7 @@ export function liveAltTab(ctx) {
       TICKS.map(f => [sv("line", { x1: X(a + f * (b - a)), x2: X(a + f * (b - a)), y1: T, y2: H - B, class: "grid" }),
         sv("text", { x: X(a + f * (b - a)), y: H - 8, class: "tick", "text-anchor": f === 0 ? "start" : f === 1 ? "end" : "middle" }, `+${dur(f * (b - a)) || "0s"}`)]),
       bands.length > 1 ? bands.map(([p, [t0, t1]], i) => [sv("rect", { x: X(t0), y: 2, width: Math.max(1, X(t1) - X(t0)), height: H - B - 2, class: `alt-band${i % 2 ? " odd" : ""}` }),
-        sv("text", { x: (X(t0) + X(t1)) / 2, y: 12, class: "tick alt-band-label", "text-anchor": "middle" }, p == null ? "S" : String(p))]) : "",
+        sv("text", { x: (X(t0) + X(t1)) / 2, y: 12, class: "tick alt-band-label", "text-anchor": "middle" }, passShort(p))]) : "",
       order.map(({ n, kind, t0, t1 }) => {
         const y = T + lanes.indexOf(kind) * lane + 3, width = Math.max(3, X(t1) - X(t0));
         return taskSvg(n, { class: `alt-time-task${n.id === selected ? " sel" : ""}`, "data-kind": kind, "aria-pressed": String(n.id === selected),

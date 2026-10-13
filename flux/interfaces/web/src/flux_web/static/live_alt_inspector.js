@@ -2,7 +2,7 @@
 // given, and for the tasks that decide something, what was decided. Live's own inspector is unchanged.
 import { dur, h } from "./ui.js";
 import { WORK_COLORS as COLORS, AGENT_COLOR, phaseKind, workLabel, ownSpans } from "./work_style.js";
-import { candidateOf, taskLabel } from "./live_alt_views.js";
+import { candidateOf, passName, taskLabel } from "./live_alt_views.js";
 import { conversation, markdown } from "./loops.js";
 
 const isAgent = n => /^\s*agent\s*:/i.test(String(n.name));
@@ -335,7 +335,7 @@ export function passSummary(p, nodes, env) {
   const cand = nodes.map(candidateOf).find(Boolean) || "";
   const meas = nodes.filter(n => isTool(n) && phaseKind(n) === "measure").map(n => metricsOf(stdoutOf(n))).find(m => Object.keys(m).length) || {};
   const steps = top.filter(n => !["setup"].includes(phaseKind(n)));
-  return [h("div", { class: "detail-head alt-ihead" }, h("h2", {}, p == null ? "Setup" : Number(p) === 0 ? "Pass 0 · baseline" : `Pass ${p}`),
+  return [h("div", { class: "detail-head alt-ihead" }, h("h2", {}, passName(p)),
       h("span", { class: `pill ${live ? "live" : failed ? "bad" : "ok"}` }, live ? h("span", { class: "alt-spin" }) : "", live ? "running" : failed ? "failed" : "done"), h("span", { class: "muted" }, dur(t1 - t0))),
     cand ? h("div", { class: "alt-tried" }, h("div", { class: "alt-label" }, "Tried"), h("b", {}, cand),
       h("span", { class: "mono muted small" }, Object.entries(meas).slice(0, 3).map(([k, v]) => `${k} ${fmt(v)}`).join(" · "))) : "",
