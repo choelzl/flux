@@ -140,7 +140,7 @@ def iterate(problem: Any, source: Source, subgoal: str | None, state: LoopState,
         state.attempts[key] = state.attempts.get(key, 0) + 1
         attempt = Attempt(subgoal=subgoal, state=state, index=index, prior=prior,
                           failure=failure, brief=brief)
-        with _phase(f"generation: {source.name} draft {index + 1}", why=tag):
+        with _phase(f"generation: {source.name} draft {index + 1}", why=tag, absorb=True):
             try:
                 cand, why = source.draft(attempt)
             except Exception as exc:  # noqa: BLE001 -- a source that raises is a refusal

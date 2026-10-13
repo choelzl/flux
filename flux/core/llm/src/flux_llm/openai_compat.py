@@ -592,7 +592,7 @@ class OpenAIChatProposer:
         from flux_profile import phase
 
         prompt = messages[0].get("content", "") if messages else ""
-        return phase(title, why=f"~{len(prompt) // 4} tok prompt", model=self.model,
+        return phase(title, why=f"~{len(prompt) // 4} tok prompt", inline=True, model=self.model,
                      num_predict=self._cap(prompt), think=think, prompt=prompt,
                      **{k: v for k, v in extra.items() if v})
 

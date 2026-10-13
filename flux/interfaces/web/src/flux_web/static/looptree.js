@@ -33,6 +33,10 @@
         if (d.timedOut) d.failed = false;
       }
     }
+    else if (e.ev === "params") {                  // D1050: a wrapper took in its one agent or model turn: its inputs join
+      var pw = m.nodes.get(e.id);
+      if (pw) pw.params = Object.assign({}, pw.params || {}, e.params || {});
+    }
     else if (e.ev === "publish") m.standings.set(e.key, e.payload);
     else if (e.ev === "note") {                    // D1047: a quiet step (a brief, a frontier) -- on its task, not a task
       var pn = e.parent != null && m.nodes.get(e.parent), note = { name: e.name, why: e.why, t: e.t, output: e.output || {} };

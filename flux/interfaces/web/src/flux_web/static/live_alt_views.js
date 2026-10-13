@@ -4,8 +4,9 @@ import { phaseKind, workLabel } from "./work_style.js";
 import { taskState as state } from "./live_alt_model.js";
 
 const SETUP_SAYS = { "gate: tools": "tools ready", "gate: the problem": "problem answerable", "propose: decompose": "parts" };
-const isAgent = n => /^\s*agent\s*:/i.test(String(n.name));
-const isModel = n => /^\s*(llm\b|model)/i.test(String(n.name));
+const turnOf = n => String(n.params?.turn || n.name);          // D1050: a wrapper's taken-in turn
+const isAgent = n => /^\s*agent\s*:/i.test(turnOf(n));
+const isModel = n => /^\s*(llm\b|model)/i.test(turnOf(n));
 
 /** The candidate a task works on: from its own or a descendant's purpose ("generate lut-chunk=4"). */
 export function candidateOf(n) {
@@ -37,15 +38,20 @@ export function taskNote(n) {
 }
 export function taskLabel(n) {
   const name = String(n.name || "").trim(), low = name.toLowerCase(), at = name.indexOf(":");
-  const head = (at < 0 ? low : low.slice(0, at)).trim(), rest = at < 0 ? "" : name.slice(at + 1).trim();
-  if (isAgent(n)) return `Agent · ${rest}`;
-  if (isModel(n)) return rest ? `Model · ${rest}` : "Model";
+  const head = (at < 0 ? low : low.slice(0, at)).trim();
+  // D1050: a wrapper is named as itself (its agent is its pill) -- "draft 1", not "agent:claude draft 1"
+  const rest = at < 0 ? "" : name.slice(at + 1).trim().replace(/^(agent|llm|model):\S+\s+/i, "");
+  if (/^\s*agent\s*:/i.test(name)) return `Agent · ${rest}`;
+  if (/^\s*(llm\b|model)/i.test(name)) return rest ? `Model · ${rest}` : "Model";
   const kind = workLabel(phaseKind(n));
   if (SETUP_SAYS[low]) return `Setup · ${SETUP_SAYS[low]}`;
   if (head === "knowledge") return `Setup · ${/^digest/i.test(rest) ? "papers" : /^mentor/i.test(rest) ? "mentor" : "inputs"}`;
   if (head === "tool") return `${kind} · ${ranFor(n) || rest.replace(/^fluxpreset\s+/, "") || "a command"}`;   // D1037: the document's name
   if (head === "dse") { const c = candidateOf(n); return c ? `Search · ${c}` : "Search"; }
   if (head === "test" && rest === "gate") return "Check";
+  // D1050: a design's checks said one way -- its build and fast check, the gate's verdict on it
+  if (head === "test" && /^fast check\s/i.test(rest)) return `${kind} · fast check · ${rest.slice(11).trim()}`;
+  if (head === "test" && /^judge\s/i.test(rest)) return `${kind} · gate · ${rest.slice(6).trim()}`;
   // D1038: the decision's own steps said apart -- the step that holds them, the pick, a critique of what it judges
   if (head === "decide" && !rest) return /^\s*decide\b/i.test(String(n.parent?.name || "")) ? `${kind} · pick` : kind;
   if (head === "critique") return `${kind} · critique of ${rest === "decision" ? "the decision" : rest === "measurement" ? "the measurement" : rest || "a design"}`;

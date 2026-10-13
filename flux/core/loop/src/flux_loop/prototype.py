@@ -521,7 +521,7 @@ def _prototype_stage(problem: Problem, subgoal: str | None, state: LoopState,
         checked = Checked() if req.tools and agent is None else None   # what the turn's own checks measured (D505)
         t_attempt = time.monotonic()
         answer = None
-        with _phase(f"generate: prototype {tag}", why=f"attempt {attempt + 1}") as turn_out:
+        with _phase(f"generate: prototype {tag}", why=f"attempt {attempt + 1}", absorb=True) as turn_out:
             try:
                 if agent is not None:
                     reply = problem.prototype_agent_turn(agent, prompt, code, last_err, subgoal, state)

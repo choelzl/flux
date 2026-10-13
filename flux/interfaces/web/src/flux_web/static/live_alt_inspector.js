@@ -5,9 +5,10 @@ import { WORK_COLORS as COLORS, AGENT_COLOR, phaseKind, workLabel, ownSpans } fr
 import { candidateOf, passName, taskLabel } from "./live_alt_views.js";
 import { conversation, markdown } from "./loops.js";
 
-const isAgent = n => /^\s*agent\s*:/i.test(String(n.name));
+const turnOf = n => String(n.params?.turn || n.name);          // D1050: a wrapper's taken-in turn
+const isAgent = n => /^\s*agent\s*:/i.test(turnOf(n));
 const isTool = n => /^\s*tool\s*:/i.test(String(n.name));
-const isModel = n => /^\s*(llm\b|model\b)/i.test(String(n.name));
+const isModel = n => /^\s*(llm\b|model\b)/i.test(turnOf(n));
 const head = n => String(n.name).toLowerCase().split(":")[0].trim();
 const colorOf = n => isAgent(n) ? AGENT_COLOR : COLORS[phaseKind(n)] || COLORS.setup;
 const running = n => n.t1 == null;

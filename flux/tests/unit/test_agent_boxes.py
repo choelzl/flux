@@ -158,6 +158,10 @@ def test_a_coding_agent_orchestrates_and_its_picks_are_recorded(tmp_path):
             self.open.append(name)
             return name
 
+        def phase_params(self, token, params):         # D1050: the turn taken into its orchestrate task
+            if str(params.get("turn", "")).startswith("agent:"):
+                self.under.append(token)
+
         def phase_update(self, *a):
             pass
 

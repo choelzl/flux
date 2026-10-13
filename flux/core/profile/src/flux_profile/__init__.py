@@ -53,6 +53,10 @@ class _Tee:
         for lis in self.listeners:
             _call(lis, "phase_after", name, why, params, seconds, failed, output)
 
+    def phase_params(self, token, params):
+        for lis, tok in zip(self.listeners, token or [None] * len(self.listeners)):
+            _call(lis, "phase_params", tok, params)
+
     def adopt(self, token):
         for lis, tok in zip(self.listeners, token or [None] * len(self.listeners)):
             _call(lis, "adopt", tok)
@@ -260,8 +264,18 @@ def open_spans(now: float | None = None) -> dict[tuple[str, ...], float]:
 QUIET_S = 0.5
 
 
+#: D1050: the wrappers open on this thread that take in the one agent or model turn they hold
+_ABSORB = threading.local()
+
+
+def _absorbing() -> list[dict]:
+    if not hasattr(_ABSORB, "frames"):
+        _ABSORB.frames = []
+    return _ABSORB.frames
+
+
 @contextmanager
-def phase(name: str, why: str = "", quiet: bool = False, **params):
+def phase(name: str, why: str = "", quiet: bool = False, absorb: bool = False, inline: bool = False, **params):
     """Time a block into `name`. Records even when the block raises, so a slow failure is
     not free.
 
@@ -271,7 +285,19 @@ def phase(name: str, why: str = "", quiet: bool = False, **params):
 
     D1047: `quiet` -- bookkeeping (a frontier, a brief, the tools' gate): no task while it runs; at its
     end a note on the task it ran in (`phase_note`) when it went well and fast, else a task after
-    the fact (`phase_after`) -- a failure or a slow step is still seen as one."""
+    the fact (`phase_after`) -- a failure or a slow step is still seen as one.
+
+    D1050: `absorb` -- a wrapper whose job is one agent or model turn (a draft, a critique, the plan);
+    `inline` -- that turn. The wrapper's first inline turn opens no task of its own: its inputs join
+    the wrapper's (`phase_params`), its live updates and its output are the wrapper's -- one task,
+    named as the wrapper, showing the agent. A second turn in the same wrapper is a task as ever."""
+    frames = _absorbing()
+    with _LOCK:
+        top = _stack()[-1] if _stack() else None
+    host = frames[-1] if inline and frames and not frames[-1]["used"] and top is not None and top[2] is frames[-1]["token"] else None
+    if host is not None:
+        yield from _inline(host, name, why, params)
+        return
     lis = _LISTENER
     token = None
     if lis is not None:
@@ -290,10 +316,15 @@ def phase(name: str, why: str = "", quiet: bool = False, **params):
         path = tuple(n for n, _t, _k in stack)
     failed = True
     output: dict = {}
+    frame = {"token": token, "output": output, "used": False, "lis": lis} if absorb and token is not None else None
+    if frame is not None:
+        frames.append(frame)
     try:
         yield output
         failed = bool(output.pop("failed", False))     # D1046: a phase that ended but failed (a check that found failures)
     finally:
+        if frame is not None and frames and frames[-1] is frame:
+            frames.pop()
         secs = time.perf_counter() - t0
         with _LOCK:
             stack = _stack()
@@ -310,6 +341,32 @@ def phase(name: str, why: str = "", quiet: bool = False, **params):
                     _call(lis, "phase_note", name, why, params, output)
             except Exception:  # noqa: BLE001
                 pass
+
+
+def _inline(host: dict, name: str, why: str, params: dict):
+    """D1050: the one turn a wrapper holds, as the wrapper itself: no task of its own -- its inputs
+    (the prompt, the command, which agent) added to the wrapper's, its live updates under the
+    wrapper's token, its output into the wrapper's output."""
+    host["used"] = True
+    lis, token = host["lis"], host["token"]
+    if lis is not None:
+        _call(lis, "phase_params", token, {**params, "turn": name, **({"turn why": why} if why else {})})
+    t0 = time.perf_counter()
+    with _LOCK:
+        stack = _stack()
+        stack.append((name, t0, token))         # its live updates are the wrapper's
+        path = tuple(n for n, _t, _k in stack)
+    output: dict = {}
+    try:
+        yield output
+    finally:
+        with _LOCK:
+            stack = _stack()
+            if stack and stack[-1][0] == name:
+                stack.pop()
+        record(name, time.perf_counter() - t0, path)
+        output.pop("failed", None)
+        host["output"].update(output)            # the wrapper's end carries the turn's output
 
 
 def snapshot() -> dict[str, tuple[int, float]]:

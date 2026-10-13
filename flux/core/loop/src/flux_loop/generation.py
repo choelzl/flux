@@ -191,7 +191,7 @@ def _generate_with_model(problem: Problem, subgoal: str | None, method: str,
             if tnote:
                 last_err = tnote
         else:
-            with _phase(f"generate: {tag}", why=f"attempt {attempt + 1}",
+            with _phase(f"generate: {tag}", why=f"attempt {attempt + 1}", absorb=True,
                         structured=req.structured) as out:
                 try:
                     reply = _ask(state, prompt, schema, tools=tools).text

@@ -588,7 +588,7 @@ function liveTree(base, qs, onQuestion, stream, { unifiedDetail = false, inspect
     const path = []; for (let p = n.parent; p; p = p.parent) path.unshift(p.name);
     // D739: what a task was given, what it gave, its log, and what it does now -- each a tab,
     // the tabs it has; the one chosen stays chosen from task to task
-    const isAgent = String(n.name).startsWith("agent:"), isTool = String(n.name).startsWith("tool:");
+    const isAgent = String(n.params?.turn || n.name).startsWith("agent:"), isTool = String(n.name).startsWith("tool:");
     const has = (o) => o && Object.keys(o).length;
     const f = { ...(n.fields || {}), ...(running(n) ? {} : (n.output || {})) };
     const logText = [f.stdout ?? f["stdout (live tail)"], f.stderr ?? f["stderr (live tail)"]].filter(Boolean).join("\n");

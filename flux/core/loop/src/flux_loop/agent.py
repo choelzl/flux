@@ -1123,7 +1123,7 @@ def _run_turn(spec: AgentSpec, argv: tuple[str, ...], subs: dict[str, str], *, w
     resumed = spec.resume is not None and argv == spec.resume
     prompt = subs.get("answer", "") if resumed else subs.get("prompt", "")
     shown_command = shlex.join(cmd)
-    with _phase(f"agent: {spec.tool}", why=subs.get("name") or subs.get("part") or "", prompt=prompt,
+    with _phase(f"agent: {spec.tool}", why=subs.get("name") or subs.get("part") or "", inline=True, prompt=prompt,
                 command=shown_command[:2000] + (" … command truncated" if len(shown_command) > 2000 else ""), folder=str(workdir),
                 stdin="The prompt above (sent on stdin)" if feed == prompt else "closed" if feed is None else feed[:48000]) as row, contextlib.ExitStack() as cleanup:
         cleanup.callback(end_group, proc)             # manual interruption also reaps the old process

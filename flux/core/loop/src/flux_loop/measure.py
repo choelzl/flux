@@ -199,7 +199,7 @@ def _judged(problem: Problem, state: LoopState, got: Scored) -> None:
     measurement again: a stage's run is what it is."""
     from .rejection import reject
 
-    with _phase("critique: measurement", why=f"{got.name}@{got.stage}") as out:
+    with _phase("critique: measurement", why=f"{got.name}@{got.stage}", absorb=True) as out:
         c = problem.critique("measurement", got, state)
         out["verdict"] = "no objection" if c.ok else f"REJECTED: {c.why}"
         out["subject"] = f"{got.name}: {got.metrics}"

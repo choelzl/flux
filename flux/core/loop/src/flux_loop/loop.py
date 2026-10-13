@@ -177,7 +177,7 @@ def run_loop(problem: Problem, request: LoopRequest, *, proposer: Any | None = N
     for round_ in range(_rounds(problem, request, "decomposition")):
         if not goals:
             break
-        with _phase("critique: decomposition", why=f"round {round_ + 1}") as out:
+        with _phase("critique: decomposition", why=f"round {round_ + 1}", absorb=True) as out:
             c = problem.critique("decomposition", list(goals), state)
             out["verdict"] = "the division stands" if c.ok else f"SENT BACK: {c.why}"
             out["subject"] = ", ".join(str(g) for g in goals)
@@ -1060,7 +1060,7 @@ def _admit(problem: Problem, state: LoopState, todo: list, goals: list[str], sg:
             out["why"] = verdict.why
     state.judged += 1
     if verdict.ok and _rounds(problem, request, "candidate"):
-        with _phase(f"critique: {tag}", why=cand.name) as out:
+        with _phase(f"critique: {tag}", why=cand.name, absorb=True) as out:
             c = problem.critique("candidate", cand, state)
             out["verdict"] = "no objection" if c.ok else f"REJECTED: {c.why}"
             out["subject"] = f"{cand.name}: {len(cand.artifact or '')} chars of artifact, {verdict.why[:300] if verdict.why else 'gate passed'}"
@@ -1409,7 +1409,7 @@ def _conclude(problem: Problem, state: LoopState, goals: list[str]) -> LoopResul
     rounds = _rounds(problem, request, "decision")
     while pick is not None and rounds > 0:
         rounds -= 1
-        with _phase("critique: decision", why=pick.name) as out:
+        with _phase("critique: decision", why=pick.name, absorb=True) as out:
             c = problem.critique("decision", pick, state)
             out["verdict"] = "no objection" if c.ok else f"REJECTED: {c.why}"
             out["subject"] = f"{pick.name}: {pick.metrics}"

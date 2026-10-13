@@ -231,7 +231,7 @@ export function liveAltTab(ctx) {
       "aria-expanded": String(!collapsed), onclick: event => { event.stopPropagation(); toggleFold(key, collapsed); } }, collapsed ? "▸" : "▾");
     // D1044: a critique that rejected what it judged is a failure of that work: red, the critic pill says who
     const rejectedBy = n => /^\s*critique\s*:/i.test(String(n.name)) && /^(rejected|sent back|objection)/i.test(String(n.output?.verdict ?? n.fields?.verdict ?? ""));
-    const pills = n => [AI.test(String(n.name)) || aiOf.has(n.id) ? h("span", { class: "alt-ai-pill", title: (aiOf.get(n.id) || n).name }, "ai") : "",
+    const pills = n => [AI.test(String(n.params?.turn || n.name)) || aiOf.has(n.id) ? h("span", { class: "alt-ai-pill", title: (aiOf.get(n.id) || n).name }, "ai") : "",
       /^\s*critique\s*:/i.test(String(n.name)) ? h("span", { class: "alt-critic-tag" }, "critic") : ""];
     // D1044: a box's line says the box, then what it worked on; a step under it drops the box's name
     const said = (n, box) => {
@@ -246,7 +246,7 @@ export function liveAltTab(ctx) {
       const n = r.node, under = flat ? [] : kids.get(n.id) || [], finished = n.t1 != null, collapsed = under.length && isFolded(n.id, finished, holds(n.id) && n.id !== selected);
       const kind = phaseKind(n), opens = aiOf.get(n.id) || n, label = named || said(n, box), rejected = rejectedBy(n);
       const picked = n.id === selected || opens.id === selected;
-      out.push(h("div", { class: `alt-tree-row ${box ? "box" : "step"}${secs(n) < .05 && !under.length ? " quiet" : ""}`, style: `--depth:${depth};--k:${COLORS[kind] || (AI.test(n.name) ? AGENT_COLOR : COLORS.setup)}` },
+      out.push(h("div", { class: `alt-tree-row ${box ? "box" : "step"}${secs(n) < .05 && !under.length ? " quiet" : ""}`, style: `--depth:${depth};--k:${COLORS[kind] || (AI.test(String(n.params?.turn || n.name)) ? AGENT_COLOR : COLORS.setup)}` },
         under.length ? fold(n.id, collapsed, typeof label === "string" ? label : n.name) : h("span", { class: "alt-fold-space" }),
         h("button", { ...taskButton(opens), type: "button", class: `alt-task ${state(n)}${picked ? " sel" : ""}`, "aria-pressed": String(picked), title: n.name + (n.why ? " · " + n.why : "") },
           rejected ? doneMark(true, false) : mark(n, below), h("span", { class: "alt-task-name" }, label, extra, note(n) ? h("span", { class: "muted small" }, ` · ${note(n)}`) : "",
@@ -274,7 +274,7 @@ export function liveAltTab(ctx) {
       const nodes = run.map(r => r.node), first = nodes[0], key = `again:${first.id}`, finished = nodes.every(n => n.t1 != null);
       const collapsed = isFolded(key, finished, nodes.some(n => holds(n.id)));
       const t0 = Math.min(...nodes.map(n => n.t0)), t1 = Math.max(...nodes.map(n => n.t1 ?? now));
-      const ai = nodes.some(n => aiOf.has(n.id) || AI.test(String(n.name)));
+      const ai = nodes.some(n => aiOf.has(n.id) || AI.test(String(n.params?.turn || n.name)));
       const opensTries = phaseKind(first) === "design";             // D1045: a step repeated elsewhere is one line, ×N
       out.push(h("div", { class: `alt-tree-row ${box ? "box" : "step"}`, style: `--depth:${depth};--k:${COLORS[phaseKind(first)] || COLORS.setup}` }, opensTries ? fold(key, collapsed, taskLabel(first)) : h("span", { class: "alt-fold-space" }),
         h("button", { type: "button", class: `alt-task ${finished ? "" : "running"}`, onclick: () => toggleFold(key, collapsed) },
@@ -337,17 +337,20 @@ export function liveAltTab(ctx) {
     // D1045: a pass's work as boxes -- the tasks of one kind in a row are ONE box line, whatever their names;
     // under it its tries -- a draft and the checks after it, or each run when it ran several -- else its steps
     const flat = n => [n, ...(n.kids || []).flatMap(flat)];
-    const leadOf = c => (phaseKind(c) === "design" && !/^\s*(propose|template-fill)\b/i.test(String(c.name))) || AI.test(String(c.name));
+    // a draft: an agent's or a model's turn, or a design step of its own -- never a command it ran, a brief or a composition
+    const leadOf = c => !/^\s*tool\s*:/i.test(String(c.name)) && ((phaseKind(c) === "design" && !/^\s*(propose|template-fill)\b/i.test(String(c.name))) || AI.test(String(c.params?.turn || c.name)));
     const triesIn = n => {
-      const got = []; let cur = null;
+      const got = [], before = []; let cur = null;
       for (const r of kids.get(n.id) || []) {
         if (leadOf(r.node)) got.push(cur = { lead: r.node, steps: [] });
         else if (cur) cur.steps.push(r.node);
+        else before.push(r.node);                      // what ran before the first draft is the first try's
       }
+      if (got.length) got[0].steps.unshift(...before);
       return got.length >= 2 ? got : null;
     };
     const draftsIn = n => { const t = triesIn(n); if (t) return t; const k = (kids.get(n.id) || []).map(r => r.node); const i = k.findIndex(leadOf);
-      return i >= 0 ? [{ lead: k[i], steps: k.slice(i + 1) }] : null; };
+      return i >= 0 ? [{ lead: k[i], steps: k.filter((_, j) => j !== i) }] : null; };   // one draft: every other step is its
     const rest = n => { const l = taskLabel(n), at = l.indexOf(" · "); return at < 0 ? "" : l.slice(at + 3); };
     // D1046: what a stage measured, as it said it ("d#4: score=88.9, cycles=41") -- its first numbers
     const STAGE = /^\s*(simulation|analytical)\s*:/i;
@@ -369,7 +372,7 @@ export function liveAltTab(ctx) {
         h("button", { ...taskButton(opens), type: "button", class: `alt-task ${state(opens)}${picked ? " sel" : ""}`, "aria-pressed": String(picked), title: t.lead.name },
           running ? h("span", { class: "alt-spin", role: "img", "aria-label": "running" }) : doneMark(!!failedStep || !!t.lead.failed, all.some(n => below.has(n.id))),
           h("span", { class: "alt-task-name" }, `try ${i}`, made ? h("span", { class: "alt-what" }, ` ${made}`) : "", why ? h("span", { class: "alt-what" }, ` · ${why}`) : ""),
-          aiOf.has(t.lead.id) || AI.test(String(t.lead.name)) ? h("span", { class: "alt-ai-pill" }, "ai") : "",
+          aiOf.has(t.lead.id) || AI.test(String(t.lead.params?.turn || t.lead.name)) ? h("span", { class: "alt-ai-pill" }, "ai") : "",
           h("span", { class: "mono muted small" }, dur(t1 - t0)))));
       if (!collapsed) runs(under, depth + 1);
     };
@@ -380,17 +383,23 @@ export function liveAltTab(ctx) {
       let tries = kind === "design" ? nodes.flatMap(n => draftsIn(n) || [{ lead: n, steps: [], run: true }]) : null;
       if (tries && tries.length < 2) tries = null;
       const all = nodes.flatMap(flat), running = all.some(n => n.t1 == null);
-      const steps = tries ? [] : nodes.length > 1 ? nodes.map(n => ({ node: n, parent: null })) : (kids.get(first.id) || []);
+      // D1050: a design of one draft is that draft -- the box opens its conversation, its checks under it
+      const lone = !tries && kind === "design" && nodes.length === 1 ? draftsIn(first) : null;
+      const steps = tries ? [] : lone ? lone[0].steps.map(n => ({ node: n, parent: null }))
+        : nodes.length > 1 ? nodes.map(n => ({ node: n, parent: null })) : (kids.get(first.id) || []);
       const collapsed = !(tries || steps.length) || isFolded(key, !running, all.some(n => holds(n.id)) && !nodes.some(n => n.id === selected));
-      const opens = nodes.length === 1 ? (aiOf.get(first.id) || first) : last, picked = nodes.length === 1 && (first.id === selected || opens.id === selected);
+      const opens = lone ? (aiOf.get(lone[0].lead.id) || lone[0].lead) : nodes.length === 1 ? (aiOf.get(first.id) || first) : last;
+      const picked = nodes.length === 1 && (first.id === selected || opens.id === selected);
       const t0 = Math.min(...all.map(n => n.t0)), t1 = Math.max(...all.map(n => n.t1 ?? now));
       const staged = kind === "measure" ? all.filter(n => STAGE.test(String(n.name)) && numbersOf(n)).at(-1) : null;
-      const what = staged ? `${String(staged.name).split(":")[1].trim()} · ${numbersOf(staged)}` : rest(last), ai = all.some(n => AI.test(String(n.name)) || aiOf.has(n.id));
+      const what = staged ? `${String(staged.name).split(":")[1].trim()} · ${numbersOf(staged)}` : rest(last), ai = all.some(n => AI.test(String(n.params?.turn || n.name)) || aiOf.has(n.id));
       const crit = all.some(n => /^\s*critique\s*:/i.test(String(n.name))), rejected = all.some(rejectedBy);
       out.push(h("div", { class: "alt-tree-row box", style: `--depth:${depth};--k:${COLORS[kind] || COLORS.setup}` },
         tries || steps.length ? fold(key, collapsed, workLabel(kind)) : h("span", { class: "alt-fold-space" }),
-        h("button", { ...taskButton(opens), type: "button", class: `alt-task ${state(opens)}${picked ? " sel" : ""}`, "aria-pressed": String(picked), title: nodes.map(n => n.name).join(" · ") },
-          running ? h("span", { class: "alt-spin", role: "img", "aria-label": "running" }) : doneMark(ended(nodes) || rejected, all.some(n => n.failed || below.has(n.id))),
+        h("button", { ...taskButton(opens), type: "button", class: `alt-task ${state(opens)}${picked ? " sel" : ""}`, "aria-pressed": String(picked), title: lone ? opens.name : nodes.map(n => n.name).join(" · ") },
+          running ? h("span", { class: "alt-spin", role: "img", "aria-label": "running" })
+            : lone && (opens.interrupted || opens.timedOut) ? mark(opens, below)      // its one draft's own end: interrupted, a time limit
+            : doneMark(ended(nodes) || rejected, all.some(n => n.failed || below.has(n.id))),
           h("span", { class: "alt-task-name" }, h("b", {}, workLabel(kind)), what ? h("span", { class: "alt-what" }, ` ${what}`) : "", nodes.length === 1 && note(first) ? h("span", { class: "alt-what" }, ` · ${note(first)}`) : ""),
           ai ? h("span", { class: "alt-ai-pill" }, "ai") : "", crit ? h("span", { class: "alt-critic-tag" }, "critic") : "",
           tries && tries.length > 1 ? h("span", { class: "alt-again" }, `×${tries.length}`) : "",

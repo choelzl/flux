@@ -162,6 +162,13 @@ class Journal:
         self._write({"ev": "end", "id": pid, "name": name, "seconds": round(seconds, 3), "failed": bool(failed),
                      "output": _capped(output or {})})
 
+    def phase_params(self, token: int, params: dict) -> None:
+        """D1050: inputs a wrapper takes in from the one turn it holds -- the prompt whole, as at an agent's start."""
+        given = _cut(params or {})
+        if isinstance((params or {}).get("prompt"), str):
+            given["prompt"] = params["prompt"]
+        self._write({"ev": "params", "id": token, "params": given})
+
     def phase_update(self, token: int, name: str, output: dict) -> None:
         with self._lock:
             self._live["updates"][str(token)] = _cut(output)
