@@ -177,6 +177,7 @@
               pkgs.hyperfine   # `flux prog time` (D661)
               pkgs.tini        # PID 1 of the run's sandbox: reaps the tools' processes, forwards signals (D680)
               pkgs.ripgrep     # `rg`: the coding agents search with it first (Codex) -- in the sandbox via the PATH (D848)
+              pkgs.sqlite      # `sqlite3`: a loop's record and the server's store, read by hand (D1048)
             ]
             # Verilator, Yosys, Icarus, sv-lang; CMU-SAFARI/Pythia: ChampSim, with its source
             # tree under $out/share/pythia so an app's `champsim.py build` can rebuild it; on linux
