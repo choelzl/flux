@@ -36,6 +36,8 @@ class Note:
     text: str
     received_at: float
     origin: str = "this-run"        # or "earlier-run", for notes reloaded from the record
+    ident: str = ""                 # D1049: the page's id for it, so a removal finds it
+    removed: bool = False           # D1049: the page removed this note -- it leaves the prompts and the record
 
 
 class FeedbackChannel:
@@ -103,6 +105,7 @@ class InboxChannel:
 
     def __init__(self, path: str, say: Callable[[str], None] = print) -> None:
         self.path, self._say, self._offset = path, say, 0
+        self._said_gone: set[str] = set()
         self.active = True
         try:
             import os
@@ -140,14 +143,42 @@ class InboxChannel:
         gone = {str(d["forget"]) for d in docs if d.get("forget") is not None}
         notes = []
         for doc in docs:
-            if str(doc.get("id") or doc.get("t")) in gone:
+            ident = str(doc.get("id") or doc.get("t"))
+            if doc.get("forget") is not None or ident in gone:
                 continue
             text = str(doc.get("text") or "").strip()
             if text:
                 by = str(doc.get("by") or "").strip()
-                notes.append(Note(text=text, received_at=float(doc.get("t") or time.time())))
+                notes.append(Note(text=text, received_at=float(doc.get("t") or time.time()), ident=ident))
                 self._say(f'feedback noted{" from " + by if by else ""}: "{text[:200]}" -- it reaches the next proposal prompt')
+        # D1049: a note removed after it was read -- read in this run or an earlier one -- is said as a removal:
+        # it leaves the notes the prompts carry and the record a resumed run reloads
+        in_batch = {str(d.get("id") or d.get("t")) for d in docs if d.get("forget") is None}   # skipped unread: nothing to undo
+        for ident in gone - in_batch:
+            if ident in self._said_gone:
+                continue
+            self._said_gone.add(ident)
+            text = self._text_of(ident)
+            notes.append(Note(text=text, received_at=time.time(), ident=ident, removed=True))
+            self._say(f'feedback: a note was removed{": " + repr(text[:120]) if text else ""} -- it leaves the prompts')
         return notes
+
+    def _text_of(self, ident: str) -> str:
+        """The text of the note `ident`, from the whole file (it may be older than this run)."""
+        import json
+
+        try:
+            with open(self.path, encoding="utf-8", errors="replace") as fh:
+                for line in fh:
+                    try:
+                        doc = json.loads(line)
+                    except ValueError:
+                        continue
+                    if isinstance(doc, dict) and doc.get("forget") is None and str(doc.get("id") or doc.get("t")) == ident:
+                        return str(doc.get("text") or "").strip()
+        except OSError:
+            pass
+        return ""
 
     def close(self) -> None:
         pass
@@ -198,7 +229,9 @@ def drain_guidance(channel, accumulated: list[Note], *,
                 on_note(n)
             except Exception:                                             # noqa: BLE001
                 pass
-    accumulated.extend(fresh)
+    for gone in (n for n in fresh if n.removed):                          # D1049: out of the prompts too
+        accumulated[:] = [k for k in accumulated if not ((gone.ident and k.ident == gone.ident) or (gone.text and k.text == gone.text))]
+    accumulated.extend(n for n in fresh if not n.removed)
     return render_guidance(accumulated) or None
 
 
@@ -210,8 +243,8 @@ def reload_notes(records, say: Callable[[str], None] = lambda _m: None) -> list[
     try:
         if records is None or not getattr(records, "resumed", False):
             return []
-        earlier = [Note(text=t, received_at=0.0, origin="earlier-run")
-                   for t in records.notes()]
+        earlier = [Note(text=t, received_at=0.0, origin="earlier-run", ident=i)
+                   for t, i in (records.notes_with_ids() if hasattr(records, "notes_with_ids") else [(t, "") for t in records.notes()])]
         if earlier:
             say(f"resumed: {len(earlier)} operator note(s) from an earlier run rejoin "
                 "the proposer prompt")
@@ -260,8 +293,12 @@ def note_sink(records: Any, acknowledge: Callable[[str], None] | None = None,
     """The `on_note` for `drain_guidance` (D429): persist the note into the campaign record when
     there is one (a resume re-shows it, D403), then acknowledge it the run's own way."""
     def on_note(n: Note) -> None:
+        if n.removed:                                                     # D1049: the record forgets it too
+            if records is not None and hasattr(records, "forget_note"):
+                records.forget_note(n.ident, n.text)
+            return
         if records is not None:
-            records.note(n.text)
+            records.note(n.text, n.ident) if n.ident else records.note(n.text)
         if acknowledge is not None:
             acknowledge(n.text)
 

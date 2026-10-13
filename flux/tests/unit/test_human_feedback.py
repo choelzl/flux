@@ -158,3 +158,31 @@ def test_with_no_model_role_guidance_is_still_recorded_and_reported(tmp_path):
     channel.close()
     fake.close()
     records.close("completed")
+
+
+def test_a_note_removed_after_it_was_read_leaves_the_prompts_and_the_record(tmp_path):
+    """D1049: the page removes a note the loop already read: the running loop drops it from what its
+    prompts carry and the record forgets it, so a resumed run does not bring it back."""
+    import json as _json
+
+    from flux_feedback.channel import InboxChannel, drain_guidance, note_sink, reload_notes
+    from flux_records import Records
+
+    inbox = tmp_path / "inbox.jsonl"
+    inbox.write_text("")
+    ch = InboxChannel(str(inbox), say=lambda _m: None)
+    with inbox.open("a") as fh:
+        fh.write(_json.dumps({"id": "a1", "text": "use a lookup table", "t": 1.0}) + "\n")
+        fh.write(_json.dumps({"id": "b2", "text": "keep it small", "t": 2.0}) + "\n")
+    rec = Records(str(tmp_path / "r.db"), objective={"s": 1})
+    notes: list = []
+    block = drain_guidance(ch, notes, on_note=note_sink(rec))
+    assert "use a lookup table" in block and [n.ident for n in notes] == ["a1", "b2"]
+    with inbox.open("a") as fh:
+        fh.write(_json.dumps({"forget": "a1", "by": "bob", "t": 3.0}) + "\n")
+    block = drain_guidance(ch, notes, on_note=note_sink(rec))
+    assert [n.text for n in notes] == ["keep it small"] and "use a lookup table" not in block
+    assert rec.notes() == ["keep it small"], "the record forgets it"
+    rec.resumed = True
+    assert [n.text for n in reload_notes(rec)] == ["keep it small"], "a resumed run does not bring it back"
+    assert drain_guidance(ch, notes, on_note=note_sink(rec)) is not None and len(notes) == 1, "said once"

@@ -230,27 +230,52 @@ class Records:
         except Exception:  # noqa: BLE001
             pass
 
-    def note(self, text: str) -> None:
-        """Persist a human note."""
+    def note(self, text: str, ident: str = "") -> None:
+        """Persist a human note (D1049: with the page's id for it, so a removal finds it)."""
         if self.store is None:
             return
         try:
             import time
 
             self.store.append_event(self.campaign_id, "human_note",
-                                    {"text": text, "ts": time.time()})
+                                    {"text": text, "ts": time.time(), **({"id": ident} if ident else {})})
+        except Exception:  # noqa: BLE001
+            pass
+
+    def forget_note(self, ident: str, text: str = "") -> None:
+        """D1049: a note the page removed -- a resumed run no longer reloads it."""
+        if self.store is None:
+            return
+        try:
+            self.store.append_event(self.campaign_id, "human_note_removed", {"id": ident, "text": text})
         except Exception:  # noqa: BLE001
             pass
 
     def notes(self) -> list[str]:
         """Operator guidance already in this campaign's record, oldest first, for a resumed run."""
+        return [t for t, _i in self.notes_with_ids()]
+
+    def notes_with_ids(self) -> list[tuple[str, str]]:
+        """(text, the page's id) of each note standing in this campaign's record, oldest first --
+        D1049: a note the page removed is left out (by its id, or its text for a note kept without one)."""
         if self.store is None or not self.campaign_id:
             return []
         try:
-            return [e["detail"]["text"] for e in self.store.events(self.campaign_id)
-                    if e.get("kind") == "human_note" and e.get("detail", {}).get("text")]
+            events = self.store.events(self.campaign_id)
         except Exception:  # noqa: BLE001
             return []
+        gone_ids = {str(e["detail"].get("id")) for e in events if e.get("kind") == "human_note_removed" and e["detail"].get("id")}
+        gone_texts = {str(e["detail"].get("text")) for e in events if e.get("kind") == "human_note_removed" and e["detail"].get("text")}
+        out = []
+        for e in events:
+            d = e.get("detail") or {}
+            if e.get("kind") != "human_note" or not d.get("text"):
+                continue
+            ident = str(d.get("id") or "")
+            if (ident and ident in gone_ids) or d["text"] in gone_texts:
+                continue
+            out.append((d["text"], ident))
+        return out
 
     def close(self, status: str) -> None:
         """Mark the campaign's final status; failures cost only the status line."""

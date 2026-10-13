@@ -997,12 +997,24 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
         _w, _whose, d, _run = loop_of(name, user, owner, edit=True)
         from .confine import Escape
 
+        text = next((n.get("text", "") for n in runs.notes(d / "runs") if n.get("id") == ident), "")
         try:
             gone = runs.forget_note(d / "runs", user, ident)
         except (Escape, OSError) as exc:
             raise HTTPException(400, "the loop's inbox is not a file of this loop") from exc
         if not gone:
             raise HTTPException(404, "no such note")
+        # D1049: out of the record too -- a note the loop read is reloaded by every resumed run (D403)
+        run = _run
+        cid = runs.campaign(run)[0] if run else None
+        if run and cid and Path(run["db"]).exists():
+            from flux_store import CampaignStore
+
+            try:
+                with CampaignStore(run["db"]) as record:
+                    record.append_event(cid, "human_note_removed", {"id": ident, "text": text})
+            except Exception:  # noqa: BLE001 -- the inbox's removal stands; a running loop says it to its record
+                pass
         store.audit(user.name, "note removed", name)
         return {"ok": "the note is removed"}
 
