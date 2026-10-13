@@ -186,7 +186,8 @@ export function docNotes(raw, documentName) {
   const policy = typeof orch === "object" && orch ? orch.policy || orch.intent || "" : typeof orch === "string" ? orch : "";
   const cmd = typeof gen === "object" && gen ? gen.command || (gen.agent ? "an agent" : gen.model ? "a model" : "") : typeof gen === "string" ? gen : "";
   const script = String(Array.isArray(cmd) ? cmd.join(" ") : cmd).split(/\s+/).map(w => w.replace(/^\{home\}\//, "")).find(w => /\.\w+$/.test(w) && !w.startsWith("{")) || (cmd ? String(cmd).split(/\s+/)[0] : "");
-  const goals = objectives.filter(o => o && o.metric).map(o => `${o.metric} ${/max/i.test(o.direction || "") ? "↑" : "↓"}`);
+  // D1058: a goal written as its name alone is maximized, as the loop reads it
+  const goals = objectives.map(o => typeof o === "string" ? { metric: o } : o).filter(o => o && o.metric).map(o => `${o.metric} ${/min/i.test(o.direction || "") ? "↓" : "↑"}`);
   const tests = count(flow.test), measures = count(flow.measure);
   return {
     search: policy, design: script.replace(/^.*\//, ""), check: tests ? plural(tests, "check") : "", measure: measures ? plural(measures, "measurement") : "",
