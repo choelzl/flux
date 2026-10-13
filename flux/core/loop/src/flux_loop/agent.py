@@ -155,6 +155,7 @@ class AgentSpec:
     probe: tuple[tuple[str, int], ...] | None = (("gate", 20), ("stages", 3))   # `flux probe` per turn (D678); None = off
     allowed: tuple[str, ...] = ()  # denied commands this agent was given back (`allow:`, D678)
     kind: str = ""                 # the preset it runs as (D807); "" for a command of one's own
+    endpoint: str = ""             # its endpoint as resolved (D1027: the slots it shares with every loop)
 
 
 def _argv(command: Any) -> tuple[str, ...]:
@@ -238,8 +239,9 @@ def agent_spec(spec: Any) -> AgentSpec:
     argv = _in_box(_with_args((exe, *_allowed(p["argv"][1:], allow)), extra))
     resume = _in_box(_with_args((exe, *_allowed(p["resume"][1:], allow)), extra)) if p["resume"] else None
     config = tuple((k, json.dumps(_allowed_config(v, allow))) for k, v in (p.get("config") or {}).items())
+    endpoint = str(((eff.fields if eff is not None else {}).get("endpoint") or {}).get("value") or "")
     return AgentSpec(preset, argv, resume, p["output"], **common, config=config, add_dir=tuple(p.get("add_dir") or ()),
-                     allowed=tuple(allow), kind=kind)
+                     allowed=tuple(allow), kind=kind, endpoint=endpoint)
 
 
 def _in_box(argv: tuple[str, ...]) -> tuple[str, ...]:
@@ -554,8 +556,12 @@ def run_turn(spec: AgentSpec, argv: tuple[str, ...], subs: dict[str, str], *, wo
 
     from flux_llm import transcript
 
+    from flux_llm.slots import at_once, endpoint_key, endpoint_slot
+
     t0 = time.monotonic()
-    turn = _run_turn(spec, argv, subs, workdir=workdir)
+    # D1027: one of its endpoint's slots while it runs -- every loop's turns there share the admin's limit
+    with endpoint_slot(endpoint_key(spec.endpoint, f"agent-{spec.tool}"), at_once(spec.tool), f"{spec.tool} turn"):
+        turn = _run_turn(spec, argv, subs, workdir=workdir)
     turn.resumed = spec.resume is not None and argv == spec.resume
     if turn.resumed:
         turn.began = "resumed"

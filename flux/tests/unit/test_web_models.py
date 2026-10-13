@@ -303,3 +303,27 @@ def test_an_agents_time_limit_is_set_on_the_web_and_a_document_still_wins(server
     assert agent_spec({"preset": "codex", "timeout_s": 600}).timeout_s == 600.0, "the document wins"
     monkeypatch.delenv("FLUX_CODEX_TIMEOUT_S")
     assert agent_spec("codex").timeout_s == 1800.0
+
+
+def test_calls_at_once_on_an_endpoint_are_the_admins_alone(server, monkeypatch):
+    """D1027: FLUX_<NAME>_AT_ONCE and FLUX_REMOTE_AT_ONCE -- the admin's, reaching every run (no user's own,
+    whoever's endpoint), with the folder of the slots every run shares."""
+    for k in ("FLUX_CODEX_AT_ONCE", "FLUX_REMOTE_AT_ONCE"):
+        monkeypatch.delenv(k, raising=False)
+    app, store = server
+    ada, bob = _client(app, "ada", "correct horse battery"), _client(app, "bob", "another long secret")
+    assert ada.put("/api/admin/settings", json={"values": {"FLUX_CODEX_AT_ONCE": "two"}}, headers=H).status_code == 400
+    assert ada.put("/api/admin/settings", json={"values": {"FLUX_CODEX_AT_ONCE": "2", "FLUX_REMOTE_AT_ONCE": "3"}},
+                   headers=H).status_code == 200
+    admin_groups = {g["id"]: g for g in ada.get("/api/admin/settings").json()["groups"]}
+    assert "FLUX_CODEX_AT_ONCE" in admin_groups["codex"]["public"] and "FLUX_REMOTE_AT_ONCE" in admin_groups["model"]["public"]
+    groups = {g["id"]: g for g in bob.get("/api/settings").json()["groups"]}
+    assert not any(k.endswith("_AT_ONCE") for g in groups.values() for k in g["public"]), "no field of a user's own"
+    assert bob.put("/api/settings", json={"values": {"FLUX_CODEX_AT_ONCE": "99"}}, headers=H).status_code == 400
+    assert bob.put("/api/env", json={"name": "FLUX_CODEX_AT_ONCE", "value": "99"}, headers=H).status_code == 400
+    bob.put("/api/settings", json={"values": {"FLUX_REMOTE_BASE_URL": "http://own.example/v1"}}, headers=H)
+    env = run_env(store, store.user(name="bob"))
+    assert env["FLUX_CODEX_AT_ONCE"] == "2" and env["FLUX_REMOTE_AT_ONCE"] == "3", "the admin's, his own endpoint or not"
+    assert env["FLUX_SLOTS_DIR"] == str(store.data / "slots") and (store.data / "slots").is_dir()
+    ada.put("/api/admin/settings", json={"values": {"FLUX_CODEX_AT_ONCE": "0"}}, headers=H)
+    assert "FLUX_CODEX_AT_ONCE" not in run_env(store, store.user(name="bob")), "0: no limit"

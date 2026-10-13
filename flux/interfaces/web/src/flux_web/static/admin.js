@@ -899,6 +899,7 @@ async function adminGroups(body, ok = () => true) {
 /** Model settings by what uses them (D696): Flux's own model and each coding agent. `server`:
     the admin's values a field falls back to when empty (a key only said to be set). */
 const SETTING_LABELS = { FLUX_REMOTE_BASE_URL: "Endpoint URL", FLUX_REMOTE_MODEL: "Model", FLUX_LLM_TIMEOUT_S: "Seconds per request",
+  FLUX_REMOTE_AT_ONCE: "Requests at once on its endpoint (every loop; 0: no limit)",
   FLUX_REMOTE_API_KEY: "Key", 
   FLUX_DEFAULT_AGENT: "Agent" };
 /** D807: each agent offered has a tab of its own -- its kind's endpoint, model and key, and variables

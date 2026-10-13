@@ -101,6 +101,12 @@ def run_env(store: Store, user: User, app: str | None = None, views: dict[str, A
                 env.pop("FLUX_REMOTE_API_KEY_FILE", None)             # a key set here wins over the server's file
         web.update(vals)
     env.update(web)
+    env.pop("FLUX_REMOTE_AT_ONCE", None)                       # D1027: the admin's limit alone, whoever's endpoint
+    if str(server.get("FLUX_REMOTE_AT_ONCE") or "0") != "0":
+        env["FLUX_REMOTE_AT_ONCE"] = str(server["FLUX_REMOTE_AT_ONCE"])
+    slots = store.data / "slots"                               # D1027: every run's endpoint slots, one folder
+    slots.mkdir(exist_ok=True)
+    env["FLUX_SLOTS_DIR"] = str(slots)
     if web.get("FLUX_REMOTE_BASE_URL"):
         env["FLUX_LLM_REMOTE"] = "1"
     names: list[str] = list(web)
@@ -373,6 +379,10 @@ def _agents(store: Store, user: User, env: dict[str, str], server: dict[str, str
         for k, v in run_prices(a, server, mine, flux).items():
             env[k] = v
             names.append(k)
+        env.pop(a.at_once(), None)                               # D1027: the admin's limit alone, no one else's
+        if str(server.get(a.at_once()) or "0") != "0":
+            env[a.at_once()] = str(server[a.at_once()])
+            names.append(a.at_once())
         env.pop(a.timeout(), None)                               # D893: the web's time limit, not the machine's
         if run_timeout(a, server, mine):
             env[a.timeout()] = run_timeout(a, server, mine)

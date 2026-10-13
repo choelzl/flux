@@ -298,13 +298,17 @@ class OpenAIChatProposer:
     RECOVERY_WAIT_S = 300.0       # server reloads outlast one immediate retry
 
     def _call(self, body: dict) -> dict:
-        if self.stream:
-            return self._call_streaming(body)
-        req = urllib.request.Request(
-            f"{self.base_url}/chat/completions", data=json.dumps(body).encode(),
-            headers=self._headers())
-        with urllib.request.urlopen(req, timeout=self.timeout_s) as resp:
-            return json.loads(resp.read())
+        from .slots import at_once, endpoint_key, endpoint_slot
+
+        # D1027: one of the endpoint's slots while the request runs, shared with every loop's
+        with endpoint_slot(endpoint_key(self.base_url, "model"), at_once("REMOTE"), f"model {self.model}"):
+            if self.stream:
+                return self._call_streaming(body)
+            req = urllib.request.Request(
+                f"{self.base_url}/chat/completions", data=json.dumps(body).encode(),
+                headers=self._headers())
+            with urllib.request.urlopen(req, timeout=self.timeout_s) as resp:
+                return json.loads(resp.read())
 
     def _headers(self, **more: str) -> dict[str, str]:
         h = {"Content-Type": "application/json", **more}

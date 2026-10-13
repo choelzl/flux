@@ -175,3 +175,12 @@ def test_a_login_a_former_server_started_is_removed_with_its_client(monkeypatch)
     finally:
         if p.poll() is None:
             p.kill()
+
+
+def test_every_run_shares_the_endpoint_slots(monkeypatch, tmp_path):
+    """D1027: the host's slot folder mounted read-write into every sandbox, where the run finds it."""
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
+    monkeypatch.setenv("FLUX_SLOTS_DIR", str(tmp_path / "slots"))
+    cmd = sandbox.container_argv(["flux"], _args(tmp_path), "task run", "flux-t", None, "docker")
+    assert f"{tmp_path / 'slots'}:/flux-slots" in cmd
+    assert sandbox.container_env(cmd)["FLUX_SLOTS_DIR"] == "/flux-slots"

@@ -285,7 +285,8 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
         from .agents import visible
 
         agents = visible(store)
-        groups = _groups(agents)
+        # D1027: calls at once on an endpoint is the admin's alone -- no field of a user's own
+        groups = [{**g, "public": [k for k in g["public"] if not k.endswith("_AT_ONCE")]} for g in _groups(agents)]
         inherited = _from_server(user, agents)
         values = store.settings(user)
         env = {n: {"mine": _env_list(f"agent:{n}:user:{user.id}"), "server": [] if user.external else _inherited_list(f"agent:{n}")}

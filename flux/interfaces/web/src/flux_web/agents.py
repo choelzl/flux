@@ -64,7 +64,12 @@ class Agent:
     def keys(self) -> dict[str, tuple[str, ...]]:
         """Its settings' names: endpoint and model public, the key (and a Claude login's token) secret."""
         secret = (f"FLUX_{self.up}_API_KEY", *((f"FLUX_{self.up}_OAUTH_TOKEN",) if self.kind == "claude" else ()))
-        return {"public": (f"FLUX_{self.up}_BASE_URL", f"FLUX_{self.up}_MODEL", self.timeout(), *self.prices()), "secret": secret}
+        return {"public": (f"FLUX_{self.up}_BASE_URL", f"FLUX_{self.up}_MODEL", self.timeout(), *self.prices(), self.at_once()),
+                "secret": secret}
+
+    def at_once(self) -> str:
+        """D1027: its turns at once on its endpoint (host:port), every loop's -- the admin's alone; 0: no limit."""
+        return f"FLUX_{self.up}_AT_ONCE"
 
     def timeout(self) -> str:
         """Its turn's time limit's name (D893): seconds, the server's or a user's own; a document's
@@ -79,6 +84,7 @@ class Agent:
         k = self.keys()
         pin, pout = self.prices()
         out = {k["public"][0]: KINDS[self.kind]["endpoint"], k["public"][1]: "Model", self.timeout(): "Seconds per turn",
+               self.at_once(): "Turns at once on its endpoint (every loop; 0: no limit)",
                k["secret"][0]: "Key", pin: "Price in", pout: "Price out"}
         if self.kind == "claude":
             out[k["secret"][1]] = "Login token (its login saves it)"

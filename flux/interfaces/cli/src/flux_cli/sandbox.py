@@ -63,6 +63,7 @@ _SECRETISH = ("TOKEN", "SECRET", "PASSWORD", "AWS_", "GITHUB_", "GH_", "AZURE_",
 #: make mount points in the user's home.
 HOME_IN = "/home/flux"
 LOOP_IN = "/sandbox"
+SLOTS_IN = "/flux-slots"            # D1027: every run's endpoint slots, one folder of the host's
 CACHE_IN = "/sandbox-cache"
 SOURCE_IN = "/flux"
 #: On one's own machine, the Flux home starts with the agents' configuration and logins of the
@@ -555,10 +556,22 @@ def container_argv(argv: list[str], args: Any, command: str, name: str, proxy_di
     if guard:
         extra = [v[:-3] + ":ro" if v.endswith(":rw") else v for v in extra]
     cmd += extra                                              # D936: the loop's admin mounts, after the sandbox's own
+    slots = None
+    if not guard:                                             # D1027: the endpoint slots every run shares
+        from flux_llm.slots import slots_dir
+
+        slots = slots_dir()
+        try:
+            slots.mkdir(parents=True, exist_ok=True)
+            cmd += ["-v", f"{slots}:{SLOTS_IN}"]
+        except OSError:
+            slots = None
     if said:
         print(f"flux {command}: admin mounts: " + "; ".join(said), file=sys.stderr, flush=True)
     env = _env()
     env.update(FLUX_SANDBOXED="1", FLUX_SANDBOX_NAME=name, HOME=HOME_IN, FLUX_SANDBOX_CLI=json.dumps(cli))
+    if slots is not None:
+        env["FLUX_SLOTS_DIR"] = SLOTS_IN
     env.update(agent_programs())                              # D804: the programs at the paths mounted
     env.update(OPENCODE_SKIP_SAFE_CHECK="1")                  # D714: the container is the safety; OpenCode's own check refuses it
     if not env.get("NODE_EXTRA_CA_CERTS"):                    # D722: Node/Bun trust their own roots only; the host's too

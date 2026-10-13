@@ -56,7 +56,8 @@ _UNSET = "unset"
 #: D721: each group shows on a tab of its own (`tab`); the agent by default beside Flux's model.
 GROUPS: dict[str, dict[str, Any]] = {
     "model": {"label": "Flux's own model (OpenAI-compatible)", "tab": "Flux", "endpoint": "FLUX_REMOTE_BASE_URL",
-              "public": ("FLUX_REMOTE_BASE_URL", "FLUX_REMOTE_MODEL", "FLUX_LLM_TIMEOUT_S", "FLUX_REMOTE_PRICE_IN", "FLUX_REMOTE_PRICE_OUT"),
+              "public": ("FLUX_REMOTE_BASE_URL", "FLUX_REMOTE_MODEL", "FLUX_LLM_TIMEOUT_S", "FLUX_REMOTE_PRICE_IN", "FLUX_REMOTE_PRICE_OUT",
+                         "FLUX_REMOTE_AT_ONCE"),
               "prices": ("FLUX_REMOTE_PRICE_IN", "FLUX_REMOTE_PRICE_OUT"),
               "secret": ("FLUX_REMOTE_API_KEY",),
               "hint": "Any OpenAI-compatible endpoint: hosted, OpenRouter, a local Ollama's /v1."},
@@ -70,7 +71,7 @@ SECRET_SETTINGS = tuple(k for g in GROUPS.values() for k in g["secret"])
 #: Names a run's variables never take (D697): the sandbox and the loop's own plumbing, the
 #: process's basics, and the model settings (set under Models).
 _RESERVED_ENV = re.compile(r"(FLUX_SANDBOX.*|FLUX_CONFIG|FLUX_FEEDBACK_INBOX|FLUX_RUN_LOG|FLUX_TRACE_ROOT|FLUX_SANDBOXED|"
-                           r"FLUX_LLM_REMOTE|FLUX_[A-Z0-9_]+_PRICE_IN|FLUX_[A-Z0-9_]+_PRICE_OUT|FLUX_[A-Z0-9_]+_TIMEOUT_S|FLUX_[A-Z0-9_]+_ARGS|FLUX_[A-Z0-9_]+_BIN|FLUX_[A-Z0-9_]+_ENV|FLUX_[A-Z0-9_]+_LOGIN_FILES|"
+                           r"FLUX_LLM_REMOTE|FLUX_[A-Z0-9_]+_PRICE_IN|FLUX_[A-Z0-9_]+_PRICE_OUT|FLUX_[A-Z0-9_]+_TIMEOUT_S|FLUX_[A-Z0-9_]+_AT_ONCE|FLUX_SLOTS_DIR|FLUX_[A-Z0-9_]+_ARGS|FLUX_[A-Z0-9_]+_BIN|FLUX_[A-Z0-9_]+_ENV|FLUX_[A-Z0-9_]+_LOGIN_FILES|"
                            r"FLUX_AGENTS|FLUX_SHARED_VARS|FLUX_AGENT_API_KEY|OPENCODE_CONFIG_CONTENT|PATH|HOME|PWD|USER|SHELL|"
                            r"TMPDIR|TMP|TEMP|LD_.*|PYTHON.*|XDG_.*|NIX_.*)")
 
@@ -639,6 +640,10 @@ class Store:
                 ok = False
             if not ok:
                 raise ValueError(f"{key}: a price is USD per million tokens, a number such as 0.5")
+        if key.endswith("_AT_ONCE"):                                 # D1027: calls at once on an endpoint
+            if not re.fullmatch(r"\d{1,4}", value.strip()):
+                raise ValueError(f"{key}: how many at once, a whole number (0: no limit)")
+            value = value.strip()
         if key.endswith("_TIMEOUT_S"):                               # D893: an agent's turn, Flux's request
             try:
                 ok = float(value) > 0
@@ -654,6 +659,8 @@ class Store:
         return value
 
     def set_setting(self, user: User, key: str, value: str | None) -> None:
+        if key.endswith("_AT_ONCE"):
+            raise ValueError(f"{key}: how many calls an endpoint takes at once is the admin's (Admin › Agents and models)")
         value = self._checked(key, value)
         with self._db() as db:
             if value is None:
