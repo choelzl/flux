@@ -38,7 +38,7 @@ TREE = """
 
 def test_tasks_are_named_kind_first_then_what():
     got = run(f"""m => {{ {TREE} return [...all, agent, {{name: "gate: tools", kids: []}}, {{name: "knowledge: prepare popcount", kids: []}}, {{name: "critique: decision", kids: []}}, {{name: "knowledge: mentor", kids: []}}, {{name: "knowledge: digest", kids: []}}].map(m.taskLabel); }}""")
-    assert got == ["Search · lut-chunk=4", "Design · gen.py", "Check · lut-chunk=4", "Check · golden", "Measure · screen", "Measure · screen",
+    assert got == ["Search · lut-chunk=4", "Design · lut-chunk=4", "Check · lut-chunk=4", "Check · golden", "Measure · screen · lut-chunk=4", "Measure · screen",
                    "Measure · evaluation", "Agent · claude", "Setup · tools ready", "Setup · inputs", "Choose · critique of the decision",
                    "Setup · mentor", "Setup · papers"]
 
@@ -147,4 +147,4 @@ def test_a_command_is_named_by_its_check_or_stage_its_program_beside():
       const xs = [mk("tool:build.sh", "build d#43"), mk("tool:sim.py", "stage esl d#43"), mk("tool:fluxpreset golden", "test d#3"),
                   mk("tool:gen.py", "generate x=1")];
       return xs.map(x => [m.taskLabel(x), m.taskNote(x)]); }""")
-    assert got == [["Check · build", "build.sh"], ["Measure · esl", "sim.py"], ["Check · golden", ""], ["Design · gen.py", ""]]
+    assert got == [["Check · build", "build.sh"], ["Measure · esl", "sim.py"], ["Check · golden", ""], ["Design · x=1", "gen.py"]]

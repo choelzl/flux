@@ -94,7 +94,9 @@ export function liveAltTab(ctx) {
     followBtn.textContent = following ? "Following" : "Follow";
     followBtn.classList.toggle("on", following); followBtn.setAttribute("aria-pressed", String(following));
     followBtn.title = following ? "Pause automatic task selection" : "Follow the latest task in the current pass";
-    const counts = Object.fromEntries(["running", "done", "failed", "interrupted", "timeout"].map(s => [s, scope.rows.filter(r => state(r.node) === s).length]));
+    // D1063: a task at work inside another at work is one piece of work -- the running count is the innermost
+    const counts = Object.fromEntries(["running", "done", "failed", "interrupted", "timeout"].map(s => [s, scope.rows.filter(r => state(r.node) === s
+      && (s !== "running" || !(r.node.kids || []).some(k => k.t1 == null))).length]));
     const scopeName = pass === "all" ? "All passes" : pass === "current" ? scope.current.length ? scope.current.map(passName).join(", ") : "Setup" : passName(Number(pass));
     summary.replaceChildren(h("strong", {}, scopeName === "Pass 0" ? "Pass 0 · baseline" : scopeName),
       h("span", { class: "muted small" }, `${visibleRows.length} tasks`),
@@ -135,6 +137,8 @@ export function liveAltTab(ctx) {
           h("h2", {}, b?.title || workLabel(boxView.key)), h("span", { class: "pill" }, b?.done ? "done" : b?.runs.length || b?.notes?.length ? { ok: "done", bad: "failed", part: "partly failed", run: "running" }[b.state] || "done" : later ? "not recorded" : "waiting")),   // D1059: as its box says
         h("p", { class: "muted small" }, passName(boxView.p)),
         b?.runs.length ? h("div", { class: "alt-steps" }, b.runs.map(n => h("button", { type: "button", class: "alt-step-row", onclick: () => select(n.id) }, taskLabel(n))))
+          : b?.notes?.length === 1 ? h("div", {}, h("p", { class: "muted" }, String(b.notes[0].name).replace(/^\s*\w+\s*:\s*/, "")),   // D1063: one note is the box itself
+              ...Object.entries(b.notes[0].output || {}).map(([k, v]) => h("div", { class: "kv" }, h("div", { class: "k" }, k), h("div", { class: "val" }, typeof v === "object" ? JSON.stringify(v) : String(v)))))
           : b?.notes?.length ? h("div", { class: "alt-steps" }, b.notes.map(n => h("div", { class: "alt-step-row note" }, h("span", {}, String(n.name).replace(/^\s*\w+\s*:\s*/, "")),
             Object.keys(n.output || {}).length ? h("span", { class: "mono muted small" }, Object.entries(n.output).map(([k, v]) => `${k} ${typeof v === "object" ? JSON.stringify(v) : v}`).join(" · ")) : "")))
           : h("p", { class: "muted" }, b?.done ? "Baseline stored as a reference." : later ? "No task was recorded for this phase in this pass." : "This phase has not started. No task output is available yet."),
@@ -258,8 +262,8 @@ export function liveAltTab(ctx) {
         under.length ? fold(n.id, collapsed, typeof label === "string" ? label : n.name) : h("span", { class: "alt-fold-space" }),
         h("button", { ...taskButton(opens), type: "button", class: `alt-task ${state(n)}${picked ? " sel" : ""}`, "aria-pressed": String(picked), title: n.name + (n.why ? " · " + n.why : "") },
           rejected ? doneMark(true, false) : mark(n, below), h("span", { class: "alt-task-name" }, label, extra, note(n) ? h("span", { class: "muted small" }, ` · ${note(n)}`) : "",
-            STAGE.test(String(n.name)) && candidateOf(n) ? h("span", { class: "alt-what", title: candidateOf(n) }, ` ${short(candidateOf(n))}`) : "",   // D1059: which design it measured
-            STAGE.test(String(n.name)) && numbersOf(n) ? h("span", { class: "alt-what" }, ` · ${numbersOf(n)}`) : ""),
+            STAGE.test(String(n.name)) && numbersOf(n) ? h("span", { class: "alt-what" }, ` · ${numbersOf(n)}`) : "",
+            n.failed && phaseKind(n) === "check" && (n.kids || []).length && firstFailing(n) ? h("span", { class: "alt-what" }, ` · ${firstFailing(n)}`) : ""),   // D1063
           ...pills(n), h("span", { class: "mono muted small" }, dur(secs(n))))));
       if (!collapsed) runs(under, depth + 1);      // D1038: its children grouped as the pass's are
     };
@@ -389,7 +393,7 @@ export function liveAltTab(ctx) {
       const collapsed = onlyLine || !under.length || isFolded(key, !running, all.some(n => holds(n.id)) && !all.slice(0, 1).some(n => n.id === selected));
       const opens = aiOf.get(t.lead.id) || t.lead, picked = all.some(n => n.id === selected) && (opens.id === selected || t.lead.id === selected);
       const made = madeOf(t);
-      const why = failedStep ? `${checkWord(failedStep)} failed` : "";
+      const why = failedStep ? (firstFailing(failedStep) ? `${checkWord(failedStep)}: ${firstFailing(failedStep)}` : `${checkWord(failedStep)} failed`) : "";   // D1063: which test
       const shortMade = made.replace(/^.*?(#[^#\s]+)$/, "$1");                 // "#4": the loop's name is the page's already
       const t0 = Math.min(...all.map(n => n.t0)), t1 = Math.max(...all.map(n => n.t1 ?? now));
       out.push(h("div", { class: "alt-tree-row step try", style: `--depth:${depth};--k:${COLORS[phaseKind(t.lead) || "design"] || COLORS.design}` },
@@ -423,19 +427,24 @@ export function liveAltTab(ctx) {
       const t0 = Math.min(...all.map(n => n.t0)), t1 = Math.max(...all.map(n => n.t1 ?? now));
       // D1055: the newest design's own measurement -- not the evaluation's, which measures the composition again
       const stages = kind === "measure" ? all.filter(n => STAGE.test(String(n.name)) && numbersOf(n)) : [];
-      const staged = stages.filter(n => !/^\s*evaluation\b/i.test(String(n.parent?.name || ""))).at(-1) || stages.at(-1) || null;
+      // D1063: the newest design's latest stage -- a confirm after its screen, inside the evaluation or not
+      const newest = candidateOf(stages.filter(n => !/^\s*evaluation\b/i.test(String(n.parent?.name || ""))).at(-1) || stages.at(-1) || {});
+      const staged = (newest && stages.filter(n => candidateOf(n) === newest).at(-1)) || stages.at(-1) || null;
       const planned = kind === "plan" ? String(last.output?.picked ?? last.output?.next ?? "") : "";
       // D1061: a design says the design it made (#12), as the graph does -- what it improved on hover
       const lastTry = kind === "design" ? (tries || lone || draftsIn(last) || []).at(-1) : null, made = lastTry ? madeOf(lastTry) : "";
       const failing = kind === "check" ? firstFailing(last) : "";          // D1061: what failed in it, as the graph says
-      const what = staged ? `${String(staged.name).split(":")[1].trim()} · ${numbersOf(staged)}` : planned ? `picked ${planned}` : kind === "plan" ? "" : [made || rest(last), failing].filter(Boolean).join(" · "), ai = all.some(n => AI.test(String(n.params?.turn || n.name)) || aiOf.has(n.id));
+      // D1063: a choice says its pick -- or that the critic rejected it
+      const decided = kind === "choose" ? all.map(n => n.output?.decision).filter(Boolean).at(-1) : "";
+      const picked1 = decided ? (ended(nodes) ? `${short(decided)} rejected` : `★ ${short(decided)}`) : "";
+      const what = staged ? `${String(staged.name).split(":")[1].trim()}${candidateOf(staged) ? ` ${short(candidateOf(staged))}` : ""} · ${numbersOf(staged)}` : planned ? `picked ${planned}` : kind === "plan" ? "" : picked1 || [made || rest(last), failing].filter(Boolean).join(" · "), ai = all.some(n => AI.test(String(n.params?.turn || n.name)) || aiOf.has(n.id));
       const crit = all.some(n => /^\s*critique\s*:/i.test(String(n.name))), rejected = all.some(rejectedBy);
       out.push(h("div", { class: "alt-tree-row box", style: `--depth:${depth};--k:${COLORS[kind] || COLORS.setup}` },
         tries || steps.length ? fold(key, collapsed, workLabel(kind)) : h("span", { class: "alt-fold-space" }),
         h("button", { ...taskButton(opens), type: "button", class: `alt-task ${state(opens)}${picked ? " sel" : ""}`, "aria-pressed": String(picked), title: lone ? opens.name : nodes.map(n => n.name).join(" · ") },
           running ? h("span", { class: "alt-spin", role: "img", "aria-label": "running" })
             : lone && (opens.interrupted || opens.timedOut) ? mark(opens, below)      // its one draft's own end: interrupted, a time limit
-            : doneMark(ended(nodes) || rejected, all.some(n => n.failed)),     // D1061: its own work's failures
+            : doneMark(ended(nodes) || rejected, all.some(n => n.failed || aiOf.get(n.id)?.failed)),     // D1061: its own work's failures; D1063: its folded model turn's too
           h("span", { class: "alt-task-name" }, h("b", {}, workLabel(kind)), what ? h("span", { class: "alt-what", title: what }, ` ${shortAll(what)}`) : "", nodes.length === 1 && note(first) ? h("span", { class: "alt-what" }, ` · ${note(first)}`) : ""),
           ai ? h("span", { class: "alt-ai-pill" }, "ai") : "", crit ? h("span", { class: "alt-critic-tag" }, "critic") : "",
           tries && tries.length > 1 ? h("span", { class: "alt-again" }, `×${tries.length}`) : "",
@@ -463,7 +472,8 @@ export function liveAltTab(ctx) {
         while (e < list.length && (phaseKind(list[e].node) || "setup") === kind) e++;
         const nodes = list.slice(k, e).map(r => r.node);
         k = e;
-        if (kind === "measure") { boxLine(nodes.flatMap(n => /^\s*evaluation\s*$/i.test(String(n.name)) && (kids.get(n.id) || []).length ? kids.get(n.id).map(r => r.node) : [n]), depth); continue; }   // D1059
+        // D1059; D1063: the evaluation's own children (a merge may have folded one into it), not what the tree drew under it
+        if (kind === "measure") { boxLine(nodes.flatMap(n => /^\s*evaluation\s*$/i.test(String(n.name)) && (n.kids || []).some(k => ids.has(k.id)) ? n.kids.filter(k => ids.has(k.id)) : [n]), depth); continue; }
         if (kind !== "design") { boxLine(nodes, depth); continue; }
         const moved = nodes.flatMap(passedIn);
         for (const c of moved) kids.set(c.parent.id, kids.get(c.parent.id).filter(r => r.node !== c));
@@ -495,8 +505,7 @@ export function liveAltTab(ctx) {
       const items = one.length ? one : runsOf;
       newestFirst(key, items.map((n, i) => [n, i]), ([n, i]) => {
         if (kind === "plan") line({ node: n, parent: null }, 0, n.output?.picked != null ? `picked ${n.output.picked}` : own(n), false, "", true);   // D1059: a plan per part, not tries
-        else if (kind === "check") line({ node: n, parent: null }, 0, own(n), false,
-          [firstFailing(n) ? h("span", { class: "alt-what" }, ` · ${firstFailing(n)}`) : "", testDots(n)], true);
+        else if (kind === "check") line({ node: n, parent: null }, 0, own(n), false, testDots(n), true);   // its failing test said by the line
         else line({ node: n, parent: null }, 0, own(n), false, "", true);
       }, 0, () => false, true);
     };

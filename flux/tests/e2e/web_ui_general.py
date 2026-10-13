@@ -561,7 +561,7 @@ def general_flows(r, watch):
                 r.button("Locate", ".alt-detail-actions")
                 r.check("Locate reveals the selected task inside a folded branch", b.js("return !!document.querySelector('.alt-tree [data-task=\"4\"].sel')"))
                 choose("LiveAlt pass", "all")
-                r.check("all passes have clear headings and a running task count", b.js("return [...document.querySelectorAll('.alt-pass-heading .alt-task-name')].map(n=>n.textContent).join(',')==='Pass 0 · baseline,Pass 1,Pass 2' && document.querySelector('.alt-summary .running').textContent==='2 running'"))
+                r.check("all passes have clear headings and a running task count", b.js("return [...document.querySelectorAll('.alt-pass-heading .alt-task-name')].map(n=>n.textContent).join(',')==='Pass 0 · baseline,Pass 1,Pass 2' && document.querySelector('.alt-summary .running').textContent==='1 running'"))
                 r.check("D978: a finished pass is folded to its line, the pass at work open, a running task spins", b.js("return !document.querySelector('.alt-tree [data-task=\"2\"]') && !!document.querySelector('.alt-tree [data-task=\"4\"] .alt-spin') && document.querySelector('.alt-tree [data-fold=\"pass:1\"]').getAttribute('aria-expanded')==='false'"))
                 r.check("D978: tasks are named in the timeline's words, the engine's name kept for the inspector", b.js("const t=n=>document.querySelector('.alt-tree [data-task=\"'+n+'\"] .alt-task-name')?.textContent;return t(4)==='Design current' && !document.querySelector('.alt-tree [data-task=\"3\"]') && document.querySelector('.alt-tree [data-task=\"4\"]').title.startsWith('agent: claude')"))
                 b.click('.alt-tree [data-fold="pass:1"]')

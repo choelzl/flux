@@ -151,7 +151,8 @@ def measure_many(problem: Problem, state: LoopState, cands: list[Candidate], sta
         out["candidates"] = ", ".join(c.name for c in cands)
         hits, runs = state.cache_hits, state.tool_runs
         got = list(problem.measure_batch(list(cands), stage, state) or [])
-        if state.tool_runs == runs and state.cache_hits - hits >= len(cands):
+        reused = state.tool_runs == runs and state.cache_hits - hits >= len(cands)
+        if reused:
             out["reused"] = "measured before: its numbers read back, nothing run"   # D1061: a note, not a measurement
         out["measured"] = "\n".join(
             f"{c.name}: " + (", ".join(f"{k}={v:g}" if isinstance(v, (int, float)) else f"{k}={v!s:.80}"
@@ -182,7 +183,7 @@ def measure_many(problem: Problem, state: LoopState, cands: list[Candidate], sta
         metrics = numeric_metrics(m, _metric_specs(problem, stage))
         payload = {k: v for k, v in m.items() if k not in metrics}
         scored = Scored(cand, stage, metrics, payload)
-        if judging and metrics:
+        if judging and metrics and not reused:   # D1063: numbers read back were judged when they were measured
             _judged(problem, state, scored)
         if state.records is not None:
             try:

@@ -15,6 +15,9 @@ export function candidateOf(n) {
     const x = stack.shift(), why = String(x.why || "");
     const m = /^(?:stage|estimate)\s+\S+\s+(\S+)/i.exec(why) || /^(?:generate|test)\s+(\S+)/i.exec(why);   // a measurement names its stage first
     if (m) return m[1];
+    // D1063: a check's test says the design it ran on after its name ("apply x=1", "ut demo#3")
+    const t = /^\s*tool\s*:/i.test(String(x.name)) && /^\S+\s+(\S+)$/.exec(why.trim());
+    if (t) return t[1];
     stack.push(...(x.kids || []));
   }
   return "";
@@ -33,7 +36,7 @@ export function ranFor(n) {
 /** D1037: a command's program, said beside the check or stage it runs; "" for anything else. */
 export function taskNote(n) {
   const name = String(n.name || ""), at = name.indexOf(":");
-  if (!/^\s*tool\s*:/i.test(name) || !ranFor(n)) return "";
+  if (!/^\s*tool\s*:/i.test(name) || !(ranFor(n) || phaseKind(n) === "design" && candidateOf(n))) return "";   // D1063: a generator's program too
   return name.slice(at + 1).trim().replace(/^fluxpreset\s+/, "");
 }
 export function taskLabel(n) {
@@ -46,7 +49,11 @@ export function taskLabel(n) {
   const kind = workLabel(phaseKind(n));
   if (SETUP_SAYS[low]) return `Setup · ${SETUP_SAYS[low]}`;
   if (head === "knowledge") return `Setup · ${/^digest/i.test(rest) ? "papers" : /^mentor/i.test(rest) ? "mentor" : "inputs"}`;
+  // D1063: a design's generator says the design it made ("Design · x=1"), its program the line's note
+  if (head === "tool" && kind === "Design" && candidateOf(n)) return `${kind} · ${candidateOf(n)}`;
   if (head === "tool") return `${kind} · ${ranFor(n) || rest.replace(/^fluxpreset\s+/, "") || "a command"}`;   // D1037: the document's name
+  // D1063: a measurement says the design it measured ("Measure · esl · x#4"; the views say "#4")
+  if ((head === "simulation" || head === "analytical") && rest) { const c = candidateOf(n); return c ? `${kind} · ${rest} · ${c}` : `${kind} · ${rest}`; }
   if (head === "dse") { const c = candidateOf(n); return c ? `Search · ${c}` : "Search"; }
   if (head === "test" && rest === "gate") { const c = candidateOf(n); return c ? `Check · ${c}` : "Check"; }   // D1051; D1061: a check, said "check"
   // D1050: a design's checks said one way -- its build and check, the gate's verdict on it
@@ -54,7 +61,11 @@ export function taskLabel(n) {
   if (head === "test" && /^judge\s/i.test(rest)) return `${kind} · ${rest.slice(6).trim()}`;
   // D1038: the decision's own steps said apart -- the step that holds them, the pick, a critique of what it judges
   if (head === "decide" && !rest) return /^\s*decide\b/i.test(String(n.parent?.name || "")) ? `${kind} · pick` : kind;
-  if (head === "critique") return `${kind} · critique of ${rest === "decision" ? "the decision" : rest === "measurement" ? "the measurement" : rest || "a design"}`;
+  // D1063: which design's -- two critiques of a box told apart
+  if (head === "critique") { const of = String(n.why || "").replace(/@\S*$/, "").trim();
+    return `${kind} · critique of ${rest === "decision" ? "the decision" : rest === "measurement" ? "the measurement" : rest || "a design"}${of && !/^round\b/i.test(of) ? ` · ${of}` : ""}`; }
+  // D1063: a check of a design names it ("Check · scope TSUB · x#3.2") -- two designs' scope checks told apart
+  if (head === "test" && rest && /\S#\S/.test(String(n.why || "")) && !rest.includes(String(n.why).trim())) return `${kind} · ${rest} · ${String(n.why).trim()}`;
   if (/^draft\s+\d+$/i.test(rest)) { const d = draftDesign(n); if (d) return `${kind} · ${d}`; }   // D1056: a draft is the design it made
   if (rest) return `${kind} · ${rest}`;
   return low === kind.toLowerCase() ? kind : `${kind} · ${name}`;

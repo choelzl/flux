@@ -87,8 +87,10 @@ function usualOf(n, env) {
 function bestOf(n, env) {
   const goals = Object.fromEntries((env.goals?.() || []).map(g => [g.metric, /max/i.test(g.direction || "") ? 1 : -1]));
   const best = {};
+  // D1063: the best of the other designs measured before it on the same stage -- never itself, never another stage
+  const stageOf = x => String(x.why || "").split(/\s+/).slice(0, 2).join(" "), mine = candidateOf(n);
   for (const x of env.nodes.values()) {
-    if (x === n || x.t1 == null || x.failed || x.name !== n.name) continue;
+    if (x === n || x.t1 == null || x.failed || x.name !== n.name || stageOf(x) !== stageOf(n) || x.t0 > n.t0 || (mine && candidateOf(x) === mine)) continue;
     for (const [k, v] of Object.entries(metricsOf(stdoutOf(x)))) if (goals[k] && (best[k] == null || goals[k] * v > goals[k] * best[k])) best[k] = v;
   }
   return { best, goals };
@@ -114,15 +116,16 @@ function toolBody(n, env) {
       if (!ok && before.length) top.push(h("div", {}, h("div", { class: "alt-label" }, "The first failures"),
         h("pre", { class: "val alt-cases" }, before.slice(0, 3).join("\n") + (before.length > 3 ? `\n… and ${before.length - 3} more` : ""))));
     } else if (Object.keys(metrics).length) {
-      const { best, goals } = bestOf(n, env);
+      const { best, goals } = bestOf(n, env), dicts = dictsOf(out), me = candidateOf(n);
       top.push(h("div", { class: "alt-table-wrap" }, h("table", { class: "list compact alt-metrics" },
-        h("thead", {}, h("tr", {}, h("th", {}, "metric"), h("th", { class: "num" }, "this design"), h("th", { class: "num" }, "best so far"), h("th", {}, ""))),
+        h("thead", {}, h("tr", {}, h("th", {}, "metric"), h("th", { class: "num", title: me }, me ? byId(me) : "this design"), h("th", { class: "num" }, "best so far"), h("th", {}, ""))),
         h("tbody", {}, Object.entries(metrics).map(([k, v]) => {
           const b = best[k], dir = goals[k], change = b != null && b !== 0 ? (v - b) / Math.abs(b) : null;
           const better = change == null || dir == null ? "" : dir * change > 0 ? "up" : dir * change < 0 ? "down" : "";
           return h("tr", {}, h("td", {}, k, dir ? ` ${dir > 0 ? "↑" : "↓"}` : ""), h("td", { class: "num mono" }, fmt(v)), h("td", { class: "num mono" }, b != null ? fmt(b) : "—"),
-            h("td", { class: `alt-change ${better}` }, change == null || !dir ? "" : `${change > 0 ? "+" : "−"}${Math.abs(change * 100).toFixed(1)}%`));
-        })))));
+            h("td", { class: `alt-change ${better}` }, change == null || !dir ? "" : Math.abs(change) < 0.0005 ? "=" : `${change > 0 ? "+" : "−"}${Math.abs(change * 100).toFixed(1)}%`));
+        }), Object.entries(dicts).map(([k, v]) => h("tr", {}, h("td", {}, k, goals[k] ? ` ${goals[k] > 0 ? "↑" : "↓"}` : ""),    // D1063: a dictionary goal too
+          h("td", { class: "num mono" }, cell(v)), h("td", { class: "num mono" }, ""), h("td", {}, "")))))));
     } else if (n.timedOut) top.push(h("div", { class: "alt-result warn", style: "--k:var(--warn)" },     // D997: a time limit warns
       h("span", { class: "alt-big" }, `! exit ${f.exit} · time limit`)));
     else if (f.exit != null) top.push(h("div", { class: `alt-result ${f.exit === 0 ? "ok" : "bad"}`, style: `--k:${f.exit === 0 ? colorOf(n) : "var(--bad)"}` },
@@ -291,7 +294,9 @@ function chooseBody(n, env) {
   // D1061: the goals first, then the other numbers measured (a dictionary metric too), three at most
   const seen = [...new Set(rows.flatMap(([, m]) => Object.keys(m)))];
   const cols = [...new Set([...goals.map(g => g.metric), ...seen])].slice(0, 3);
-  const chosen = rows.map(([c]) => c).find(c => text.includes(c)) || "";
+  // D1063: the decision's own name; else the longest name the text holds -- "x#2" is the start of "x#2.2"
+  const names = rows.map(([c]) => c), dec = String(said.decision || "").trim();
+  const chosen = names.find(c => c === dec) || names.filter(c => text.includes(c)).sort((a, b) => b.length - a.length)[0] || "";
   // D1059: a design the select critic rejected stays on the record, marked -- never shown as chosen
   const rejected = new Map();
   for (const x of env.nodes.values()) if (x.failed && /^\s*critique\s*:\s*decision/i.test(String(x.name))) rejected.set(String(x.why || ""), String(fieldsOf(x).verdict || "").replace(/^REJECTED:\s*/i, ""));
