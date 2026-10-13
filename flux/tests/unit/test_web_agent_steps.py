@@ -57,3 +57,26 @@ def test_only_a_steps_file_of_the_loops_own_is_read(bob):
         assert c.get("/api/apps/x/steps", params={"file": f}).status_code == 404, f
     mine = _write(tmp / "cache" / "flux" / "apps" / "bob.x" / ".flux-steps" / "t.jsonl", 3)
     assert cy.get("/api/apps/x/steps", params={"file": mine, "owner": "bob"}).status_code in (403, 404), "not shared with cy"
+
+
+def test_a_turn_without_a_steps_file_reads_its_kept_steps_from_the_transcript(bob):
+    """D1039: a turn from before D1036 wrote no steps file; the transcript holds its kept steps --
+    the agent turn that ended as the task did."""
+    c, _cy, tmp = bob
+    from flux_web.store import Store
+
+    store = Store(tmp / "data")
+    d = tmp / "data" / "users" / "bob" / "apps" / "x"
+    trace = d / "out" / "c1"
+    trace.mkdir(parents=True)
+    turn = lambda ts, agent, n: json.dumps({"ts": ts, "kind": "agent", "agent": agent,  # noqa: E731
+                                            "steps": [{"k": "text", "text": f"{agent} {i}"} for i in range(n)]}) + "\n"
+    (trace / "turns.jsonl").write_text(json.dumps({"ts": 100, "kind": "model"}) + "\n" + turn(110, "claude", 3)
+                                       + turn(205, "claude", 60) + turn(206, "codex", 2))
+    db = d / "out" / "x.db"
+    db.with_name("x.db.runs.json").write_text(json.dumps({"c1": str(trace)}))
+    (d / "runs").mkdir(exist_ok=True)
+    store.add_run(store.user(name="bob"), "x", str(db), str(d / "runs" / "loop.log"), ["flux"], {})
+    got = c.get("/api/apps/x/turn-steps", params={"t0": 150, "t1": 204.5, "agent": "claude"}).json()["steps"]
+    assert len(got) == 60 and got[0]["text"] == "claude 0"
+    assert c.get("/api/apps/x/turn-steps", params={"t0": 300, "t1": 310}).json() == {"steps": []}

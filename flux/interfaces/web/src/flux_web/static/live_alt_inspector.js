@@ -196,19 +196,34 @@ function earlierSteps(n, env, file, earlier, want) {
   }
   return have.steps.slice(Math.max(0, have.steps.length - want));
 }
+/** D1039: a finished turn that wrote no steps file (before D1036): its kept steps from the transcript, asked once. */
+const fromTranscript = new Map();
+function transcriptSteps(n, env, agent) {
+  if (!fromTranscript.has(n.id) && env.turnSteps) {
+    fromTranscript.set(n.id, null);
+    env.turnSteps(n.t0, n.t1, agent).then(got => { fromTranscript.set(n.id, got.steps || []); env.redraw(); }).catch(() => fromTranscript.set(n.id, []));
+  }
+  return fromTranscript.get(n.id);
+}
+const lostSaid = (n, kept, steps, lost) => running(n) ? `${lost} earlier step${lost === 1 ? "" : "s"}, shown when the turn ends`
+  : kept == null ? "Loading the earlier steps…"
+  : kept === steps ? `${lost} earliest step${lost === 1 ? " was" : "s were"} not kept`
+  : `${lost} earlier step${lost === 1 ? " is" : "s are"} not in the transcript`;
 function agentChat(n, env) {
   const f = { ...(running(n) ? {} : (n.output || {})), ...(n.fields || {}) }, p = n.params || {};
-  const steps = Array.isArray(f.steps) ? f.steps : [], total = Number(f["steps total"] || steps.length);
-  const limit = chatLimit.get(n.id) || CHAT_STEP, earlier = total - steps.length, file = f["steps file"];
+  const live = Array.isArray(f.steps) ? f.steps : [], total = Number(f["steps total"] || live.length), file = f["steps file"];
+  const kept = !file && total > live.length && !running(n) ? transcriptSteps(n, env, String(f.agent || "")) : null;
+  const steps = kept && kept.length > live.length ? kept : live;
+  const limit = chatLimit.get(n.id) || CHAT_STEP, earlier = total - steps.length;
   // D1036: the whole conversation -- the steps before the live window come from the turn's file as one scrolls up
   const before = file && earlier > 0 ? earlierSteps(n, env, file, earlier, Math.max(0, limit - steps.length)) : [];
   const all = [...before, ...steps], shown = all.slice(-limit), above = (file ? earlier - before.length : 0) + all.length - shown.length;
-  const kept = file ? 0 : earlier;
+  const lost = file ? 0 : earlier;                                         // past the 400 a turn keeps
   const conv = conversation(shown, { key: `task${n.id}`, offset: total - shown.length, live: running(n) });
   conv.querySelector(":scope > p.muted.small")?.remove();                   // the chat says what is above, below
   const prompt = typeof p.prompt === "string" ? p.prompt : "";
   const top = above > 0 ? h("div", { class: "alt-chat-more" }, `↑ ${above} earlier — scroll up`)
-    : [kept > 0 ? h("div", { class: "alt-chat-more" }, `${kept} earlier step${kept === 1 ? "" : "s"} are in the full log`) : "",
+    : [lost > 0 ? h("div", { class: "alt-chat-more" }, lostSaid(n, kept, steps, lost)) : "",
       prompt ? bubble("me", `Prompt · ${prompt.length.toLocaleString()} characters`, h("pre", { class: "val tall", "data-k": "prompt" }, prompt), "input", env) : ""];
   // D1033: one "working" line -- the conversation's own when it is in a stretch of work (D1030), else this one
   const now = running(n) && !conv.querySelector(".cv-work.live") ? h("div", { class: "alt-chat-now" }, h("span", { class: "alt-spin" }), String(f.status || "working") + "…") : "";

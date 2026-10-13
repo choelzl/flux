@@ -628,6 +628,7 @@ function liveTree(base, qs, onQuestion, stream, { unifiedDetail = false, inspect
       (same ? kids => morph(detail, kids) : kids => detail.replaceChildren(...kids))(altInspector(n, {
         now, nodes, place, goals, tidy: tidyCommand, block, redraw: () => drawDetail(Date.now() / 1000),
         steps: (file, start, count) => api(`${base.replace(/^\/api/, "")}/steps?file=${encodeURIComponent(file)}&start=${start}&count=${count}`),   // D1036
+        turnSteps: (t0, t1, agent) => api(`${base.replace(/^\/api/, "")}/turn-steps?t0=${t0}&t1=${t1}&agent=${encodeURIComponent(agent)}`),   // D1039
         pick: id => { if (pick) pick(id); },
         tools: () => viewerTools(detail, { title: n.name, rawText: () => JSON.stringify({ name: n.name, input: n.params, fields: n.fields, output: n.output }, null, 2) }),
       }));

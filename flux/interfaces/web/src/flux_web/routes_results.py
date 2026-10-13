@@ -491,6 +491,35 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
             except ValueError:
                 return {"turns": []}
 
+    @app.get("/api/apps/{name}/turn-steps")
+    def turn_steps(name: str, t0: float, t1: float, agent: str = "", owner: str | None = None,
+                   user: User = Depends(user_of)) -> dict[str, Any]:
+        """D1039: an agent turn's steps from the transcript, for a turn that wrote no steps file (before
+        D1036): the agent turn of the record's transcripts that ended as the task did, its kept steps
+        (the latest 400)."""
+        _w, _whose, _d, run = selected_run(name, user, owner, None)
+        best: tuple[float, str, int] | None = None
+        for path in runs.turns_paths(run):
+            try:
+                offsets, rows = _turn_summaries(path)
+            except OSError:
+                continue
+            for i, t in enumerate(rows):
+                if not t or t.get("kind") != "agent" or (agent and str(t.get("agent") or "") not in agent):
+                    continue
+                ts = float(t.get("ts") or 0)
+                if t0 - 1 <= ts <= t1 + 30 and (best is None or abs(ts - t1) < best[0]):
+                    best = (abs(ts - t1), path, offsets[i])
+        if best is None:
+            return {"steps": []}
+        with open(best[1], "rb") as fh:
+            fh.seek(best[2])
+            try:
+                steps = json.loads(fh.readline()).get("steps") or []
+            except ValueError:
+                return {"steps": []}
+        return {"steps": _masks().fields(steps)}
+
     @app.get("/api/apps/{name}/timeline")
     def loop_timeline(name: str, start: int | None = None, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, Any]:
         """Where one start's time went (D694): its phases as bars, and per kind of work."""
