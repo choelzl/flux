@@ -38,7 +38,7 @@ TREE = """
 
 def test_tasks_are_named_kind_first_then_what():
     got = run(f"""m => {{ {TREE} return [...all, agent, {{name: "gate: tools", kids: []}}, {{name: "knowledge: prepare popcount", kids: []}}, {{name: "critique: decision", kids: []}}, {{name: "knowledge: mentor", kids: []}}, {{name: "knowledge: digest", kids: []}}].map(m.taskLabel); }}""")
-    assert got == ["Search · lut-chunk=4", "Design · gen.py", "Check", "Check · golden", "Measure · screen", "Measure · screen",
+    assert got == ["Search · lut-chunk=4", "Design · gen.py", "Check · gate · lut-chunk=4", "Check · golden", "Measure · screen", "Measure · screen",
                    "Measure · evaluation", "Agent · claude", "Setup · tools ready", "Setup · inputs", "Choose · critique of the decision",
                    "Setup · mentor", "Setup · papers"]
 

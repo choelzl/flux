@@ -48,7 +48,7 @@ export function taskLabel(n) {
   if (head === "knowledge") return `Setup · ${/^digest/i.test(rest) ? "papers" : /^mentor/i.test(rest) ? "mentor" : "inputs"}`;
   if (head === "tool") return `${kind} · ${ranFor(n) || rest.replace(/^fluxpreset\s+/, "") || "a command"}`;   // D1037: the document's name
   if (head === "dse") { const c = candidateOf(n); return c ? `Search · ${c}` : "Search"; }
-  if (head === "test" && rest === "gate") return "Check";
+  if (head === "test" && rest === "gate") { const c = candidateOf(n); return c ? `Check · gate · ${c}` : "Check · gate"; }   // D1051
   // D1050: a design's checks said one way -- its build and fast check, the gate's verdict on it
   if (head === "test" && /^fast check\s/i.test(rest)) return `${kind} · fast check · ${rest.slice(11).trim()}`;
   if (head === "test" && /^judge\s/i.test(rest)) return `${kind} · gate · ${rest.slice(6).trim()}`;

@@ -1402,3 +1402,5 @@ td.cleared s { color: var(--muted); }
 .alt-box-tasks .alt-more-tries { margin-left: 24px; }
 .alt-ai-box-pill { fill: color-mix(in srgb, #d45eae 16%, var(--panel)); } .alt-ai-box-text { font: 700 9px var(--sans, sans-serif); fill: #d45eae; text-anchor: middle; letter-spacing: .05em; }
 .alt-notes { margin: 4px 0 0; padding-left: 18px; font-size: 12.5px; display: flex; flex-direction: column; gap: 2px; } /* D1047 */
+.alt-dots { display: inline-flex; gap: 2px; margin-left: 6px; vertical-align: middle; } .alt-dots i { width: 7px; height: 7px; border-radius: 2px; background: var(--ok); display: block; }
+.alt-dots i.bad { background: var(--bad); } .alt-dots i.run { background: var(--run); }   /* D1051 */
