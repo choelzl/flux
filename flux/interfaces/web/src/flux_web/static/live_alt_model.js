@@ -7,7 +7,10 @@ export function taskPass(node, marks) {
     root = p;
   }
   let pass = null;
-  for (const mark of marks) if (mark.name === "pass" && mark.t <= root.t0 + .001 && Number.isFinite(Number(mark.n))) pass = Number(mark.n);
+  // D1041: a mark is before a task by its place in the journal -- a pass's last steps can start in the
+  // millisecond its successor's mark is written; by time alone (journals without the order) within 1ms
+  const before = mark => mark.seq != null && root.seq != null ? mark.seq < root.seq : mark.t <= root.t0 + .001;
+  for (const mark of marks) if (mark.name === "pass" && before(mark) && Number.isFinite(Number(mark.n))) pass = Number(mark.n);
   if (pass != null) return pass;
   // D978: before the first mark -- the engine marks passes from the second (or the baseline) on, so
   // what ran before is the pass before it, as Live counts it; the run's own setup (the document
@@ -24,6 +27,13 @@ export function taskPass(node, marks) {
 export function taskScope(model, pass = "current") {
   const all = [...model.nodes.values()].sort((a, b) => a.t0 - b.t0 || Number(a.id) - Number(b.id));
   const membership = new Map(all.map(n => [n.id, taskPass(n, model.marks)]));
+  // D1041: a run of one pass is never marked -- a setup step after its work began (the mentor read
+  // again between designs) is that pass's, as it is in a marked pass, not a Setup between its steps
+  if (!model.marks.some(m => m.name === "pass")) {
+    const rootOf = n => { while (n.parent) n = n.parent; return n; };
+    const began = Math.min(...all.filter(n => !n.parent && membership.get(n.id) === 1).map(n => n.t0));
+    for (const n of all) { const r = rootOf(n); if (membership.get(n.id) == null && r.t0 > began) membership.set(n.id, 1); }
+  }
   const passes = [...new Set([...model.marks.filter(m => m.name === "pass" && m.n != null).map(m => Number(m.n)),
     ...membership.values()].filter(n => n != null && Number.isFinite(n)))].sort((a, b) => a - b);
   const active = new Set(all.filter(n => n.t1 == null).map(n => membership.get(n.id)).filter(n => n != null));

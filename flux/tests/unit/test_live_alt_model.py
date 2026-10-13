@@ -168,3 +168,21 @@ def test_a_first_pass_without_a_mark_is_pass_one_as_live_says():
               start(3, 4, parent=2, name="agent: claude")]
     assert evaluate(events, "[1, 2, 3].map(id => taskPass(model.nodes.get(id), model.marks))") == [None, 1, 1]
     assert evaluate(events, "taskScope(model).current") == [1]
+
+
+def test_a_mark_is_after_the_tasks_that_started_before_it_in_the_journal_though_in_the_same_millisecond():
+    """D1041: a pass's evaluation and decision can start in the millisecond the next pass's mark is
+    written; the journal's order says they are the pass before."""
+    events = [start(1, 1.0), start(2, 5.0, name="evaluation"), start(3, 5.0005, name="decide"), mark(2, 5.0005),
+              start(4, 5.0006, name="generation: next")]
+    got = evaluate(events, "(() => { const m = taskScope(model, 'all').membership; return [1, 2, 3, 4].map(i => m.get(i)); })()")
+    assert got == [1, 1, 1, 2]
+
+
+def test_a_run_of_one_unmarked_pass_keeps_its_later_setup_steps_in_the_pass():
+    """D1041: with no pass mark, the mentor read again between designs is the pass's, not a Setup
+    between its steps; the steps before its work began are the start's Setup."""
+    events = [start(1, 1, name="propose: decompose"), start(2, 2, name="knowledge: mentor"), start(3, 3, name="propose: brief x"),
+              start(4, 4), start(5, 5, name="knowledge: mentor"), start(6, 6, parent=5, name="tool:x"), start(7, 7, name="evaluation")]
+    got = evaluate(events, "(() => { const m = taskScope(model, 'all').membership; return [1, 2, 3, 4, 5, 6, 7].map(i => m.get(i)); })()")
+    assert got == [None, None, 1, 1, 1, 1, 1]

@@ -258,8 +258,25 @@ export function liveAltTab(ctx) {
           h("span", { class: "mono muted small" }, dur(t1 - t0)))));
       if (!collapsed) run.forEach((r, i) => line(r, depth + 1, i % 2 ? "" : `try ${i / 2 + 1}`));
     };
-    const runs = (list, depth) => {
+    // D1041: one stretch of a box's work in a row -- a stage's measurement, then its evaluation -- is one
+    // line of that box, its tasks under it (as Choose holds its frontier, pick and critique)
+    const STRETCH = ["search", "design", "check", "measure"];
+    const stretch = (run, depth) => {
+      const nodes = run.map(r => r.node), first = nodes[0], kind = phaseKind(first), key = `stretch:${first.id}`;
+      const finished = nodes.every(n => n.t1 != null), collapsed = isFolded(key, finished, nodes.some(n => holds(n.id)));
+      const t0 = Math.min(...nodes.map(n => n.t0)), t1 = Math.max(...nodes.map(n => n.t1 ?? now));
+      out.push(h("div", { class: "alt-tree-row", style: `--depth:${depth};--k:${COLORS[kind] || COLORS.setup}` }, fold(key, collapsed, workLabel(kind)),
+        h("button", { type: "button", class: `alt-task ${finished ? "" : "running"}`, onclick: () => toggleFold(key, collapsed) },
+          finished ? doneMark(ended(nodes), nodes.some(n => n.failed || below.has(n.id))) : h("span", { class: "alt-spin", role: "img", "aria-label": "running" }),
+          h("span", { class: "alt-task-name" }, workLabel(kind)), h("span", { class: "mono muted small" }, dur(t1 - t0)))));
+      if (!collapsed) runs(run, depth + 1, true);
+    };
+    const runs = (list, depth, inStretch = false) => {
       for (let k = 0; k < list.length;) {
+        const kind = phaseKind(list[k].node);
+        let s = k + 1;
+        while (!inStretch && STRETCH.includes(kind) && s < list.length && phaseKind(list[s].node) === kind) s++;
+        if (s - k >= 2 && new Set(list.slice(k, s).map(r => taskLabel(r.node))).size > 1) { stretch(list.slice(k, s), depth); k = s; continue; }
         let e = k + 1;
         while (e < list.length && taskLabel(list[e].node) === taskLabel(list[k].node) && !(kids.get(list[k].node.id) || []).length === !(kids.get(list[e].node.id) || []).length) e++;
         const m = e === k + 1 ? pairs(list, k) : 0;

@@ -17,7 +17,7 @@
     if (e.ev === "hello") { m.nodes.clear(); m.roots.length = 0; m.standings.clear(); m.marks.length = 0; m.before = 0; m.cut = false; m.settled = false; return { reset: true }; }
     if (e.ev === "window") { m.before = Number(e.before) || 0; m.cut = !!e.cut; return {}; }   // D759: passes left out before the window
     if (e.ev === "start") {
-      var n = { id: e.id, name: e.name, why: e.why, params: e.params, t0: e.t, fields: {}, kids: [], parent: null };
+      var n = { id: e.id, name: e.name, why: e.why, params: e.params, t0: e.t, seq: m.seq = (m.seq || 0) + 1, fields: {}, kids: [], parent: null };
       m.nodes.set(e.id, n);
       var p = e.parent != null && m.nodes.get(e.parent);
       if (p) { n.parent = p; p.kids.push(n); } else m.roots.push(n);
@@ -37,7 +37,7 @@
     else if (e.ev === "mark" && e.name === "question") { try { return { question: JSON.parse(e.why) }; } catch (_) { return {}; } }
     else if (e.ev === "mark" && LOOP_MARKS.has(e.name)) {
       var w = {}; try { w = JSON.parse(e.why || "{}") || {}; } catch (_) {}
-      m.marks.push(Object.assign({}, w, { name: e.name, t: e.t }));
+      m.marks.push(Object.assign({}, w, { name: e.name, t: e.t, seq: m.seq = (m.seq || 0) + 1 }));   // D1041: its place in the journal
     }
     return {};
   }
