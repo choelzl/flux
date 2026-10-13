@@ -1,6 +1,6 @@
 // D978: what LiveAlt's three views say about the tasks -- a task's name in the timeline's words,
 // the flow a pass went through, and what each box is set to (from the document as written).
-import { phaseKind, workLabel } from "./work_style.js";
+import { kindOf, phaseKind, workLabel } from "./work_style.js";
 import { taskState as state } from "./live_alt_model.js";
 
 const SETUP_SAYS = { "gate: tools": "tools ready", "gate: the problem": "problem answerable", "propose: decompose": "parts" };
@@ -95,7 +95,7 @@ function who(runs) {
 }
 
 /** The boxes of a pass's flow: [{key, title, kind, state, runs, steps, who, count}]. */
-export function flowBoxes(rows, p, running) {
+export function flowBoxes(rows, p, running, notes = []) {
   const kind = passKind(p);
   if (kind === "setup") {
     const boxes = SETUP_BOXES.map(([title, test]) => ({ key: title, title, kind: "setup", runs: runsOf(rows, test) })).filter(b => b.runs.length);
@@ -105,11 +105,13 @@ export function flowBoxes(rows, p, running) {
     return boxes.map(b => ({ ...finish(b), count: times[b.key] }));
   }
   const kinds = kind === "baseline" ? ["check", "measure"] : kind === "remeasure" ? ["check", "measure", "choose"] : PASS_KINDS;
-  const present = new Set(rows.map(r => phaseKind(r.node)));
+  // D1052: work done quickly is a note, not a task (D1047) -- a box whose work this pass is only notes ran, it is not missing
+  const noted = k => notes.filter(n => kindOf(n.name, n.why) === k);
+  const present = new Set([...rows.map(r => phaseKind(r.node)), ...kinds.filter(k => noted(k).length)]);
   const measured = Math.min(...rows.filter(r => phaseKind(r.node) === "measure").map(r => r.node.t0));
   const boxes = kinds.filter(k => present.has(k) || (running && kind === "pass"))
     .map(k => ({ key: k, title: workLabel(k), kind: k,
-      runs: runsOf(rows, n => phaseKind(n) === k && (k !== "design" || n.t0 < measured || !Number.isFinite(measured))) }));
+      runs: runsOf(rows, n => phaseKind(n) === k && (k !== "design" || n.t0 < measured || !Number.isFinite(measured))), notes: noted(k) }));
   if (kind === "baseline" && boxes.length && boxes.every(b => ["ok", "part"].includes(boxState(b.runs)))) boxes.push({ key: "record", title: "Record", kind: "setup", runs: [], done: true });
   const times = stretches(rows);
   return boxes.map(b => ({ ...finish(b), ...(times[b.key] ? { count: times[b.key] } : {}) }));
@@ -134,7 +136,7 @@ function stretches(rows) {
   return out;
 }
 function finish(b) {
-  const st = b.done ? "ok" : boxState(b.runs);
+  const st = b.done || !b.runs.length && b.notes?.length ? "ok" : boxState(b.runs);
   const last = b.runs[b.runs.length - 1];
   const steps = (b.kind === "check" || b.kind === "measure" || b.key === "Papers") && last ? leaves(last).map(n => boxState([n])) : null;
   const critic = b.runs.some(function judged(n) { return /^\s*critique\s*:/i.test(String(n.name)) || (n.kids || []).some(judged); });

@@ -39,7 +39,7 @@
     }
     else if (e.ev === "publish") m.standings.set(e.key, e.payload);
     else if (e.ev === "note") {                    // D1047: a quiet step (a brief, a frontier) -- on its task, not a task
-      var pn = e.parent != null && m.nodes.get(e.parent), note = { name: e.name, why: e.why, t: e.t, output: e.output || {} };
+      var pn = e.parent != null && m.nodes.get(e.parent), note = { name: e.name, why: e.why, t: e.t, output: e.output || {}, seq: m.seq = (m.seq || 0) + 1 };
       if (pn) (pn.notes || (pn.notes = [])).push(note); else (m.notes || (m.notes = [])).push(note);
     }
     else if (e.ev === "mark" && e.name === "question") { try { return { question: JSON.parse(e.why) }; } catch (_) { return {}; } }

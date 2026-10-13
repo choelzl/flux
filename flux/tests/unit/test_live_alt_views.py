@@ -49,6 +49,16 @@ def test_a_pass_flow_has_its_boxes_and_composing_after_measuring_is_no_repair():
     assert got == {"keys": ["search", "design", "check", "measure"], "states": ["ok", "ok", "ok", "ok"], "design": 1, "repaired": False}
 
 
+def test_a_search_done_as_a_note_is_a_box_that_ran():
+    """D1052: a scripted search's scope list is a note with no task (D1047): its box is there and done, not missing."""
+    got = run(f"""m => {{ {TREE} const d = mk(1, "generation: improve x", "", null, 0, 5);
+      const b = m.flowBoxes([{{node: d}}], 3, true, [{{name: "orchestrate: scope list", why: "", t: 0, output: {{scopes: 2}}}}]);
+      const s = b.find(x => x.key === "search"); return [s.state, s.notes.length, s.runs.length]; }}""")
+    assert got == ["ok", 1, 0]
+    script = f"import({json.dumps(MODEL)}).then(m => process.stdout.write(String(m.notePass({{name: 'orchestrate: scope list', t: 4, seq: 9}}, [{{name: 'pass', n: 3, t: 1, seq: 2}}]))));"
+    assert subprocess.run(["node", "-e", script], capture_output=True, text=True, timeout=30).stdout == "3"     # the pass it was written in
+
+
 def test_a_box_whose_step_failed_says_so_though_it_finished():
     """D995: a measure that ended with one of its tools failing (exit 1) is "!", not ✓."""
     got = run(f"""m => {{ {TREE} rtl.failed = true; const b = m.flowBoxes(rows, 6, false); return b.map(x => x.state); }}""")

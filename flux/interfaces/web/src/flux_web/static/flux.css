@@ -833,6 +833,7 @@ svg.alt-flow { display: block; width: 100%; height: auto; margin: 0 auto; overfl
 .alt-steps { display: grid; gap: 2px; margin: 4px 0 10px; }
 .alt-step-row { display: flex; align-items: center; gap: 7px; width: 100%; padding: 4px 8px; border: 0; border-radius: 4px; text-align: left; font-size: 13px; background: color-mix(in srgb, var(--k) 24%, var(--panel)); }
 .alt-step-row:hover { background: color-mix(in srgb, var(--k) 38%, var(--panel)); }
+.alt-step-row.note, .alt-step-row.note:hover { justify-content: space-between; background: color-mix(in srgb, var(--k) 14%, var(--panel)); cursor: default; }
 .alt-step-row .alt-task-name .muted { font-size: 12px; }
 .alt-fold-block { border-top: 1px solid var(--line); padding: 6px 0 2px; } .alt-fold-block > summary { cursor: pointer; display: flex; gap: 8px; align-items: baseline; min-width: 0; font-size: 13px; }
 .alt-fold-block > summary::-webkit-details-marker { display: none; } .alt-fold-block > summary { list-style: none; }

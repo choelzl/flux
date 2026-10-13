@@ -1,4 +1,6 @@
 // Pure task selection shared by the three LiveAlt representations.
+/** D1052: a note with no task of its own (a scripted search's scope list) is the pass it was written in, as a task there would be. */
+export const notePass = (note, marks) => taskPass({ name: note.name, t0: note.t, seq: note.seq, parent: null }, marks);
 export function taskPass(node, marks) {
   let root = node;
   for (let p = node; p; p = p.parent) {

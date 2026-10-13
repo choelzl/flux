@@ -3,7 +3,7 @@ import { api, appHref, card, dur, empty, enc, h, loopStream, request, skeleton, 
 import { liveTree } from "./live.js";
 import { sv } from "./charts.js";
 import { restoreScroll, scrollState } from "./scroll.js";
-import { campaignForStart, currentTask, taskScope, taskState as state, taskWindow } from "./live_alt_model.js";
+import { campaignForStart, currentTask, notePass, taskScope, taskState as state, taskWindow } from "./live_alt_model.js";
 import { WORK_COLORS as COLORS, AGENT_COLOR, workLabel, phaseKind, ownSpans } from "./work_style.js";
 import { candidateOf, docNotes, flowBoxes, passKind, passName, passShort, repaired, taskLabel, taskNote } from "./live_alt_views.js";
 import { passSummary } from "./live_alt_inspector.js";
@@ -20,6 +20,8 @@ export function liveAltTab(ctx) {
   let resizeObserver = null, locateTimer = null, choice = null;
   const folded = new Set(), opened = new Set(), viewPlaces = new Map(), allTries = new Set();   // D1044: lists showing every try
   let notes = {}, goals = [], chainPass, openBox = null;      // D1038: chainPass undefined until one is clicked -- null is the setup pass
+  // D1052: the notes written in a pass with no task to hang on (a scripted search) -- its boxes count them
+  const passNotes = p => (inspector.model.notes || []).filter(n => notePass(n, inspector.model.marks) === p);
   let boxView = null, problem = null;
   const NO_PASS = Symbol("no pass");
   let passView = NO_PASS;                 // D982: a pass shown in the inspector instead of a task
@@ -124,15 +126,17 @@ export function liveAltTab(ctx) {
     if (!didReveal && focused) panel.querySelector(`[data-${focusKey}="${CSS.escape(focused)}"]`)?.focus({ preventScroll: true });
     if (boxView) {
       const scope = taskScope(inspector.model, "all"), rows = scope.rows.filter(r => (scope.membership.get(r.node.id) ?? null) === boxView.p);
-      const boxes = flowBoxes(rows, boxView.p, rows.some(r => r.node.t1 == null)), b = boxes.find(b => b.key === boxView.key);
+      const boxes = flowBoxes(rows, boxView.p, rows.some(r => r.node.t1 == null), passNotes(boxView.p)), b = boxes.find(b => b.key === boxView.key);
       const config = { search: problem?.raw?.flow?.orchestrate, design: problem?.raw?.flow?.generate,
         check: problem?.raw?.flow?.test, measure: problem?.raw?.flow?.measure, choose: problem?.raw?.objectives }[boxView.key];
       const later = b && boxes.slice(boxes.indexOf(b) + 1).some(b => b.runs.length);
       detailHost.replaceChildren(h("div", { class: "detail alt-detail alt-box-detail", "data-box": boxView.key, "data-pass": String(boxView.p ?? "setup") },
         h("div", { class: "detail-head alt-ihead" }, h("span", { class: "alt-stripe", style: `background:${COLORS[b?.kind] || COLORS.setup}` }),
-          h("h2", {}, b?.title || workLabel(boxView.key)), h("span", { class: "pill" }, b?.done ? "done" : b?.runs.length ? "recorded" : later ? "not recorded" : "waiting")),
+          h("h2", {}, b?.title || workLabel(boxView.key)), h("span", { class: "pill" }, b?.done ? "done" : b?.runs.length || b?.notes?.length ? "recorded" : later ? "not recorded" : "waiting")),
         h("p", { class: "muted small" }, passName(boxView.p)),
         b?.runs.length ? h("div", { class: "alt-steps" }, b.runs.map(n => h("button", { type: "button", class: "alt-step-row", onclick: () => select(n.id) }, taskLabel(n))))
+          : b?.notes?.length ? h("div", { class: "alt-steps" }, b.notes.map(n => h("div", { class: "alt-step-row note" }, h("span", {}, String(n.name).replace(/^\s*\w+\s*:\s*/, "")),
+            Object.keys(n.output || {}).length ? h("span", { class: "mono muted small" }, Object.entries(n.output).map(([k, v]) => `${k}=${typeof v === "object" ? JSON.stringify(v) : v}`).join(" · ")) : "")))
           : h("p", { class: "muted" }, b?.done ? "Baseline stored as a reference." : later ? "No task was recorded for this phase in this pass." : "This phase has not started. No task output is available yet."),
         boxView.key === "record" && b?.done ? passSummary(boxView.p, rows.map(r => r.node), { pick: id => select(id) }).slice(1) : "",
         config != null ? h("section", {}, h("div", { class: "alt-label" }, `Configuration · ${problem.document || "problem.yaml"}`),
@@ -489,7 +493,7 @@ export function liveAltTab(ctx) {
       } else lead.forEach(r => line(r, depth));
       boxes(rest, depth);                       // D1045: the pass's own tasks, one line per box
       if (g.rows.some(r => r.node.t1 == null))    // D1044: in a pass at work, the boxes still to come, dimmed
-        for (const b of flowBoxes(g.rows, g.p, true).filter(x => x.state === "wait" && !x.runs.length))
+        for (const b of flowBoxes(g.rows, g.p, true, passNotes(g.p)).filter(x => x.state === "wait" && !x.runs.length))
           out.push(h("div", { class: "alt-tree-row box wait", style: `--depth:${depth};--k:${COLORS[b.kind] || COLORS.setup}`, "aria-label": `${b.title}: still to come` },
             h("span", { class: "alt-fold-space" }), h("span", { class: "alt-task" }, h("span", { class: "alt-task-state wait" }, "·"), h("span", { class: "alt-task-name" }, h("b", {}, b.title)))));
     }
@@ -504,7 +508,7 @@ export function liveAltTab(ctx) {
     const shown = pass === "all" ? (passes.includes(chainPass) ? chainPass : passes.includes(selPass) ? selPass : passes.at(-1)) : passes.at(-1);
     const inPass = rows.filter(r => (membership.get(r.node.id) ?? null) === shown);
     const running = inPass.some(r => r.node.t1 == null);
-    const boxes = flowBoxes(inPass, shown, running), back = repaired(boxes);
+    const boxes = flowBoxes(inPass, shown, running, passNotes(shown)), back = repaired(boxes);
     const chain = pass === "all" && passes.length > 1 ? h("div", { class: "alt-chain", role: "group", "aria-label": "Passes" }, passes.map(p => {
       const nodes = rows.filter(r => (membership.get(r.node.id) ?? null) === p).map(r => r.node);
       const top = nodes.filter(n => n.parent == null || (membership.get(n.parent.id) ?? null) !== p);
@@ -544,7 +548,7 @@ export function liveAltTab(ctx) {
       const attrs = { class: `alt-flow-box${picked ? " sel" : ""}${isOpen ? " open" : ""}`, "data-kind": b.kind, "data-box": b.key, "aria-pressed": String(picked) };
       // Every box follows the same activation path, including synthetic boxes such as Record.
       // Update expansion before selection redraws the graph; keyboard and mouse do the same thing.
-      const box = sv("g", { ...attrs, tabindex: "0", role: "button", "aria-label": `${b.title} · ${task ? state(task) : b.done ? "done" : "no task recorded"}`,
+      const box = sv("g", { ...attrs, tabindex: "0", role: "button", "aria-label": `${b.title} · ${task ? state(task) : b.done || b.notes?.length ? "done" : "no task recorded"}`,
         ...(task ? { "data-task": String(task.id), "aria-expanded": String(!!isOpen) } : {}) }, ...kids);
       // D1045: a redraw morphs this element in place and keeps its first listener -- what the click
       // does is read when it happens, from the box's attributes and the open box, never this render's closure
