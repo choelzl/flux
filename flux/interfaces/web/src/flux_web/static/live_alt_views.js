@@ -55,8 +55,19 @@ export function taskLabel(n) {
   // D1038: the decision's own steps said apart -- the step that holds them, the pick, a critique of what it judges
   if (head === "decide" && !rest) return /^\s*decide\b/i.test(String(n.parent?.name || "")) ? `${kind} · pick` : kind;
   if (head === "critique") return `${kind} · critique of ${rest === "decision" ? "the decision" : rest === "measurement" ? "the measurement" : rest || "a design"}`;
+  if (/^draft\s+\d+$/i.test(rest)) { const d = draftDesign(n); if (d) return `${kind} · ${d}`; }   // D1056: a draft is the design it made
   if (rest) return `${kind} · ${rest}`;
   return low === kind.toLowerCase() ? kind : `${kind} · ${name}`;
+}
+/** D1056: the design a draft made -- named by the check after it (its siblings up to the next draft); "" when none was checked. */
+function draftDesign(n) {
+  const sib = n.parent?.kids || [], at = sib.indexOf(n);
+  for (const x of sib.slice(at + 1)) {
+    if (/\bdraft\s+\d+\s*$/i.test(String(x.name))) break;
+    const m = /^\s*test\s*:\s*(?:fast check|judge)\s+(\S+)/i.exec(String(x.name)) || /\s(\S+#\S+)\s*$/.exec(String(x.why || ""));
+    if (m) return m[1].replace(/^.*?(#[^#\s]+)$/, "$1");
+  }
+  return "";
 }
 
 /** Which flow a pass draws: the setup (before pass 0 or 1), the baseline (pass 0), or a pass. */

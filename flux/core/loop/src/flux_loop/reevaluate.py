@@ -177,7 +177,7 @@ def _measure_again(problem, state, designs):
             failed += 1
     state.stopped = f"re-evaluated {len(designs)} design(s): {passed} passed today's checks, {failed} did not"
     state.say(f"  {state.stopped}")
-    with _phase("decide", why="frontier, decision, conclusion -- from the re-evaluated designs"):
+    with _phase("decide", why="the choice among the designs measured again"):
         result = (_conclude(problem, state, []) if state.scored and state.on_stage
                   else _result(problem, state, None, state.stopped, [], []))
     if state.depth == 0:

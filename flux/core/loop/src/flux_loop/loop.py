@@ -241,12 +241,12 @@ def run_loop(problem: Problem, request: LoopRequest, *, proposer: Any | None = N
     state.drain()
 
     if state.fresh:          # something changed after the last climb (or nothing climbed yet)
-        with _phase("evaluation", why="compose, chain, cutoffs, routing", quiet=not state.scored):   # D1053: nothing measured, nothing to evaluate
+        with _phase("evaluation", why="the measured designs taken through the stages", quiet=not state.scored):   # D1053: nothing measured, nothing to evaluate
             _climb(problem, state, goals)
     from .boxes import flush_turns
 
     flush_turns(state)
-    with _phase("decide", why="frontier, decision, conclusion", quiet=not state.scored):   # D1053: nothing measured, nothing to choose
+    with _phase("decide", why="the choice among the measured designs", quiet=not state.scored):   # D1053: nothing measured, nothing to choose
         out = _conclude(problem, state, goals)
     if state.ahead is not None:
         state.ahead.close()
@@ -415,7 +415,7 @@ def _run_steps(problem: Problem, state: LoopState, searching: "_SearchSession | 
                     state.stopped = state.stopped or "nothing left to do"
                     break
                 state.step = step + 1
-                with _phase("evaluation", why="compose, chain, cutoffs, routing", quiet=not state.scored):   # D1053: nothing measured, nothing to evaluate
+                with _phase("evaluation", why="the measured designs taken through the stages", quiet=not state.scored):   # D1053: nothing measured, nothing to evaluate
                     _climb(problem, state, goals)
                 step += 1
                 if state.depth == 0:
@@ -439,7 +439,7 @@ def _run_steps(problem: Problem, state: LoopState, searching: "_SearchSession | 
             elif kind == "batch":
                 # The DSE box, whole (D546, D547): the policy's proposal and the batch through
                 # the gate and first stage, so the generator's own time is attributed here.
-                with _phase("DSE: batch", why="the search policy proposes, the gate and the first stage measure") as out:
+                with _phase("DSE: batch", why="points proposed, gated and measured on the first stage") as out:
                     # D738: one pass, one design (or `budget.batch` of them): the search picks
                     # between passes, from what the last ones measured
                     batch = searching.take(max(1, int(request.batch or 1) - carried), state)
@@ -890,13 +890,17 @@ def _next_batch(gen: Iterator[list[Candidate]] | None, got: list[Scored],
         return None
 
 
+def _designs(n: int) -> str:
+    return f"{n} design{'' if n == 1 else 's'}"
+
+
 def _search_step(problem: Problem, state: LoopState, batch: list[Candidate]) -> list[Scored]:
     """One batch: the gate (build, judge) on every candidate, then the admitted ones through
     the first stage together. Refusals carry the gate's words; the admitted join `state.pool`
     and the measured `state.scored`."""
     say = state.say
     admitted: list[Candidate] = []
-    with _phase("test: gate", why=f"{len(batch)} candidate(s)") as gate:
+    with _phase("test: gate", why=_designs(len(batch))) as gate:
         for cand in batch:
             sg = cand.subgoal
             try:
@@ -1034,7 +1038,7 @@ def _draft(problem: Problem, state: LoopState, sg: str | None, method: str, huma
     `problem.generate` runs it. Safe on a worker thread (D569): it writes only its own part's
     entries of the state and the record."""
     tag = sg or problem.name
-    with _phase(f"generation: {tag}", why=method or "LLM-gen, test, repair") as out:
+    with _phase(f"generation: {tag}", why=method or "drafts, each checked, repaired when it fails") as out:
         got = problem.generate(sg, method, state, human)
         out["failed"] = got[0] is None              # D1054: no design came of it -- the design failed, not "!"
         return got

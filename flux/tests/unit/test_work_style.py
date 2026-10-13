@@ -66,4 +66,4 @@ def test_the_climb_through_the_stages_is_measure_work():
     measuring its design said "Design · evaluation, running"."""
     from flux_web.timeline import kind_of
 
-    assert kind_of("evaluation", "compose, chain, cutoffs, routing") == "measure"
+    assert kind_of("evaluation", "the measured designs taken through the stages") == "measure"

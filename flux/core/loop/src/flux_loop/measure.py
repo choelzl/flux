@@ -147,7 +147,7 @@ def measure_many(problem: Problem, state: LoopState, cands: list[Candidate], sta
     # A stage nothing declares as modelled is treated as measured, as in the record.
     kind = "analytical" if stage in problem.analytic_stages() else "simulation"
     t0 = time.monotonic()
-    with _phase(f"{kind}: {stage}", why=f"{len(cands)} candidate(s)") as out:
+    with _phase(f"{kind}: {stage}", why=f"{len(cands)} design{'' if len(cands) == 1 else 's'}") as out:
         out["candidates"] = ", ".join(c.name for c in cands)
         got = list(problem.measure_batch(list(cands), stage, state) or [])
         out["measured"] = "\n".join(
@@ -225,7 +225,7 @@ def _estimated(problem: Problem, state: LoopState, cands: list[Candidate], stage
     run: list[Candidate] = []
     made: dict[int, dict[str, Any]] = {}
     count = state.estimates.setdefault(stage, {"skipped": 0, "measured": 0})
-    with _phase(f"estimate: {stage}", why=f"{len(cands)} candidate(s)") as out:
+    with _phase(f"estimate: {stage}", why=f"{len(cands)} design{'' if len(cands) == 1 else 's'}") as out:
         for cand, (est, why) in zip(cands, judged):
             if est is None:
                 run.append(cand)

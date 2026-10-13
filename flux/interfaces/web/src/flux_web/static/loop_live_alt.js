@@ -136,7 +136,7 @@ export function liveAltTab(ctx) {
         h("p", { class: "muted small" }, passName(boxView.p)),
         b?.runs.length ? h("div", { class: "alt-steps" }, b.runs.map(n => h("button", { type: "button", class: "alt-step-row", onclick: () => select(n.id) }, taskLabel(n))))
           : b?.notes?.length ? h("div", { class: "alt-steps" }, b.notes.map(n => h("div", { class: "alt-step-row note" }, h("span", {}, String(n.name).replace(/^\s*\w+\s*:\s*/, "")),
-            Object.keys(n.output || {}).length ? h("span", { class: "mono muted small" }, Object.entries(n.output).map(([k, v]) => `${k}=${typeof v === "object" ? JSON.stringify(v) : v}`).join(" · ")) : "")))
+            Object.keys(n.output || {}).length ? h("span", { class: "mono muted small" }, Object.entries(n.output).map(([k, v]) => `${k} ${typeof v === "object" ? JSON.stringify(v) : v}`).join(" · ")) : "")))
           : h("p", { class: "muted" }, b?.done ? "Baseline stored as a reference." : later ? "No task was recorded for this phase in this pass." : "This phase has not started. No task output is available yet."),
         boxView.key === "record" && b?.done ? passSummary(boxView.p, rows.map(r => r.node), { pick: id => select(id) }).slice(1) : "",
         config != null ? h("section", {}, h("div", { class: "alt-label" }, `Configuration · ${problem.document || "problem.yaml"}`),
