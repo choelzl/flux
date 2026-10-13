@@ -14,7 +14,7 @@
   /** One event of the journal into the model; "hello" (a new start) begins it afresh. Returns
       what the page may want to know besides: {reset} or {question}. */
   function apply(m, e) {
-    if (e.ev === "hello") { m.nodes.clear(); m.roots.length = 0; m.standings.clear(); m.marks.length = 0; m.before = 0; m.cut = false; m.settled = false; return { reset: true }; }
+    if (e.ev === "hello") { m.nodes.clear(); m.roots.length = 0; m.standings.clear(); m.marks.length = 0; m.notes = []; m.before = 0; m.cut = false; m.settled = false; return { reset: true }; }
     if (e.ev === "window") { m.before = Number(e.before) || 0; m.cut = !!e.cut; return {}; }   // D759: passes left out before the window
     if (e.ev === "start") {
       var n = { id: e.id, name: e.name, why: e.why, params: e.params, t0: e.t, seq: m.seq = (m.seq || 0) + 1, fields: {}, kids: [], parent: null };
@@ -34,6 +34,10 @@
       }
     }
     else if (e.ev === "publish") m.standings.set(e.key, e.payload);
+    else if (e.ev === "note") {                    // D1047: a quiet step (a brief, a frontier) -- on its task, not a task
+      var pn = e.parent != null && m.nodes.get(e.parent), note = { name: e.name, why: e.why, t: e.t, output: e.output || {} };
+      if (pn) (pn.notes || (pn.notes = [])).push(note); else (m.notes || (m.notes = [])).push(note);
+    }
     else if (e.ev === "mark" && e.name === "question") { try { return { question: JSON.parse(e.why) }; } catch (_) { return {}; } }
     else if (e.ev === "mark" && LOOP_MARKS.has(e.name)) {
       var w = {}; try { w = JSON.parse(e.why || "{}") || {}; } catch (_) {}

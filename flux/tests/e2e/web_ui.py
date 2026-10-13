@@ -2201,7 +2201,7 @@ def flows(r: Run) -> None:
         r.page("#/", "document.querySelector('#main')", "home before a browser reload")
         r.preferences()
         b.js("localStorage.clear(); window.__preferencesReload = 1; location.reload(); return 1")
-        b.wait("!window.__preferencesReload && document.querySelector('#who') && document.querySelector('#main')", what="reloaded browser document")
+        b.wait("!window.__preferencesReload && document.querySelector('#who') && document.querySelector('#main table.list, #main .empty')", what="reloaded browser document")   # home drawn: its first render cannot land after the next page
         b.js(WATCH)
         b.js(stub, False, payload)
         r.page("#/app/sw/results/graphs", "document.querySelector('#main svg.chart.pareto')", "remembered graphs")

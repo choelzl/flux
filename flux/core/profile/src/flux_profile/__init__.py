@@ -45,6 +45,14 @@ class _Tee:
         for lis, tok in zip(self.listeners, token or [None] * len(self.listeners)):
             _call(lis, "phase_end", tok, name, seconds, failed, output)
 
+    def phase_note(self, name, why, params, output):
+        for lis in self.listeners:
+            _call(lis, "phase_note", name, why, params, output)
+
+    def phase_after(self, name, why, params, seconds, failed, output):
+        for lis in self.listeners:
+            _call(lis, "phase_after", name, why, params, seconds, failed, output)
+
     def adopt(self, token):
         for lis, tok in zip(self.listeners, token or [None] * len(self.listeners)):
             _call(lis, "adopt", tok)
@@ -248,24 +256,33 @@ def open_spans(now: float | None = None) -> dict[tuple[str, ...], float]:
         return out
 
 
+#: D1047: a quiet phase that ended well within this is a note on its parent, not a task
+QUIET_S = 0.5
+
+
 @contextmanager
-def phase(name: str, why: str = "", **params):
+def phase(name: str, why: str = "", quiet: bool = False, **params):
     """Time a block into `name`. Records even when the block raises, so a slow failure is
     not free.
 
     `why` and `params` go to the observer only; aggregation stays keyed by `name`. The block
     receives a dict for its output (`with phase(...) as out: out["reply"] = text`), which
-    reaches the observer at exit (D470)."""
+    reaches the observer at exit (D470).
+
+    D1047: `quiet` -- bookkeeping (a frontier, a brief, the tools' gate): no task while it runs; at its
+    end a note on the task it ran in (`phase_note`) when it went well and fast, else a task after
+    the fact (`phase_after`) -- a failure or a slow step is still seen as one."""
     lis = _LISTENER
     token = None
     if lis is not None:
         tags = _tags()
         if tags:
             params = {**tags, **params}
-        try:
-            token = lis.phase_start(name, why, params)
-        except Exception:  # noqa: BLE001
-            lis = None
+        if not quiet:
+            try:
+                token = lis.phase_start(name, why, params)
+            except Exception:  # noqa: BLE001
+                lis = None
     t0 = time.perf_counter()
     with _LOCK:
         stack = _stack()
@@ -285,7 +302,12 @@ def phase(name: str, why: str = "", **params):
         record(name, secs, path)
         if lis is not None:
             try:
-                lis.phase_end(token, name, secs, failed, output)
+                if not quiet:
+                    lis.phase_end(token, name, secs, failed, output)
+                elif failed or secs >= QUIET_S:
+                    _call(lis, "phase_after", name, why, params, secs, failed, output)
+                else:
+                    _call(lis, "phase_note", name, why, params, output)
             except Exception:  # noqa: BLE001
                 pass
 

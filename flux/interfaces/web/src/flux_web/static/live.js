@@ -413,6 +413,13 @@ function liveTree(base, qs, onQuestion, stream, { unifiedDetail = false, inspect
     const cur = visitOf(selected);
     const curBox = cur ? boxOfTask(cur) : null;
     const activity = {};
+    // D1047: a quiet step (a note) is its box's work too -- the division, the brief, the frontier
+    const noted = {};
+    for (const x of [...(mdl.notes || []), ...[...nodes.values()].flatMap(n => n.notes || [])]) {
+      const b = boxOfTask({ name: x.name, why: x.why, kids: [] });
+      if (b && !used[b]) noted[b] = x;
+    }
+    for (const [b, x] of Object.entries(noted)) activity[b] = { state: "done", sel: false, title: `latest: ${x.name}${x.why ? " — " + x.why : ""}` };
     for (const [b, list] of Object.entries(used)) {                      // a box this start used; its state only where it is now
       const live = list.some(running);
       activity[b] = { state: live ? "running" : b === curBox && cur.failed ? "failed" : "done", sel: b === curBox,

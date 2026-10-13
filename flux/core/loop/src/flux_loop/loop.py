@@ -74,7 +74,7 @@ def run_loop(problem: Problem, request: LoopRequest, *, proposer: Any | None = N
     state = LoopState(request=request, say=say, proposer=proposer, feedback=feedback,
                       started=time.monotonic(), depth=depth)
     state.__dict__["workbench"] = str(getattr(getattr(problem, "task", None), "workbench", "") or "")   # D677: every box agent's
-    with _phase("gate: tools", why="refuse loudly before spending anything") as out:
+    with _phase("gate: tools", why="refuse loudly before spending anything", quiet=True) as out:
         missing = (getattr(problem, "baseline_tools_missing", problem.tools_missing)()
                    if request.baseline else problem.tools_missing())
         out["verdict"] = ("MISSING: " + ", ".join(missing)) if missing else "every tool the problem names is on PATH"
@@ -83,7 +83,7 @@ def run_loop(problem: Problem, request: LoopRequest, *, proposer: Any | None = N
         raise RuntimeError(f"{', '.join(missing)} not on PATH")
     # The "input/problem valid?" node (D463): a target no stage measures or a constraint
     # nothing can check is a mis-posed run.
-    with _phase("gate: the problem", why="is what was asked answerable") as out:
+    with _phase("gate: the problem", why="is what was asked answerable", quiet=True) as out:
         wrong = problem.validate(request)
         out["verdict"] = ("NOT ANSWERABLE: " + "; ".join(wrong)) if wrong else "answerable as posed"
         out["request"] = _describe_request(request)
@@ -171,7 +171,7 @@ def run_loop(problem: Problem, request: LoopRequest, *, proposer: Any | None = N
     searching = _search_session(problem, state)     # D738: the search lives across passes
     if searching is not None:
         _reload_measured(problem, state)     # D682: before the walk's first step reads what is measured
-    with _phase("propose: decompose", why="the parts this pass works on") as out:
+    with _phase("propose: decompose", why="the parts this pass works on", quiet=True) as out:
         goals: list[str] = _work(state, problem.decompose(state))
         out["parts"] = _describe_parts(goals, problem, state)
     for round_ in range(_rounds(problem, request, "decomposition")):
@@ -204,7 +204,7 @@ def run_loop(problem: Problem, request: LoopRequest, *, proposer: Any | None = N
     if depth == 0:            # a sub-loop does not own the live panels (D455)
         _publish(problem, state, todo, goals, "resumed", searching=hunting)
         _publish_mentor(problem, state)
-    with _phase(f"knowledge: prepare {problem.name}", why="suite, inputs, cache") as out:
+    with _phase(f"knowledge: prepare {problem.name}", why="suite, inputs, cache", quiet=True) as out:
         details = problem.prepare(state)
         if isinstance(details, dict):                  # D487: what was prepared, in the task pane
             out.update({k: (str(v) if len(str(v)) <= 6000 else str(v)[:6000] + f"…(+{len(str(v)) - 6000} chars)")
@@ -594,7 +594,7 @@ def _direction(problem: Problem, state: LoopState) -> Improve | None:
     state.drain()                           # D1023: the notes before the pass decides; the design brief leads with them
     menu: list[tuple[str, str]] = []
     if getattr(getattr(problem, "task", None), "scope", None) or type(problem).scope_list is not Problem.scope_list:
-        with _phase("orchestrate: scope list") as out:
+        with _phase("orchestrate: scope list", quiet=True) as out:
             menu = problem.scope_list(state)
             out["scopes"] = len(menu)
     pick, why, scope = decide(problem, state, cand, said, menu=menu)     # D1042: the orchestrator's question leads with every note
@@ -1002,7 +1002,7 @@ def _pick(problem: Problem, state: LoopState, todo: list, goals: list[str], huma
     say(f"plan: attempt {tag}" + (f" via {method}" if method else "")
         + (f" ({len(state.admitted)}/{len(goals)} proven)" if goals else ""))
     if key not in state.plans:
-        with _phase(f"propose: brief {tag}", why="once per part", part=sg or "") as out:
+        with _phase(f"propose: brief {tag}", why="once per part", part=sg or "", quiet=True) as out:
             try:
                 state.plans[key] = dict(problem.plan_part(sg, state) or {})
                 for k, v in state.plans[key].items():
@@ -1162,7 +1162,7 @@ def _climb(problem: Problem, state: LoopState, goals: list[str]) -> None:
     say = state.say
     state.fresh = False
     stages = problem.stages()
-    with _phase("template-fill: compose", why=f"{len(state.admitted)} part(s)"):
+    with _phase("template-fill: compose", why=f"{len(state.admitted)} part(s)", quiet=True):
         composed = problem.compose(dict(state.admitted), state) if state.admitted else None
     if composed is not None and stages:
         many = list(composed) if isinstance(composed, (list, tuple)) else [composed]
@@ -1197,9 +1197,9 @@ def _climb(problem: Problem, state: LoopState, goals: list[str]) -> None:
                 f"nothing measured on the {below} stage was worth the {stage} stage; the numbers "
                 f"below are the {below} stage's"))
             break
-        with _phase("frontier", why=f"{len(survivors)} on {below}"):
+        with _phase("frontier", why=f"{len(survivors)} on {below}", quiet=True):
             front = list(problem.frontier(survivors, state))
-        with _phase("propose: finalists", why=f"{len(front)} on the frontier") as out:
+        with _phase("propose: finalists", why=f"{len(front)} on the frontier", quiet=True) as out:
             climbers = list(problem.finalists(front, state, stage))
             out["frontier"] = "\n".join(f"{c.candidate.name}: {c.metrics}" for c in front[:24]) or "(empty)"
             out["climbing"] = ", ".join(c.candidate.name for c in climbers) or "(none)"
@@ -1289,7 +1289,7 @@ def _calibrate(problem: Problem, state: LoopState, cheap: str, costly: str) -> N
         return
     if not found:
         return
-    with _phase("calibrate", why=f"{costly} against {cheap}"):
+    with _phase("calibrate", why=f"{costly} against {cheap}", quiet=True):
         for b in found:
             state.bias[(b.stage, b.metric)] = b
             state.say(f"  {b.render()}")
@@ -1402,7 +1402,7 @@ def _conclude(problem: Problem, state: LoopState, goals: list[str]) -> LoopResul
         _note_once(state, f"{len(rejected)} result(s) rejected, not chosen: " + ", ".join(sorted({s.name for s in rejected}))[:300])
         if not pool:
             return _result(problem, state, None, "every measured design was rejected", [], [])
-    with _phase("frontier", why=f"{len(pool)} on {reached}"):
+    with _phase("frontier", why=f"{len(pool)} on {reached}", quiet=True):
         front = list(problem.frontier(pool, state))
     with _phase("decide", why=f"{len(pool)} in the pool") as out:
         pick, decided_by, closest, unmet, standing, ranked_by = _decide(problem, state, pool, stages, out)

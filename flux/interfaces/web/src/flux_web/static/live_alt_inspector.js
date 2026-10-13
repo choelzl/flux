@@ -319,7 +319,16 @@ export function altInspector(n, env) {
   const f = n.fields || {}, o = n.output || {};
   const every = Object.keys(f).length || Object.keys(o).length || Object.keys(n.params || {}).length
     ? fold("fields", "Every field", "", [env.block("Input", n.params), env.block("Fields", f), env.block("Output", o)], env) : "";
-  return [...inspectorHead(n, env), ...body, isAgent(n) ? "" : every];
+  return [...inspectorHead(n, env), ...body, notesOf(n, env), isAgent(n) ? "" : every];
+}
+/** D1047: the quiet steps this task took (a brief, a frontier, the tools' gate) -- what each said, folded */
+function notesOf(n, env) {
+  const notes = n.notes || [];
+  if (!notes.length) return "";
+  const said = o => Object.entries(o || {}).filter(([, v]) => v !== "" && v != null).slice(0, 3)
+    .map(([k, v]) => `${k}: ${String(typeof v === "object" ? JSON.stringify(v) : v).split("\n")[0].slice(0, 120)}`).join(" · ");
+  return fold("notes", "Steps", `${notes.length}`, h("ul", { class: "alt-notes" }, notes.map(x =>
+    h("li", {}, h("b", {}, taskLabel({ name: x.name, why: x.why, kids: [] })), said(x.output) ? h("span", { class: "muted small" }, ` ${said(x.output)}`) : ""))), env);
 }
 
 /** A pass at a glance (P11): what it tried and how that ended, where its time went, its steps. */

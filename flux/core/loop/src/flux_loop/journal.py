@@ -141,6 +141,27 @@ class Journal:
         self._write({"ev": "start", "id": pid, "parent": parent, "name": name, "why": _cut(why), "params": given})
         return pid
 
+    def _parent(self) -> int | None:
+        stack = self._stacks.get(threading.get_ident(), [])
+        return stack[-1] if stack else self._adopted.get(threading.get_ident())
+
+    def phase_note(self, name: str, why: str, params: dict, output: dict) -> None:
+        """D1047: a quiet step that went well and fast -- a note on the task it ran in, not a task."""
+        with self._lock:
+            parent = self._parent()
+        self._write({"ev": "note", "parent": parent, "name": name, "why": _cut(why), "output": _capped(output or {})})
+
+    def phase_after(self, name: str, why: str, params: dict, seconds: float, failed: bool, output: dict) -> None:
+        """D1047: a quiet step that failed or took its time -- a task after all, written at its end."""
+        with self._lock:
+            self._n += 1
+            pid, parent = self._n, self._parent()
+        now = time.time()
+        self._write({"t": round(now - seconds, 3), "ev": "start", "id": pid, "parent": parent, "name": name, "why": _cut(why),
+                     "params": _cut(params or {})})
+        self._write({"ev": "end", "id": pid, "name": name, "seconds": round(seconds, 3), "failed": bool(failed),
+                     "output": _capped(output or {})})
+
     def phase_update(self, token: int, name: str, output: dict) -> None:
         with self._lock:
             self._live["updates"][str(token)] = _cut(output)

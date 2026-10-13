@@ -413,6 +413,9 @@ def test_the_gate_propose_and_critique_rows_carry_their_details():
         def phase_end(self, token, name, secs, failed, output):
             ended.append((name, dict(output or {})))
 
+        def phase_note(self, name, why, params, output):     # D1047: a quiet step is a note, its details on it
+            ended.append((name, dict(output or {})))
+
         def publish(self, key, payload):
             pass
 
