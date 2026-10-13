@@ -149,7 +149,10 @@ def measure_many(problem: Problem, state: LoopState, cands: list[Candidate], sta
     t0 = time.monotonic()
     with _phase(f"{kind}: {stage}", why=f"{len(cands)} design{'' if len(cands) == 1 else 's'}") as out:
         out["candidates"] = ", ".join(c.name for c in cands)
+        hits, runs = state.cache_hits, state.tool_runs
         got = list(problem.measure_batch(list(cands), stage, state) or [])
+        if state.tool_runs == runs and state.cache_hits - hits >= len(cands):
+            out["reused"] = "measured before: its numbers read back, nothing run"   # D1061: a note, not a measurement
         out["measured"] = "\n".join(
             f"{c.name}: " + (", ".join(f"{k}={v:g}" if isinstance(v, (int, float)) else f"{k}={v!s:.80}"
                                        for k, v in m.items()) if isinstance(m, dict) and m else "could not measure")

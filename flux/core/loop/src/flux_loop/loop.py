@@ -246,8 +246,10 @@ def run_loop(problem: Problem, request: LoopRequest, *, proposer: Any | None = N
     from .boxes import flush_turns
 
     flush_turns(state)
-    with _phase("decide", why="the choice among the measured designs", quiet=not state.scored):   # D1053: nothing measured, nothing to choose
+    with _phase("decide", why="the choice among the measured designs", quiet=not state.scored) as chose:   # D1053: nothing measured, nothing to choose
         out = _conclude(problem, state, goals)
+        # D1061: the critic rejected every pick -- nothing chosen: the choice failed, as its critiques did
+        chose["failed"] = getattr(out, "decision", None) is None and "rejected" in str(getattr(out, "decided_by", "") or "")
     if state.ahead is not None:
         state.ahead.close()
     if depth == 0:
@@ -439,7 +441,7 @@ def _run_steps(problem: Problem, state: LoopState, searching: "_SearchSession | 
             elif kind == "batch":
                 # The DSE box, whole (D546, D547): the policy's proposal and the batch through
                 # the gate and first stage, so the generator's own time is attributed here.
-                with _phase("DSE: batch", why="points proposed, gated and measured on the first stage") as out:
+                with _phase("DSE: batch", why="points proposed, checked and measured on the first stage") as out:
                     # D738: one pass, one design (or `budget.batch` of them): the search picks
                     # between passes, from what the last ones measured
                     batch = searching.take(max(1, int(request.batch or 1) - carried), state)

@@ -139,7 +139,7 @@ export function liveAltTab(ctx) {
             Object.keys(n.output || {}).length ? h("span", { class: "mono muted small" }, Object.entries(n.output).map(([k, v]) => `${k} ${typeof v === "object" ? JSON.stringify(v) : v}`).join(" · ")) : "")))
           : h("p", { class: "muted" }, b?.done ? "Baseline stored as a reference." : later ? "No task was recorded for this phase in this pass." : "This phase has not started. No task output is available yet."),
         boxView.key === "record" && b?.done ? passSummary(boxView.p, rows.map(r => r.node), { pick: id => select(id) }).slice(1) : "",
-        config != null && !b?.runs.length ? h("section", {}, h("div", { class: "alt-label" }, `Configuration · ${problem.document || "problem.yaml"}`),   // D1059: what it is set to, until it runs
+        config != null && !b?.runs.length && !b?.notes?.length ? h("section", {}, h("div", { class: "alt-label" }, `Configuration · ${problem.document || "problem.yaml"}`),   // D1059: what it is set to, until it runs
           h("pre", { class: "val tall", "data-k": "configuration" }, typeof config === "string" ? config : JSON.stringify(config, null, 2)))
           : notes[boxView.key] ? h("p", { class: "mono" }, notes[boxView.key]) : ""));
     } else if (passView !== NO_PASS) {
@@ -189,6 +189,8 @@ export function liveAltTab(ctx) {
   const ended = nodes => { const last = [...nodes].sort((a, b) => (a.t1 ?? a.t0) - (b.t1 ?? b.t0)).at(-1); return !!last?.failed; };
   const doneMark = (failed, partial) => h("span", { class: `alt-task-state ${failed ? "failed" : partial ? "partial" : "done"}`, "aria-hidden": "true",
     title: partial && !failed ? "a step under it failed" : null }, failed ? "✗" : partial ? "!" : "✓");
+  // D1061: a step that is only its one step of the same kind (a choice and its pick) is that step -- what opens, no list of one
+  const soleOf = n => { const k = n?.kids || []; return k.length === 1 && phaseKind(k[0]) === phaseKind(n) && !(k[0].kids || []).length && !/^\s*tool\s*:/i.test(String(k[0].name)) ? k[0] : null; };   // a command is its step's (D1034)
   const mark = (n, below) => n.t1 == null ? h("span", { class: "alt-spin", role: "img", "aria-label": "running" })
     : n.interrupted ? h("span", { class: `alt-task-state ${state(n)}`, "aria-hidden": "true" }, "—")
     : n.timedOut ? h("span", { class: "alt-task-state partial", "aria-hidden": "true", title: "stopped at its time limit" }, "!") : doneMark(n.failed, below?.has(n.id));
@@ -377,13 +379,16 @@ export function liveAltTab(ctx) {
       const pairs = [...line.slice(at + 2).matchAll(/([A-Za-z][\w.]*)=(\{[^}]*\}|\[[^\]]*\]|[^,]+)/g)];
       return pairs.filter(([, k, v]) => !k.startsWith("_") && /^-?[\d.]+(e-?\d+)?$/i.test(v.trim())).slice(0, 3).map(([, k, v]) => `${k} ${v.trim()}`).join(" · ");
     };
+    // the design a try made: its draft's own, the check after it, or the design it was asked for
+    const madeOf = t => { const opens = aiOf.get(t.lead.id) || t.lead;
+      return candidateOf(t.lead) || t.steps.map(candidateOf).find(Boolean) || (/\S+#\S+/.exec(String(t.lead.params?.["turn why"] || opens.why || t.lead.why || "")) || [""])[0] || ""; };
     const tryLine = (t, i, depth, onlyLine = false) => {
       const nodes = [t.lead, ...t.steps], all = nodes.flatMap(flat), key = `try:${t.lead.id}`;
       const running = all.some(n => n.t1 == null), failedStep = t.steps.find(n => n.failed || below.has(n.id));
       const under = t.run ? (kids.get(t.lead.id) || []) : t.steps.map(n => ({ node: n, parent: null }));
       const collapsed = onlyLine || !under.length || isFolded(key, !running, all.some(n => holds(n.id)) && !all.slice(0, 1).some(n => n.id === selected));
       const opens = aiOf.get(t.lead.id) || t.lead, picked = all.some(n => n.id === selected) && (opens.id === selected || t.lead.id === selected);
-      const made = candidateOf(t.lead) || (/\S+#\S+/.exec(String(t.lead.params?.["turn why"] || opens.why || t.lead.why || "")) || [""])[0] || t.steps.map(candidateOf).find(Boolean) || "";
+      const made = madeOf(t);
       const why = failedStep ? `${checkWord(failedStep)} failed` : "";
       const shortMade = made.replace(/^.*?(#[^#\s]+)$/, "$1");                 // "#4": the loop's name is the page's already
       const t0 = Math.min(...all.map(n => n.t0)), t1 = Math.max(...all.map(n => n.t1 ?? now));
@@ -404,27 +409,33 @@ export function liveAltTab(ctx) {
       // another box's runs (a stage, then its evaluation) are its steps
       let tries = kind === "design" ? nodes.flatMap(n => draftsIn(n) || [{ lead: n, steps: [], run: true }]) : null;
       if (tries && tries.length < 2) tries = null;
-      const all = nodes.flatMap(flat), running = all.some(n => n.t1 == null);
+      // D1061: its own work only -- work moved to the boxes after it (a sweep point's design and gate) is theirs
+      const flatK = n => [n, ...(kids.get(n.id) || []).flatMap(r => flatK(r.node))];
+      const all = nodes.flatMap(flatK), running = all.some(n => n.t1 == null);
       // D1050: a design of one draft is that draft -- the box opens its conversation, its checks under it
       const lone = !tries && kind === "design" && nodes.length === 1 ? draftsIn(first) : null;
-      const steps = tries ? [] : lone ? lone[0].steps.map(n => ({ node: n, parent: null }))
+      const sole = nodes.length === 1 && !lone ? soleOf(first) : null;
+      const steps = tries || sole ? [] : lone ? lone[0].steps.map(n => ({ node: n, parent: null }))
         : nodes.length > 1 ? nodes.map(n => ({ node: n, parent: null })) : (kids.get(first.id) || []);
       const collapsed = !(tries || steps.length) || isFolded(key, !running, all.some(n => holds(n.id)) && !nodes.some(n => n.id === selected));
-      const opens = lone ? (aiOf.get(lone[0].lead.id) || lone[0].lead) : nodes.length === 1 ? (aiOf.get(first.id) || first) : last;
+      const opens = lone ? (aiOf.get(lone[0].lead.id) || lone[0].lead) : sole || (nodes.length === 1 ? (aiOf.get(first.id) || first) : last);
       const picked = nodes.length === 1 && (first.id === selected || opens.id === selected);
       const t0 = Math.min(...all.map(n => n.t0)), t1 = Math.max(...all.map(n => n.t1 ?? now));
       // D1055: the newest design's own measurement -- not the evaluation's, which measures the composition again
       const stages = kind === "measure" ? all.filter(n => STAGE.test(String(n.name)) && numbersOf(n)) : [];
       const staged = stages.filter(n => !/^\s*evaluation\b/i.test(String(n.parent?.name || ""))).at(-1) || stages.at(-1) || null;
       const planned = kind === "plan" ? String(last.output?.picked ?? last.output?.next ?? "") : "";
-      const what = staged ? `${String(staged.name).split(":")[1].trim()} · ${numbersOf(staged)}` : planned ? `picked ${planned}` : kind === "plan" ? "" : rest(last), ai = all.some(n => AI.test(String(n.params?.turn || n.name)) || aiOf.has(n.id));
+      // D1061: a design says the design it made (#12), as the graph does -- what it improved on hover
+      const lastTry = kind === "design" ? (tries || lone || draftsIn(last) || []).at(-1) : null, made = lastTry ? madeOf(lastTry) : "";
+      const failing = kind === "check" ? firstFailing(last) : "";          // D1061: what failed in it, as the graph says
+      const what = staged ? `${String(staged.name).split(":")[1].trim()} · ${numbersOf(staged)}` : planned ? `picked ${planned}` : kind === "plan" ? "" : [made || rest(last), failing].filter(Boolean).join(" · "), ai = all.some(n => AI.test(String(n.params?.turn || n.name)) || aiOf.has(n.id));
       const crit = all.some(n => /^\s*critique\s*:/i.test(String(n.name))), rejected = all.some(rejectedBy);
       out.push(h("div", { class: "alt-tree-row box", style: `--depth:${depth};--k:${COLORS[kind] || COLORS.setup}` },
         tries || steps.length ? fold(key, collapsed, workLabel(kind)) : h("span", { class: "alt-fold-space" }),
         h("button", { ...taskButton(opens), type: "button", class: `alt-task ${state(opens)}${picked ? " sel" : ""}`, "aria-pressed": String(picked), title: lone ? opens.name : nodes.map(n => n.name).join(" · ") },
           running ? h("span", { class: "alt-spin", role: "img", "aria-label": "running" })
             : lone && (opens.interrupted || opens.timedOut) ? mark(opens, below)      // its one draft's own end: interrupted, a time limit
-            : doneMark(ended(nodes) || rejected, all.some(n => n.failed || below.has(n.id))),
+            : doneMark(ended(nodes) || rejected, all.some(n => n.failed)),     // D1061: its own work's failures
           h("span", { class: "alt-task-name" }, h("b", {}, workLabel(kind)), what ? h("span", { class: "alt-what", title: what }, ` ${shortAll(what)}`) : "", nodes.length === 1 && note(first) ? h("span", { class: "alt-what" }, ` · ${note(first)}`) : ""),
           ai ? h("span", { class: "alt-ai-pill" }, "ai") : "", crit ? h("span", { class: "alt-critic-tag" }, "critic") : "",
           tries && tries.length > 1 ? h("span", { class: "alt-again" }, `×${tries.length}`) : "",
@@ -471,22 +482,19 @@ export function liveAltTab(ctx) {
         const c = candidateOf(n), named = /^\s*test\s*:\s*fast check\b/i.test(String(n.name)) ? `check · ${r}` : r;      // D1054: a design's check, said "check"
         // D1059: which design -- a scope's checks of two designs told apart -- every design said by its id
         return shortAll(kind === "check" && c && !named.includes(c) && !named.includes(short(c)) ? `${named} · ${c}` : named); };
-      const base = n => taskLabel(n).replace(/[\s#]*\d+\s*$/, "");          // draft 1, draft 2: the same task again
       if (kind === "design") {                    // D1045: the same tries as the tree -- each draft and the checks after it
         // D1059: runs for different parts (a plan's lo and hi) are those parts, not tries of one design
-        const parts = runsOf.every(n => !/^improve\b/i.test(rest(n))) && new Set(runsOf.map(rest)).size > 1;
-        const tries = runsOf.flatMap(n => (draftsIn(n) || (leadOf(n) ? [{ lead: n, steps: [], run: true }] : [])).map(t => ({ ...t, part: parts ? rest(n) : "" })));
-        if (tries.length > 1) newestFirst(key, tries.map((t, i) => [t, i]), ([t, i]) => tryLine(t, i + 1, 0, true), 0, holdsTry);
+        // D1061: so are two designs of one pass (a scope's second) -- runs of other names; one name again is its tries
+        const parts = new Set(runsOf.map(rest)).size > 1;
+        const tries = runsOf.flatMap(n => { const t = draftsIn(n) || (leadOf(n) ? [{ lead: n, steps: [], run: true }] : []);
+          return t.map((x, k) => ({ ...x, part: parts ? shortAll(rest(n)) + (t.length > 1 ? ` · try ${k + 1}` : "") : "" })); });
+        if (tries.length > 1) newestFirst(key, tries.map((t, i) => [t, i]), ([t, i]) => tryLine(t, i + 1, 0, true), 0, holdsTry, parts);   // D1061: parts in run order
         return;                                   // one draft: the box opens its conversation
       }
       const one = runsOf.length === 1 ? (kids.get(runsOf[0].id) || []).map(r => r.node) : [];
       const items = one.length ? one : runsOf;
-      const same = items.length > 1 && new Set(items.map(base)).size === 1;
       newestFirst(key, items.map((n, i) => [n, i]), ([n, i]) => {
-        const what = candidateOf(n) || (/\S+#\S+/.exec(String(aiOf.get(n.id)?.why || n.why || "")) || [""])[0] || note(n);
         if (kind === "plan") line({ node: n, parent: null }, 0, n.output?.picked != null ? `picked ${n.output.picked}` : own(n), false, "", true);   // D1059: a plan per part, not tries
-        else if (same) line({ node: n, parent: null }, 0, `try ${i + 1}`, false, [what ? h("span", { class: "alt-what" }, ` ${what}`) : "",
-          kind === "check" && firstFailing(n) ? h("span", { class: "alt-what" }, ` · ${firstFailing(n)}`) : "", kind === "check" ? testDots(n) : ""], true);
         else if (kind === "check") line({ node: n, parent: null }, 0, own(n), false,
           [firstFailing(n) ? h("span", { class: "alt-what" }, ` · ${firstFailing(n)}`) : "", testDots(n)], true);
         else line({ node: n, parent: null }, 0, own(n), false, "", true);
@@ -538,7 +546,8 @@ export function liveAltTab(ctx) {
       boxes(rest, depth);                       // D1045: the pass's own tasks, one line per box
       // D1044: in a pass at work, the boxes still to come, dimmed; D1059: the loop's last pass between two tasks is at work too
       if (g.rows.some(r => r.node.t1 == null) || (g === groups.at(-1) && g.p != null && [...inspector.model.nodes.values()].some(n => n.t1 == null)))
-        for (const b of flowBoxes(g.rows, g.p, true, passNotes(g.p)).filter(x => x.state === "wait" && !x.runs.length))
+        // D1061: from all the pass's tasks -- a check inside its design ran, it is not still to come
+        for (const b of flowBoxes(rows.filter(r => (membership.get(r.node.id) ?? null) === g.p), g.p, true, passNotes(g.p)).filter(x => x.state === "wait" && !x.runs.length))
           out.push(h("div", { class: "alt-tree-row box wait", style: `--depth:${depth};--k:${COLORS[b.kind] || COLORS.setup}`, "aria-label": `${b.title}: still to come` },
             h("span", { class: "alt-fold-space" }), h("span", { class: "alt-task" }, h("span", { class: "alt-task-state wait" }, "·"), h("span", { class: "alt-task-name" }, h("b", {}, b.title)))));
     }
@@ -573,7 +582,8 @@ export function liveAltTab(ctx) {
       // a box at work opens its current task (a running agent first, as Following does); a finished one its
       // latest run -- one its list shows -- or, its list being one item, that item
       const lastRun = b.runs.at(-1), lastDraft = b.kind === "design" && lastRun ? [...(lastRun.kids || [])].reverse().find(isDraft) : null;
-      const task = own.some(r => r.node.t1 == null) ? currentTask(own) : lastDraft || (listed === 1 && items.length === 1 ? items[0] : lastRun || currentTask(own));
+      const chosen = own.some(r => r.node.t1 == null) ? currentTask(own) : lastDraft || (listed === 1 && items.length === 1 ? items[0] : lastRun || currentTask(own));
+      const task = soleOf(chosen) || chosen;
       if (i) g.push(sv("path", { d: `M${W / 2} ${y - GAP} V${y - 2}`, class: "alt-flow-edge", "marker-end": "url(#alt-arrow)" }));
       // a box with a list opens; D1029: a design of one run is that run -- its line opens the conversation, no list
       const isOpen = openBox === `${shown}:${b.key}` && listed > 1;

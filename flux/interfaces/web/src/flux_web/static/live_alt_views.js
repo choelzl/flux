@@ -48,10 +48,10 @@ export function taskLabel(n) {
   if (head === "knowledge") return `Setup · ${/^digest/i.test(rest) ? "papers" : /^mentor/i.test(rest) ? "mentor" : "inputs"}`;
   if (head === "tool") return `${kind} · ${ranFor(n) || rest.replace(/^fluxpreset\s+/, "") || "a command"}`;   // D1037: the document's name
   if (head === "dse") { const c = candidateOf(n); return c ? `Search · ${c}` : "Search"; }
-  if (head === "test" && rest === "gate") { const c = candidateOf(n); return c ? `Check · gate · ${c}` : "Check · gate"; }   // D1051
+  if (head === "test" && rest === "gate") { const c = candidateOf(n); return c ? `Check · ${c}` : "Check"; }   // D1051; D1061: a check, said "check"
   // D1050: a design's checks said one way -- its build and check, the gate's verdict on it
   if (head === "test" && /^fast check\s/i.test(rest)) return `${kind} · ${rest.slice(11).trim()}`;      // D1054: a check, said "check"
-  if (head === "test" && /^judge\s/i.test(rest)) return `${kind} · gate · ${rest.slice(6).trim()}`;
+  if (head === "test" && /^judge\s/i.test(rest)) return `${kind} · ${rest.slice(6).trim()}`;
   // D1038: the decision's own steps said apart -- the step that holds them, the pick, a critique of what it judges
   if (head === "decide" && !rest) return /^\s*decide\b/i.test(String(n.parent?.name || "")) ? `${kind} · pick` : kind;
   if (head === "critique") return `${kind} · critique of ${rest === "decision" ? "the decision" : rest === "measurement" ? "the measurement" : rest || "a design"}`;
@@ -111,7 +111,8 @@ function boxState(runs) {
   if (s === "running") return "run";
   if (s === "failed" || s === "interrupted") return "bad";
   if (s === "timeout") return "part";                   // D997: a time limit warns
-  const failedIn = n => (n.kids || []).some(k => k.failed || failedIn(k));
+  // D1061: only what the box shows -- a sweep point's gate is the Check box's failure, not its Search's
+  const failedIn = n => (n.kids || []).some(k => boxKind(k) === boxKind(last) && (k.failed || failedIn(k)));
   // D995: a step under it failed; D1031: or an earlier run failed (a refused try before the one that passed)
   return runs.some(r => r !== last && r.failed) || runs.some(failedIn) ? "part" : "ok";
 }

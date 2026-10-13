@@ -32,7 +32,8 @@
         d.timedOut = !!e.output && (!!e.output["timed out"] || /^\s*agent\s*:/i.test(String(d.name)) && Number(e.output.exit) === 124);   // D1053
         if (d.timedOut) d.failed = false;
         // D1055: an evaluation that ran nothing under it and ended at once did nothing to see -- a note, not a task
-        if (/^\s*evaluation\s*$/i.test(String(d.name)) && !d.kids.length && !d.failed && (Number(e.seconds) || 0) < 0.5) {
+        // D1061: so is a stage whose numbers were read back from before -- it measured nothing
+        if ((/^\s*evaluation\s*$/i.test(String(d.name)) && (Number(e.seconds) || 0) < 0.5 || e.output && e.output.reused) && !d.kids.length && !d.failed) {
           m.nodes.delete(d.id);
           var sib = d.parent ? d.parent.kids : m.roots, at = sib.indexOf(d);
           if (at >= 0) sib.splice(at, 1);

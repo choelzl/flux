@@ -38,7 +38,7 @@ TREE = """
 
 def test_tasks_are_named_kind_first_then_what():
     got = run(f"""m => {{ {TREE} return [...all, agent, {{name: "gate: tools", kids: []}}, {{name: "knowledge: prepare popcount", kids: []}}, {{name: "critique: decision", kids: []}}, {{name: "knowledge: mentor", kids: []}}, {{name: "knowledge: digest", kids: []}}].map(m.taskLabel); }}""")
-    assert got == ["Search · lut-chunk=4", "Design · gen.py", "Check · gate · lut-chunk=4", "Check · golden", "Measure · screen", "Measure · screen",
+    assert got == ["Search · lut-chunk=4", "Design · gen.py", "Check · lut-chunk=4", "Check · golden", "Measure · screen", "Measure · screen",
                    "Measure · evaluation", "Agent · claude", "Setup · tools ready", "Setup · inputs", "Choose · critique of the decision",
                    "Setup · mentor", "Setup · papers"]
 
@@ -62,7 +62,7 @@ def test_a_search_done_as_a_note_is_a_box_that_ran():
 def test_a_box_whose_step_failed_says_so_though_it_finished():
     """D995: a measure that ended with one of its tools failing (exit 1) is "!", not ✓."""
     got = run(f"""m => {{ {TREE} rtl.failed = true; const b = m.flowBoxes(rows, 6, false); return b.map(x => x.state); }}""")
-    assert got == ["part", "ok", "ok", "part"]          # the search holds the measure; the check passed
+    assert got == ["ok", "ok", "ok", "part"]            # D1061: the measure is the Measure box's failure, not the search's that holds it
 
 
 def test_a_design_after_a_check_is_a_repair_counted_on_the_box():

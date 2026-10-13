@@ -28,6 +28,8 @@ export function failingOf(text) {
   const all = [...String(text).matchAll(/(\d+)\s+failing(?:\s+of\s+(\d+))?/g)], m = all.at(-1);
   return m ? { failing: Number(m[1]), of: m[2] != null ? Number(m[2]) : null, index: m.index } : null;
 }
+/** D1061: a design said by its id ("#4") -- the loop's name is the page's already; the whole name on hover. */
+const byId = t => String(t).replace(/[^\s·#]+(#[^#\s]+)/g, "$1");
 const fmt = v => Math.abs(v) >= 100 ? String(Math.round(v * 10) / 10) : Math.abs(v) >= 1 ? v.toFixed(2).replace(/\.?0+$/, "") : Number(v.toPrecision(2)).toString();
 
 function pill(n) {
@@ -36,9 +38,9 @@ function pill(n) {
 }
 function stepRow(x, env) {
   const s = summaryOf(x);
-  return h("button", { type: "button", class: "alt-step-row", style: `--k:${colorOf(x)}`, "data-task": String(x.id), onclick: () => env.pick?.(x.id) },
+  return h("button", { type: "button", class: "alt-step-row", style: `--k:${x.failed ? "var(--bad)" : colorOf(x)}`, "data-task": String(x.id), onclick: () => env.pick?.(x.id) },
     running(x) ? h("span", { class: "alt-spin", "aria-hidden": "true" }) : h("span", { class: `alt-task-state ${x.failed ? "failed" : "done"}` }, x.failed ? "✗" : "✓"),
-    h("span", { class: "alt-task-name" }, taskLabel(x), s ? h("span", { class: "muted" }, ` — ${s}`) : ""),
+    h("span", { class: "alt-task-name", title: taskLabel(x) }, byId(taskLabel(x)), s ? h("span", { class: "muted" }, ` — ${s}`) : ""),
     h("span", { class: "mono muted small" }, dur(x.seconds ?? (x.t1 ?? Date.now() / 1000) - x.t0)));
 }
 /** One line of what a task gave: a check's failing count, a measurement's numbers, else nothing. */
@@ -67,9 +69,9 @@ export function inspectorHead(n, env) {
   for (const b of tools) if (b && b.textContent) { b.title = b.textContent; b.setAttribute("aria-label", b.textContent); b.textContent = b.textContent === "Raw" ? "{ }" : "⤢"; b.classList.add("alt-icon-btn"); }
   const parents = []; for (let p = n.parent; p; p = p.parent) parents.unshift(p);
   return [h("div", { class: "detail-head alt-ihead" }, h("span", { class: "alt-stripe", style: `background:${colorOf(n)}` }),
-      h("h2", {}, taskLabel(n)), pill(n), h("span", { class: "muted" }, dur(running(n) ? env.now - n.t0 : n.seconds)), h("span", { class: "alt-head-tools" }, tools)),
+      h("h2", { title: taskLabel(n) }, byId(taskLabel(n))), pill(n), h("span", { class: "muted" }, dur(running(n) ? env.now - n.t0 : n.seconds)), h("span", { class: "alt-head-tools" }, tools)),
     parents.length ? h("div", { class: "alt-crumbs" }, parents.flatMap((p, i) => [i ? h("span", { class: "muted" }, "›") : "",
-      h("button", { type: "button", class: "alt-pchip", style: `--k:${colorOf(p)}`, onclick: () => env.pick?.(p.id) }, taskLabel(p))])) : "",
+      h("button", { type: "button", class: "alt-pchip", style: `--k:${colorOf(p)}`, onclick: () => env.pick?.(p.id), title: taskLabel(p) }, byId(taskLabel(p)))])) : "",
     h("p", { class: "alt-meta muted" }, n.why ? `${n.why} · ` : "", h("span", { class: "mono" }, n.name))];
 }
 
@@ -108,7 +110,7 @@ function toolBody(n, env) {
     if (fails) {
       const ok = fails.failing === 0, before = lines(out.slice(0, fails.index)).filter(l => !/^\s*\d+\s+failing/.test(l));
       top.push(h("div", { class: `alt-result ${ok ? "ok" : "bad"}`, style: `--k:${ok ? colorOf(n) : "var(--bad)"}` },
-        h("span", { class: "alt-big" }, `${ok ? "✓" : "✗"} ${fails.failing} failing`), h("span", { class: "muted" }, `${fails.of != null ? `of ${fails.of} · ` : ""}exit ${f.exit ?? (n.failed ? "≠0" : 0)}`)));
+        h("span", { class: "alt-big" }, `${ok ? "✓" : "✗"} ${fails.failing} failing`), h("span", { class: "muted" }, [fails.of != null ? `of ${fails.of}` : "", f.exit && f.exit !== 0 ? `exit ${f.exit}` : ""].filter(Boolean).join(" · "))));   // D1061: an exit 0 beside failures says nothing
       if (!ok && before.length) top.push(h("div", {}, h("div", { class: "alt-label" }, "The first failures"),
         h("pre", { class: "val alt-cases" }, before.slice(0, 3).join("\n") + (before.length > 3 ? `\n… and ${before.length - 3} more` : ""))));
     } else if (Object.keys(metrics).length) {
@@ -286,7 +288,9 @@ function chooseBody(n, env) {
   const said = all.find(f => f.decision) || {};
   const text = String(said.decision || "") || all.map(o => Object.values(o).map(v => typeof v === "string" ? v : JSON.stringify(v)).join(" ")).join(" ");
   const rows = [...measured(env).entries()], goals = (env.goals?.() || []).filter(g => g.metric);
-  const cols = (goals.length ? goals.map(g => g.metric) : Object.keys(rows[0]?.[1] || {})).slice(0, 3);
+  // D1061: the goals first, then the other numbers measured (a dictionary metric too), three at most
+  const seen = [...new Set(rows.flatMap(([, m]) => Object.keys(m)))];
+  const cols = [...new Set([...goals.map(g => g.metric), ...seen])].slice(0, 3);
   const chosen = rows.map(([c]) => c).find(c => text.includes(c)) || "";
   // D1059: a design the select critic rejected stays on the record, marked -- never shown as chosen
   const rejected = new Map();
@@ -298,14 +302,14 @@ function chooseBody(n, env) {
   const num = v => typeof v === "number" ? v : null;           // a dictionary is not ordered here: the chosen one leads
   rows.sort((a, b) => (b[0] === chosen) - (a[0] === chosen) || (g0 && sign ? sign * ((num(a[1][g0.metric]) ?? Infinity * sign) - (num(b[1][g0.metric]) ?? Infinity * sign)) : 0));
   return [h("div", { class: "task-inspector" },
-    refused ? h("div", { class: "alt-result bad", style: "--k:var(--bad)" }, h("span", { class: "alt-big" }, `✗ ${chosen}`),
+    refused ? h("div", { class: "alt-result bad", style: "--k:var(--bad)" }, h("span", { class: "alt-big", title: chosen }, `✗ ${byId(chosen)}`),
       h("span", { class: "muted" }, `picked, then rejected by the critic${rejected.get(chosen) ? `: ${rejected.get(chosen)}` : ""}`))
-    : chosen || said.decision ? h("div", { class: "alt-result ok", style: `--k:${colorOf(n)}` }, h("span", { class: "alt-big" }, `★ ${chosen || said.decision}`),
+    : chosen || said.decision ? h("div", { class: "alt-result ok", style: `--k:${colorOf(n)}` }, h("span", { class: "alt-big", title: chosen || said.decision }, `★ ${byId(chosen || said.decision)}`),
       said["decided by"] ? h("span", { class: "muted" }, said["decided by"]) : "") : "",
     rows.length ? h("div", { class: "alt-table-wrap" }, h("table", { class: "list compact alt-metrics" },
       h("thead", {}, h("tr", {}, h("th", {}, "design"), cols.map(k => { const g = goals.find(x => x.metric === k), d = g === g0 ? dir : g?.direction; return h("th", { class: "num" }, k, d ? ` ${/max/i.test(d) ? "↑" : "↓"}` : ""); }))),
       h("tbody", {}, rows.map(([c, m]) => h("tr", { class: rejected.has(c) ? "alt-rejected" : c === chosen ? "alt-chosen" : "", title: rejected.has(c) ? `rejected by the critic: ${rejected.get(c)}` : "" },
-        h("td", {}, rejected.has(c) ? [`✗ ${c}`, h("span", { class: "alt-critic-tag" }, "critic")] : c === chosen ? `★ ${c}` : c), cols.map(k => h("td", { class: "num mono" }, cell(m[k])))))))) : "",
+        h("td", { title: c }, rejected.has(c) ? [`✗ ${byId(c)}`, h("span", { class: "alt-critic-tag" }, "critic")] : c === chosen ? `★ ${byId(c)}` : byId(c)), cols.map(k => h("td", { class: "num mono" }, cell(m[k])))))))) : "",
     n.kids.length ? h("div", { class: "alt-steps" }, n.kids.map(k => stepRow(k, env))) : "")];
 }
 
