@@ -38,7 +38,7 @@ TREE = """
 
 def test_tasks_are_named_kind_first_then_what():
     got = run(f"""m => {{ {TREE} return [...all, agent, {{name: "gate: tools", kids: []}}, {{name: "knowledge: prepare popcount", kids: []}}, {{name: "critique: decision", kids: []}}, {{name: "knowledge: mentor", kids: []}}, {{name: "knowledge: digest", kids: []}}].map(m.taskLabel); }}""")
-    assert got == ["Search · lut-chunk=4", "Design · gen.py", "Check", "Check · golden", "Measure · screen", "Measure · rtl measure",
+    assert got == ["Search · lut-chunk=4", "Design · gen.py", "Check", "Check · golden", "Measure · screen", "Measure · screen",
                    "Measure · evaluation", "Agent · claude", "Setup · tools ready", "Setup · inputs", "Choose · decision",
                    "Setup · mentor", "Setup · papers"]
 
@@ -108,3 +108,13 @@ def test_a_critique_is_in_the_box_it_judges_with_a_badge_not_a_box_of_its_own():
       return b.map(x => [x.key, !!x.critic]); }}""")
     assert ["critic", True] not in got and ["critic", False] not in got
     assert dict(got)["check"] is True and dict(got)["choose"] is True and dict(got)["measure"] is False
+
+
+def test_a_command_is_named_by_its_check_or_stage_its_program_beside():
+    """D1037: `build.sh` run for the check named build is "Check · build", its program a note; a stage's
+    command "Measure · esl"; the gate's default check, and a command for no check, keep the program."""
+    got = run("""m => { const mk = (name, why) => ({name, why, kids: [], parent: {name: "test: fast check d#1", kids: []}});
+      const xs = [mk("tool:build.sh", "build d#43"), mk("tool:sim.py", "stage esl d#43"), mk("tool:fluxpreset golden", "test d#3"),
+                  mk("tool:gen.py", "generate x=1")];
+      return xs.map(x => [m.taskLabel(x), m.taskNote(x)]); }""")
+    assert got == [["Check · build", "build.sh"], ["Measure · esl", "sim.py"], ["Check · golden", ""], ["Design · gen.py", ""]]

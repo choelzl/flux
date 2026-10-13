@@ -5,7 +5,7 @@ import { sv } from "./charts.js";
 import { restoreScroll, scrollState } from "./scroll.js";
 import { campaignForStart, currentTask, taskScope, taskState as state, taskWindow } from "./live_alt_model.js";
 import { WORK_COLORS as COLORS, AGENT_COLOR, workLabel, phaseKind, ownSpans } from "./work_style.js";
-import { docNotes, flowBoxes, passKind, repaired, taskLabel } from "./live_alt_views.js";
+import { docNotes, flowBoxes, passKind, repaired, taskLabel, taskNote } from "./live_alt_views.js";
 import { passSummary } from "./live_alt_inspector.js";
 
 // D977: work is classified as Live's timeline classifies it, so a task sits in the same lane in both
@@ -207,7 +207,9 @@ export function liveAltTab(ctx) {
         merged.set(r.node.id, [...(merged.get(r.node.id) || []), c.node]);
       }
     }
-    const note = n => (merged.get(n.id) || []).map(c => taskLabel(c).replace(/^[^·]*·\s*/, "")).join(" › ");
+    // D1037: a merged command says its program; a command's own row too, beside its check's name
+    const note = n => [...(merged.get(n.id) || []).map(c => taskNote(c) || taskLabel(c).replace(/^[^·]*·\s*/, "")), ...(merged.has(n.id) ? [] : [taskNote(n)])]
+      .filter(x => x && !taskLabel(n).endsWith(` · ${x}`)).join(" › ");
     const sel = inspector.model.nodes.get(selected), holds = id => { for (let p = sel; p; p = p.parent) if (p.id === id) return true; return false; };
     const now = Date.now() / 1000, secs = n => n.seconds ?? (n.t1 ?? now) - n.t0, below = failedUnder();
     const fold = (key, collapsed, label) => h("button", { type: "button", class: "alt-fold", "data-fold": String(key), "aria-label": `${collapsed ? "Expand" : "Collapse"} ${label}`,
@@ -218,7 +220,7 @@ export function liveAltTab(ctx) {
       out.push(h("div", { class: `alt-tree-row${secs(n) < .05 && !under.length ? " quiet" : ""}`, style: `--depth:${depth};--k:${/^\s*agent\s*:/i.test(n.name) ? AGENT_COLOR : COLORS[kind] || COLORS.setup}` },
         under.length ? fold(n.id, collapsed, label) : h("span", { class: "alt-fold-space" }),
         h("button", { ...taskButton(n), type: "button", class: `alt-task ${state(n)}${n.id === selected ? " sel" : ""}`, "aria-pressed": String(n.id === selected), title: n.name + (n.why ? " · " + n.why : "") },
-          mark(n, below), h("span", { class: "alt-task-name" }, label, merged.has(n.id) ? h("span", { class: "muted small" }, ` · ${note(n)}`) : ""),
+          mark(n, below), h("span", { class: "alt-task-name" }, label, note(n) ? h("span", { class: "muted small" }, ` · ${note(n)}`) : ""),
           h("span", { class: "mono muted small" }, dur(secs(n))))));
       if (!collapsed) under.forEach(k => line(k, depth + 1));
     };
@@ -350,7 +352,11 @@ export function liveAltTab(ctx) {
         // the box is its runs: list what is under each, never the run itself; runs of a box that
         // ran more than once are kept apart by a thin divider
         const under = (run, n) => { for (let p = n.parent; p; p = p.parent) if (p === run) return true; return false; };
-        const groups = b.kind === "design" ? [drafts.map(r => ({ ...r, parent: null }))] : b.runs.map(run => own.filter(r => under(run, r.node))).filter(gr => gr.length);
+        // D1037: a run that is one command (a stage and the program it runs) is listed as itself, one line
+        const oneCommand = run => { const k = run.kids || []; return k.length === 1 && /^\s*tool\s*:/i.test(String(k[0].name)) && !(k[0].kids || []).length; };
+        const groups = b.kind === "design" ? [drafts.map(r => ({ ...r, parent: null }))]
+          : b.runs.map(run => own.filter(r => oneCommand(run) ? r.node === run || r.node.parent === run : under(run, r.node))
+            .map(r => r.node === run ? { ...r, parent: null } : r)).filter(gr => gr.length);
         const rowsOf = gr => { const out = [], t = taskRows(gr, selected, out); t.roots.forEach(r => t.line(r, 0)); return out; };
         if (groups.length) {
           const list = h("div", { class: "alt-box-tasks", role: "group", "aria-label": `${b.title} tasks` },

@@ -21,6 +21,20 @@ export function candidateOf(n) {
 
 /** A task as the timeline says it (TN1): its kind, then what it is -- the tool as the document
     says it, the stage, the candidate; the engine's own name stays in the inspector. */
+/** D1037: the check or stage a command runs, from what it was told (`build bau#43`, `stage esl bau#43`);
+    "" for a command that is no check or stage, or the gate's default single check (its program says more). */
+function ranFor(n) {
+  const w = String(n.why || "").trim().split(/\s+/);
+  if (w[0] === "stage" && w[1]) return w[1];
+  if (w[0] === "estimate" && w[1]) return `estimate ${w[1]}`;
+  return !w[0] || ["generate", "search", "baseline", "focus", "scope", "test"].includes(w[0]) ? "" : w[0];
+}
+/** D1037: a command's program, said beside the check or stage it runs; "" for anything else. */
+export function taskNote(n) {
+  const name = String(n.name || ""), at = name.indexOf(":");
+  if (!/^\s*tool\s*:/i.test(name) || !ranFor(n)) return "";
+  return name.slice(at + 1).trim().replace(/^fluxpreset\s+/, "");
+}
 export function taskLabel(n) {
   const name = String(n.name || "").trim(), low = name.toLowerCase(), at = name.indexOf(":");
   const head = (at < 0 ? low : low.slice(0, at)).trim(), rest = at < 0 ? "" : name.slice(at + 1).trim();
@@ -29,7 +43,7 @@ export function taskLabel(n) {
   const kind = workLabel(phaseKind(n));
   if (SETUP_SAYS[low]) return `Setup · ${SETUP_SAYS[low]}`;
   if (head === "knowledge") return `Setup · ${/^digest/i.test(rest) ? "papers" : /^mentor/i.test(rest) ? "mentor" : "inputs"}`;
-  if (head === "tool") return `${kind} · ${rest.replace(/^fluxpreset\s+/, "") || "a command"}`;
+  if (head === "tool") return `${kind} · ${ranFor(n) || rest.replace(/^fluxpreset\s+/, "") || "a command"}`;   // D1037: the document's name
   if (head === "dse") { const c = candidateOf(n); return c ? `Search · ${c}` : "Search"; }
   if (head === "test" && rest === "gate") return "Check";
   if (rest) return `${kind} · ${rest}`;
