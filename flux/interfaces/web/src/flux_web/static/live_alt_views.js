@@ -24,7 +24,7 @@ export function candidateOf(n) {
     says it, the stage, the candidate; the engine's own name stays in the inspector. */
 /** D1037: the check or stage a command runs, from what it was told (`build bau#43`, `stage esl bau#43`);
     "" for a command that is no check or stage, or the gate's default single check (its program says more). */
-function ranFor(n) {
+export function ranFor(n) {
   const w = String(n.why || "").trim().split(/\s+/);
   if (w[0] === "stage" && w[1]) return w[1];
   if (w[0] === "estimate" && w[1]) return `estimate ${w[1]}`;
@@ -67,7 +67,9 @@ function draftDesign(n) {
     const m = /^\s*test\s*:\s*(?:fast check|judge)\s+(\S+)/i.exec(String(x.name)) || /\s(\S+#\S+)\s*$/.exec(String(x.why || ""));
     if (m) return m[1].replace(/^.*?(#[^#\s]+)$/, "$1");
   }
-  return "";
+  // D1059: no check after it (stopped at its time limit) -- the design it was asked for, as its try line says
+  const asked = /\S+#\S+/.exec(String(n.params?.["turn why"] || n.why || ""));
+  return asked ? asked[0].replace(/^.*?(#[^#\s]+)$/, "$1") : "";
 }
 
 /** Which flow a pass draws: the setup (before pass 0 or 1), the baseline (pass 0), or a pass. */
@@ -133,10 +135,17 @@ export function flowBoxes(rows, p, running, notes = []) {
   // D1054: only a search -- an evaluation or a decision that is a note had nothing to work on (D1053), no box
   const noted = k => k === "search" ? notes.filter(n => kindOf(n.name, n.why) === k) : [];
   const present = new Set([...rows.map(r => boxKind(r.node)), ...kinds.filter(k => noted(k).length)]);
-  const measured = Math.min(...rows.filter(r => phaseKind(r.node) === "measure").map(r => r.node.t0));
+  // D1059: a design composed inside a measurement is the measurement's; a second design later in the pass is a design
+  const inMeasure = n => { for (let p = n.parent; p; p = p.parent) if (phaseKind(p) === "measure") return true; return false; };
   const boxes = kinds.filter(k => present.has(k) || (running && kind === "pass" && k !== "plan"))
     .map(k => ({ key: k, title: workLabel(k), kind: k,
-      runs: runsOf(rows, n => boxKind(n) === k && (k !== "design" || n.t0 < measured || !Number.isFinite(measured))), notes: noted(k) }));
+      runs: runsOf(rows, n => boxKind(n) === k && (k !== "design" || !inMeasure(n))), notes: noted(k) }));
+  // D1059: an evaluation is the loop taking designs through the stages -- its measurements are the box's own runs
+  for (const b of boxes) if (b.kind === "measure") {
+    const inBox = b.runs.inBox;
+    b.runs = b.runs.flatMap(n => /^\s*evaluation\s*$/i.test(String(n.name)) && (n.kids || []).length ? n.kids : [n]);
+    b.runs.inBox = inBox;
+  }
   if (kind === "baseline" && boxes.length && boxes.every(b => ["ok", "part"].includes(boxState(b.runs)))) boxes.push({ key: "record", title: "Record", kind: "setup", runs: [], done: true });
   const times = stretches(rows);
   // D1054: a design counts its tries, as its list and the tree do; another box, its stretches of work
@@ -174,7 +183,8 @@ function finish(b) {
     the measured design's, not a new one. */
 export function repaired(boxes) {
   const d = boxes.find(b => b.key === "design"), c = boxes.find(b => b.key === "check");
-  return !!(d && c && d.runs.length && c.runs.length && d.runs.some(x => x.t0 > c.runs[0].t0));
+  // D1059: the same design again -- another part's design after a check is no way back
+  return !!(d && c && d.runs.length && c.runs.length && d.runs.some(x => x.t0 > c.runs[0].t0 && d.runs.some(y => y !== x && y.t0 < x.t0 && y.name === x.name)));
 }
 
 /** What each box is set to, from the document as written (D686: nothing of it runs). */

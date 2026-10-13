@@ -760,7 +760,7 @@ pre.author-log { max-height: 260px; overflow: auto; white-space: pre-wrap; }
 .alt-split > .card { min-width: 0; scroll-margin-top: 64px; }
 .alt-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin-bottom: 12px; }
 .alt-count { font-size: 11px; color: var(--muted); }
-.alt-count.running { color: var(--run); } .alt-count.failed { color: var(--bad); } .alt-count.interrupted { color: var(--warn); }
+.alt-count.running { color: var(--run); } .alt-count.failed { color: var(--bad); } .alt-count.timeout { color: var(--warn); } .alt-count.interrupted { color: var(--warn); }
 .alt-visual { overflow: auto; max-height: 74vh; }
 .alt-pass-heading { font-weight: 600; }
 /* D978: one line per task, tinted by its kind; the selected deeper and outlined; quiet when it took no time */
@@ -789,7 +789,7 @@ pre.author-log { max-height: 260px; overflow: auto; white-space: pre-wrap; }
 .alt-chip { position: relative; min-width: 30px; padding: 2px 8px; border-radius: 12px; font: 12px var(--mono, monospace); }
 .alt-chip:not(:last-child)::after { content: "→"; position: absolute; right: -13px; color: var(--muted); }
 .alt-chip::before { content: ""; position: absolute; top: -2px; right: -2px; width: 7px; height: 7px; border-radius: 50%; background: var(--ok); }
-.alt-chip.failed::before { background: var(--bad); } .alt-chip.running::before { background: var(--run); }
+.alt-chip.failed::before { background: var(--bad); } .alt-chip.part::before { background: var(--warn); } .alt-chip.running::before { background: var(--run); }
 .alt-chip.sel { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
 svg.alt-flow { display: block; width: 100%; height: auto; margin: 0 auto; overflow: visible; }
 .alt-flow-edge, .alt-flow-back { stroke: var(--muted); stroke-width: 1.2; fill: none; } .alt-flow-back { stroke-dasharray: 4 3; } .alt-arrow-head { fill: var(--muted); }
@@ -801,6 +801,7 @@ svg.alt-flow { display: block; width: 100%; height: auto; margin: 0 auto; overfl
 .alt-pill-text { font: 9px var(--sans, sans-serif); fill: #fff; text-anchor: middle; } .alt-count-pill { fill: var(--line); } .alt-count-text { font: 9px var(--mono, monospace); fill: var(--ink); text-anchor: middle; }
 .alt-step { fill: var(--k); } .alt-step.wait { fill: var(--line); } .alt-step.bad { fill: var(--bad); }
 @media (prefers-reduced-motion: no-preference) { .alt-step.run { animation: alt-glow 1s ease-in-out infinite alternate; } }
+.alt-metrics tr.alt-rejected td { color: var(--bad); text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--bad) 50%, transparent); } .alt-metrics tr.alt-rejected .alt-critic-tag { margin-left: 6px; text-decoration: none; display: inline-block; }
 .alt-done.ok { fill: var(--ok); } .alt-done.bad { fill: var(--bad); } .alt-done.part { fill: var(--warn); } .alt-done-mark { font: 600 9.5px var(--sans, sans-serif); fill: #fff; text-anchor: middle; }
 .alt-flow-box { cursor: pointer; }
 .alt-box-tasks { border: 1px solid var(--line); border-radius: 7px; background: var(--panel); padding: 3px 0; overflow: hidden; display: grid; grid-template-columns: minmax(0, 1fr); }

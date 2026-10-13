@@ -722,7 +722,7 @@ def general_flows(r, watch):
                     s.emit('events', {ev: 'end', id, t: t0 + 5, seconds: 5, output: {}}); } return 1""")
                 b.wait("document.querySelector('.alt-tree .alt-again')", what="the repeated design as one line")
                 r.check("D1016, D1045: a box's runs in a row are one line, ×N, its tries under it", b.js(
-                    "const p = document.querySelector('.alt-tree .alt-again'); return p.textContent === '×3' && p.closest('.alt-tree-row').querySelector('.alt-task-name').textContent === 'Design improve wheel#7'"))
+                    "const p = document.querySelector('.alt-tree .alt-again'); return p.textContent === '×3' && p.closest('.alt-tree-row').querySelector('.alt-task-name').textContent === 'Design improve #7'"))   # D1059: a design said by its id
                 choose("LiveAlt start", "21")
                 b.wait("document.querySelector('.alt-detail')?.textContent.includes('FULL retained prompt')", what="retained task inspector")
                 r.check("older start replays its own passes, prompts and output", b.js("return document.querySelector('.alt-detail').textContent.includes('Retained answer') && !document.querySelector('.live-alt').textContent.includes('FULL live prompt') && window.__altTraceRequests.at(-1).includes('start_id=21')"))

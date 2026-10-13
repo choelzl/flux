@@ -2,7 +2,7 @@
 // given, and for the tasks that decide something, what was decided. Live's own inspector is unchanged.
 import { dur, h } from "./ui.js";
 import { WORK_COLORS as COLORS, AGENT_COLOR, phaseKind, workLabel, ownSpans } from "./work_style.js";
-import { candidateOf, passName, taskLabel } from "./live_alt_views.js";
+import { candidateOf, passName, ranFor, taskLabel } from "./live_alt_views.js";
 import { conversation, markdown } from "./loops.js";
 
 const turnOf = n => String(n.params?.turn || n.name);          // D1050: a wrapper's taken-in turn
@@ -44,6 +44,9 @@ function stepRow(x, env) {
 /** One line of what a task gave: a check's failing count, a measurement's numbers, else nothing. */
 function summaryOf(x) {
   const leaves = x.kids?.length ? x.kids.flatMap(k => k.kids?.length ? k.kids : [k]) : [x];
+  // D1059: a step that failed says so first -- which test, and how many of its cases
+  const bad = leaves.length > 1 && leaves.find(l => l.failed && failingOf(stdoutOf(l))?.failing);
+  if (bad) { const f = failingOf(stdoutOf(bad)); return `${ranFor(bad) || "a test"} ${f.failing} failing${f.of != null ? ` of ${f.of}` : ""}`; }
   for (const l of leaves) {
     const out = stdoutOf(l), f = failingOf(out);
     if (f) return `${f.failing} failing${f.of != null ? ` of ${f.of}` : ""}`;
@@ -285,17 +288,24 @@ function chooseBody(n, env) {
   const rows = [...measured(env).entries()], goals = (env.goals?.() || []).filter(g => g.metric);
   const cols = (goals.length ? goals.map(g => g.metric) : Object.keys(rows[0]?.[1] || {})).slice(0, 3);
   const chosen = rows.map(([c]) => c).find(c => text.includes(c)) || "";
+  // D1059: a design the select critic rejected stays on the record, marked -- never shown as chosen
+  const rejected = new Map();
+  for (const x of env.nodes.values()) if (x.failed && /^\s*critique\s*:\s*decision/i.test(String(x.name))) rejected.set(String(x.why || ""), String(fieldsOf(x).verdict || "").replace(/^REJECTED:\s*/i, ""));
+  const refused = chosen && rejected.has(chosen);
   // D1055: a goal written as its name alone takes its direction from what the decision said ("the largest score")
   const g0 = goals[0], dir = g0?.direction || (/\b(largest|highest|most)\b/i.test(String(said["decided by"] || "")) ? "maximize" : /\b(smallest|lowest|least)\b/i.test(String(said["decided by"] || "")) ? "minimize" : "");
   const sign = g0 && dir ? (/max/i.test(dir) ? -1 : 1) : 0;
   const num = v => typeof v === "number" ? v : null;           // a dictionary is not ordered here: the chosen one leads
   rows.sort((a, b) => (b[0] === chosen) - (a[0] === chosen) || (g0 && sign ? sign * ((num(a[1][g0.metric]) ?? Infinity * sign) - (num(b[1][g0.metric]) ?? Infinity * sign)) : 0));
   return [h("div", { class: "task-inspector" },
-    chosen || said.decision ? h("div", { class: "alt-result ok", style: `--k:${colorOf(n)}` }, h("span", { class: "alt-big" }, `★ ${chosen || said.decision}`),
+    refused ? h("div", { class: "alt-result bad", style: "--k:var(--bad)" }, h("span", { class: "alt-big" }, `✗ ${chosen}`),
+      h("span", { class: "muted" }, `picked, then rejected by the critic${rejected.get(chosen) ? `: ${rejected.get(chosen)}` : ""}`))
+    : chosen || said.decision ? h("div", { class: "alt-result ok", style: `--k:${colorOf(n)}` }, h("span", { class: "alt-big" }, `★ ${chosen || said.decision}`),
       said["decided by"] ? h("span", { class: "muted" }, said["decided by"]) : "") : "",
     rows.length ? h("div", { class: "alt-table-wrap" }, h("table", { class: "list compact alt-metrics" },
       h("thead", {}, h("tr", {}, h("th", {}, "design"), cols.map(k => { const g = goals.find(x => x.metric === k), d = g === g0 ? dir : g?.direction; return h("th", { class: "num" }, k, d ? ` ${/max/i.test(d) ? "↑" : "↓"}` : ""); }))),
-      h("tbody", {}, rows.map(([c, m]) => h("tr", { class: c === chosen ? "alt-chosen" : "" }, h("td", {}, c === chosen ? `★ ${c}` : c), cols.map(k => h("td", { class: "num mono" }, cell(m[k])))))))) : "",
+      h("tbody", {}, rows.map(([c, m]) => h("tr", { class: rejected.has(c) ? "alt-rejected" : c === chosen ? "alt-chosen" : "", title: rejected.has(c) ? `rejected by the critic: ${rejected.get(c)}` : "" },
+        h("td", {}, rejected.has(c) ? [`✗ ${c}`, h("span", { class: "alt-critic-tag" }, "critic")] : c === chosen ? `★ ${c}` : c), cols.map(k => h("td", { class: "num mono" }, cell(m[k])))))))) : "",
     n.kids.length ? h("div", { class: "alt-steps" }, n.kids.map(k => stepRow(k, env))) : "")];
 }
 
@@ -314,7 +324,10 @@ function criticBody(n, env) {
 function stepsBody(n, env) {
   // D1029: its own box's steps -- a check run inside a design's generation is the Check box's, not listed here
   const kind = phaseKind(n), kids = n.kids.filter(k => phaseKind(k) === kind);
-  return kids.length ? [h("div", { class: "task-inspector" }, h("div", { class: "alt-steps" }, kids.map(k => stepRow(k, env))))] : [];
+  if (kids.length) return [h("div", { class: "task-inspector" }, h("div", { class: "alt-steps" }, kids.map(k => stepRow(k, env))))];
+  // D1059: no steps of its own -- what it came to (a plan's pick, its menu), its short results said plainly
+  const said = Object.entries(n.output || {}).filter(([k, v]) => !k.startsWith("_") && v != null && v !== "" && (typeof v !== "object") && String(v).length <= 160).slice(0, 4);
+  return said.length ? [h("div", { class: "task-inspector" }, ...said.map(([k, v]) => h("div", { class: "kv" }, h("div", { class: "k" }, k), h("div", { class: "val" }, String(v)))))] : [];
 }
 
 /** The inspector of a task in LiveAlt (D982). `env`: now, nodes, tools(), block(), tidy(), agent(n),
