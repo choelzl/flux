@@ -46,6 +46,11 @@ export function liveAltTab(ctx) {
     if (pass === "current") pass = p == null ? "all" : String(p);
     render(); revealDetails();
   }
+  // D1045: every fold that hides a task -- its ancestors', and the box and try lines that hold them
+  function unfoldTo(id) {
+    for (let p = inspector.model.nodes.get(id)?.parent; p; p = p.parent) for (const k of [p.id, `box:${p.id}`, `try:${p.id}`]) folded.delete(k);
+    for (const k of [...folded]) if (/^(box|try):/.test(String(k))) folded.delete(k);   // a box of its run's siblings is keyed by the first
+  }
   function select(id, locate = false) {
     following = false;
     boxView = null;
@@ -53,7 +58,7 @@ export function liveAltTab(ctx) {
     pinPass(id);
     choice = null;
     reveal = locate;
-    for (let p = inspector.model.nodes.get(id)?.parent; p; p = p.parent) folded.delete(p.id);
+    unfoldTo(id);
     inspector.inspect(id);
     render();
     revealDetails();
@@ -233,8 +238,9 @@ export function liveAltTab(ctx) {
       const full = taskLabel(n), at = full.indexOf(" · "), rest = at < 0 ? "" : full.slice(at + 3);
       if (/^\s*critique\s*:/i.test(String(n.name))) return box ? [h("b", {}, workLabel(phaseKind(n) || "check")), " critique"] : "critique";
       if (box) return [h("b", {}, workLabel(phaseKind(n) || "setup")), rest ? h("span", { class: "alt-what" }, ` ${rest}`) : ""];
-      const parentKind = n.parent ? phaseKind(n.parent) : null;
-      return rest && (!parentKind || parentKind === phaseKind(n)) ? rest : full;
+      const parentKind = n.parent ? phaseKind(n.parent) : null, kind = phaseKind(n);
+      if (!rest) return kind ? kind : full;                           // D1045: "Check" alone under Design is "check"
+      return !parentKind || !kind || parentKind === kind ? rest : `${kind} · ${rest}`;
     };
     const line = (r, depth, named = "", box = false, extra = "", flat = false) => {
       const n = r.node, under = flat ? [] : kids.get(n.id) || [], finished = n.t1 != null, collapsed = under.length && isFolded(n.id, finished, holds(n.id) && n.id !== selected);
@@ -250,13 +256,17 @@ export function liveAltTab(ctx) {
     // D1016: the same task again in a row (a design continued in its pass, D999) -- one line, ×N, its tries under it
     // D1044: the tries of a list, newest first, five at a time -- "N earlier tries" shows the rest
     const TRIES = 5;
-    const newestFirst = (key, items, draw, depth) => {
-      const all = allTries.has(key), order = [...items].reverse(), shown = all ? order : order.slice(0, TRIES);
+    // D1045: the try that holds the selected task, or is still at work, is always shown
+    const newestFirst = (key, items, draw, depth, keep = () => false) => {
+      const all = allTries.has(key), order = [...items].reverse(), shown = all ? order : order.filter((x, i) => i < TRIES || keep(x));
       shown.forEach(draw);
+      const hidden = order.length - shown.length;
       if (order.length > TRIES) out.push(h("button", { type: "button", class: "alt-more-tries", style: `--depth:${depth}`, "data-more": key,
         onclick: () => { if (all) allTries.delete(key); else allTries.add(key); render(); } },
-        all ? "▾ newest five only" : `▸ ${order.length - TRIES} earlier tr${order.length - TRIES === 1 ? "y" : "ies"}`));
+        all || !hidden ? "▾ newest five only" : `▸ ${hidden} earlier tr${hidden === 1 ? "y" : "ies"}`));
     };
+    const holdsTry = ([t]) => [t.lead, ...t.steps].flatMap(n => [n, ...(n.kids || []).flatMap(function f(k) { return [k, ...(k.kids || []).flatMap(f)]; })])
+      .some(n => n.id === selected || n.t1 == null);
     // D1016: the same task again in a row (a design continued in its pass, D999) -- one line, ×N, its tries under it
     const again = (run, depth, box = false) => {
       if (run.length < 2) return line(run[0], depth, "", box);
@@ -264,13 +274,14 @@ export function liveAltTab(ctx) {
       const collapsed = isFolded(key, finished, nodes.some(n => holds(n.id)));
       const t0 = Math.min(...nodes.map(n => n.t0)), t1 = Math.max(...nodes.map(n => n.t1 ?? now));
       const ai = nodes.some(n => aiOf.has(n.id) || AI.test(String(n.name)));
-      out.push(h("div", { class: `alt-tree-row ${box ? "box" : "step"}`, style: `--depth:${depth};--k:${COLORS[phaseKind(first)] || COLORS.setup}` }, fold(key, collapsed, taskLabel(first)),
+      const opensTries = phaseKind(first) === "design";             // D1045: a step repeated elsewhere is one line, ×N
+      out.push(h("div", { class: `alt-tree-row ${box ? "box" : "step"}`, style: `--depth:${depth};--k:${COLORS[phaseKind(first)] || COLORS.setup}` }, opensTries ? fold(key, collapsed, taskLabel(first)) : h("span", { class: "alt-fold-space" }),
         h("button", { type: "button", class: `alt-task ${finished ? "" : "running"}`, onclick: () => toggleFold(key, collapsed) },
           finished ? doneMark(ended(nodes), nodes.some(n => n.failed || below.has(n.id))) : h("span", { class: "alt-spin", role: "img", "aria-label": "running" }),
           h("span", { class: "alt-task-name" }, said(first, box)), ai ? h("span", { class: "alt-ai-pill" }, "ai") : "",
           h("span", { class: "alt-again", title: `${run.length} tries in this pass` }, `×${run.length}`),
           h("span", { class: "mono muted small" }, dur(t1 - t0)))));
-      if (!collapsed) newestFirst(key, run.map((r, i) => [r, i]), ([r, i]) => {
+      if (!collapsed && phaseKind(first) === "design") newestFirst(key, run.map((r, i) => [r, i]), ([r, i]) => {
         const what = candidateOf(r.node) || note(r.node);
         line(r, depth + 1, `try ${i + 1}`, false, what ? h("span", { class: "alt-what" }, ` ${what}`) : "");
       }, depth + 1);
@@ -313,7 +324,7 @@ export function liveAltTab(ctx) {
       for (let k = 0; k < list.length;) {
         const kind = phaseKind(list[k].node);
         let s = k + 1;
-        while (!inStretch && STRETCH.includes(kind) && s < list.length && phaseKind(list[s].node) === kind) s++;
+        while (box && !inStretch && STRETCH.includes(kind) && s < list.length && phaseKind(list[s].node) === kind) s++;
         if (s - k >= 2 && new Set(list.slice(k, s).map(r => taskLabel(r.node))).size > 1) { stretch(list.slice(k, s), depth, box); k = s; continue; }
         let e = k + 1;
         while (e < list.length && taskLabel(list[e].node) === taskLabel(list[k].node) && !(kids.get(list[k].node.id) || []).length === !(kids.get(list[e].node.id) || []).length) e++;
@@ -322,11 +333,83 @@ export function liveAltTab(ctx) {
         again(list.slice(k, e), depth, box); k = e;
       }
     };
+    // D1045: a pass's work as boxes -- the tasks of one kind in a row are ONE box line, whatever their names;
+    // under it its tries -- a draft and the checks after it, or each run when it ran several -- else its steps
+    const flat = n => [n, ...(n.kids || []).flatMap(flat)];
+    const leadOf = c => (phaseKind(c) === "design" && !/^\s*(propose|template-fill)\b/i.test(String(c.name))) || AI.test(String(c.name));
+    const triesIn = n => {
+      const got = []; let cur = null;
+      for (const r of kids.get(n.id) || []) {
+        if (leadOf(r.node)) got.push(cur = { lead: r.node, steps: [] });
+        else if (cur) cur.steps.push(r.node);
+      }
+      return got.length >= 2 ? got : null;
+    };
+    const draftsIn = n => { const t = triesIn(n); if (t) return t; const k = (kids.get(n.id) || []).map(r => r.node); const i = k.findIndex(leadOf);
+      return i >= 0 ? [{ lead: k[i], steps: k.slice(i + 1) }] : null; };
+    const rest = n => { const l = taskLabel(n), at = l.indexOf(" · "); return at < 0 ? "" : l.slice(at + 3); };
+    const tryLine = (t, i, depth, onlyLine = false) => {
+      const nodes = [t.lead, ...t.steps], all = nodes.flatMap(flat), key = `try:${t.lead.id}`;
+      const running = all.some(n => n.t1 == null), failedStep = t.steps.find(n => n.failed || below.has(n.id));
+      const under = t.run ? (kids.get(t.lead.id) || []) : t.steps.map(n => ({ node: n, parent: null }));
+      const collapsed = onlyLine || !under.length || isFolded(key, !running, all.some(n => holds(n.id)) && !all.slice(0, 1).some(n => n.id === selected));
+      const opens = aiOf.get(t.lead.id) || t.lead, picked = all.some(n => n.id === selected) && (opens.id === selected || t.lead.id === selected);
+      const made = candidateOf(t.lead) || (/\S+#\S+/.exec(String(opens.why || t.lead.why || "")) || [""])[0] || t.steps.map(candidateOf).find(Boolean) || "";
+      const why = failedStep ? `${said(failedStep, false)} failed` : "";
+      const t0 = Math.min(...all.map(n => n.t0)), t1 = Math.max(...all.map(n => n.t1 ?? now));
+      out.push(h("div", { class: "alt-tree-row step try", style: `--depth:${depth};--k:${COLORS[phaseKind(t.lead) || "design"] || COLORS.design}` },
+        under.length && !onlyLine ? fold(key, collapsed, `try ${i}`) : h("span", { class: "alt-fold-space" }),
+        h("button", { ...taskButton(opens), type: "button", class: `alt-task ${state(opens)}${picked ? " sel" : ""}`, "aria-pressed": String(picked), title: t.lead.name },
+          running ? h("span", { class: "alt-spin", role: "img", "aria-label": "running" }) : doneMark(!!failedStep || !!t.lead.failed, all.some(n => below.has(n.id))),
+          h("span", { class: "alt-task-name" }, `try ${i}`, made ? h("span", { class: "alt-what" }, ` ${made}`) : "", why ? h("span", { class: "alt-what" }, ` · ${why}`) : ""),
+          aiOf.has(t.lead.id) || AI.test(String(t.lead.name)) ? h("span", { class: "alt-ai-pill" }, "ai") : "",
+          h("span", { class: "mono muted small" }, dur(t1 - t0)))));
+      if (!collapsed) runs(under, depth + 1);
+    };
+    const boxLine = (nodes, depth) => {
+      const first = nodes[0], last = nodes.at(-1), kind = phaseKind(first) || "setup", key = `box:${first.id}`;
+      // D1045: only a design has tries -- its drafts, each with the checks after it, numbered across its runs;
+      // another box's runs (a stage, then its evaluation) are its steps
+      let tries = kind === "design" ? nodes.flatMap(n => draftsIn(n) || [{ lead: n, steps: [], run: true }]) : null;
+      if (tries && tries.length < 2) tries = null;
+      const all = nodes.flatMap(flat), running = all.some(n => n.t1 == null);
+      const steps = tries ? [] : nodes.length > 1 ? nodes.map(n => ({ node: n, parent: null })) : (kids.get(first.id) || []);
+      const collapsed = !(tries || steps.length) || isFolded(key, !running, all.some(n => holds(n.id)) && !nodes.some(n => n.id === selected));
+      const opens = nodes.length === 1 ? (aiOf.get(first.id) || first) : last, picked = nodes.length === 1 && (first.id === selected || opens.id === selected);
+      const t0 = Math.min(...all.map(n => n.t0)), t1 = Math.max(...all.map(n => n.t1 ?? now));
+      const what = rest(last), ai = all.some(n => AI.test(String(n.name)) || aiOf.has(n.id));
+      const crit = all.some(n => /^\s*critique\s*:/i.test(String(n.name))), rejected = all.some(rejectedBy);
+      out.push(h("div", { class: "alt-tree-row box", style: `--depth:${depth};--k:${COLORS[kind] || COLORS.setup}` },
+        tries || steps.length ? fold(key, collapsed, workLabel(kind)) : h("span", { class: "alt-fold-space" }),
+        h("button", { ...taskButton(opens), type: "button", class: `alt-task ${state(opens)}${picked ? " sel" : ""}`, "aria-pressed": String(picked), title: nodes.map(n => n.name).join(" · ") },
+          running ? h("span", { class: "alt-spin", role: "img", "aria-label": "running" }) : doneMark(ended(nodes) || rejected, all.some(n => n.failed || below.has(n.id))),
+          h("span", { class: "alt-task-name" }, h("b", {}, workLabel(kind)), what ? h("span", { class: "alt-what" }, ` ${what}`) : "", nodes.length === 1 && note(first) ? h("span", { class: "alt-what" }, ` · ${note(first)}`) : ""),
+          ai ? h("span", { class: "alt-ai-pill" }, "ai") : "", crit ? h("span", { class: "alt-critic-tag" }, "critic") : "",
+          tries && tries.length > 1 ? h("span", { class: "alt-again" }, `×${tries.length}`) : "",
+          h("span", { class: "mono muted small" }, dur(t1 - t0)))));
+      if (collapsed) return;
+      if (tries) newestFirst(key, tries.map((t, i) => [t, i]), ([t, i]) => tryLine(t, i + 1, depth + 1), depth + 1, holdsTry);
+      else runs(steps, depth + 1);
+    };
+    const boxes = (list, depth) => {
+      for (let k = 0; k < list.length;) {
+        const kind = phaseKind(list[k].node) || "setup";
+        let e = k + 1;
+        while (e < list.length && (phaseKind(list[e].node) || "setup") === kind) e++;
+        boxLine(list.slice(k, e).map(r => r.node), depth);
+        k = e;
+      }
+    };
     // D1044: a graph box's list -- its tries, one flat line each, newest first, five at a time, when it ran
     // one task again and again; else each of its runs (a stage, then its evaluation); a single run, its steps
     const boxList = (runsOf, key, kind) => {
       const own = n => { const full = taskLabel(n), at = full.indexOf(" · "); return at >= 0 && phaseKind(n) === kind ? full.slice(at + 3) : full; };
       const base = n => taskLabel(n).replace(/[\s#]*\d+\s*$/, "");          // draft 1, draft 2: the same task again
+      if (kind === "design") {                    // D1045: the same tries as the tree -- each draft and the checks after it
+        const tries = runsOf.flatMap(n => draftsIn(n) || (leadOf(n) ? [{ lead: n, steps: [], run: true }] : []));
+        if (tries.length > 1) newestFirst(key, tries.map((t, i) => [t, i]), ([t, i]) => tryLine(t, i + 1, 0, true), 0, holdsTry);
+        return;                                   // one draft: the box opens its conversation
+      }
       const one = runsOf.length === 1 ? (kids.get(runsOf[0].id) || []).map(r => r.node) : [];
       const items = one.length ? one : runsOf;
       const same = items.length > 1 && new Set(items.map(base)).size === 1;
@@ -336,11 +419,11 @@ export function liveAltTab(ctx) {
         else line({ node: n, parent: null }, 0, own(n), false, "", true);
       }, 0);
     };
-    return { line, fold, secs, kids, runs, boxList, roots: rows.filter(r => r.parent == null || !ids.has(r.parent)) };
+    return { line, fold, secs, kids, runs, boxes, boxList, roots: rows.filter(r => r.parent == null || !ids.has(r.parent)) };
   }
   function tree(rows, selected) {
     const membership = taskScope(inspector.model, "all").membership;
-    const out = [], { line, fold, secs, kids, runs } = taskRows(rows, selected, out), below = failedUnder();
+    const out = [], { line, fold, secs, kids, runs, boxes } = taskRows(rows, selected, out), below = failedUnder();
     const now = Date.now() / 1000;
     const sel = inspector.model.nodes.get(selected), holds = id => { for (let p = sel; p; p = p.parent) if (p.id === id) return true; return false; };
     // per pass: the steps every pass starts with fold into one Setup line
@@ -372,9 +455,9 @@ export function liveAltTab(ctx) {
           h("button", { type: "button", class: "alt-task alt-setup-steps", onclick: () => toggleFold(key, collapsed) },
             finished ? doneMark(nodes.some(n => n.failed), nodes.some(n => below.has(n.id))) : h("span", { class: "alt-spin" }),
             h("span", { class: "alt-task-name" }, `Setup · ${lead.length} steps`), h("span", { class: "mono muted small" }, dur(nodes.reduce((t, n) => t + secs(n), 0))))));
-        if (!collapsed) lead.forEach(r => line(r, depth + 1));
+        if (!collapsed) runs(lead, depth + 1);    // D1045: the same step again in a row is one line, ×N
       } else lead.forEach(r => line(r, depth));
-      runs(rest, depth, false, true);           // D1044: the pass's own tasks are its boxes' lines
+      boxes(rest, depth);                       // D1045: the pass's own tasks, one line per box
       if (g.rows.some(r => r.node.t1 == null))    // D1044: in a pass at work, the boxes still to come, dimmed
         for (const b of flowBoxes(g.rows, g.p, true).filter(x => x.state === "wait" && !x.runs.length))
           out.push(h("div", { class: "alt-tree-row box wait", style: `--depth:${depth};--k:${COLORS[b.kind] || COLORS.setup}`, "aria-label": `${b.title}: still to come` },
@@ -407,7 +490,7 @@ export function liveAltTab(ctx) {
       const c = COLORS[b.kind] || COLORS.setup, own = inPass.filter(r => b.ids.has(r.node.id)), task = currentTask(own);
       if (i) g.push(sv("path", { d: `M${W / 2} ${y - GAP} V${y - 2}`, class: "alt-flow-edge", "marker-end": "url(#alt-arrow)" }));
       // a box with a list opens; D1029: a design of one run is that run -- its line opens the conversation, no list
-      const isOpen = openBox === `${shown}:${b.key}` && !(b.kind === "design" && b.runs.length === 1) && (b.runs.length > 1 || own.some(r => !b.runs.includes(r.node)));
+      const isOpen = openBox === `${shown}:${b.key}` && (b.runs.length > 1 || own.some(r => !b.runs.includes(r.node)));
       const note = notes[b.key === "record" ? "record" : b.key] || "";
       // Notes get their own bounded line: long objective names must not run into the title or pills.
       const BH = note ? (b.steps ? 52 : 44) : 34;
@@ -433,13 +516,17 @@ export function liveAltTab(ctx) {
       // Update expansion before selection redraws the graph; keyboard and mouse do the same thing.
       const box = sv("g", { ...attrs, tabindex: "0", role: "button", "aria-label": `${b.title} · ${task ? state(task) : b.done ? "done" : "no task recorded"}`,
         ...(task ? { "data-task": String(task.id), "aria-expanded": String(!!isOpen) } : {}) }, ...kids);
-      const activate = () => {
-        box.focus({ preventScroll: true });
-        openBox = task && !isOpen ? `${shown}:${b.key}` : null;
-        if (task) select(task.id); else showBox(shown, b.key);
+      // D1045: a redraw morphs this element in place and keeps its first listener -- what the click
+      // does is read when it happens, from the box's attributes and the open box, never this render's closure
+      box.dataset.open = `${shown}:${b.key}`;
+      const activate = e => {
+        const el = e.currentTarget, me = el.dataset.open, t = el.dataset.task;
+        el.focus({ preventScroll: true });
+        openBox = t && openBox !== me ? me : null;
+        if (t) select(Number.isNaN(Number(t)) ? t : Number(t)); else showBox(me.slice(0, me.lastIndexOf(":")) === "null" ? null : Number(me.slice(0, me.lastIndexOf(":"))), el.dataset.box);
       };
       box.addEventListener("click", activate);
-      box.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); activate(); } });
+      box.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); activate(e); } });
       g.push(box);
       y += BH;
       // D1044 (G1): a box opens on its list, attached under it in its colour -- tries newest first, five at a time
@@ -643,7 +730,7 @@ export function liveAltTab(ctx) {
     summary = h("div", { class: "alt-summary" });
     logLink = h("a", { class: "btn small alt-log-link", title: "Full output and retained run data" });
     locateBtn = h("button", { type: "button", class: "small", title: "Reveal and highlight the selected task in the list", onclick: () => {
-      for (let p = inspector.model.nodes.get(inspector.taskId())?.parent; p; p = p.parent) folded.delete(p.id);
+      unfoldTo(inspector.taskId());
       reveal = true; render();
     } }, "Locate");
     panel = h("div", { class: "alt-visual", tabindex: "0", "aria-label": "LiveAlt task view", onkeydown: event => {

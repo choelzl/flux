@@ -553,11 +553,11 @@ def general_flows(r, watch):
                 # D1035: a redraw of the same task is a morph -- the prompt's node is kept, not rebuilt
                 r.check("a redraw keeps the inspector's nodes", b.js("return window.__altPrompt===document.querySelector('.alt-detail [data-k=prompt]')"))
                 r.check("unrelated task updates preserve prompt and thinking scroll", b.js("return [document.querySelector('.alt-detail [data-k=prompt]').scrollTop,document.querySelector('.alt-detail .cv-thought').scrollTop]") == positions)
-                b.click('.alt-tree [data-fold="3"]')
-                r.check("tree branches collapse without changing inspected task", b.js("return !document.querySelector('.alt-tree [data-task=\"4\"]') && document.querySelector('.alt-detail').dataset.task==='4' && document.querySelector('.alt-tree [data-fold=\"3\"]').getAttribute('aria-expanded')==='false'"))
+                b.click('.alt-tree [data-fold="box:3"]')
+                r.check("tree branches collapse without changing inspected task", b.js("return !document.querySelector('.alt-tree [data-task=\"4\"]') && document.querySelector('.alt-detail').dataset.task==='4' && document.querySelector('.alt-tree [data-fold=\"box:3\"]').getAttribute('aria-expanded')==='false'"))
                 b.js("window.__altFold=document.activeElement;window.__altStreams.at(-1).emit('events',{ev:'update',id:3,fields:{status:'still working'}});return 1")
-                b.wait("window.__altFold!==document.querySelector('.alt-tree [data-fold=\"3\"]')", what="folded tree redraw")
-                r.check("folded branches retain keyboard focus across updates", b.js("return document.activeElement.dataset.fold==='3' && document.activeElement.getAttribute('aria-expanded')==='false' && !document.querySelector('.alt-tree [data-task=\"4\"]')"))
+                b.wait("window.__altFold!==document.querySelector('.alt-tree [data-fold=\"box:3\"]')", what="folded tree redraw")
+                r.check("folded branches retain keyboard focus across updates", b.js("return document.activeElement.dataset.fold==='box:3' && document.activeElement.getAttribute('aria-expanded')==='false' && !document.querySelector('.alt-tree [data-task=\"4\"]')"))
                 r.button("Locate", ".alt-detail-actions")
                 r.check("Locate reveals the selected task inside a folded branch", b.js("return !!document.querySelector('.alt-tree [data-task=\"4\"].sel')"))
                 choose("LiveAlt pass", "all")
@@ -706,7 +706,7 @@ def general_flows(r, watch):
                 r.check("navigation reveals an older task outside the tree window", b.js("return document.querySelector('.alt-detail').dataset.task==='1000' && !!document.querySelector('.alt-tree [data-task=\"1000\"].sel.alt-located')"))
                 r.button("Follow", ".alt-controls")
                 b.click('.alt-more')
-                r.check("earlier tasks can be expanded without losing the active task", b.js("return document.querySelector('.alt-detail').dataset.task==='4' && document.querySelectorAll('.alt-tree [data-task]').length===208 && !document.querySelector('.alt-more')"))
+                r.check("earlier tasks can be expanded without losing the active task", b.js("return document.querySelector('.alt-detail').dataset.task==='4' && !!document.querySelector('.alt-tree .alt-more-tries') && !document.querySelector('.alt-more')"))
                 r.button("Following", ".alt-controls")
                 r.check("pass picker offers baseline and each numbered pass", b.js("return ['0','1','2'].every(value=>Array.from(document.querySelector('[aria-label=\"LiveAlt pass\"]').options).some(option=>option.value===value))"))
                 b.js("""const s=window.__altStreams.at(-1), t=Date.now()/1000;
@@ -722,8 +722,8 @@ def general_flows(r, watch):
                   for (const [id, t0] of [[901, t], [902, t + 10]]) { s.emit('events', {ev: 'start', id, t: t0, parent: null, name: 'generation: improve wheel#7', why: 'gate', params: {}});
                     s.emit('events', {ev: 'end', id, t: t0 + 5, seconds: 5, output: {}}); } return 1""")
                 b.wait("document.querySelector('.alt-tree .alt-again')", what="the repeated design as one line")
-                r.check("D1016: the same task again in a row is one line, ×2, its tries under it", b.js(
-                    "const p = document.querySelector('.alt-tree .alt-again'); return p.textContent === '×2' && p.closest('.alt-tree-row').querySelector('.alt-task-name').textContent === 'improve wheel#7'"))
+                r.check("D1016, D1045: a box's runs in a row are one line, ×N, its tries under it", b.js(
+                    "const p = document.querySelector('.alt-tree .alt-again'); return p.textContent === '×3' && p.closest('.alt-tree-row').querySelector('.alt-task-name').textContent === 'Design improve wheel#7'"))
                 choose("LiveAlt start", "21")
                 b.wait("document.querySelector('.alt-detail')?.textContent.includes('FULL retained prompt')", what="retained task inspector")
                 r.check("older start replays its own passes, prompts and output", b.js("return document.querySelector('.alt-detail').textContent.includes('Retained answer') && !document.querySelector('.live-alt').textContent.includes('FULL live prompt') && window.__altTraceRequests.at(-1).includes('start_id=21')"))

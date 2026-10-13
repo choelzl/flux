@@ -1384,7 +1384,8 @@ td.cleared s { color: var(--muted); }
 .reject-form .note { padding: 6px 8px; border-radius: 6px; background: color-mix(in srgb, var(--warn, #9a6200) 10%, transparent); margin: 0; }
 
 /* D1044: tree A -- a box is a tinted band (its name, what it worked on); its steps plain lines on a thin guide */
-.alt-tree-row.step { background: transparent; position: relative; }
+.alt-tree-row.step { background: color-mix(in srgb, var(--k, transparent) 6%, var(--panel)); position: relative; }   /* D1045: a step keeps its kind's colour, lighter */
+.alt-tree-row.step.try { background: color-mix(in srgb, var(--k, transparent) 10%, var(--panel)); }
 .alt-tree-row.step::before { content: ""; position: absolute; left: -6px; top: 0; bottom: 0; width: 1px; background: color-mix(in srgb, var(--k, var(--line)) 30%, var(--line)); }
 .alt-tree-row.step:hover { background: color-mix(in srgb, var(--k, transparent) 9%, var(--panel)); }
 .alt-tree-row.box { margin-top: 3px; box-shadow: inset 3px 0 0 var(--k); }
