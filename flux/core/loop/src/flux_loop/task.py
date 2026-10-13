@@ -585,11 +585,23 @@ class PromptProblem(PrototypeMixin, MeasureMixin, KnowledgeMixin, DraftMixin, Pa
                    state: LoopState) -> tuple[int, str]:
         if not self.task.gate:
             return 0, ""
-        got = self.__dict__.get("_tested", {}).pop(_digest_of(cand.artifact), None)   # build ran it (D594)
-        return got if got is not None else self._gate_run(self._subs(cand, subgoal, state))
+        digest = _digest_of(cand.artifact)
+        got = self.__dict__.get("_tested", {}).pop(digest, None)   # build ran it (D594)
+        got = got if got is not None else self._gate_run(self._subs(cand, subgoal, state))
+        if not got[0]:                                  # D1060: passed -- the gate takes this run, not a second one
+            self.__dict__.setdefault("_passed", {})[digest] = got
+        return got
+
+    def gate_ran(self, cand: Candidate) -> bool:
+        """D1060: the gate's checks already passed on this very text (its check in the draft): the gate reuses them."""
+        return _digest_of(cand.artifact) in self.__dict__.get("_passed", {})
 
     def judge(self, built: Any, cand: Candidate, subgoal: str | None, state: LoopState) -> Verdict:
-        fails, text = self.fast_check(built, cand, subgoal, state)
+        # D1060: the same checks on the same text are not run twice -- a passing check is the gate's verdict
+        got = self.__dict__.get("_passed", {}).pop(_digest_of(cand.artifact), None)
+        fails, text = got if got is not None else self.fast_check(built, cand, subgoal, state)
+        if got is None:
+            self.__dict__.get("_passed", {}).pop(_digest_of(cand.artifact), None)
         return Verdict(fails == 0, float(fails), text if fails else "", {"failures": fails})
 
 

@@ -688,7 +688,8 @@ def _improve_step(problem: Problem, state: LoopState, item: Improve) -> list[Sco
         state.refused.append((f"{item.candidate.name} (improve)", reason[:300]))
         _record_trial(state, item.candidate, item.subgoal, None, error=reason)
         return []
-    with _phase("test: gate", why=cand.name) as out:
+    reused = getattr(problem, "gate_ran", lambda c: False)(cand)     # D1060: its check passed on this text: no second run, a note
+    with _phase("test: gate", why=cand.name, quiet=reused) as out:
         verdict = _judge(problem, built, cand, item.subgoal, state)
         out["failed"] = not verdict.ok                 # D1053: a gate that refused the design failed
     state.judged += 1
@@ -1062,7 +1063,8 @@ def _admit(problem: Problem, state: LoopState, todo: list, goals: list[str], sg:
         say(f"  {tag}: no design -- {' '.join(str(reason).split())[:240]}")      # said as it happens, not only in the report
         return
     state.fail_streak[key] = 0
-    with _phase(f"test: judge {tag}", why=cand.name) as out:
+    reused = getattr(problem, "gate_ran", lambda c: False)(cand)     # D1060: its check passed on this text: no second run, a note
+    with _phase(f"test: judge {tag}", why=cand.name, quiet=reused) as out:
         verdict = _judge(problem, built, cand, sg, state)
         out["verdict"] = f"{'ADMITTED' if verdict.ok else 'refused'}, score {verdict.score:g}"
         if not verdict.ok:
