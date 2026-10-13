@@ -4,7 +4,7 @@
 
 import { codeBlock, codeEditor } from "./highlight.js";
 import { can, me, pageOwner, pageRefresh, setPageRefresh } from "./state.js";
-import { act, ago, api, autosave, bytes, card, confirmDialog, createFromText, dialog, dur, empty, enc, h, head, offline, owned, pageShow, saveMark, sortableTable, statePill, toast, toasts, when, withOwner } from "./ui.js";
+import { act, ago, api, on, autosave, bytes, card, confirmDialog, createFromText, dialog, dur, empty, enc, h, head, offline, owned, pageShow, saveMark, sortableTable, statePill, toast, toasts, when, withOwner } from "./ui.js";
 import { num4, sv } from "./charts.js";
 import { flushResultPreferences, mainMeasurements, measurementText, relativeMeasurement } from "./result_table.js";
 import { diffView, lineDiff } from "./configure.js";
@@ -369,7 +369,7 @@ function conversation(steps, { key = "", offset = 0, live = false, scroll = fals
   const preview = (t, n = 140) => { const x = String(t || "").replace(/\s+/g, " ").trim(); return x.length > n ? x.slice(0, n) + "…" : x; };
   const kept = (det, id) => {
     if (convOpen.has(id)) det.open = true;
-    det.addEventListener("toggle", () => { if (det.open) convOpen.add(id); else convOpen.delete(id); });
+    on(det, "toggle", e => { if (e.currentTarget.open) convOpen.add(id); else convOpen.delete(id); });   // D1035: carried by a morph
     return det;
   };
   const stepOf = (st, i) => {

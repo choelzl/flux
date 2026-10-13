@@ -531,8 +531,11 @@ def general_flows(r, watch):
                   p.scrollTop=125;t.scrollTop=175;window.__altPrompt=p;
                   return [p.scrollTop,t.scrollTop];""")
                 r.check("LiveAlt prompt and thinking have independent scrolling", positions == [125, 175], str(positions))
+                drawn = b.js("return document.querySelector('.alt-detail').dataset.drawn")
                 b.js("window.__altStreams.at(-1).emit('events',{ev:'update',id:3,fields:{status:'unrelated update'}});return 1")
-                b.wait("window.__altPrompt!==document.querySelector('.alt-detail [data-k=prompt]')", what="LiveAlt inspector redraw")
+                b.wait(f"document.querySelector('.alt-detail').dataset.drawn !== '{drawn}'", what="LiveAlt inspector redraw")
+                # D1035: a redraw of the same task is a morph -- the prompt's node is kept, not rebuilt
+                r.check("a redraw keeps the inspector's nodes", b.js("return window.__altPrompt===document.querySelector('.alt-detail [data-k=prompt]')"))
                 r.check("unrelated task updates preserve prompt and thinking scroll", b.js("return [document.querySelector('.alt-detail [data-k=prompt]').scrollTop,document.querySelector('.alt-detail .cv-thought').scrollTop]") == positions)
                 b.click('.alt-tree [data-fold="3"]')
                 r.check("tree branches collapse without changing inspected task", b.js("return !document.querySelector('.alt-tree [data-task=\"4\"]') && document.querySelector('.alt-detail').dataset.task==='4' && document.querySelector('.alt-tree [data-fold=\"3\"]').getAttribute('aria-expanded')==='false'"))
@@ -828,7 +831,7 @@ def general_flows(r, watch):
                 page("", "document.querySelector('.best-n')")
                 r.check("Decision shares the table's Relative mode", b.js("return document.querySelector('.relative-values').textContent === 'Relative' && [...document.querySelectorAll('.best-n td.num')].some(td => td.textContent === '-20%')"))
                 b.click(".relative-values")
-                page("results", "document.querySelector('table.designs')")
+                page("results", "document.querySelector('table.designs') && document.querySelector('.relative-values')")   # both drawn, a loaded machine too
                 r.check("a second press returns to Absolute without a third mode", b.js("return document.querySelector('.relative-values').textContent === 'Absolute' && document.querySelector('table.designs tbody td[data-label=score]').textContent === '120' && document.querySelector('table.designs tbody td[data-label=latency]').textContent === '8'"))
                 page("results/graphs", "document.querySelector('svg.best-chart')")
                 r.check("new graph selections default to the chosen main metric", b.js("const card = [...document.querySelectorAll('.card')].find(c => c.querySelector('h2')?.textContent === 'Improvement by design'); return [...card.querySelectorAll('.chips button.on')].map(b => b.textContent).join() === 'score'"))

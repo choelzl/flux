@@ -138,24 +138,31 @@ function toolBody(n, env) {
 const CHAT_STEP = 40;
 const chatLimit = new Map(), chatAnchor = new Map();       // per task: how many steps shown, the place to keep
 function chatBox(n, env, kids, more) {
-  const box = h("div", { class: "alt-chat cv", "data-k": "chat", tabindex: "0", "aria-label": "Conversation" }, kids);
-  const jump = h("button", { type: "button", class: "alt-chat-jump", hidden: true, onclick: () => { box.scrollTop = box.scrollHeight; } }, "↓ latest");
-  const atBottom = () => box.scrollHeight - box.scrollTop - box.clientHeight < 24;
-  box.addEventListener("scroll", () => {
-    jump.hidden = atBottom();
-    if (more && box.scrollTop < 40 && !chatAnchor.has(n.id)) {           // the history, a step at a time, the place kept
-      chatAnchor.set(n.id, box.scrollHeight - box.scrollTop);
+  // D1035: its handlers find the box from the event -- a redraw may keep the old box and button (a morph)
+  const atBottom = box => box.scrollHeight - box.scrollTop - box.clientHeight < 24;
+  const box = h("div", { class: "alt-chat cv", "data-k": "chat", tabindex: "0", "aria-label": "Conversation", onscroll: e => {
+    const b = e.currentTarget, jump = b.parentElement?.querySelector(".alt-chat-jump");
+    if (jump) jump.hidden = atBottom(b);
+    if (more && b.scrollTop < 40 && !chatAnchor.has(n.id)) {           // the history, a step at a time, the place kept
+      chatAnchor.set(n.id, b.scrollHeight - b.scrollTop);
       chatLimit.set(n.id, (chatLimit.get(n.id) || CHAT_STEP) + CHAT_STEP);
       env.redraw();
     }
-  });
+  } }, kids);
+  const jump = h("button", { type: "button", class: "alt-chat-jump", hidden: true,
+    onclick: e => { const b = e.currentTarget.parentElement?.querySelector(".alt-chat"); if (b) b.scrollTop = b.scrollHeight; } }, "↓ latest");
+  const wrap = h("div", { class: "alt-chat-wrap" }, box, jump);
   requestAnimationFrame(() => {
+    // a fresh box (another task, the first draw); a morph keeps the old one, the panel's restore keeps its place
+    const live = wrap.isConnected ? box : document.querySelector(`.alt-detail[data-task="${n.id}"] .alt-chat`);
+    if (!live) return;
     const anchor = chatAnchor.get(n.id);
-    if (anchor != null) { chatAnchor.delete(n.id); box.scrollTop = box.scrollHeight - anchor; }
-    else if (!env.place?.blocks?.get("chat")) box.scrollTop = box.scrollHeight;     // a new task opens at its newest end
-    jump.hidden = atBottom();
+    if (anchor != null) { chatAnchor.delete(n.id); live.scrollTop = live.scrollHeight - anchor; }
+    else if (wrap.isConnected && !env.place?.blocks?.get("chat")) live.scrollTop = live.scrollHeight;  // a new task opens at its newest end
+    const j = live.parentElement?.querySelector(".alt-chat-jump");
+    if (j) j.hidden = atBottom(live);
   });
-  return h("div", { class: "alt-chat-wrap" }, box, jump);
+  return wrap;
 }
 const bubble = (side, label, body, key, env, open) => h("details", { class: `alt-bubble ${side}${side === "me" ? " inspector-input" : ""}`, "data-fold": key, open: open ?? env.place?.folds?.get(key) ?? false },
   h("summary", {}, h("small", {}, label)), body);

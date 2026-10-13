@@ -1,7 +1,7 @@
 // Flux web: a loop's log and its live task tree (D889: split out of app.js).
 
 import { crafterCatalog, setCrafterCatalog } from "./state.js";
-import { NARROW, dur, empty, h, skeleton, streamPill } from "./ui.js";
+import { NARROW, dur, empty, h, morph, skeleton, streamPill } from "./ui.js";
 import { conversation, markdown } from "./loops.js";
 import { viewerTools } from "./viewer.js";
 import { restoreScroll, scrollState } from "./scroll.js";
@@ -601,7 +601,9 @@ function liveTree(base, qs, onQuestion, stream, { unifiedDetail = false, inspect
     // Live output becoming a completed conversation/output is the same view of the same task.
     const view = `${n.id}:${unifiedDetail ? "inspector" : ["Live", "Conversation", "Output"].includes(want?.[0]) ? "output" : want?.[0] || "empty"}`;
     const place = detailPlaces.get(view);
+    const same = detail.dataset.view === view && !!detail.firstChild;     // D1035: the same view again is a morph
     detail.dataset.view = view;
+    detail.dataset.drawn = String(Number(detail.dataset.drawn || 0) + 1);    // how many times drawn: a morph keeps the nodes
     const tabBar = tabs.length > 1 ? h("div", { class: "dtabs", role: "tablist" }, tabs.map(([t]) => h("button", { type: "button", class: `small${want && t === want[0] ? " on" : ""}`, role: "tab",
       "aria-selected": String(!!want && t === want[0]), onclick: () => { detailTab = t; drawDetail(Date.now() / 1000); } }, t))) : "";
     const leaf = n.pseudo ? null : leafOf(n);
@@ -623,7 +625,7 @@ function liveTree(base, qs, onQuestion, stream, { unifiedDetail = false, inspect
     // D982: LiveAlt draws its own inspector (the task as the tree names it, what it gave first);
     // Live keeps this one
     if (unifiedDetail) {
-      detail.replaceChildren(...altInspector(n, {
+      (same ? kids => morph(detail, kids) : kids => detail.replaceChildren(...kids))(altInspector(n, {
         now, nodes, place, goals, tidy: tidyCommand, block, redraw: () => drawDetail(Date.now() / 1000),
         pick: id => { if (pick) pick(id); },
         tools: () => viewerTools(detail, { title: n.name, rawText: () => JSON.stringify({ name: n.name, input: n.params, fields: n.fields, output: n.output }, null, 2) }),

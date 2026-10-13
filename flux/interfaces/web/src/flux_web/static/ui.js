@@ -6,11 +6,18 @@ import { me, navSeq, pageOwner, sessionGen, setMe, setPageOwner } from "./state.
 const main = document.getElementById("main");
 
 // ================================================================ building blocks
+/** D1035: an element's handlers from `h` live in a table on it behind one listener a type, so a redraw
+    applied as a morph (`morph`) can hand a kept element the new render's handlers. */
+function on(el, type, fn) {
+  const table = el.__on || (el.__on = {});
+  if (!(type in table)) el.addEventListener(type, e => el.__on?.[type]?.call(el, e));
+  table[type] = fn;
+}
 function h(tag, attrs = {}, ...kids) {
   const el = document.createElement(tag);
   for (const [k, v] of Object.entries(attrs || {})) {
     if (v === null || v === undefined || v === false) continue;
-    if (k.startsWith("on")) el.addEventListener(k.slice(2), v);
+    if (k.startsWith("on")) on(el, k.slice(2), v);
     else if (k === "class") el.className = v;
     else if (k === "value") el.value = v;
     else if (k === "checked") el.checked = !!v;
@@ -22,6 +29,47 @@ function h(tag, attrs = {}, ...kids) {
   }
   return el;
 }
+
+/** D1035: `target`'s children made `kids` by changing only what differs (idiomorph): the nodes kept keep
+    their scroll, focus, selection and what a person opened; a kept element takes the new render's
+    handlers (`h`'s). A handler must find other elements from its event (`e.currentTarget.closest(...)`),
+    never hold one made in the same render: the kept one is the old. A details' `open` is the person's --
+    a redraw opens one, never closes one. */
+let idiomorph = null;
+async function morphReady() {
+  if (!idiomorph) idiomorph = (await import("./vendor/idiomorph.esm.js")).Idiomorph;
+  return idiomorph;
+}
+function morph(target, kids) {
+  const list = [kids].flat(Infinity).filter(k => k !== null && k !== undefined && k !== false && k !== "")
+    .map(k => k instanceof Node ? k : document.createTextNode(String(k)));
+  if (!idiomorph || !target.firstChild) { target.replaceChildren(...list); return; }
+  const wrap = document.createElement(target.tagName);
+  wrap.append(...list);
+  // idiomorph inserts a new node as a clone: no listeners, no state set by script -- the clone takes the
+  // original's handlers and form state, the two walked side by side
+  const adding = [];
+  const carry = (from, to) => {
+    if (from.nodeType !== 1 || to.nodeType !== 1) return;
+    for (const type of Object.keys(from.__on || {})) on(to, type, from.__on[type]);
+    if ("value" in from && from.value !== to.value && /^(INPUT|TEXTAREA|SELECT)$/.test(from.tagName)) to.value = from.value;
+    if (from.tagName === "INPUT" && to.checked !== from.checked) to.checked = from.checked;
+    for (let a = from.firstChild, b = to.firstChild; a && b; a = a.nextSibling, b = b.nextSibling) carry(a, b);
+  };
+  idiomorph.morph(target, wrap, { morphStyle: "innerHTML", ignoreActiveValue: true, callbacks: {
+    beforeNodeAdded(node) { adding.push(node); return true; },
+    afterNodeAdded(node) { const from = adding.pop(); if (from && from !== node) carry(from, node); },
+    beforeNodeMorphed(old, now) {
+      if (old.nodeType === 1 && now.__on) {
+        for (const type of Object.keys(now.__on)) on(old, type, now.__on[type]);
+        for (const type of Object.keys(old.__on || {})) if (!(type in now.__on)) delete old.__on[type];
+      } else if (old.nodeType === 1 && old.__on) old.__on = {};
+      return true;
+    },
+    beforeAttributeUpdated(name, node, kind) { return !(name === "open" && kind === "remove" && node.tagName === "DETAILS"); },
+  } });
+}
+morphReady().catch(() => { /* without it, a redraw replaces: as before */ });
 
 // D701: on a loop shared with this user (or an admin's look at another's), every call about it
 // names its owner -- the server checks what this user may do with it
@@ -429,6 +477,6 @@ function sortableTable(memo, cols, rows, rowFn, firstCol = 0, { cls = "list comp
 // D754: a phone's width -- the tables stack their rows (app.js), the log wraps (live.js)
 const NARROW = window.matchMedia ? window.matchMedia("(max-width: 640px)") : { matches: false };
 
-export { NARROW, act, ago, promptDialog, api, appHref, request, autosave, bytes, card, confirmDialog, createFromText, crumbs, dialog, dur, empty,
+export { NARROW, act, ago, morph, on, promptDialog, api, appHref, request, autosave, bytes, card, confirmDialog, createFromText, crumbs, dialog, dur, empty,
   enc, fmtTok, followStream, h, head, loopStream, markSaved, offline, owned, pageShow, saveMark, show, skeleton, sortableTable,
   statePill, streamPill, toast, toasts, when, withOwner };
