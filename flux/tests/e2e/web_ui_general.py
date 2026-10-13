@@ -571,8 +571,7 @@ def general_flows(r, watch):
                 r.check("task inspection gets most of the desktop width", b.js("return document.querySelector('.alt-inspector-card').clientWidth > document.querySelector('.alt-visual-card').clientWidth * 1.7"))
                 b.click('.alt-tree .alt-pass-heading[data-pass="1"]')
                 r.check("D982: a pass's row shows the pass in the inspector: its steps and where its time went", b.js("const d=document.querySelector('.alt-pass-detail');return !!d && d.querySelector('h2').textContent==='Pass 1' && !!d.querySelector('.alt-bar.tall') && [...d.querySelectorAll('.alt-step-row .alt-task-name')].some(n=>n.textContent.startsWith('Design · first'))"))
-                b.click('.alt-tree [data-task="1"]')
-                b.click('.alt-detail [data-task="2"]')
+                b.click('.alt-tree [data-task="1"]')     # D1055: a task and its one command -- its panel is the command's
                 r.check("a tool inspector shows command, stdin, stdout and neutral debug stderr together", b.js("const d=document.querySelector('.alt-detail');return ['python3 check.py','case one','CHECK OK','DEBUG diagnostic'].every(t=>d.textContent.includes(t)) && !d.querySelector('.err')"))
                 if os.environ.get("FLUX_E2E_SHOTS"):
                     Path(os.environ["FLUX_E2E_SHOTS"]).mkdir(parents=True, exist_ok=True)
@@ -582,7 +581,7 @@ def general_flows(r, watch):
                 b.wait("document.querySelector('.alt-flow-box[data-box=design]')", what="the pass's flow")
                 r.check("graph shows the chain of passes and the selected task's pass as a flow", b.js("return [...document.querySelectorAll('.alt-chip')].map(c=>c.textContent).join(',')==='0,1,2' && document.querySelector('.alt-chip.sel').textContent==='1' && document.querySelectorAll('.alt-flow-box').length===1 && !document.querySelector('.alt-phase, .alt-graph .run-graph') && document.querySelector('.alt-flow-box[data-box=design] .alt-box-title').textContent==='Design' && !!document.querySelector('.alt-flow-box[data-box=design] .alt-done.ok')"))
                 r.check("graph work colours are shared with the tree and the timeline (palette A4)", b.js("return getComputedStyle(document.querySelector('.alt-flow-box[data-box=design] .alt-box')).stroke==='rgb(91, 110, 232)'"))
-                r.check("changing representation keeps pass and pinned task", b.js("return document.querySelector('[aria-label=\"LiveAlt pass\"]').value==='all' && document.querySelector('.alt-detail').dataset.task==='2'"))
+                r.check("changing representation keeps pass and pinned task", b.js("return document.querySelector('[aria-label=\"LiveAlt pass\"]').value==='all' && document.querySelector('.alt-detail').dataset.task==='1'"))
                 b.click('.alt-chip[data-chain="2"]')
                 b.wait("document.querySelector('.alt-chip.sel')?.textContent==='2'", what="pass 2's flow")
                 r.check("a running pass shows the boxes still to come as waiting, an agent's box with its pill", b.js("return !!document.querySelector('.alt-flow-box[data-box=design] .alt-glow') && [...document.querySelectorAll('.alt-flow-box[data-box=design] .alt-ai-box-text')].some(t=>t.textContent==='ai') && !!document.querySelector('.alt-flow-box[data-box=check] .alt-box.wait') && !!document.querySelector('.alt-flow-box[data-box=measure] .alt-box.wait')"))

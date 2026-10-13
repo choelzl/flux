@@ -31,6 +31,14 @@
         // D997: an agent stopped at its time limit (exit 124) is a warning, not a failure
         d.timedOut = !!e.output && (!!e.output["timed out"] || /^\s*agent\s*:/i.test(String(d.name)) && Number(e.output.exit) === 124);   // D1053
         if (d.timedOut) d.failed = false;
+        // D1055: an evaluation that ran nothing under it and ended at once did nothing to see -- a note, not a task
+        if (/^\s*evaluation\s*$/i.test(String(d.name)) && !d.kids.length && !d.failed && (Number(e.seconds) || 0) < 0.5) {
+          m.nodes.delete(d.id);
+          var sib = d.parent ? d.parent.kids : m.roots, at = sib.indexOf(d);
+          if (at >= 0) sib.splice(at, 1);
+          var nt = { name: d.name, why: d.why, t: d.t0, output: e.output || {}, seq: d.seq };
+          if (d.parent) (d.parent.notes || (d.parent.notes = [])).push(nt); else (m.notes || (m.notes = [])).push(nt);
+        }
       }
     }
     else if (e.ev === "params") {                  // D1050: a wrapper took in its one agent or model turn: its inputs join

@@ -405,7 +405,9 @@ export function liveAltTab(ctx) {
       const opens = lone ? (aiOf.get(lone[0].lead.id) || lone[0].lead) : nodes.length === 1 ? (aiOf.get(first.id) || first) : last;
       const picked = nodes.length === 1 && (first.id === selected || opens.id === selected);
       const t0 = Math.min(...all.map(n => n.t0)), t1 = Math.max(...all.map(n => n.t1 ?? now));
-      const staged = kind === "measure" ? all.filter(n => STAGE.test(String(n.name)) && numbersOf(n)).at(-1) : null;
+      // D1055: the newest design's own measurement -- not the evaluation's, which measures the composition again
+      const stages = kind === "measure" ? all.filter(n => STAGE.test(String(n.name)) && numbersOf(n)) : [];
+      const staged = stages.filter(n => !/^\s*evaluation\b/i.test(String(n.parent?.name || ""))).at(-1) || stages.at(-1) || null;
       const planned = kind === "plan" ? String(last.output?.picked ?? last.output?.next ?? "") : "";
       const what = staged ? `${String(staged.name).split(":")[1].trim()} · ${numbersOf(staged)}` : planned ? `picked ${planned}` : kind === "plan" ? "" : rest(last), ai = all.some(n => AI.test(String(n.params?.turn || n.name)) || aiOf.has(n.id));
       const crit = all.some(n => /^\s*critique\s*:/i.test(String(n.name))), rejected = all.some(rejectedBy);
@@ -775,7 +777,7 @@ export function liveAltTab(ctx) {
     history = got;
     notes = {}; problem = null;
     api(`/apps/${enc(ctx.name)}/document${ctx.qs}`).then(d => {
-      problem = d; notes = docNotes(d.raw, d.document); goals = Array.isArray(d.raw?.objectives) ? d.raw.objectives.filter(o => o && o.metric) : []; queue();
+      problem = d; notes = docNotes(d.raw, d.document); goals = Array.isArray(d.raw?.objectives) ? d.raw.objectives.map(o => typeof o === "string" ? { metric: o } : o).filter(o => o && o.metric) : [];   // D1055: "score" is a goal too queue();
     }).catch(() => {});
     const startSel = h("select", { "aria-label": "LiveAlt start", onchange: () => { choice = null; startId = startSel.value; pass = startId === "current" ? "current" : "all"; passSel.value = pass; load(valid); } },
       h("option", { value: "current" }, "Current start"), history.starts.filter(s => !s.running).map(s => h("option", { value: String(s.id) }, `${when(s.started)} · ${s.rc == null ? "ended" : "exit " + s.rc}`)));

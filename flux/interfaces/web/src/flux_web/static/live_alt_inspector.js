@@ -262,11 +262,20 @@ function measured(env) {
   const by = new Map();
   for (const x of env.nodes.values()) {
     if (x.t1 == null || x.failed || !isTool(x)) continue;
-    const c = candidateOf(x), m = metricsOf(stdoutOf(x));
+    const c = candidateOf(x), m = { ...metricsOf(stdoutOf(x)), ...dictsOf(stdoutOf(x)) };
     if (c && Object.keys(m).length) by.set(c, { ...(by.get(c) || {}), ...m });
   }
   return by;
 }
+/** D1055: a metric that is a dictionary ("sim_us={"t1": 41, "t2": 79}") -- its numbers by name. */
+function dictsOf(text) {
+  const out = {};
+  for (const m of String(text).matchAll(/(?:^|\s)([A-Za-z_][\w.]*)=(\{[^{}]*\})/g)) {
+    try { const d = JSON.parse(m[2]); if (d && typeof d === "object" && !(m[1] in out)) out[m[1]] = d; } catch (_) { /* not a dictionary */ }
+  }
+  return out;
+}
+const cell = v => v == null ? "—" : typeof v === "object" ? Object.entries(v).map(([k, x]) => `${k} ${typeof x === "number" ? fmt(x) : x}`).join(" · ") : fmt(v);
 /** A choice (P9): what was chosen, and the frontier it was chosen from, sorted by the goals. */
 function chooseBody(n, env) {
   // the decision may be the task's own or a task's under it (the outer "decide" holds the inner one)
@@ -276,14 +285,17 @@ function chooseBody(n, env) {
   const rows = [...measured(env).entries()], goals = (env.goals?.() || []).filter(g => g.metric);
   const cols = (goals.length ? goals.map(g => g.metric) : Object.keys(rows[0]?.[1] || {})).slice(0, 3);
   const chosen = rows.map(([c]) => c).find(c => text.includes(c)) || "";
-  const g0 = goals[0], sign = g0 ? (/max/i.test(g0.direction || "") ? -1 : 1) : 0;
-  if (g0) rows.sort((a, b) => sign * ((a[1][g0.metric] ?? Infinity * sign) - (b[1][g0.metric] ?? Infinity * sign)));
+  // D1055: a goal written as its name alone takes its direction from what the decision said ("the largest score")
+  const g0 = goals[0], dir = g0?.direction || (/\b(largest|highest|most)\b/i.test(String(said["decided by"] || "")) ? "maximize" : /\b(smallest|lowest|least)\b/i.test(String(said["decided by"] || "")) ? "minimize" : "");
+  const sign = g0 && dir ? (/max/i.test(dir) ? -1 : 1) : 0;
+  const num = v => typeof v === "number" ? v : null;           // a dictionary is not ordered here: the chosen one leads
+  rows.sort((a, b) => (b[0] === chosen) - (a[0] === chosen) || (g0 && sign ? sign * ((num(a[1][g0.metric]) ?? Infinity * sign) - (num(b[1][g0.metric]) ?? Infinity * sign)) : 0));
   return [h("div", { class: "task-inspector" },
     chosen || said.decision ? h("div", { class: "alt-result ok", style: `--k:${colorOf(n)}` }, h("span", { class: "alt-big" }, `★ ${chosen || said.decision}`),
       said["decided by"] ? h("span", { class: "muted" }, said["decided by"]) : "") : "",
     rows.length ? h("div", { class: "alt-table-wrap" }, h("table", { class: "list compact alt-metrics" },
-      h("thead", {}, h("tr", {}, h("th", {}, "design"), cols.map(k => { const g = goals.find(x => x.metric === k); return h("th", { class: "num" }, k, g ? ` ${/max/i.test(g.direction || "") ? "↑" : "↓"}` : ""); }))),
-      h("tbody", {}, rows.map(([c, m]) => h("tr", { class: c === chosen ? "alt-chosen" : "" }, h("td", {}, c === chosen ? `★ ${c}` : c), cols.map(k => h("td", { class: "num mono" }, m[k] != null ? fmt(m[k]) : "—"))))))) : "",
+      h("thead", {}, h("tr", {}, h("th", {}, "design"), cols.map(k => { const g = goals.find(x => x.metric === k), d = g === g0 ? dir : g?.direction; return h("th", { class: "num" }, k, d ? ` ${/max/i.test(d) ? "↑" : "↓"}` : ""); }))),
+      h("tbody", {}, rows.map(([c, m]) => h("tr", { class: c === chosen ? "alt-chosen" : "" }, h("td", {}, c === chosen ? `★ ${c}` : c), cols.map(k => h("td", { class: "num mono" }, cell(m[k])))))))) : "",
     n.kids.length ? h("div", { class: "alt-steps" }, n.kids.map(k => stepRow(k, env))) : "")];
 }
 
@@ -313,6 +325,8 @@ export function altInspector(n, env) {
   if (isAgent(n)) body = [h("div", { class: "task-inspector" }, agentChat(n, env))];
   else if (isModel(n)) body = [h("div", { class: "task-inspector" }, modelChat(n, env))];
   else if (isTool(n)) body = toolBody(n, env);
+  // D1055: a stage or check whose one child is its command is one line (D1034) -- its panel is the command's result
+  else if (n.kids.length === 1 && isTool(n.kids[0]) && !(n.kids[0].kids || []).length) body = toolBody(n.kids[0], env);
   else if (hd === "dse") body = searchBody(n, env);
   else if (["decide", "frontier", "decision", "select"].includes(hd) || /^propose:\s*what next/i.test(n.name)) body = chooseBody(n, env);
   else if (hd === "critique") body = criticBody(n, env);
