@@ -16,7 +16,7 @@ from typing import Any
 
 from fastapi import Depends, FastAPI, HTTPException
 
-from .models import LoginInput, EnvVar, AgentConfig, AgentNew, AgentRename
+from .models import LoginInput, EnvVar, AgentConfig, AgentNew, AgentRename, AskOffer
 from .runs import home_ready, sandbox_config, machine_env, run_env, sandbox_env
 from .store import User
 
@@ -344,8 +344,10 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
         env = c[0]
         got = available(env, visible(store))
         default = env.get("FLUX_DEFAULT_AGENT")     # D705: the admin's, or the user's own
+        off = set(store.ask_off())
         for a in got:
             a["default"] = a["id"] == default
+            a["ask"] = a["id"] not in off           # D1025: whether the admin offers it for Ask
             if a["id"] in visible(store):           # D924: installed -- and whether its connection was verified, before a draft is spent
                 mine, eff, ident = effective(user, a["id"], None, c)
                 a["verified"] = verified(user, a["id"], None, ident)["state"]
@@ -450,6 +452,19 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
         store.audit(a.name, "agent added", f"{name}: a {body.kind}, program {cfg[name]['bin'] or '(none yet)'}")
         return {"ok": f"{name} added", "found": found(registry(store)[name], store)}
 
+    @app.get("/api/admin/ask")
+    def admin_ask(a: User = Depends(admin_of)) -> dict[str, Any]:
+        """Who is not offered for Ask (D1025): agents' ids, or `model`."""
+        return {"off": store.ask_off()}
+
+    @app.put("/api/admin/ask/{who}")
+    def set_admin_ask(who: str, body: AskOffer, a: User = Depends(admin_of)) -> dict[str, Any]:
+        if who != "model" and who not in registry(store):
+            raise HTTPException(404, f"no agent named {who}")
+        off = store.set_ask(who, body.on)
+        store.audit(a.name, "offered for Ask" if body.on else "not offered for Ask", who)
+        return {"off": off}
+
     @app.delete("/api/admin/agents/{agent}")
     def remove_admin_agent(agent: str, a: User = Depends(admin_of)) -> dict[str, str]:
         reg = registry(store)
@@ -459,6 +474,7 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
             raise HTTPException(409, f"{agent} is built in: clear its program instead")
         keys = sum(reg[agent].keys().values(), ())
         store.forget_settings(keys)                               # its settings, the server's and every user's
+        store.set_ask(agent, True)                                # D1025: off the Ask list with it
         store.server_set(f"env:agent:{agent}", None)
         for u in store.users():
             store.server_set(f"env:agent:{agent}:user:{u.id}", None)

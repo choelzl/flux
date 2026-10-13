@@ -296,6 +296,7 @@ const canAsk = info.can_ask ?? (mine && canRun);          // D991: a group membe
     if (!canAsk || askBusy || askSending) return;
     const text = askQ.value.trim();
     if (!text) { askQ.focus(); return; }
+    if (!askWho.value) { toast("No agent or model is offered for Ask on this server: an admin sets it in Admin › Agents and models", "warn"); return; }   // D1025
     askSending = true;
     try {
       const sent = await api(`/apps/${enc(name)}/asks${qs}`, { method: "POST", body: { question: text, author: askWho.value, parent_id: askReply } });
@@ -323,7 +324,7 @@ const canAsk = info.can_ask ?? (mine && canRun);          // D991: a group membe
     if (askBusy) askTimer = setTimeout(askView, 3000);
     const reply = list.find(a => a.id === askReply);
     if (!reply) askReply = null;
-    if (canAsk) askWho = askWho || await agentSelect("ask-who");
+    if (canAsk) askWho = askWho || await agentSelect("ask-who", { ask: true });
     if (!askOpen || show.stale() || my !== askSeq) return;
     const place = scrollState(askHistory), active = document.activeElement;
     const selection = active instanceof HTMLTextAreaElement ? [active.selectionStart, active.selectionEnd] : null;

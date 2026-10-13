@@ -276,3 +276,29 @@ def test_an_agents_answer_keeps_its_thinking_and_commands_for_the_page(tmp_path,
     assert seen["steps"] == turn["steps"] and seen["running"] is False
     assert cy.get(f"/api/apps/x/asks/{ident}/agent?owner=bob").status_code == 403, "not shared with cy"
     assert bob.get("/api/apps/x/asks/20260101-000000/agent").status_code == 404
+
+
+def test_an_admin_says_which_agents_and_model_ask_may_use(server):
+    """D1025: every agent and the model are offered for Ask until an admin unticks one -- the picker
+    lists them no more and the server refuses them; a rename keeps the choice, a removal drops it."""
+    app, store, _tmp = server
+    ada, bob = _c(app, "ada", "correct horse battery"), _c(app, "bob", "another long secret")
+    bob.post("/api/apps", data={"name": "x"}, files=[("files", ("x.problem.yaml", b"statement: s\n"))], headers=H)
+    assert all(a["ask"] for a in bob.get("/api/agents").json())
+    assert bob.put("/api/admin/ask/codex", json={"on": False}, headers=H).status_code == 403, "an admin's"
+    assert ada.put("/api/admin/ask/nobody", json={"on": False}, headers=H).status_code == 404
+    assert ada.put("/api/admin/ask/codex", json={"on": False}, headers=H).json() == {"off": ["codex"]}
+    assert ada.put("/api/admin/ask/model", json={"on": False}, headers=H).json() == {"off": ["codex", "model"]}
+    assert ada.get("/api/admin/ask").json() == {"off": ["codex", "model"]}
+    got = {a["id"]: a["ask"] for a in bob.get("/api/agents").json()}
+    assert got["codex"] is False and got["model"] is False and got["opencode"] is True
+    r = bob.post("/api/apps/x/asks", json={"question": "q", "author": "codex"}, headers=H)
+    assert r.status_code == 403 and "not offered for Ask" in r.json()["detail"]
+    assert ada.put("/api/admin/ask/model", json={"on": True}, headers=H).json() == {"off": ["codex"]}
+    # an agent of its own, unticked, renamed, removed
+    assert ada.post("/api/admin/agents", json={"name": "nga", "kind": "opencode", "bin": sys.executable}, headers=H).status_code == 200
+    assert ada.put("/api/admin/ask/nga", json={"on": False}, headers=H).status_code == 200
+    assert ada.post("/api/admin/agents/nga/rename", json={"name": "nga2"}, headers=H).status_code == 200
+    assert ada.get("/api/admin/ask").json() == {"off": ["codex", "nga2"]}
+    assert ada.delete("/api/admin/agents/nga2", headers=H).status_code == 200
+    assert ada.get("/api/admin/ask").json() == {"off": ["codex"]}

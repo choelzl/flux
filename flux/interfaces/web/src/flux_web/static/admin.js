@@ -98,7 +98,7 @@ async function adminAudit(body, ok = () => true) {
       "edit", "upload", "add files", "delete file", "move file", "delete app", "reset app", "asked about a loop", "invalidated a design", "restored a design", "clone loop", "empty loop",
       "document migrated", "rename loop", "transfer loop"]],
     ["Sharing and loop settings", ["share", "left a share", "variable", "settings", "advanced settings", "sandbox mounts"]],
-    ["Agents", ["agent added", "agent removed", "agent renamed", "agent settings", "agent login", "agent test"]],
+    ["Agents", ["agent added", "agent removed", "agent renamed", "agent settings", "agent login", "agent test", "offered for Ask", "not offered for Ask"]],
     // D885: the scheduled clean-up and its settings are the server's
     ["Server", ["server settings", "sandbox settings", "clean cache", "application refreshed", "maintenance",
       "maintenance settings", "notification", "past turns priced", "stderr masks", "insights: removed"]],
@@ -624,7 +624,17 @@ async function adminInsights(body, part = "failures", ok = () => true) {   // D8
 async function adminAgents(body) {
   body.replaceChildren(skeleton(6));
   // D921: drawn at once, each version not known yet filled in when its probe answers
-  const [r, st, genv] = await Promise.all([api("/admin/agents?probe=false"), api("/admin/settings"), api("/admin/env")]);
+  const [r, st, genv, askOff] = await Promise.all([api("/admin/agents?probe=false"), api("/admin/settings"), api("/admin/env"),
+    api("/admin/ask").then(x => x.off).catch(() => [])]);
+  // D1025: whether Ask may use it -- one checkbox per agent and one for the model, saved at once
+  const askBox = (who, name) => {
+    const cb = h("input", { type: "checkbox", checked: !askOff.includes(who), id: `ask-on-${who}` });
+    cb.addEventListener("change", async () => {
+      await api(`/admin/ask/${encodeURIComponent(who)}`, { method: "PUT", body: { on: cb.checked } });
+      toast(cb.checked ? `${name} answers Ask` : `${name} is no longer offered for Ask`, "ok");
+    });
+    return h("label", { class: "check ask-on", title: "Offered in a loop's Ask, to answer questions about it" }, cb, "Can be used for Ask");
+  };
   if (r.agents.some(a => a.found && a.version == null)) {
     api("/admin/agents/versions").then((vs) => {
       for (const a of r.agents) {                         // a panel drawn later reads it from `a`
@@ -710,6 +720,7 @@ async function adminAgents(body) {
       h("div", { class: "grid-2 set-fields" },
         h("label", { class: "stack" }, a.builtin ? "Program (a path, or a name on PATH)" : "Program (a path)", bin),
         h("label", { class: "stack" }, "Name shown", label)),
+      askBox(a.id, a.label),
       // D816: what is set once and rarely looked at again, folded -- as its model and variables are (D896)
       h("details", { class: "set-fold", open: null }, h("summary", {}, "Login and files",
           h("span", { class: "muted small" }, nMore ? ` · ${nMore} set` : " · none")),
@@ -726,7 +737,7 @@ async function adminAgents(body) {
     return { el };
   };
   const offered = new Set(st.groups.filter(g => g.agent).map(g => g.agent));
-  const panels = {}, extraTabs = [];
+  const panels = { model: { el: h("div", { class: "agent-panel" }, askBox("model", "Flux's model")) } }, extraTabs = [];
   for (const a of r.agents) {
     const p = panelOf(a);
     if (offered.has(a.id)) panels[a.id] = p;
@@ -952,7 +963,7 @@ function settingsForm(st, { server = null, save, scope, agentEnv = null, panels 
     const note = server && st.values[g.endpoint] ? "your own endpoint: none of the server's values of this group are used"
       : server && [...g.public, ...g.secret].some(k => server[k]) && !own ? "the server's settings apply" : "";
     const vars = g.agent && agentEnv ? agentEnv(g.agent) : null;
-    const panel = g.agent ? panels[g.agent] : null;
+    const panel = (panels || {})[g.agent || g.id] || null;
     // D823: an agent's model and its own variables fold away, open by themselves when something is set
     const setHere = [...g.public, ...g.secret].filter(k => st.values[k] || (server && server[k])).length;
     const fold = (title, n, open, ...kids) => h("details", { class: "set-fold" + (title.startsWith("Variables") ? " agent-vars" : ""), open: open || null },

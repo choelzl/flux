@@ -2461,6 +2461,26 @@ def flows(r: Run) -> None:
                timeout=30, what="its version filled in")
         r.check("Admin › Agents: the program found with its version",
                 "0.0-e2e" in b.js("return [...document.querySelectorAll('#main .card')].find(c => c.textContent.includes('fake-codex')).textContent"))
+        # D1025: the admin unticks what Ask may use -- bob's Ask lists it no more, and the server refuses it
+        r.check("each agent says whether Ask may use it, ticked by default",
+                b.js("const c = document.querySelector('#ask-on-codex'); return !!c && c.checked && c.closest('label').textContent.includes('Ask')"))
+        b.js("const c = document.querySelector('#ask-on-codex'); c.scrollIntoView({block: 'center'}); c.click(); return 1")
+        for _ in range(100):
+            if json.loads(r.api("/admin/ask")["body"]).get("off") == ["codex"]:
+                break
+            time.sleep(0.1)
+        r.check("unticked, it is saved at once", json.loads(r.api("/admin/ask")["body"]).get("off") == ["codex"])
+        r.login("bob")
+        r.page("#/app/fromex", "document.querySelector('.ask-fab')", "the Ask button")
+        b.click(".ask-fab")
+        got = b.wait("document.querySelector('.drawer.open #ask-who') && [...document.querySelectorAll('#ask-who option')].map(o => o.value)",
+                     timeout=20, what="Ask's choices")
+        r.check("Ask no longer offers it", "codex" not in got and "opencode" in got, str(got))
+        r.check("and the server refuses it", r.api("/apps/fromex/asks", "POST", {"question": "why?", "author": "codex"})["status"] == 403)
+        r.login("ada")
+        r.api("/admin/ask/codex", "PUT", {"on": True})
+        r.page("#/admin/agents", "[...document.querySelectorAll('#main .agent-panel')].some(x => x.dataset.label === 'Codex')", "Admin › Agents")
+        r.check("ticked again", b.js("return document.querySelector('#ask-on-codex').checked"))
         r.clean("Admin › Agents")
         # D807: an agent added under a name of its own, of a kind, by its program -- offered once found
         b.js("document.querySelector('#ag-new-name').value = 'corp'; document.querySelector('#ag-new-kind').value = 'codex';"

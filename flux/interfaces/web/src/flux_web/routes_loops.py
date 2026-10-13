@@ -449,6 +449,8 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
         if body.parent_id is not None and any(a.get("id") == _ask_id(body.parent_id) and not _seen(a, user) for a in asks.list(d)):
             raise HTTPException(404, "no such question")       # a reply follows a conversation its asker sees
         check_author(body.author)
+        if body.author in store.ask_off():
+            raise HTTPException(403, f"{body.author} is not offered for Ask on this server (Admin › Agents and models)")
         try:
             ident = asks.start(app_dir=d, question=body.question, author=body.author, env=_author_env(whose, name, user, body.author),
                                by=user.name, parent_id=_ask_id(body.parent_id) if body.parent_id is not None else None,

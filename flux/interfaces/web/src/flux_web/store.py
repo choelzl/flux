@@ -724,9 +724,21 @@ class Store:
                 db.execute("UPDATE server SET key = ? WHERE key = ?", (f"setting:{b}", f"setting:{a}"))
             if default_agent:
                 was, now = default_agent
+                off = json.loads((db.execute("SELECT value FROM server WHERE key = 'ask-off'").fetchone() or ["[]"])[0])
+                if was in off:                     # D1025: not offered for Ask under its new name either
+                    db.execute("UPDATE server SET value = ? WHERE key = 'ask-off'",
+                               (json.dumps(sorted({*off} - {was} | {now})),))
                 db.execute("UPDATE settings SET value = ? WHERE key = 'FLUX_DEFAULT_AGENT' AND value = ?", (now, was))
                 db.execute("UPDATE server SET value = ? WHERE key = 'setting:FLUX_DEFAULT_AGENT' AND value = ?",
                            (json.dumps(now), json.dumps(was)))
+
+    def ask_off(self) -> list[str]:
+        """Who the admin does not offer for Ask (D1025): agents' ids, or `model`; none by default."""
+        return [str(x) for x in self.server_get("ask-off", []) or []]
+
+    def set_ask(self, who: str, on: bool) -> list[str]:
+        """Offer `who` for Ask or not (D1025); the list of those not offered, after."""
+        return self.server_update("ask-off", lambda cur: sorted(({*(cur or [])} - {who}) | (set() if on else {who})) or None) or []
 
     def forget_settings(self, keys: tuple[str, ...]) -> None:
         """These settings, the server's and every user's (an agent removed, D807)."""

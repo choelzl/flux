@@ -395,17 +395,19 @@ function conversation(steps, { key = "", offset = 0, live = false, scroll = fals
   return h("div", { class: `cv${scroll ? " cv-live-box" : ""}`, "data-k": `cv-${key}` }, items.length ? items : h("p", { class: "muted" }, "Nothing yet."));
 }
 
-/** The agents that can write a problem here (D704), as a select; the unavailable say why. */
-async function agentSelect(id) {
-  const list = await api("/agents").catch(() => []);
+/** The agents that can write a problem here (D704), as a select; the unavailable say why. `ask`: only
+    those the admin offers for Ask (D1025). */
+async function agentSelect(id, { ask = false } = {}) {
+  const list = (await api("/agents").catch(() => [])).filter(a => !ask || a.ask !== false);
   // D705: the agent by default -- the user's (Account), else the admin's (Models) -- else the first that works here
   const first = list.find(a => a.available && a.default) || list.find(a => a.available);
   // D924: an installed agent says whether its connection was verified -- not disabled for it (the start's gate
   // says so too), and tested from here, the draft kept
   // D942: only found agents are listed, so "installed" said nothing -- the connection's state alone
   const said = { ready: "", untested: "connection untested", failed: "connection failed", changed: "changed since test" };
-  const sel = h("select", { id }, list.map(a => h("option", { value: a.id, disabled: !a.available, selected: first && a.id === first.id },
-    a.label + (a.available ? (said[a.verified] ? ` (${said[a.verified]})` : "") : ` (${a.why})`))));
+  const sel = h("select", { id }, list.length ? list.map(a => h("option", { value: a.id, disabled: !a.available, selected: first && a.id === first.id },
+    a.label + (a.available ? (said[a.verified] ? ` (${said[a.verified]})` : "") : ` (${a.why})`)))
+    : h("option", { value: "", disabled: true, selected: true }, ask ? "none offered for Ask (Admin › Agents and models)" : "none"));
   const status = h("span", { class: "agent-pick-said small" });
   const draw = () => {
     const a = list.find(x => x.id === sel.value);

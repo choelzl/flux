@@ -132,6 +132,10 @@ class StopAll(BaseModel):
     now: bool = False
 
 
+class AskOffer(BaseModel):                # D1025: an agent, or the model, offered for Ask or not
+    on: bool
+
+
 class AskIn(BaseModel):                   # D705
     question: str = Field(max_length=20000)
     author: str = "opencode"
