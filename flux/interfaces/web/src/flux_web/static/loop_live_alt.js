@@ -47,6 +47,11 @@ export function liveAltTab(ctx) {
   // D1066: and which scope the pass took, from its design's own record of it
   const scopeOf = p => { const m = taskScope(inspector.model, "all").membership;
     for (const x of inspector.model.nodes.values()) if ((m.get(x.id) ?? null) === p && x.output?.scope) return String(x.output.scope); return ""; };
+  // D1067: a line's few words for it -- "whole design", "took TSUB"
+  const noteShort = (n, p) => {
+    const what = String(n.name).replace(/^\s*\w+\s*:\s*/, ""), k = n.output?.scopes, took = scopeOf(p);
+    return /^scope list$/i.test(what) && k != null ? (Number(k) ? (took ? `took ${took}` : `${k} scopes`) : "whole design") : what;
+  };
   const noteSaid = (n, p) => {
     const what = String(n.name).replace(/^\s*\w+\s*:\s*/, ""), k = n.output?.scopes, took = p !== undefined ? scopeOf(p) : "";
     if (/^scope list$/i.test(what) && k != null) return Number(k) ? `${k} scope${Number(k) === 1 ? "" : "s"} listed; the pass ${took ? `took ${took}` : "picks one"}.` : "No scopes listed: the pass works on the whole design.";
@@ -124,6 +129,7 @@ export function liveAltTab(ctx) {
       : mode === "graph" ? [graph(scope.rows, selected)] : mode === "timeline" ? [timeline(scope.rows, selected)] : [tree(rows, selected)]),
       mode === "tree" && scope.rows.length > rows.length ? h("button", { class: "small alt-more", type: "button", onclick: () => { limit += 200; render(); } }, `Earlier tasks (${scope.rows.length - rows.length})`) : "");
     if (!loadMessage && !rows.length) panel.replaceChildren(empty(startId === "current" && ctx.st.running ? "Waiting for tasks from this start…" : "No tasks recorded for this selection."));
+    const switched = mode !== lastMode;                 // D1067: a view just switched to brings the selected task into sight
     const savedPlace = mode === lastMode ? place : viewPlaces.get(mode);
     if (savedPlace) restoreScroll(panel, savedPlace); else panel.scrollTop = panel.scrollLeft = 0;
     lastMode = mode;
@@ -135,7 +141,7 @@ export function liveAltTab(ctx) {
     }
     if (locatedId === selected && Date.now() < locatedUntil) selectedElement(selected)?.classList.add("alt-located");
     // D1065: following, the task at work is in view -- a long tree scrolled it out of sight
-    if (following && !didReveal && selected != null && mode === "tree") {
+    if ((following || switched) && !didReveal && selected != null && mode === "tree") {
       const el = selectedElement(selected), box = panel.getBoundingClientRect(), at = el?.getBoundingClientRect();
       if (el && (at.bottom > box.bottom || at.top < box.top)) el.scrollIntoView({ block: "nearest" });
     }
@@ -280,6 +286,9 @@ export function liveAltTab(ctx) {
       if (!rest) return kind ? kind : full;                           // D1045: "Check" alone under Design is "check"
       return shortAll(!parentKind || !kind || parentKind === kind || /^gate\b/.test(rest) ? rest : `${kind} · ${rest}`);
     };
+    // D1066: the checks a failed check never reached, rows of their own under it; D1067: under a box line too
+    const skipRows = (n, depth) => { for (const t of notReached(n)) out.push(h("div", { class: "alt-tree-row step quiet skipped", style: `--depth:${depth};--k:${COLORS.check}` },
+      h("span", { class: "alt-fold-space" }), h("span", { class: "alt-task", title: "not run: a check before it failed" }, h("span", { class: "alt-task-state" }, "○"), h("span", { class: "alt-task-name muted" }, `${t} · not run`)))); };
     const line = (r, depth, named = "", box = false, extra = "", flat = false) => {
       const n = r.node, under = flat ? [] : kids.get(n.id) || [], finished = n.t1 != null, collapsed = under.length && isFolded(n.id, finished, holds(n.id) && n.id !== selected);
       const kind = phaseKind(n), opens = aiOf.get(n.id) || n, label = named || said(n, box), rejected = rejectedBy(n);
@@ -293,9 +302,7 @@ export function liveAltTab(ctx) {
             collapsed && notReached(n).length ? h("span", { class: "muted small" }, ` · ${notReached(n).join(", ")} not run`) : ""),   // D1065; D1066: open, its rows say it
           ...pills(n), h("span", { class: "mono muted small" }, dur(secs(n))))));
       if (!collapsed) runs(under, depth + 1);      // D1038: its children grouped as the pass's are
-      // D1066: the checks it never reached, rows of their own under it
-      if (!collapsed && under.length) for (const t of notReached(n)) out.push(h("div", { class: "alt-tree-row step quiet skipped", style: `--depth:${depth + 1};--k:${COLORS.check}` },
-        h("span", { class: "alt-fold-space" }), h("span", { class: "alt-task", title: "not run: a check before it failed" }, h("span", { class: "alt-task-state" }, "○"), h("span", { class: "alt-task-name muted" }, `${t} · not run`))));
+      if (!collapsed && under.length) skipRows(n, depth + 1);     // D1066
     };
     // D1016: the same task again in a row (a design continued in its pass, D999) -- one line, ×N, its tries under it
     // D1044: the tries of a list, newest first, five at a time -- "N earlier tries" shows the rest
@@ -325,8 +332,8 @@ export function liveAltTab(ctx) {
       out.push(h("div", { class: `alt-tree-row ${box ? "box" : "step"}`, style: `--depth:${depth};--k:${COLORS[phaseKind(first)] || COLORS.setup}` }, opensTries ? fold(key, collapsed, taskLabel(first)) : h("span", { class: "alt-fold-space" }),
         h("button", { type: "button", class: `alt-task ${finished ? "" : "running"}`, onclick: () => toggleFold(key, collapsed) },
           finished ? doneMark(ended(nodes), nodes.some(n => n.failed || below.has(n.id))) : h("span", { class: "alt-spin", role: "img", "aria-label": "running" }),
-          h("span", { class: "alt-task-name" }, said(first, box)), ai ? h("span", { class: "alt-ai-pill" }, "ai") : "",
-          h("span", { class: "alt-again", title: `${run.length} tries in this pass` }, `×${run.length}`),
+          h("span", { class: "alt-task-name" }, said(first, box)),
+          h("span", { class: "alt-again", title: `${run.length} tries in this pass` }, `×${run.length}`), ai ? h("span", { class: "alt-ai-pill" }, "ai") : "",
           h("span", { class: "mono muted small" }, dur(t1 - t0)))));
       if (!collapsed && phaseKind(first) === "design") newestFirst(key, run.map((r, i) => [r, i]), ([r, i]) => {
         const what = candidateOf(r.node) || note(r.node);
@@ -480,12 +487,13 @@ export function liveAltTab(ctx) {
             : doneMark(ended(nodes.filter(n => !/^\s*critique\s*:/i.test(String(n.name)))) || (rejected && nodes.every(n => /^\s*critique\s*:/i.test(String(n.name)))),
               all.some(n => n.failed || aiOf.get(n.id)?.failed)),     // D1061: its own work's failures; D1063: its folded model turn's too
           h("span", { class: "alt-task-name" }, h("b", {}, workLabel(kind)), what ? h("span", { class: "alt-what", title: what }, ` ${shortAll(what)}`) : "", nodes.length === 1 && note(first) ? h("span", { class: "alt-what" }, ` · ${note(first)}`) : ""),
-          ai ? h("span", { class: "alt-ai-pill" }, "ai") : "", crit ? h("span", { class: "alt-critic-tag" }, "critic") : "",
+          // D1067: the graph's order -- how many, a critic, the ai
           tries && tries.length > 1 ? h("span", { class: "alt-again" }, `×${tries.length}`) : "",
+          crit ? h("span", { class: "alt-critic-tag" }, "critic") : "", ai ? h("span", { class: "alt-ai-pill" }, "ai") : "",
           h("span", { class: "mono muted small" }, dur(t1 - t0)))));
       if (collapsed) return;
       if (tries) newestFirst(key, tries.map((t, i) => [t, i]), ([t, i]) => tryLine(t, i + 1, depth + 1), depth + 1, holdsTry);
-      else runs(steps, depth + 1);
+      else { runs(steps, depth + 1); if (nodes.length === 1) skipRows(first, depth + 1); }
     };
     // D1054: a check that passed inside a design is the Check box's -- drawn there, out of its try; a check
     // that failed stays the try's (it sent the design back). The graph draws them so too (`boxKind`).
@@ -587,7 +595,7 @@ export function liveAltTab(ctx) {
       const searched = g.p != null && !rest.some(r => phaseKind(r.node) === "search") ? passNotes(g.p).filter(n => kindOf(n.name, n.why) === "search") : [];
       if (searched.length) out.push(h("div", { class: "alt-tree-row box", style: `--depth:${depth};--k:${COLORS.search}` }, h("span", { class: "alt-fold-space" }),
         h("button", { type: "button", class: "alt-task", "data-box": "search", onclick: () => showBox(g.p, "search") }, doneMark(false, false),
-          h("span", { class: "alt-task-name" }, h("b", {}, "Search"), h("span", { class: "alt-what" }, ` ${searched.map(n => String(n.name).replace(/^\s*\w+\s*:\s*/, "")).join(", ")}${scopeOf(g.p) ? ` · took ${scopeOf(g.p)}` : ""}`)))));
+          h("span", { class: "alt-task-name" }, h("b", {}, "Search"), h("span", { class: "alt-what" }, ` ${searched.map(n => noteShort(n, g.p)).join(", ")}`)))));
       boxes(rest, depth);                       // D1045: the pass's own tasks, one line per box
       // D1044: in a pass at work, the boxes still to come, dimmed; D1059: the loop's last pass between two tasks is at work too
       if (g.rows.some(r => r.node.t1 == null) || (g === groups.at(-1) && g.p != null && [...inspector.model.nodes.values()].some(n => n.t1 == null)))

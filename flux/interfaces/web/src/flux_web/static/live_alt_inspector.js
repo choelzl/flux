@@ -77,7 +77,9 @@ function fold(key, title, summary, kids, env, attrs = {}) {
 export function inspectorHead(n, env) {
   const tools = env.tools();
   for (const b of tools) if (b && b.textContent) { b.title = b.textContent; b.setAttribute("aria-label", b.textContent); b.textContent = b.textContent === "Raw" ? "{ }" : "⤢"; b.classList.add("alt-icon-btn"); }
-  const parents = []; for (let p = n.parent; p; p = p.parent) parents.unshift(p);
+  // D1067: a crumb that says something -- not the title again, not a kind word alone, not the evaluation's wrapper
+  const parents = [], title = plain(taskLabel(n));
+  for (let p = n.parent; p; p = p.parent) { const l = plain(taskLabel(p)); if (l !== title && l.includes(" · ") && !/·\s*evaluation$/i.test(l)) parents.unshift(p); }
   return [h("div", { class: "detail-head alt-ihead" }, h("span", { class: "alt-stripe", style: `background:${colorOf(n)}` }),
       h("h2", { title: taskLabel(n) }, plain(taskLabel(n))), pill(n), h("span", { class: "muted" }, dur(running(n) ? env.now - n.t0 : n.seconds)), h("span", { class: "alt-head-tools" }, tools)),
     parents.length ? h("div", { class: "alt-crumbs" }, parents.flatMap((p, i) => [i ? h("span", { class: "muted" }, "›") : "",

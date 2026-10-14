@@ -58,7 +58,8 @@ export function currentTask(rows) {
   const latest = (items, ended = false) => items.reduce((best, n) => !best || (ended ? n.t1 ?? n.t0 : n.t0) >= (ended ? best.t1 ?? best.t0 : best.t0) ? n : best, null);
   return latest(active.filter(n => /^agent:/i.test(n.name)))
     || latest(active.filter(n => !n.kids.some(k => k.t1 == null)))
-    || latest(active) || latest(nodes.filter(n => !n.kids.length), true) || latest(nodes, true);
+    // D1067: done, the latest work -- a critique of it is not what Following opens
+    || latest(active) || latest(nodes.filter(n => !n.kids.length && !/^\s*critique\s*:/i.test(String(n.name))), true) || latest(nodes.filter(n => !n.kids.length), true) || latest(nodes, true);
 }
 
 export const taskState = n => n.t1 == null ? "running" : n.interrupted ? "interrupted" : n.failed ? "failed" : n.timedOut ? "timeout" : "done";
