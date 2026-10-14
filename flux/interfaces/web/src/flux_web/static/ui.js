@@ -236,6 +236,8 @@ const fmtTok = (n) => !n ? "0" : n >= 1e9 ? (n / 1e9).toFixed(2) + "G" : n >= 1e
 
 const enc = encodeURIComponent;
 const when = (t) => t ? new Date(t * 1000).toLocaleString() : "";
+/** "$1.25" -- an amount of money, `n` decimals. */
+const money = (v, n = 2) => `$${Number(v).toFixed(n)}`;
 /** "1 file", "3 files" (D1094: never "file(s)"); `many` where "s" is not the plural. */
 function plural(n, one, many = one + "s") { return `${n} ${n === 1 ? one : many}`; }
 function dur(s) {
@@ -244,11 +246,14 @@ function dur(s) {
   if (s < 3600) return `${Math.floor(s / 60)}m ${String(Math.round(s % 60)).padStart(2, "0")}s`;
   return `${Math.floor(s / 3600)}h ${String(Math.round((s % 3600) / 60)).padStart(2, "0")}m`;
 }
+/** How long ago, in words: "just now", "5 min ago", "3 h ago", "2 d ago". */
+function agoText(t) {
+  const s = Date.now() / 1000 - t;
+  return s < 45 ? "just now" : s < 3600 ? `${Math.round(s / 60)} min ago` : s < 86400 ? `${Math.round(s / 3600)} h ago` : `${Math.round(s / 86400)} d ago`;
+}
 function ago(t) {
   if (!t) return "";
-  const s = Date.now() / 1000 - t;
-  const text = s < 45 ? "just now" : s < 3600 ? `${Math.round(s / 60)} min ago` : s < 86400 ? `${Math.round(s / 3600)} h ago` : `${Math.round(s / 86400)} d ago`;
-  return h("time", { title: when(t) }, text);
+  return h("time", { title: when(t) }, agoText(t));
 }
 /** A loop's state: running (since), idle, or how its last start ended. */
 function statePill(st) {
@@ -503,6 +508,6 @@ function sortableTable(memo, cols, rows, rowFn, firstCol = 0, { cls = "list comp
 // D754: a phone's width -- the tables stack their rows (app.js), the log wraps (live.js)
 const NARROW = window.matchMedia ? window.matchMedia("(max-width: 640px)") : { matches: false };
 
-export { NARROW, act, plural, ago, morph, on, promptDialog, api, apiUpload, appHref, request, autosave, bytes, card, confirmDialog, createFromText, crumbs, dialog, dur, empty,
+export { NARROW, act, money, plural, ago, agoText, morph, on, promptDialog, api, apiUpload, appHref, request, autosave, bytes, card, confirmDialog, createFromText, crumbs, dialog, dur, empty,
   enc, fmtTok, followStream, h, head, loopStream, markSaved, offline, owned, pageShow, saveMark, show, skeleton, sortableTable,
   statePill, streamPill, toast, toasts, when, withOwner };
