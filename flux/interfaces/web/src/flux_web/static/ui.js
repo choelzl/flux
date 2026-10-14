@@ -111,6 +111,30 @@ async function request(path, { method = "GET", body, form, signal } = {}) {
   }
   return r;
 }
+/** D1075: a form posted with its upload's progress -- `onProgress(sent, total)` as the bytes go (fetch says
+    nothing until the answer); `signal` cancels it. The answer and its errors as `api`'s. */
+function apiUpload(path, form, { onProgress = () => {}, signal } = {}) {
+  return new Promise((resolve, reject) => {
+    const x = new XMLHttpRequest();
+    x.open("POST", "/api" + owned(path));
+    x.setRequestHeader("X-Flux", "1");
+    x.upload.onprogress = e => { if (e.lengthComputable) onProgress(e.loaded, e.total); };
+    x.onerror = () => { offline(true); reject(new Error("The server cannot be reached.")); };
+    x.onabort = () => reject(Object.assign(new Error("cancelled"), { name: "AbortError" }));
+    x.onload = () => {
+      offline(false);
+      let data = null;
+      try { data = JSON.parse(x.responseText); } catch { data = x.responseText; }
+      if (x.status >= 200 && x.status < 300) return resolve(data);
+      if (x.status === 401) { setMe(null); location.hash = "#/login"; return reject(new Error("log in")); }
+      const m = data && data.detail ? (typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail))
+        : x.status === 413 ? "Too large for the server (or a proxy in front of it): 413." : `The server answered ${x.status}`;
+      reject(Object.assign(new Error(m), { status: x.status }));
+    };
+    if (signal) signal.addEventListener("abort", () => x.abort());
+    x.send(form);
+  });
+}
 async function api(path, opts = {}) {
   const r = await request(path, opts);
   return (r.headers.get("content-type") || "").includes("json") ? r.json() : r.text();
@@ -477,6 +501,6 @@ function sortableTable(memo, cols, rows, rowFn, firstCol = 0, { cls = "list comp
 // D754: a phone's width -- the tables stack their rows (app.js), the log wraps (live.js)
 const NARROW = window.matchMedia ? window.matchMedia("(max-width: 640px)") : { matches: false };
 
-export { NARROW, act, ago, morph, on, promptDialog, api, appHref, request, autosave, bytes, card, confirmDialog, createFromText, crumbs, dialog, dur, empty,
+export { NARROW, act, ago, morph, on, promptDialog, api, apiUpload, appHref, request, autosave, bytes, card, confirmDialog, createFromText, crumbs, dialog, dur, empty,
   enc, fmtTok, followStream, h, head, loopStream, markSaved, offline, owned, pageShow, saveMark, show, skeleton, sortableTable,
   statePill, streamPill, toast, toasts, when, withOwner };

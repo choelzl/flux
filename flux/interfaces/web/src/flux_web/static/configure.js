@@ -3,7 +3,7 @@
 
 import { codeEditor, langOf } from "./highlight.js";
 import { can, cleanup, crafterCatalog, me, setCrafterCatalog } from "./state.js";
-import { act, api, appHref, bytes, card, confirmDialog, crumbs, createFromText, dialog, empty, enc, h, head, owned, pageShow, request, skeleton, toast, when } from "./ui.js";
+import { act, api, apiUpload, appHref, bytes, card, confirmDialog, crumbs, createFromText, dialog, empty, enc, h, head, owned, pageShow, request, skeleton, toast, when } from "./ui.js";
 import { advancedCard, agentSelect, attachBox, authoringCard, dropZone, progressDialog, sendFiles, uploadForm, permissionChoice } from "./loops.js";
 
 // ================================================================ the configurator (D686)
@@ -122,7 +122,12 @@ function filesPanel(name, yamlOf, { staged = new Map(), namedOf = null, onDraw =
     },
     async upload(appName) {                                  // a new loop: its files, once it exists
       if (!staged.size) return 0;
-      return sendFiles(appName, [...staged].map(([p, x]) => ({ file: x.file || new File([x.text], p.split("/").pop(), { type: "text/plain" }), path: p })));
+      // D1075: its files go with their progress -- a large set said as it goes, cancellable
+      const pd = progressDialog("Uploading", `${staged.size} file(s) to ${appName}`);
+      try {
+        return await sendFiles(appName, [...staged].map(([p, x]) => ({ file: x.file || new File([x.text], p.split("/").pop(), { type: "text/plain" }), path: p })),
+          { onProgress: pd.set, signal: pd.signal });
+      } finally { pd.close(); }
     } };
 }
 
@@ -411,7 +416,12 @@ async function newByAgent(body, draft = null, onDraft = null) {
     if (!name.value.trim()) { toast("Name the loop.", "warn"); name.focus(); return; }
     if (!ask.value.trim()) { toast("Say what the loop should do.", "warn"); ask.focus(); return; }
     const fd = new FormData(); fd.append("name", name.value.trim()); fd.append("prompt", ask.value); fd.append("author", who.value); files.form(fd);
-    const r = await api("/apps/new-by-agent", { method: "POST", form: fd });
+    // D1075: the files go with their progress
+    const n = [...fd.values()].filter(v => v instanceof File).length;
+    const pd = n ? progressDialog("Uploading", `${n} file(s) for the agent`) : null;
+    let r;
+    try { r = await apiUpload("/apps/new-by-agent", fd, pd ? { onProgress: pd.set, signal: pd.signal } : {}); }
+    finally { if (pd) pd.close(); }
     if (draft && DRAFT === draft) { DRAFT = null; forgetDraft(); }   // D912: the agent writes the loop the draft was
     toast(r.ok, "ok"); location.hash = `#/app/${enc(name.value.trim())}`;
   }, { cls: "primary" });
