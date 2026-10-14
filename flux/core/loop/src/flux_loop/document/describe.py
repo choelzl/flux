@@ -7,6 +7,7 @@ from typing import Any, TYPE_CHECKING
 
 from ..objective import Objectives
 from .library import library_folders, library_on
+from ..words import plural
 
 if TYPE_CHECKING:  # pragma: no cover
     from .spec import TaskSpec
@@ -50,7 +51,7 @@ def _space_size(task: "TaskSpec", problem: Any) -> str:
     n = 1
     for vals in space.values():
         n *= max(1, len(vals))
-    return f"{n} point(s): " + " x ".join(f"{k}[{len(v)}]" for k, v in space.items())
+    return f"{plural(n, 'point')}: " + " x ".join(f"{k}[{len(v)}]" for k, v in space.items())
 
 
 def _critic_name(c: dict) -> str:
@@ -123,7 +124,7 @@ def describe_flow(task: "TaskSpec", problem: Any = None) -> list[str]:
     policies = [n for n in available_roles("orchestrator") if n not in ("rules", "given", "llm", "agent")]
     orch_name = describe_orchestrate(task).split(" ", 1)[0]
     gen = task.generator
-    generate = ("catalog of %d design(s), no model" % len(gen["catalog"]) if gen.get("catalog")
+    generate = (f"catalog of {plural(len(gen['catalog']), 'design')}, no model" if gen.get("catalog")
                 else "the generator command, no model" if gen.get("command")
                 else f"coding agent `{_agent_tool(gen['agent'])}` (its own model and tools; the loop's build, test and judge around it, D575)" if gen.get("agent")
                 else "model (the prototype stage, transpile, repair)")

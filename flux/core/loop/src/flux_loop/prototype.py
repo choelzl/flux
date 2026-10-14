@@ -21,6 +21,7 @@ from .observe import _phase
 from .provenance import stamp, turn_cost
 from .patch import apply_patch, parse_patch, patch_schema
 from .types import LoopState, StageNames, Verdict
+from .words import plural
 
 if TYPE_CHECKING:  # pragma: no cover
     from .problem import Problem
@@ -688,7 +689,7 @@ def _prototype_stage(problem: Problem, subgoal: str | None, state: LoopState,
         # is no best -- the record keeps the last attempt and the rule it broke.
         code, v = last
         _record_prototype(state, subgoal, code, v, ok=False, reply=answer, seconds=round(time.monotonic() - t_attempt, 3))
-        return None, (f"prototype budget spent; none of {len(grad.history)} attempt(s) was "
+        return None, (f"prototype budget spent; none of {plural(len(grad.history), 'attempt')} was "
                       f"measurable ({(v.why or 'refused')[:80]})")
     return None, "no prototype was ever produced"
 

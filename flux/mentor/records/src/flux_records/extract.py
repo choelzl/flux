@@ -27,7 +27,7 @@ class Law:
 
     def describe(self) -> str:
         return (f"{self.knob} {self.direction}: {self.mean_delta:+.4f} {self.metric} on "
-                f"average over {self.pairs} measured pair(s)")
+                f"average over {self.pairs} measured {'pair' if self.pairs == 1 else 'pairs'}")
 
 
 def numeric_knobs(candidate: Mapping[str, Any]) -> dict[str, float]:
@@ -122,7 +122,7 @@ class Duel:
     def describe(self) -> str:
         return (f"{self.knob}: {self.winner} beats {self.loser} by "
                 f"{self.mean_delta:+.4f} {self.metric} on average over "
-                f"{self.pairs} controlled pair(s)")
+                f"{self.pairs} controlled {'pair' if self.pairs == 1 else 'pairs'}")
 
 
 def head_to_head(known: list[tuple[Mapping[str, object], float]], *,

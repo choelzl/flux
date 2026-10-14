@@ -62,7 +62,7 @@ export function taskLabel(n) {
   if (head === "test" && /^(?:fast )?check\s/i.test(rest)) return `${kind} · ${rest.replace(/^(?:fast )?check\s+/i, "").trim()}`;      // D1054: a check, said "check"
   if (head === "test" && /^judge\s/i.test(rest)) return `${kind} · ${rest.slice(6).trim()}`;
   // D1038: the decision's own steps said apart -- the step that holds them, the pick, a critique of what it judges
-  if (head === "decide" && !rest) return /^\s*decide\b/i.test(String(n.parent?.name || "")) ? `${kind} · pick` : kind;
+  if (head === "decide" && !rest) return kind;                     // D1094: "Choose", not "Choose · pick"
   // D1063: which design's -- two critiques of a box told apart
   if (head === "critique") { const of = String(n.why || "").replace(/@\S*$/, "").trim();
     // D1066: one short form everywhere -- "Measure · critique · #3"; what it judged is the box it is in
@@ -70,7 +70,8 @@ export function taskLabel(n) {
   // D1063: a check of a design names it ("Check · scope TSUB · x#3.2") -- two designs' scope checks told apart
   if (head === "test" && rest && /\S#\S/.test(String(n.why || "")) && !rest.includes(String(n.why).trim())) return `${kind} · ${rest} · ${String(n.why).trim()}`;
   if (/^draft\s+\d+$/i.test(rest)) { const d = draftDesign(n); if (d) return `${kind} · ${d}`; }   // D1056: a draft is the design it made
-  if (rest) return `${kind} · ${rest}`;
+  if (rest && rest.toLowerCase() !== kind.toLowerCase()) return `${kind} · ${rest}`;   // D1094: "Plan", not "Plan · plan"
+  if (rest) return kind;
   return low === kind.toLowerCase() ? kind : `${kind} · ${name}`;
 }
 /** D1056: the design a draft made -- named by the check after it (its siblings up to the next draft); "" when none was checked. */
@@ -111,6 +112,22 @@ export function boxKind(n) {
   for (let p = n; p; p = p.parent) if (p.failed && p.parent && phaseKind(p) === "check" && phaseKind(p.parent) === "design") return "design";
   return k;
 }
+/** D1094: when a design's run handed its design on -- the time its first check or measurement began, the
+    run itself holding them (the generation runs its gate) -- with no work of its own after it; else null. */
+export function handedOn(n) {
+  if (boxKind(n) !== "design") return null;
+  let first = null;
+  const own = [], walk = x => { for (const c of x.kids || []) { const k = boxKind(c);
+    if (k === "check" || k === "measure") { if (first == null || c.t0 < first) first = c.t0; } else { own.push(c); walk(c); } } };
+  walk(n);
+  return first == null || own.some(c => c.t0 > first) ? null : first;
+}
+/** D1094: a design's run as its own work -- ended where it handed the design on, its time up to there:
+    Design is not running, nor taking Check's time, while its check runs. */
+export function ownView(n) {
+  const at = handedOn(n);
+  return at == null ? n : { ...n, t1: n.t1 == null ? at : Math.min(n.t1, at), seconds: Math.max(0, at - n.t0) };
+}
 function runsOf(rows, test) {
   // the outermost tasks the box is about (a tool under a check is the check's); `inBox` all of them
   const inBox = new Set(rows.filter(r => test(r.node)).map(r => r.node.id));
@@ -125,7 +142,7 @@ function boxState(runs) {
   const critique = n => /^\s*critique\s*:/i.test(String(n.name));
   const own = runs.filter(n => !critique(n));
   if (own.length && own.length < runs.length) { const s0 = boxState(own); return s0 === "ok" && runs.some(n => critique(n) && (n.failed || n.rejected)) ? "part" : s0; }
-  const last = runs[runs.length - 1], s = state(last);
+  const last = runs[runs.length - 1], s = state(ownView(last));      // D1094: a design handed on is done
   if (s === "running") return "run";
   if (s === "failed" || s === "interrupted") return "bad";
   if (s === "timeout") return "part";                   // D997: a time limit warns

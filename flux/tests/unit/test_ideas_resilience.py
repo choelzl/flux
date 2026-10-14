@@ -136,7 +136,8 @@ def test_record_failure_does_not_create_evidence_for_unselected_notes(st):
     cand = Candidate("unlinked", "source")
     bind(st, cand, {"ideas": [IDEA]})
     record_failure(st, cand, "build", "syntax error")
-    assert st.records.store.trials(st.records.campaign_id) == []
+    # D1094: the refused draft is on the record (the page lists it), but it is no idea's evidence
+    assert [t.status for t in st.records.store.trials(st.records.campaign_id)] == ["refused"]
     idea, = notebook(st.records.store, st.records.campaign_id)["ideas"]
     assert idea["status"] == "proposed" and idea["evaluations"] == []
 

@@ -83,13 +83,13 @@ class Stage:
         if self.partition is not None:
             per = f" with lanes wired as {[list(b) for b in self.partition]}"
         elif self.lane_key == "free":
-            per = (f" across {self.blocks} crossbar(s) of {self.lanes} input(s), the wiring "
+            per = (f" across {self.blocks} {'crossbar' if self.blocks == 1 else 'crossbars'} of {self.lanes} {'input' if self.lanes == 1 else 'inputs'}, the wiring "
                    "FREE: searched jointly with the mapping")
         elif self.lanes:
             per = (f" within each group of {self.lanes} consecutive lanes" if self.lane_key == "chunk"
                    else f" among lanes that agree modulo {self.lanes}")
-        return (f"{label}: {self.resources()} resource(s), each carrying up to "
-                f"{self.capacity} access(es) per cycle{per}")
+        return (f"{label}: {self.resources()} {'resource' if self.resources() == 1 else 'resources'}, each carrying up to "
+                f"{self.capacity} {'access' if self.capacity == 1 else 'accesses'} per cycle{per}")
 
 
 @dataclass(frozen=True)
@@ -137,7 +137,7 @@ class MappingRequest:
                                          "`lanes` (inputs per crossbar) and `blocks` (crossbars)")
                 if st.blocks * st.lanes < self.concurrent:
                     raise InvalidRequest(
-                        f"{st.describe()}: {st.blocks} crossbar(s) of {st.lanes} input(s) carry "
+                        f"{st.describe()}: {st.blocks} {'crossbar' if st.blocks == 1 else 'crossbars'} of {st.lanes} {'input' if st.lanes == 1 else 'inputs'} carry "
                         f"at most {st.blocks * st.lanes} accesses; {self.concurrent} were asked")
             if st.partition is not None:
                 seen_pos = [k for block in st.partition for k in block]

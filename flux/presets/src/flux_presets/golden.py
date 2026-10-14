@@ -229,7 +229,7 @@ def check_rtl(source: str, g: Golden, *, module: str | None = None, rows: list[d
     if g.clocked and g.latency is not None and cycles and not fails:
         latency = max(cycles) + 1        # the edges after the one that took the inputs, and that one
         if claim and latency != g.latency:
-            return Check(len(rows), 0, (), latency, error=f"claims {g.latency} cycle(s) of latency, measured {latency}",
+            return Check(len(rows), 0, (), latency, error=f"claims {g.latency} {'cycle' if g.latency == 1 else 'cycles'} of latency, measured {latency}",
                          cycles=tuple(c + 1 for c in cycles))
     return Check(len(rows), len(fails), tuple(fails[:show]), latency, cycles=tuple(c + 1 for c in cycles))
 

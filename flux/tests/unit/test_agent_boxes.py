@@ -210,7 +210,7 @@ def test_a_coding_agent_proposes_the_points_of_the_space(tmp_path):
                    LoopRequest(batch=WHOLE, steps=2, finalists=0, screen_only=True, prototype=False), log=said.append)
     measured = [s.candidate.knobs for s in out.scored if "cost" in s.metrics]
     assert {"x": 2, "y": "bb"} in measured and all(p.get("x") != 9 for p in measured)
-    assert any("the agent proposes 1 point(s)" in m and "1 dropped" in m for m in said), said
+    assert any("the agent proposes 1 point" in m and "1 dropped" in m for m in said), said
 
 
 def test_a_coding_agent_chooses_along_the_front_the_objectives_leave_open(tmp_path):

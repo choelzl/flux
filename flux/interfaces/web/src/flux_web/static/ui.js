@@ -236,6 +236,8 @@ const fmtTok = (n) => !n ? "0" : n >= 1e9 ? (n / 1e9).toFixed(2) + "G" : n >= 1e
 
 const enc = encodeURIComponent;
 const when = (t) => t ? new Date(t * 1000).toLocaleString() : "";
+/** "1 file", "3 files" (D1094: never "file(s)"); `many` where "s" is not the plural. */
+function plural(n, one, many = one + "s") { return `${n} ${n === 1 ? one : many}`; }
 function dur(s) {
   if (s == null || !isFinite(s)) return "";
   if (s < 60) return `${s < 10 ? s.toFixed(1) : Math.round(s)}s`;
@@ -501,6 +503,6 @@ function sortableTable(memo, cols, rows, rowFn, firstCol = 0, { cls = "list comp
 // D754: a phone's width -- the tables stack their rows (app.js), the log wraps (live.js)
 const NARROW = window.matchMedia ? window.matchMedia("(max-width: 640px)") : { matches: false };
 
-export { NARROW, act, ago, morph, on, promptDialog, api, apiUpload, appHref, request, autosave, bytes, card, confirmDialog, createFromText, crumbs, dialog, dur, empty,
+export { NARROW, act, plural, ago, morph, on, promptDialog, api, apiUpload, appHref, request, autosave, bytes, card, confirmDialog, createFromText, crumbs, dialog, dur, empty,
   enc, fmtTok, followStream, h, head, loopStream, markSaved, offline, owned, pageShow, saveMark, show, skeleton, sortableTable,
   statePill, streamPill, toast, toasts, when, withOwner };

@@ -16,6 +16,7 @@ import hashlib
 import re
 from contextlib import contextmanager
 from typing import Any
+from .words import plural
 
 __all__ = ["explore_brief", "fresh_context", "tried_block", "twin", "twin_said"]
 
@@ -109,7 +110,7 @@ def tried_block(problem: Any, state: Any, subgoal: str | None, limit: int = 8) -
         lines.append(f"- {s.candidate.name}{' (the best so far)' if s is best else ''}: {_numbers(s.metrics) or 'no numbers'}"
                      f" on the {s.stage} stage" + (f" -- {what[0][:160]}" if what else ""))
     more = len(rows) - len(shown)
-    return (f"TRIED SO FAR ({len(rows)} design(s) measured for this part" + (f"; {more} older not listed" if more > 0 else "")
+    return (f"TRIED SO FAR ({plural(len(rows), 'design')} measured for this part" + (f"; {more} older not listed" if more > 0 else "")
             + "). Do not send one of these again; a design near the best that changes little measures little "
             "different -- a new idea is worth more than a small edit:\n" + "\n".join(lines))
 

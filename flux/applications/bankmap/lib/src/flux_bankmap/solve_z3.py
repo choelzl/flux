@@ -220,11 +220,11 @@ def _solve_inner(request: MappingRequest, z3, *, seed_starts: int, max_rounds: i
     for round_ in range(1, max_rounds + 1):
         trace.rounds = round_
         if time.monotonic() - started > budget:
-            trace.outcome = f"budget of {budget:.0f}s exhausted after {round_ - 1} round(s)"
+            trace.outcome = f"budget of {budget:.0f}s exhausted after {round_ - 1} {'round' if round_ - 1 == 1 else 'rounds'}"
             break
         verdict = opt.check()
         if verdict != z3.sat:
-            trace.outcome = (f"no XOR-fold satisfies the {trace.constraints} constraint(s) "
+            trace.outcome = (f"no XOR-fold satisfies the {trace.constraints} {'constraint' if trace.constraints == 1 else 'constraints'} "
                              f"({verdict})" if verdict == z3.unsat else f"solver returned {verdict}")
             break
         model = opt.model()
@@ -249,7 +249,7 @@ def _solve_inner(request: MappingRequest, z3, *, seed_starts: int, max_rounds: i
         trace.probes.append((candidate.hardware_cost(), result.clean_fraction,
                              candidate.describe()))
         if result.conflict_free:
-            trace.outcome = f"conflict-free after {round_} round(s), {trace.constraints} constraints"
+            trace.outcome = f"conflict-free after {round_} {'round' if round_ == 1 else 'rounds'}, {trace.constraints} constraints"
             trace.elapsed_s = time.monotonic() - started
             log(f"  z3: {trace.outcome}; cost {candidate.hardware_cost()} XOR")
             return candidate, trace
@@ -263,7 +263,7 @@ def _solve_inner(request: MappingRequest, z3, *, seed_starts: int, max_rounds: i
                              dtype=np.int64)
             added += add_differences(v.stride, near)
         trace.constraints += added
-        log(f"  z3 round {round_}: proposal fails ({result.summary(n)}); +{added} constraint(s)")
+        log(f"  z3 round {round_}: proposal fails ({result.summary(n)}); +{added} {'constraint' if added == 1 else 'constraints'}")
         if added == 0:
             trace.outcome = "counter-example added no new constraint; the family cannot express it"
             break

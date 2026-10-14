@@ -21,7 +21,7 @@ H = {"X-Flux": "1"}
 def test_masks_hide_matching_lines_and_say_how_many():
     m = Masks(["stale arg0", "/^ERROR rmcp/"])
     got = m.text("WARNING: failed to clean up stale arg0 temp dirs\nreal problem\nERROR rmcp::worker quit")
-    assert got == "real problem\n[2 line(s) hidden by the admin's masks]"
+    assert got == "real problem\n[2 lines hidden by the admin's masks]"
     assert m.text("nothing to hide") == "nothing to hide"
     doc = m.fields({"turns": [{"stderr": "stale arg0 x\nkept", "reply": "stale arg0 in a reply stays"}], "fields": {"stderr (live tail)": "stale arg0"}})
     assert doc["turns"][0]["stderr"].startswith("kept") and doc["turns"][0]["reply"] == "stale arg0 in a reply stays"

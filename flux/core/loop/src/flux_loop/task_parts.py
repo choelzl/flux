@@ -13,6 +13,7 @@ from typing import Any
 
 from .types import Candidate, LoopState, SubLoop
 from .document import Part, TaskSpec, _leaf
+from .words import plural
 
 
 class PartsMixin:
@@ -40,7 +41,7 @@ class PartsMixin:
         if earlier and critique is None:
             doc = earlier[-1]
             self.parts = tuple(Part(p["name"], p.get("statement", "")) for p in doc["parts"])
-            state.say(f"decompose: {len(self.parts)} part(s) resumed from the record: "
+            state.say(f"decompose: {plural(len(self.parts), 'part')} resumed from the record: "
                       + ", ".join(p.name for p in self.parts))
             return [p.name for p in self.parts]
         if state.proposer is None:
@@ -83,7 +84,7 @@ class PartsMixin:
         # (the last remembered wins on resume), otherwise on the critic's acceptance.
         if critique is not None or not (self.critic("decomposition") is not None and state.request.critique_rounds > 0):
             self._remember_division(state)
-        state.say(f"decompose: {len(self.parts)} part(s): " + ", ".join(p.name for p in self.parts))
+        state.say(f"decompose: {plural(len(self.parts), 'part')}: " + ", ".join(p.name for p in self.parts))
         return [p.name for p in self.parts]
 
     def _remember_division(self, state: LoopState) -> None:

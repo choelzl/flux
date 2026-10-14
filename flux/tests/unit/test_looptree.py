@@ -124,7 +124,7 @@ def _parts_journal() -> str:
             end(start("tool:python3", f"test {part}#{p}", b, part=part)); end(b); end(g)
             end(start(f"critique: {part}", f"{part}#{p}", part=part), verdict="no objection")
         e = start("evaluation", "compose, chain")
-        end(start("template-fill: compose", "2 part(s)", e)); end(start("simulation: confirm", "1 candidate(s)", e)); end(e)
+        end(start("template-fill: compose", "2 parts", e)); end(start("simulation: confirm", "1 candidate", e)); end(e)
         d = start("decide", "frontier, decision")
         end(start("critique: decision", "nlu#1", d), verdict="no objection"); end(d, decision="nlu#1")
     mark("ended", why="2 passes done")
@@ -201,7 +201,7 @@ def test_the_papers_digest_is_a_leaf_of_the_setup():
     t = tree("".join(json.dumps(e) + "\n" for e in ev))
     setup = branch(t, "Setup")                              # the first pass's Setup is the run's
     assert titles(setup["kids"]) == ["Reading", "Digest"], t
-    assert next(k for k in setup["kids"] if k["leaf"] == "Digest")["line"] == "2 new by opencode · 3 paper(s) digested"
+    assert next(k for k in setup["kids"] if k["leaf"] == "Digest")["line"] == "2 new by opencode · 3 papers digested"
 
 
 def test_a_journal_cut_short_is_settled_interrupted_once_the_run_ended():

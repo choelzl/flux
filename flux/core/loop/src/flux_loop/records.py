@@ -8,6 +8,7 @@ from typing import Any, TYPE_CHECKING
 from .observe import _phase
 from .provenance import stamp
 from .types import Candidate, LoopState, Scored, StageNames, Verdict
+from .words import plural
 
 if TYPE_CHECKING:  # pragma: no cover
     from .problem import Problem
@@ -181,11 +182,11 @@ def _reload_measured(problem: Problem, state: LoopState) -> None:
         return
     stale -= {k[:2] for k in latest}
     if stale:
-        state.say(f"reload: {len(stale)} design(s) measured under other inputs (or before these were recorded) "
+        state.say(f"reload: {plural(len(stale), 'design')} measured under other inputs (or before these were recorded) "
                   "are measured again; their old numbers stay on the record")
     if latest:
         state.scored.extend(latest.values())
-        state.say(f"reload: {len({k[:2] for k in latest})} design(s) measured on earlier passes rejoin the search")
+        state.say(f"reload: {plural(len({k[:2] for k in latest}), 'design')} measured on earlier passes rejoin the search")
 
 
 def _reload(problem: Problem, state: LoopState, parts: list[str] | None = None) -> None:

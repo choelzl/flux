@@ -15,6 +15,7 @@ import sqlite3
 import sys
 from pathlib import Path
 from typing import Any, Callable
+from .words import plural
 
 __all__ = ["consult", "record_tool", "snapshot", "summary"]
 
@@ -107,7 +108,7 @@ def _listing(loop: Path) -> str:
             continue
         if p.is_dir():
             n = sum(1 for q in p.rglob("*") if q.is_file())
-            out.append(f"  {p.name}/  ({n} file(s))")
+            out.append(f"  {p.name}/  ({plural(n, 'file')})")
         else:
             out.append(f"  {p.name}  ({p.stat().st_size} bytes)")
     return "\n".join(out)

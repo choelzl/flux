@@ -694,7 +694,7 @@ def flows(r: Run) -> None:
                 b.js("return document.querySelector('.fc-yaml code').textContent.includes('an adder that is small')") and "drafty" in b.js("return document.querySelector('.draft-line').textContent"))
         b.js(click, ".fc-stepbar button", "1")
         b.js(setv, ".flux-crafter [data-fc-field=id]", "")
-        b.js(click, ".fc-stepnav button", "Create the loop")
+        b.js(click, ".fc-stepnav button", "Create loop")
         said = b.wait("(document.querySelector('.fc-stepnav .fc-status.fc-err') || {}).textContent", timeout=10, what="the refusal beside the button")
         r.check("a create refused on step 1 says why beside its button, the name focused (D912)",
                 "name" in said and b.js("return document.activeElement && document.activeElement.dataset.fcField === 'id'")
@@ -1404,9 +1404,9 @@ def flows(r: Run) -> None:
         r.api("/apps/sw/file?path=fm/notes%20%C3%A9t%C3%A9.md", "PUT", {"text": "ça va\n"})
         r.page("#/app/sw/files", "document.querySelector('.files-card ul.files')", "the Files tab")
         b.js("[...document.querySelectorAll('.files-card ul.files li a')].find(a => a.textContent.includes('fm/')).click(); return 1")
-        said = b.wait("(document.querySelector('.viewer-head .item-meta') || {}).innerText && document.querySelector('.viewer-head .item-meta').innerText.includes('file(s)')"
+        said = b.wait("(document.querySelector('.viewer-head .item-meta') || {}).innerText && document.querySelector('.viewer-head .item-meta').innerText.includes(' file')"
                       " && document.querySelector('.viewer-head .item-meta').innerText", what="the folder's size")
-        r.check("a folder selected says its kind and its contents' size", "folder" in said and "7 B in 1 file(s), 0 folder(s)" in said, said)
+        r.check("a folder selected says its kind and its contents' size", "folder" in said and "7 B in 1 file, 0 folders" in said, said)
         b.js("[...document.querySelectorAll('.viewer ul.files li a')].find(a => a.textContent.includes('notes été.md')).click(); return 1")
         said = b.wait("document.querySelector('.viewer .editor textarea') && document.querySelector('.viewer-head .item-meta').innerText", what="the file")
         r.check("a file selected says its kind and its bytes", said.startswith("file · 7 B"), said)
@@ -1481,8 +1481,8 @@ def flows(r: Run) -> None:
                 " && document.activeElement === document.querySelector('.viewer-head .actions-menu summary')", what="Escape"))
         b.js(menu, ".viewer-head .actions-menu")
         r.check("Delete on archive/", b.js(pick, ".viewer-head .actions-menu", "Delete…") == "ok")
-        said = b.wait("document.querySelector('dialog.dlg[open]') && document.querySelector('dialog.dlg[open]').innerText.includes('file(s)') && document.querySelector('dialog.dlg[open]').innerText", what="the delete dialog")
-        r.check("deleting a folder says everything in it goes", "everything in it" in said and "1 file(s), 1 folder(s)" in said, said[:200])
+        said = b.wait("document.querySelector('dialog.dlg[open]') && document.querySelector('dialog.dlg[open]').innerText.includes(' file') && document.querySelector('dialog.dlg[open]').innerText", what="the delete dialog")
+        r.check("deleting a folder says everything in it goes", "everything in it" in said and "1 file, 1 folder" in said, said[:200])
         r.dialog_button("Delete the folder")
         b.wait("![...document.querySelectorAll('.files-card ul.files li')].some(l => l.innerText.includes('archive/'))", what="archive/ gone")
         r.check("the folder is deleted", not exists("archive"))
@@ -1747,20 +1747,20 @@ def flows(r: Run) -> None:
                      " const s = c && c.querySelector('svg.best-chart'); return s ? s.querySelectorAll('.pt').length : 0; })()", timeout=10, what="the chart's points")
         r.check("improvement by design: one point per design (D916: renamed)", pts == want, f"{pts} points, {want} designs, {len(got['rows'])} measurements")
         r.page("#/app/sw", "document.querySelector('#main .card')", "Overview")
-        card = b.wait("(() => { const c = [...document.querySelectorAll('#main .card')].find(x => (x.querySelector('h2') || {}).textContent?.startsWith('Last pass'));"
+        card = b.wait("(() => { const c = [...document.querySelectorAll('#main .card')].find(x => (x.querySelector('h2') || {}).textContent === 'Last decision');"
                       " return c && [c.querySelector('.pass-said') ? c.querySelector('.pass-said').textContent : '', !!c.querySelector('details.pass-record:not([open])'),"
                       " c.innerText.includes('INFERENCE')]; })()", timeout=20, what="the last pass card")
         r.check("Overview: the last pass says its decision in words, its record folded (D856)", card[0] and card[1] and not card[2], str(card))
         heads = b.js("return [...document.querySelectorAll('#main h2, #main h3, #main summary')].map(x => x.textContent.trim())")
         r.check("Overview: concise headings -- Decision, Last pass, Record; none begins with 'The ' (D927)", "Decision" in heads
-                and any(x.startswith("Last pass (") for x in heads) and "Record" in heads and not [x for x in heads if x.startswith("The ")], str(heads))
+                and any(x == "Last decision" for x in heads) and "Record" in heads and not [x for x in heads if x.startswith("The ")], str(heads))
         # D928 (W3): the button itself, clicked -- Live › Timeline, not an Overview left in place
-        b.js("[...document.querySelectorAll('#main button')].find(x => x.textContent === 'Where its time went').id = 'e2e-where'; return 1")
+        b.js("[...document.querySelectorAll('#main button')].find(x => x.textContent === 'Timeline').id = 'e2e-where'; return 1")
         b.click("#e2e-where")
         b.wait("location.hash.endsWith('/live/timeline') && !document.querySelector('#main .skeleton')", timeout=20, what="the Timeline")
         got = b.js("return [document.querySelector('.tabs [aria-selected=true]').textContent, (document.querySelector('.subtabs [aria-selected=true]') || {}).textContent,"
                    " !!document.querySelector('#e2e-where')]")
-        r.check("'Where its time went' opens Live › Timeline (D928)", got == ["Live", "Timeline", False], str(got))
+        r.check("'Timeline' opens Live › Timeline (D928)", got == ["Live", "Timeline", False], str(got))
         r.page("#/app/sw/live", "document.querySelector('.pill.stream')", "Live")
         b.wait("[...document.querySelectorAll('#main .livelog-card h2')].some(x => x.textContent === 'Log')", timeout=15, what="the Log card")
         r.check("Live: the Log card and its Full log button (D927)", b.js("return [...document.querySelectorAll('#main .livelog-card button')].some(x => x.textContent === 'Full log')"))
@@ -3148,7 +3148,7 @@ def flows(r: Run) -> None:
                         r.check(f"Review's Checked line is the loop's own check at {width}px (D913b)", expect in said, f"{pre} {said}")
                         b.js("const f = document.getElementById('phone').contentDocument.querySelector('.fc-diff-fold'); f.open = true; return 1")
                         diff = b.wait("(document.getElementById('phone').contentDocument.querySelector('.fc-diff') || {}).innerText", timeout=10, what="the changes")
-                        r.check(f"Save's folded Changes read the save's preview at {width}px (D941)", "No change" in diff or "line(s) added" in diff, diff)
+                        r.check(f"Save's folded Changes read the save's preview at {width}px (D941)", "No change" in diff or " added" in diff, diff)
                     if shots and width == 390:
                         el = b.find("#phone")
                         png = b.cmd("WebDriver:TakeScreenshot", {"id": el, "full": False})["value"]

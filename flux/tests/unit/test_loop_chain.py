@@ -73,7 +73,7 @@ def test_a_floor_cuts_before_the_next_stage_and_says_why():
     out = run_loop(problem, LoopRequest(batch=WHOLE, steps=1, finalists=4), log=lambda _m: None)
     assert problem.measured[0] == ("coarse", 4)
     assert problem.measured[1] == ("middle", 2), "d1 and d2 were cut, d3 and d4 climbed"
-    assert any("2 of 4 measured design(s) went no further" in l and "value below 25" in l
+    assert any("2 of 4 measured designs went no further" in l and "value below 25" in l
                for l in out.lessons)
 
 

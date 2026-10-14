@@ -235,7 +235,7 @@ def test_a_task_may_ask_the_orchestrator_to_decompose_it(tmp_path):
     assert "Divide this task into 1 to 3 parts" in proposer.prompts[0]
     assert sorted(out.admitted) == ["head", "tail"] and out.decision is not None
     assert out.decision.candidate.artifact == "0\n1\n2\n3\n4\n\n\n5\n6\n7\n8\n9\n"
-    assert any("decompose: 2 part(s): head, tail" in ln for ln in log)
+    assert any("decompose: 2 parts: head, tail" in ln for ln in log)
     # a resume reuses the recorded division even if the model would now answer differently
     other = ScriptedProposer([json.dumps({"parts": [{"name": "all", "statement": "everything"}]})])
     again = PromptProblem(task)
@@ -671,7 +671,7 @@ def test_every_turn_is_in_the_transcript_and_flux_log_reads_it(tmp_path, capsys,
     capsys.readouterr()
     assert main(["log", db]) == 0
     out = capsys.readouterr().out
-    assert "1 turn(s)" in out and "model tiny-model" in out and "THE REPLY TEXT" in out
+    assert "1 turn" in out and "model tiny-model" in out and "THE REPLY TEXT" in out
     assert main(["log", db, "--turn", "1"]) == 0
     assert "--- prompt ---\nTHE PROMPT TEXT" in capsys.readouterr().out
     assert ops.run_dir  # the record's pointer found the run directory
@@ -757,7 +757,7 @@ def test_a_rejection_asking_for_numbers_again_is_measured_by_an_r_pass_before_th
     passes_mod.run_passes(lambda req, fb: run_loop(PromptProblem(task), req, proposer=ScriptedProposer([_reply(GOOD)]), log=said.append),
                           request_for(task, db=db), passes=1, say=said.append, notes=False)
     assert [w for n, w in marks if n == "pass"][:2] == [{"n": 0.5, "remeasure": True}, {"n": 1, "explore": 0}]
-    assert any("R: measuring 1 rejected design(s) again: digits#1" in s for s in said)
+    assert any("R: measuring 1 rejected design again: digits#1" in s for s in said)
     with CampaignStore(db) as store:
         assert store.rejections() == [] and [r["state"] for r in store.rejections(active=False)] == ["remeasured"]
         rows = [t for t in store.trials(camp["campaign_id"]) if t.stage == "bench"]

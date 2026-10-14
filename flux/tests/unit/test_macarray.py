@@ -131,7 +131,7 @@ def test_a_pe_that_lies_about_its_latency_is_refused_and_a_wrong_multiplier_says
     cfg = PeConfig("array", "chain", 2)
     d = generate(cfg, SHAPE)
     v = verify(replace(d, config=replace(cfg, pipeline=3)), golden_vectors(SHAPE, seed="t"))
-    assert not v.ok and "claims 3 cycle(s) of latency, measured 2" in v.why
+    assert not v.ok and "claims 3 cycles of latency, measured 2" in v.why
     wrong = "module m(input signed [7:0] a, input signed [7:0] w, output signed [15:0] p);\n  assign p = a * w + 16'sd1;\nendmodule\n"
     got = check_rtl(wrong, multiplier_golden(SHAPE), module="m", relaxed=True)
     assert not got.ok and "-- for a=" in got.why and "expected p=" in got.why

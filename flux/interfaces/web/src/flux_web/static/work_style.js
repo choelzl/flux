@@ -16,7 +16,7 @@ export function kindOf(name, why = "") {
   if (head === "tool") {
     const word = String(why || "").toLowerCase().split(/\s+/).filter(Boolean)[0] || "";
     if (word === "generate") return "design";
-    if (word === "stage" || word === "estimate") return "measure";
+    if (word === "stage" || word === "estimate") return /^\s*stage\s+gate\b/i.test(String(why)) ? "check" : "measure";   // D1094
     if (["test", "lint", "golden", "build", "compile"].includes(word)) return "check";
     return null;
   }
@@ -25,6 +25,8 @@ export function kindOf(name, why = "") {
   if (head === "build" || head === "generation" && rest.startsWith("build ")) return "check";
   if (["test", "gate", "judge", "admitted", "verify", "probe"].includes(head)) return "check";
   // D1031: `evaluation` is the climb through the stages (compose, measure, cutoffs, routing) -- the Measure box's
+  // D1094: the built-in gate stage of a loop with no measure stage counts the checks' failures -- it is the checks', not a measurement
+  if (["simulation", "analytical"].includes(head) && rest.trim() === "gate") return "check";
   if (["simulation", "physical", "analytical", "measure", "screen", "confirm", "estimate", "calibrate", "evaluation"].includes(head)) return "measure";
   if (["generation", "generate", "llm-gen", "template-fill", "template", "prototype", "patch", "repair", "rewrite",
     "design", "oracle", "invent", "compute"].includes(head)) return "design";

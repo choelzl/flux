@@ -101,7 +101,7 @@ def test_a_draft_that_repeats_a_measured_design_is_refused_before_it_is_built(tm
     assert cand is None, "the agent wrote it again each time"
     assert any("is digits#7 again, already measured" in m for m in said), said
     first, again = _turns(tmp_path)[:2]
-    assert "TRIED SO FAR (1 design(s) measured" in first["text"] and "digits#7" in first["text"]
+    assert "TRIED SO FAR (1 design measured" in first["text"] and "digits#7" in first["text"]
     assert "This design is digits#7 again" in again["text"] and "Write a DIFFERENT design" in again["text"]
 
 
@@ -115,7 +115,7 @@ def test_what_was_tried_is_listed_the_best_first(tmp_path):
     assert twin(state, Candidate("x", "text 4")) is None
     block = tried_block(prob, state, None)
     lines = block.splitlines()
-    assert lines[0].startswith("TRIED SO FAR (3 design(s)") and len(lines) == 4
+    assert lines[0].startswith("TRIED SO FAR (3 designs") and len(lines) == 4
     assert lines[1].startswith("- d#2"), "without objectives: the latest first"
     assert "d#1" in block and "a loop over the digits" in block and "a table" in block
     body, _schema = prob.design_prompt(None, "", state, None, None, "")

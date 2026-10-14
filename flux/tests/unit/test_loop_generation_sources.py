@@ -143,7 +143,7 @@ def test_an_exhausted_catalog_is_a_refusal_with_its_reason(tmp_path):
     out = _run(Wanted(Catalog(["bad", "worse"], lambda i, a: Candidate(name=i, artifact=i))),
                tmp_path, repair_attempts=4)
     assert out.decision is None
-    assert any("the catalog holds 2 design(s)" in why for _name, why in out.refused), out.refused
+    assert any("the catalog holds 2 designs" in why for _name, why in out.refused), out.refused
 
 
 def test_a_solver_is_told_the_counter_example(tmp_path):

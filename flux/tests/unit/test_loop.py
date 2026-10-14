@@ -524,7 +524,7 @@ def test_focus_window_shows_the_fault_and_the_outline():
     assert "  73 |   line 73" in view and "  70 | module m70" in view
     assert "  20 | module m20" in view          # elsewhere: in the outline
     assert "  21 |   line 21" not in view      # but not the body far away
-    assert view.startswith("(window around line(s) 73; 120 lines in all")
+    assert view.startswith("(window around line 73; 120 lines in all")
     assert focus_window(art, [], context=3).startswith("   1 |   line 1")   # no location: all
 
 
@@ -858,7 +858,7 @@ def test_prototype_stage_records_an_all_refused_pass_without_a_best(tmp_path):
                    say=said.append, proposer=Proposer(), feedback=None, workdir=".", records=rec)
     cand, built, reason = _generate_with_model(P(), "a", "", st, None)
     assert cand is None
-    assert "none of 3 attempt(s) was measurable" in reason and "np.exp" in reason
+    assert "none of 3 attempts was measurable" in reason and "np.exp" in reason
     assert not any("best so far" in m for m in said)
     assert any("not measurable -- line 2: np.exp" in m for m in said)
     refused = rec.refusals(stage="prototype")

@@ -1,5 +1,5 @@
 // D955: the library's digests a loop's record holds -- each paper, who digested it, the text the prompts read.
-import { act, api, card, empty, enc, h } from "./ui.js";
+import { act, api, card, empty, enc, h, plural } from "./ui.js";
 import { viewerTools } from "./viewer.js";
 
 export async function libraryView(ctx) {
@@ -16,7 +16,7 @@ export async function libraryView(ctx) {
         h("pre", { class: "digest-text" }, d.digest)))
     : empty("No digests yet: with the library on, each Setup digests up to 8 papers of the loop's library/ folder."));
   body.replaceChildren(card("Library", [h("div", { class: "bar" },
-    h("span", { class: "muted" }, `${data.digests.length} paper(s) digested`),
+    h("span", { class: "muted" }, `${plural(data.digests.length, "paper")} digested`),
     act("Refresh", () => libraryView(ctx), { cls: "small" }),
     ...viewerTools(content, { title: "Library digests", rawText: JSON.stringify(data, null, 2) })), content]));
 }

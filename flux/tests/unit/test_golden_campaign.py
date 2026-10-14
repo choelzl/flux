@@ -85,7 +85,7 @@ def test_a_campaign_at_rest_explores_and_keeps_the_goal(tmp_path):
     model = ScriptedProposer(['{"artifact": "front back ' + "x" * 45 + '", "why": "fewer vowels, as long"}'])
     explored = run_loop(PromptProblem(TaskSpec.from_dict(doc, base=_home(tmp_path))), dataclasses.replace(req, explore=1),
                         proposer=model, log=said.append)
-    assert any("exploring: 2 design(s) go back" in m for m in said)
+    assert any("exploring: 2 designs go back" in m for m in said)
     asked = "\n".join(model.prompts)
     assert "The campaign is at rest" in asked and "It meets the goal (fmax_mhz at least 500 (screen))" in asked and "area_um2" in asked
     assert not explored.at_rest

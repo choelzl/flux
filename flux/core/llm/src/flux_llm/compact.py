@@ -48,7 +48,7 @@ def digest_result(text: str, chars: int = 300) -> str:
     for i, ln in enumerate(lines):
         if i in keep:
             if gap:
-                out.append(f"  … ({gap} line(s) not shown)")
+                out.append(f"  … ({gap} {'line' if gap == 1 else 'lines'} not shown)")
                 gap = 0
             out.append(ln)
         else:

@@ -220,8 +220,8 @@ def test_a_failed_start_says_why_in_its_logs_words(tmp_path, server):
 
     _app, store = server
     log = tmp_path / "loop.log"
-    log.write_text("── started 2026-10-01 10:00:00 by bob · 1 pass(es) ──\nan old ERROR from the start before\n"
-                   "── started 2026-10-02 10:00:00 by bob · 1 pass(es) ──\n"
+    log.write_text("── started 2026-10-01 10:00:00 by bob · 1 pass ──\nan old ERROR from the start before\n"
+                   "── started 2026-10-02 10:00:00 by bob · 1 pass ──\n"
                    "2026-10-02 10:00:01.000 flux task run: in the podman sandbox flux-abc\n"
                    "2026-10-02 10:00:02.000 roles: orchestrator=sweep\n"
                    "2026-10-02 10:00:03.000 no-such-checker not on PATH; `flux task check` lists what the task needs\n")
@@ -229,6 +229,9 @@ def test_a_failed_start_says_why_in_its_logs_words(tmp_path, server):
     assert rm.failure({"log": str(log)}) == ["no-such-checker not on PATH; `flux task check` lists what the task needs"]
     log.write_text("── started x ──\nall quiet\nthe end\n")
     assert rm.failure({"log": str(log)}) == ["all quiet", "the end"], "nothing said wrong: its last lines"
+    # D1094: as sentences -- a list's heading, its dashes and indents dropped
+    log.write_text("── started x ──\n  gate: 0 of 1 admitted; 1 refused\nREFUSED (1)\n  - x=1: failed at ut: FAIL ut case 0\n")
+    assert rm.failure({"log": str(log)}) == ["gate: 0 of 1 admitted; 1 refused", "x=1: failed at ut: FAIL ut case 0"]
 
 
 def test_a_document_is_checked_before_it_is_saved(server):

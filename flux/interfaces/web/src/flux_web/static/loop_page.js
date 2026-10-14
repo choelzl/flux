@@ -2,12 +2,12 @@
 // drawer, the refresh; each tab's drawing in its own module (D892: out of loops.js).
 
 import { cleanup, me, setPageRefresh } from "./state.js";
-import { act, ago, api, appHref, card, confirmDialog, crumbs, dialog, dur, empty, enc, h, head, loopStream, pageShow, skeleton, statePill, toast } from "./ui.js";
+import { act, ago, api, appHref, card, confirmDialog, crumbs, dialog, dur, empty, enc, h, head, loopStream, pageShow, skeleton, statePill, toast, plural } from "./ui.js";
 import { liveTree, logView } from "./live.js";
 import { configureInto } from "./configure.js";
 import { agentSelect, binButton, conversation, lastSaid, markdown, startLoop, stopLoop, restartLoop } from "./loops.js";
 import { authorTab, overview } from "./loop_overview.js";
-import { resultsView } from "./loop_results.js";
+import { checkedCard, resultsView } from "./loop_results.js";
 import { timelineTab } from "./loop_timeline.js";
 import { agentsView } from "./loop_agents.js";
 import { filesTab } from "./loop_files.js";
@@ -353,7 +353,7 @@ const canAsk = info.can_ask ?? (mine && canRun);          // D991: a group membe
         const think = got["thinking (live tail)"] || "", stats = [got.agent, got["tokens (reported)"], got.elapsed, got["tool calls"] ? `${String(got["tool calls"]).split("\n").length}+ tool calls` : ""].filter(Boolean);
         const conv = steps.length ? conversation(steps, { key: `ask${a.id}`, offset: total - steps.length, live: !!got.running }) : null;
         box.replaceChildren(stats.length ? h("p", { class: "muted small" }, stats.join(" · ")) : "",
-          total > steps.length ? h("p", { class: "muted small" }, `${total - steps.length} earlier step(s) not shown`) : "",
+          total > steps.length ? h("p", { class: "muted small" }, `${plural(total - steps.length, "earlier step")} not shown`) : "",
           conv ? conv
             : think ? h("details", { class: "cv-step cv-think", open: true }, h("summary", {}, "Thinking"), h("pre", { class: "cv-body cv-thought" }, think))
             : h("p", { class: "muted" }, got.error || (got.running ? "Nothing recorded yet." : "No thinking or commands were recorded for this answer.")),
@@ -510,7 +510,7 @@ const canAsk = info.can_ask ?? (mine && canRun);          // D991: a group membe
         body.replaceChildren(card(null, skeleton(7)));
         const r = await api(`/apps/${enc(name)}/results${qs}`);
         if (!ok()) return;                                   // D919: another tab chosen meanwhile
-        if (!r.campaign || !r.designs.length) { body.replaceChildren(card(null, empty("No results yet."))); return; }
+        if (!r.campaign || !r.designs.length) { body.replaceChildren(checkedCard(ctx, r || {}) || card(null, empty("No results yet."))); return; }   // D1094
         results = resultsView(ctx, r);
       }
       body.replaceChildren(results.show(curSub()));

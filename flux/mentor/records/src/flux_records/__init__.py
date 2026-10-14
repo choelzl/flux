@@ -230,6 +230,16 @@ class Records:
         except Exception:  # noqa: BLE001
             pass
 
+    def pass_began(self) -> None:
+        """D1094: a pass on the record, whatever it ends with -- a failed one too, so the page counts
+        the passes the tree shows, not the conclusions alone."""
+        if self.store is None:
+            return
+        try:
+            self.store.append_event(self.campaign_id, "pass", {})
+        except Exception:  # noqa: BLE001
+            pass
+
     def note(self, text: str, ident: str = "") -> None:
         """Persist a human note (D1049: with the page's id for it, so a removal finds it)."""
         if self.store is None:

@@ -119,7 +119,7 @@ def mine_measured_points(campaign_db_path: str) -> list[Fact]:
                     })
                 values = [p["value"] for p in points]
                 statement = (
-                    f"Stage {stage!r} measured {metric} for {len(points)} candidate(s) of "
+                    f"Stage {stage!r} measured {metric} for {len(points)} {'candidate' if len(points) == 1 else 'candidates'} of "
                     f"campaign {cid[:12]}...: "
                     + "; ".join(
                         f"{p['candidate']} -> {p['value']:g}" for p in points[:6])
@@ -249,7 +249,7 @@ def mine_refusal_patterns(campaign_db_path: str) -> list[Fact]:
                 facts.append(Fact(
                     kind="refusal_pattern",
                     statement=(
-                        f"{len(trials)} trial(s) of campaign {cid[:12]}... ended "
+                        f"{len(trials)} {'trial' if len(trials) == 1 else 'trials'} of campaign {cid[:12]}... ended "
                         f"{status} with: {message!r}"
                     ),
                     evidence={
@@ -290,7 +290,7 @@ def render_facts_for_prompt(
         if boundary:
             lines.append(f"  NOT established: {boundary}")
     if len(rows) > max_facts:
-        lines.append(f"({len(rows) - max_facts} more fact(s) not shown)")
+        lines.append(f"({len(rows) - max_facts} more {'fact' if len(rows) - max_facts == 1 else 'facts'} not shown)")
     return "\n".join(lines)
 
 

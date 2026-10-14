@@ -26,6 +26,7 @@ from .runs import ADVANCED, advanced, home_ready, sandbox_config, machine_env, r
 from .result_preferences import ResultPreferences, merge_preferences, preferences
 from .store import User
 from .workspace import Changed, Exists, Workspace, WorkspaceError
+from flux_loop.words import plural
 
 
 def register(app: FastAPI, ctx: SimpleNamespace) -> None:
@@ -290,7 +291,7 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
             raise HTTPException(409, str(exc)) from exc
         except WorkspaceError as exc:
             raise fail(exc) from exc
-        store.audit(user.name, "upload", f"{name}: {len(got)} file(s)")
+        store.audit(user.name, "upload", f"{name}: {plural(len(got), 'file')}")
         return {"name": name, **meta}
 
     @app.post("/api/apps/{name}/files")
@@ -302,7 +303,7 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
             written = w.add(name, got, folder)
         except WorkspaceError as exc:
             raise fail(exc) from exc
-        store.audit(user.name, "add files", f"{name}: {len(written)} file(s)")
+        store.audit(user.name, "add files", f"{name}: {plural(len(written), 'file')}")
         return {"written": written}
 
     @app.put("/api/apps/{name}/part")
@@ -935,7 +936,7 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
 
             older = [x for x in migrate_loop(d)["documents"] if x["file"] == meta["document"] and x["status"] != "current"]
             if older:                                  # D811: of an earlier form -- said here, with what to do
-                raise HTTPException(409, f"{meta['document']} is of an earlier form ({len(older[0]['said'])} change(s) to make"
+                raise HTTPException(409, f"{meta['document']} is of an earlier form ({plural(len(older[0]['said']), 'change')} to make"
                                          + (", and some need a person" if older[0]["manual"] else "")
                                          + "): an admin migrates it in Admin › Loops › Old documents")
         agents_gate(whose, needs, name)                # D923: of the configuration this loop runs it with

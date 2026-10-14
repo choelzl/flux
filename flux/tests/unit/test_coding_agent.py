@@ -214,7 +214,7 @@ def test_an_agent_that_keeps_asking_is_refused_after_max_questions(tmp_path):
     task = TaskSpec.from_dict(_asking(tmp_path, "always", "decide", max_questions=2))
     out = run_loop(PromptProblem(task), request_for(task, db=""), proposer=None, log=lambda _m: None)
     assert out.decision is None
-    assert any("still asking after 2 answer(s)" in why for _n, why in out.refused), out.refused
+    assert any("still asking after 2 answers" in why for _n, why in out.refused), out.refused
 
 
 def test_the_answer_resumes_the_agents_own_session(tmp_path):

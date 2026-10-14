@@ -41,6 +41,9 @@ h3 { font-size: 11.5px; margin: 12px 0 6px; color: var(--muted); text-transform:
 .mono, pre, code { font-family: var(--mono); font-size: 12.5px; }
 .right { text-align: right; }
 .err { color: var(--bad); }
+.checked-designs .bad { color: var(--bad); }
+.checked-designs .ok { color: var(--ok); }
+.checked-card { margin-top: 16px; }
 
 /* ---- the top bar */
 .top { display: flex; align-items: center; gap: 22px; padding: 0 24px; height: 52px; border-bottom: 1px solid var(--line);
@@ -83,6 +86,7 @@ main { max-width: 1320px; margin: 0 auto; padding: 22px 24px 80px; }
 .empty p { margin: 4px 0 10px; }
 .callout { padding: 10px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--soft); }
 .callout.bad { border-color: color-mix(in srgb, var(--bad) 40%, transparent); color: var(--bad); }
+.callout.warn { border-color: color-mix(in srgb, var(--warn) 40%, transparent); color: var(--warn); }
 .scroll-x { overflow-x: auto; }
 
 /* ---- controls */
@@ -789,7 +793,8 @@ pre.author-log { max-height: 260px; overflow: auto; white-space: pre-wrap; }
 /* D978: the pass as a flow, the chain of passes */
 .alt-chain { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 2px 0 12px; }
 .alt-chip { position: relative; min-width: 30px; padding: 2px 8px; border-radius: 12px; font: 12px var(--mono, monospace); }
-.alt-chain-more { align-self: center; }
+.alt-chain-more { align-self: center; position: relative; letter-spacing: .02em; }
+.alt-chain-more:not(:first-child)::after { content: "→"; position: absolute; left: -13px; color: var(--muted); }   /* D1094: a gap is a step of the chain too */
 .alt-chip:not(:first-child)::after { content: "→"; position: absolute; left: -13px; color: var(--muted); }   /* D1075: on the chip it leads to -- a wrapped chip keeps its arrow */
 .alt-chip::before { content: ""; position: absolute; top: -2px; right: -2px; width: 7px; height: 7px; border-radius: 50%; background: var(--ok); }
 .alt-chip.failed::before { background: var(--bad); } .alt-chip.part::before { background: var(--warn); } .alt-chip.running::before { background: var(--run); }
@@ -1318,6 +1323,7 @@ details.set-fold > summary { font-weight: 600; font-size: 0.95em; color: var(--i
 svg.chart .pt { fill: var(--gc, var(--accent)); fill-opacity: .8; stroke: var(--gc, var(--accent)); stroke-width: .8; }
 svg.chart .pt.failed, svg.chart .pt.pending { fill: var(--panel); fill-opacity: 1; stroke-width: 1.6; }
 svg.chart .pt.pending { stroke-dasharray: 2 1.5; }
+svg.chart .pt.rejected { fill: var(--panel); fill-opacity: 1; stroke: var(--muted); stroke-width: 1.2; opacity: .7; }   /* D1094: set aside, not missing a requirement */
 svg.chart .pt.on-front { stroke: var(--ink); stroke-width: 1.3; fill-opacity: 1; }
 svg.chart .baseline-ref { stroke: var(--muted); stroke-width: 1.5; stroke-dasharray: 6 3; stroke-opacity: .4; }
 svg.chart .pt.out { opacity: .35; }

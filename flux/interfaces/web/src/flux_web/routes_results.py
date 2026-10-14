@@ -19,6 +19,7 @@ from .models import InvalidateIn, RejectIn, RestoreIn
 from .runs import loop_files
 from .store import User
 from .workspace import Workspace, WorkspaceError
+from flux_loop.words import plural
 
 
 def journal_slice(path: str, off: int, since: float) -> tuple[list[dict[str, Any]] | None, int]:
@@ -630,7 +631,7 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
         finally:
             record.close()
         store.audit(user.name, "invalidated a design", f"{owner or user.name}/{name}: {body.name} -- {reason}"[:500])
-        return {"ok": f"{body.name} invalidated: its {len(seqs)} row(s) no longer count", "trials": len(seqs)}
+        return {"ok": f"{body.name} invalidated: its {plural(len(seqs), 'row')} no longer count", "trials": len(seqs)}
 
     @app.post("/api/apps/{name}/results/reevaluate")
     def reevaluate_designs(name: str, body: RestoreIn, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, Any]:
@@ -759,7 +760,7 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
                           for o in rep.objectives]                     # for the Overview's charts (D692)
         return {"campaign": cid, "objectives": rep.objectives.describe(), "objective_list": objective_list, "rows": rows,
                 "rows_total": len(rep.rows),
-                "passes": [{"when": w, "conclusion": c} for w, c in rep.passes], "notes": rep.notes,
+                "passes": [{"when": w, "conclusion": c} for w, c in rep.passes], "passes_begun": rep.begun, "notes": rep.notes,
                 "agent_turns": len(rep.agent_turns), "answer": answer, "decided_by": decided_by, "invalidated": invalidated, **listed}
 
     @app.get("/api/apps/{name}/design")

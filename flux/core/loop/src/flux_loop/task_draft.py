@@ -17,6 +17,7 @@ from .model import _json
 from .types import Candidate, LoopState
 from .document import _leaf, _substitute
 from .task_knowledge import library_queries
+from .words import plural
 
 
 class DraftMixin:
@@ -200,7 +201,7 @@ class DraftMixin:
         if printed is not None:                                   # the agent printed the artifact instead (D848: only
             return Candidate(name, printed, knobs=knobs, meta=meta, subgoal=sg), ""   # code it fenced, not its prose)
         tail = ((turn.text or turn.stdout or "") + "\n" + (turn.stderr or "")).strip()[-2000:]
-        still = (f" (still asking after {len(asked)} answer(s))" if question_in(turn.text) is not None and asked
+        still = (f" (still asking after {plural(len(asked), 'answer')})" if question_in(turn.text) is not None and asked
                  else " (it asked, and its questions are answered by nobody here)" if question_in(turn.text) is not None else "")
         return None, (f"the coding agent {agent.tool} exited {turn.rc} and wrote no {path.name}{still}"
                       + (f": {tail}" if tail else ""))
@@ -244,7 +245,7 @@ class DraftMixin:
         words = " ".join((turn.text or "").split())[-800:]
         left = path.read_text(errors="replace") if path.is_file() else ""
         why = (f"OUT OF TIME: the design agent {agent.tool} ran past its time limit ({agent.timeout_s:g} s) {n} turns in a "
-               f"row -- its first and {n - 1} continue(s) (budget.agent_continues) -- and the pass gave up without a design."
+               f"row -- its first and {plural(n - 1, 'continue')} (budget.agent_continues) -- and the pass gave up without a design."
                + (f" What it said last: {words}" if words else "")
                + (f" It left a partial design of {len(left.splitlines())} lines ({path.name}, in its session folder"
                   f" {path.parent}): a next design may read it, or avoid what made it slow." if left else ""))

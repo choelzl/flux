@@ -6,6 +6,7 @@ import argparse
 import json
 import sys
 from typing import Any
+from flux_loop.words import plural
 
 
 def _library_line(task: Any, problem: Any) -> str:
@@ -101,7 +102,7 @@ def cmd_task_check(args: argparse.Namespace) -> int:
     for line in describe_flow(task, problem):
         print(f"    {line}")
     if task.gate:                                      # the checks in order, each with its pass rule (D652)
-        print(f"  gate: {len(task.gate)} check(s) in order; the first that fails refuses the design")
+        print(f"  gate: {plural(len(task.gate), 'check')} in order; the first that fails refuses the design")
         for i, c in enumerate(task.gate, 1):
             print(f"    {i}. {c.name}: {' '.join(c.run)}\n       {c.rule}")
     for label, cmd in task.commands():
@@ -196,7 +197,7 @@ def _drafted_by(task: Any) -> str:
         who = f"the coding agent `{spec['agent']}`" if spec.get("agent") else "a model"
         return f"its sub-loops, each by {who} unless its folder says otherwise"
     if spec.get("catalog"):
-        return f"a catalog of {len(spec['catalog'])} design(s) that already exist (no model)"
+        return f"a catalog of {plural(len(spec['catalog']), 'design')} that already exist (no model)"
     if spec.get("command"):
         return "the generator command (no model)"
     if spec.get("agent"):
@@ -582,7 +583,7 @@ def cmd_ask(args: argparse.Namespace) -> int:
               f"run it: flux task run {workdir / 'problem.yaml'}")
         return 0
     if got["error"]:
-        print(f"\nno runnable document after {args.checks} repair(s): {got['error']}")
+        print(f"\nno runnable document after {plural(args.checks, 'repair')}: {got['error']}")
         return 1
     print("\n" + "\n".join(got["report"]))
     out = got["result"]
@@ -706,7 +707,7 @@ def cmd_report(args: argparse.Namespace) -> int:
         objectives = Objectives(items)
     out = args.out or (args.db.rsplit(".", 1)[0] + "-report.html")
     rep = write(args.db, out, campaign=args.campaign, objectives=objectives)
-    print(f"campaign {rep.campaign[:12]}: {len(rep.rows)} measured rows, {len(rep.passes)} pass(es), "
+    print(f"campaign {rep.campaign[:12]}: {len(rep.rows)} measured rows, {plural(len(rep.passes), 'pass', 'passes')}, "
           f"objective {rep.objectives.describe() or '(none)'}")
     if rep.agent_turns:
         fell = sum(1 for t in rep.agent_turns if not t.get("ok") and t.get("box") not in ("generate", "prototype"))
@@ -714,7 +715,7 @@ def cmd_report(args: argparse.Namespace) -> int:
         print(f"  agent turns: {len(rep.agent_turns)} (" + ", ".join(sorted({str(t.get('box')) for t in rep.agent_turns}))
               + f"), {resumed} resumed a session, {fell} fell back to the rules half")
     if rep.library:
-        print(f"  library: {len(rep.library)} file(s) cited by the drafts' prompts: "
+        print(f"  library: {plural(len(rep.library), 'file')} cited by the drafts' prompts: "
               + ", ".join(f"{k} ({v})" for k, v in sorted(rep.library.items(), key=lambda t: -t[1])[:8]))
     for n in rep.notes:
         print(f"  {n}")
@@ -907,7 +908,7 @@ def cmd_log(args: argparse.Namespace) -> int:
     elif args.last:
         numbered = numbered[-args.last:]
     whole = args.full or args.turn is not None
-    print(f"campaign {cid[:12]}: {len(turns)} turn(s) in {path}")
+    print(f"campaign {cid[:12]}: {plural(len(turns), 'turn')} in {path}")
     for k, t in numbered:
         who = t.get("model") or t.get("agent") or t.get("kind")
         when = _time.strftime("%m-%d %H:%M:%S", _time.localtime(t.get("ts", 0)))
@@ -915,7 +916,7 @@ def cmd_log(args: argparse.Namespace) -> int:
         status = ("ERROR " + str(t["error"])[:160]) if t.get("error") else \
             (f"exit {t.get('rc')}" if t.get("kind") == "agent" and not t.get("ok") else "ok")
         print(f"\n#{k} {when} {t.get('kind')} {who} {t.get('seconds', 0):.1f}s {status}"
-              + (f", {len(hops)} tool call(s)" if hops else ""))
+              + (f", {plural(len(hops), 'tool call')}" if hops else ""))
         prompt, reply = str(t.get("prompt") or ""), str(t.get("reply") or "")
         if whole:
             print("--- prompt ---\n" + prompt)

@@ -29,6 +29,7 @@ HERE = Path(__file__).resolve().parent
 FLUX_ROOT = HERE.parents[3]
 
 from .document import DOCUMENT_KEYS  # noqa: E402 -- the loader's own list (D590)
+from .words import plural
 
 #: The worked examples every author reads, live from the repository so they never drift.
 EXAMPLES = (("mul8", ("problem.yaml", "golden.py")),
@@ -506,4 +507,4 @@ def write_golden(task: Any, proposer: Any, say: Callable[[str], None] = print, a
         say(f"{path.name} (attempt {n + 1}) refused: {error.splitlines()[0][:160]}")
     if path.is_file():
         path.rename(path.with_suffix(".refused.py"))     # never leave a golden that cannot judge
-    return f"the model could not write a golden model that runs in {attempts} attempt(s): {error[:300]}"
+    return f"the model could not write a golden model that runs in {plural(attempts, 'attempt')}: {error[:300]}"

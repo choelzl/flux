@@ -250,3 +250,28 @@ def test_a_conclusion_with_no_decision_stands_over_an_older_answer(tmp_path):
     rec.conclude({"decision": None, "closest": "slow"})
     rec.close("paused")
     assert decision_of(db, ans) is None, "the stale answer's decision is not shown"
+
+
+def test_designs_only_their_checks_judged_are_listed_apart(tmp_path):
+    """D1094: a design its checks refused, and one they passed that no stage measured, are on the
+    page -- apart from the measured, the refused with why; a measured design is not listed twice."""
+    from flux_loop.report import load
+
+    db = str(tmp_path / "r.db")
+    rec = Records(db, objective={"study": "t"}, name="t")
+    rec.pass_began()
+    rec.trial({"name": "t#1"}, "goal:t#1", stage="gate", strategy="loop", metrics=None, error="failed at ut: FAIL ut case 0")
+    rec.pass_began()
+    rec.trial({"name": "t#2"}, "goal:t#2", stage="admit", strategy="loop", metrics={"ok": 1})
+    rec.trial({"name": "t#3"}, "goal:t#3", stage="admit", strategy="loop", metrics={"ok": 1})
+    rec.trial({"name": "t#3", "artifact": "x"}, "t#3@screen", stage="screen", strategy="loop", metrics={"area": 2}, evaluator="screen")
+    rec.trial({"name": "?"}, "goal:?", stage="gate", strategy="loop", metrics=None, error="ran past its time limit")
+    rec.conclude({"decision": "t#3"})
+    rec.close("paused")
+    got = designs(db, [{"name": "screen"}])
+    checked = {u["name"]: u for u in got["checked"]}
+    assert set(checked) == {"t#1", "t#2"}, checked                    # t#3 is measured; "?" was never a design
+    assert checked["t#1"]["verdict"] == "failed" and checked["t#1"]["why"].startswith("failed at ut")
+    assert checked["t#2"]["verdict"] == "passed" and not checked["t#2"]["why"]
+    rep = load(db)
+    assert rep.begun == 2 and len(rep.passes) == 1                    # two passes, one decided

@@ -12,6 +12,7 @@ from .observe import _phase
 from .patch import apply_patch, parse_patch
 from .prototype import _prototype_stage
 from .types import BuildError, Candidate, LoopState
+from .words import plural
 
 if TYPE_CHECKING:  # pragma: no cover
     from .problem import Problem
@@ -108,7 +109,7 @@ def _generate_with_model(problem: Problem, subgoal: str | None, method: str,
                 if fails == 0:
                     state.say(f"  {tag}: transpiled from the verified prototype; passes the check")
                     return cand, built, ""
-                state.say(f"  {tag}: the TRANSPILED prototype fails {fails} check vector(s) -- "
+                state.say(f"  {tag}: the TRANSPILED prototype fails {plural(fails, 'check vector')} -- "
                           "a transpiler defect, not the design's; the model transcribes instead")
                 state.lessons.append(f"[transpile] {tag}: {fails} failing after transpilation: {summary[:200]}")
             else:
@@ -185,7 +186,7 @@ def _generate_with_model(problem: Problem, subgoal: str | None, method: str,
                 last_err = f"{last_err}\n(previous patch rejected: {perr})"
                 state.say(f"  patch rejected: {perr}")
                 continue
-            state.say(f"  patched {tag}: {len(edits)} edit(s) -- {pwhy}")
+            state.say(f"  patched {tag}: {plural(len(edits), 'edit')} -- {pwhy}")
             cand, tnote = problem.apply_tools(subgoal, cand.with_artifact(patched), reply,
                                               state)
             if tnote:
@@ -249,11 +250,11 @@ def _generate_with_model(problem: Problem, subgoal: str | None, method: str,
             if fails == 0:
                 state.say(f"  {tag} passes the check; handing it to the gate")
                 return cand, built, ""
-            record_failure(state, cand, "fast-check", summary or f"{fails} failure(s)", fails)
+            record_failure(state, cand, "fast-check", summary or f"{plural(fails, 'failure')}", fails)
             # the trend: did the last edit help, by how much, and where it stands against the best
             trend, is_best = grad.observe(fails, (cand, built), key=cand.artifact, failure=summary)
             if is_best:
-                state.say(f"  {tag}: {gate_score(fails)} check failure(s) (best so far)")
+                state.say(f"  {tag}: {plural(gate_score(fails), 'check failure')} (best so far)")
             if grad.revert_due(cand.artifact):
                 # too many regressions in a row: back to the best attempt, and say so
                 state.say(f"  {tag}: the tolerance for worsening edits is spent; backtracking "

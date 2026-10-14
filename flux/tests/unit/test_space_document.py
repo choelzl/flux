@@ -62,7 +62,7 @@ def test_a_sweep_measures_a_conditional_knob_only_where_it_does_something():
     out = run_loop(PromptProblem(TaskSpec.from_dict(_doc(flow={"orchestrate": "sweep"}))),
                    LoopRequest(steps=4, finalists=0, screen_only=True, prototype=False), log=said.append)
     points = {tuple(sorted(s.candidate.knobs.items())) for s in out.frontier or []} | set()
-    assert any("sweep: 12 point(s) of 12" in m for m in said), said
+    assert any("sweep: 12 points of 12" in m for m in said), said
     assert all(dict(p)["b_width"] == 0 for p in points if dict(p)["stack"] == "a")
 
 

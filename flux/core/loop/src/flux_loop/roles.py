@@ -15,6 +15,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
 from typing import Any, Callable, Iterable, Protocol, runtime_checkable
+from .words import plural
 
 __all__ = ["AgentOrchestrator", "Given", "ModelOrchestrator", "Orchestrator", "ROLES", "Roles", "Rules",
            "available", "available_roles", "make", "make_role", "register",
@@ -171,10 +172,10 @@ class ModelOrchestrator:
 
         lines = ["A design search is running. Choose what the next step should do.", guidance(problem, state, active=False)]
         if state.improve:
-            lines.append(f"improve: {len(state.improve)} design(s) an evaluator sent back "
+            lines.append(f"improve: {plural(len(state.improve), 'design')} an evaluator sent back "
                          f"to be redrafted: {state.improve[0].why[:160]}")
         if waiting:
-            lines.append(f"part: {len(waiting)} part(s) still need work: "
+            lines.append(f"part: {plural(len(waiting), 'part')} still need work: "
                          + ", ".join(waiting))
         lines.append("batch: the search has more candidates to propose")
         lines.append("Reply with ONLY {\"next\": \"<one of "
@@ -254,10 +255,10 @@ class AgentOrchestrator:
             return None
         lines = ["What should the next step do?"]
         if state.improve:
-            lines.append(f"improve: {len(state.improve)} design(s) an evaluator sent back to be improved "
+            lines.append(f"improve: {plural(len(state.improve), 'design')} an evaluator sent back to be improved "
                          f"-- first: {state.improve[0].why[:200]}")
         if waiting:
-            lines.append(f"part: {len(waiting)} part(s) still to make: {', '.join(waiting)}")
+            lines.append(f"part: {plural(len(waiting), 'part')} still to make: {', '.join(waiting)}")
         lines.append("batch: the search proposes more candidates")
         got = self._decide(problem, state, "what next", lines, kinds)
         return got["pick"] if got else None

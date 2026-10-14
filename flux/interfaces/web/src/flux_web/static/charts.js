@@ -1,6 +1,6 @@
 // Flux web: the charts and marks drawn as SVG (D889: split out of app.js).
 
-import { empty, h } from "./ui.js";
+import { empty, h, plural } from "./ui.js";
 import { baselinePoints, bestSeries, designPoints, directionOf, frontier, groupList, groupStyles, inScope, scopesOf, timeSegments, verdictOf } from "./chartdata.js";
 
 // ================================================================ charts (D692)
@@ -46,9 +46,9 @@ const ring = (x, y, r) => sv("circle", { cx: x, cy: y, r: r + 3.5, class: "ring"
 /** The legend (D915): each group's colour and shape, then what the outlines say -- meets every
     requirement (filled), misses one (hollow), waits for a later stage (dashed) -- the decision's ring
     and, on the Pareto chart, the feasible front. Colour is never the only cue. */
-function legend(S, { front = false, pending = false, baseline = false } = {}) {
+function legend(S, { front = false, pending = false, baseline = false, rejected = false } = {}) {
   const key = (st, cls, extra = "") => sv("svg", { viewBox: "-6 -6 12 12", class: "chart key", "aria-hidden": "true" }, mark(st, 0, 0, 3.6, { class: `pt ${cls}` }), extra);
-  const plain = { color: "var(--muted)", shape: "circle" };
+  const plain = { color: S.groups.length ? "var(--muted)" : "var(--accent)", shape: "circle" };   // D1094: the points' own colour when there are no groups
   return h("span", { class: "legend groups" },
     S.groups.map(g => h("span", { class: "key-item", "data-group": g }, key(S.of(g), "accepted"), g || "other")),
     baseline ? h("span", { class: "key-item", "data-baseline": "true" }, sv("svg", { viewBox: "0 0 14 8", class: "chart key wide", "aria-hidden": "true" },
@@ -56,6 +56,7 @@ function legend(S, { front = false, pending = false, baseline = false } = {}) {
     h("span", { class: "key-item" }, key(plain, "accepted"), "meets every requirement"),
     h("span", { class: "key-item" }, key(plain, "failed"), "misses one"),
     pending ? h("span", { class: "key-item" }, key(plain, "pending"), "waits for a later stage") : "",
+    rejected ? h("span", { class: "key-item" }, key(plain, "rejected"), "rejected") : "",   // D1094: a critic's or a person's word, not a missed requirement
     h("span", { class: "key-item" }, key(plain, "accepted", ring(0, 0, 1.2)), "decision"),
     front ? h("span", { class: "key-item" }, sv("svg", { viewBox: "0 0 14 8", class: "chart key wide", "aria-hidden": "true" }, sv("path", { d: "M1,7L1,4L7,4L7,1L13,1", class: "front" })), "feasible front") : "");
 }
@@ -69,6 +70,21 @@ function pointTitle(p, lines) {
     the best feasible so far (a step line), its limit (dashed), the passes (faint ticks). D914: the best
     counts only designs that meet every requirement, of one scope -- the whole, or a part (`opts.scope`,
     of `opts.styles`); the others are drawn, hollow when they miss one; `opts.legend` false: the page draws one. `rows`: designPoints(). */
+/** D1094: ticks on round values -- 0, 25, 50, not 1.9, 46.65, 91.4 -- about `n` of them inside [lo, hi]. */
+function niceTicks(lo, hi, n = 4) {
+  const raw = (hi - lo) / Math.max(1, n), mag = 10 ** Math.floor(Math.log10(raw || 1)), f = raw / mag;
+  const step = (f < 1.5 ? 1 : f < 3 ? 2 : f < 7 ? 5 : 10) * mag, out = [];
+  for (let v = Math.ceil(lo / step) * step; v <= hi + step * 1e-9; v += step) out.push(Number(v.toPrecision(12)));
+  return out.length >= 2 ? out : [lo, hi];
+}
+/** D1094: the two ends of a time axis, as far as they differ -- a day apart gives dates, minutes the time,
+    seconds apart the seconds; the same words twice are said once. */
+function timeEnds(t0, t1) {
+  const span = Math.abs(t1 - t0), day = new Date(t0 * 1000).toDateString() === new Date(t1 * 1000).toDateString();
+  const opt = !day ? { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" } : span < 120 ? { hour: "2-digit", minute: "2-digit", second: "2-digit" } : { hour: "2-digit", minute: "2-digit" };
+  const a = new Date(t0 * 1000).toLocaleString(undefined, opt), b = new Date(t1 * 1000).toLocaleString(undefined, opt);
+  return a === b ? [a, ""] : [a, b];
+}
 function bestChart(rows, obj, passes, opts = {}) {
   const W = 560, H = 190, L = 58, R = 12, T = 14, B = 26;
   const all = rows.filter(r => r.metrics[obj.metric] != null && (!obj.stage || obj.stage === "deepest" || r.stage === obj.stage))
@@ -85,6 +101,8 @@ function bestChart(rows, obj, passes, opts = {}) {
   let lo = Math.min(...vals), hi = Math.max(...vals);
   if (lo === hi) { lo -= Math.abs(lo) * 0.1 || 1; hi += Math.abs(hi) * 0.1 || 1; }
   const pad = (hi - lo) * 0.08; lo -= pad; hi += pad;
+  { const t = niceTicks(lo, hi), step = t.length > 1 ? t[1] - t[0] : 0;     // D1094: the axis reaches a tick below and above every point
+    if (step > 0) { lo = Math.floor(lo / step) * step; hi = Math.ceil(hi / step) * step; } }
   // x is the order of measurement: a loop measures in bursts, and time would pile them up
   const n = pts.length, t0 = (pts[0] || all[0]).t, t1 = (pts[n - 1] || all[all.length - 1]).t;
   const xi = (i) => L + (W - L - R) * (n <= 1 ? 0.5 : i / (n - 1)), y = (v) => T + (H - T - B) * (1 - (v - lo) / (hi - lo));
@@ -97,7 +115,7 @@ function bestChart(rows, obj, passes, opts = {}) {
   const said = !pts.some(counts) ? `No ${scope} design measured` : best === null ? "No feasible design yet" : null;
   const g = sv("svg", { viewBox: `0 0 ${W} ${H}`, class: "chart best-chart", role: "img", "aria-label": `${obj.metric}: ${said || `best feasible search design so far${sw} ${num4(best)}`}` },
     sv("line", { x1: L, x2: W - R, y1: H - B, y2: H - B, class: "axis" }),
-    [lo + pad, (lo + hi) / 2, hi - pad].map(v => [sv("line", { x1: L, x2: W - R, y1: y(v), y2: y(v), class: "grid" }),
+    niceTicks(lo, hi).map(v => [sv("line", { x1: L, x2: W - R, y1: y(v), y2: y(v), class: "grid" }),
       sv("text", { x: L - 6, y: y(v) + 4, class: "tick", "text-anchor": "end" }, num4(v))]),
     (passes || []).map(p => passX(p.when)).filter(v => v != null).map(v => sv("line", { x1: v, x2: v, y1: T, y2: H - B, class: "pass" })),
     obj.goal != null ? [sv("line", { x1: L, x2: W - R, y1: y(obj.goal), y2: y(obj.goal), class: "limit" }),
@@ -108,13 +126,13 @@ function bestChart(rows, obj, passes, opts = {}) {
       sv("title", {}, pointTitle(p, [`${obj.metric} ${num4(p.v)} at ${p.stage}`, new Date(p.t * 1000).toLocaleString()])))),
     pts.filter(p => p.decision).map(p => ring(p.x, y(p.v), 3)),
     path ? sv("path", { d: path, class: "best" }) : "",
-    sv("text", { x: (W + L - R) / 2, y: H - 8, class: "tick", "text-anchor": "middle" }, `${n} design(s), in order`),
-    sv("text", { x: L, y: H - 8, class: "tick" }, new Date(t0 * 1000).toLocaleDateString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })),
-    sv("text", { x: W - R, y: H - 8, class: "tick", "text-anchor": "end" }, new Date(t1 * 1000).toLocaleDateString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })));
-  return h("figure", { class: "chart-box" }, h("figcaption", {}, h("strong", {}, obj.metric), h("span", { class: "muted" },
+    sv("text", { x: (W + L - R) / 2, y: H - 8, class: "tick", "text-anchor": "middle" }, `${plural(n, "design")}, in order`),
+    timeEnds(t0, t1).map((t, i) => t ? sv("text", { x: i ? W - R : L, y: H - 8, class: "tick", ...(i ? { "text-anchor": "end" } : {}) }, t) : ""));
+  const agg = obj.aggregate && obj.aggregate !== "none" ? ` (${obj.aggregate})` : "";      // D1094: a dictionary's one number says what it is
+  return h("figure", { class: "chart-box" }, h("figcaption", {}, h("strong", {}, obj.metric + agg), h("span", { class: "muted" },
     ` ${maxi ? "higher" : "lower"} is better${obj.stage && obj.stage !== "deepest" ? " · at " + obj.stage : ""} · `),
     said ? h("span", { class: "best-said" }, said) : [h("span", { class: "muted" }, `best so far${sw} `), h("strong", { class: "best-said" }, num4(best))],
-    opts.legend === false ? "" : [" ", legend(S, { pending: pts.some(p => p.pending), baseline: refs.length > 0 })]), g);
+    opts.legend === false ? "" : [" ", legend(S, { rejected: pts.some(p => p.verdict === "rejected"), pending: pts.some(p => p.pending), baseline: refs.length > 0 })]), g);
 }
 /** Two metrics against each other (D693): every design measured with both, the limits dashed, a
     click opens the design. D914: the feasible front -- the non-dominated designs of those that meet
@@ -152,7 +170,7 @@ function paretoChart(designs, xm, ym, stage, objectives, onPick, opts = {}) {
   const said = !scoped.length ? `No ${scope} design has both ${xm} and ${ym}${stage ? " at " + stage : ""}${scope === "whole" ? "; parts are not pooled" : ""}`
     : !front.length ? "No feasible design yet" : null;
   const clipId = `pareto-plot-${++paretoSerial}`;
-  const g = sv("svg", { viewBox: `0 0 ${W} ${H}`, class: "chart pareto", role: "img", "aria-label": `${ym} against ${xm}: ${said || `${front.length} design(s) on the feasible front`}` },
+  const g = sv("svg", { viewBox: `0 0 ${W} ${H}`, class: "chart pareto", role: "img", "aria-label": `${ym} against ${xm}: ${said || `${plural(front.length, "design")} on the feasible front`}` },
     sv("line", { x1: L, x2: W - R, y1: H - B, y2: H - B, class: "axis" }), sv("line", { x1: L, x2: L, y1: T, y2: H - B, class: "axis" }),
     ticks(y0, y1).map(v => [sv("line", { x1: L, x2: W - R, y1: Y(v), y2: Y(v), class: "grid" }), sv("text", { x: L - 6, y: Y(v) + 4, class: "tick", "text-anchor": "end" }, num4(v))]),
     ticks(x0, x1).map(v => [sv("line", { x1: X(v), x2: X(v), y1: T, y2: H - B, class: "grid" }), sv("text", { x: X(v), y: H - B + 14, class: "tick", "text-anchor": "middle" }, num4(v))]),
@@ -177,9 +195,9 @@ function paretoChart(designs, xm, ym, stage, objectives, onPick, opts = {}) {
     sv("text", { x: 12, y: (H - B + T) / 2, class: "tick", "text-anchor": "middle", transform: `rotate(-90 12 ${(H - B + T) / 2})` }, `${ym} · ${dy === "minimize" ? "lower" : "higher"} is better`));
   return h("figure", { class: "chart-box" }, h("figcaption", {}, said ? h("strong", { class: "front-said" }, said)
       : h("strong", { class: "front-said" }, `${front.length} on the feasible front${scope ? ` (${scope})` : ""}`),
-    h("span", { class: "muted" }, ` · ${pts.length} search design(s)${stage ? " at " + stage : " at the deepest stage"}${opts.legend === false ? "" : " · "}`),
+    h("span", { class: "muted" }, ` · ${plural(pts.length, "search design")}${stage ? " at " + stage : " at the deepest stage"}${opts.legend === false ? "" : " · "}`),
     opts.focus ? h("span", { class: "muted pareto-focus-said" }, focused ? " · focused on front" : " · full range (no feasible front)") : "",
-    opts.legend === false ? "" : legend(S, { front: true, pending: pts.some(p => p.pending), baseline: xr.length + yr.length > 0 })), g);
+    opts.legend === false ? "" : legend(S, { front: true, rejected: pts.some(p => p.verdict === "rejected"), pending: pts.some(p => p.pending), baseline: xr.length + yr.length > 0 })), g);
 }
 /** A small time chart (D699): each series a line (the first filled), over the samples' times;
     `top` fixes the scale (a CPU count, 100%), `ref` draws a dashed level. */

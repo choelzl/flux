@@ -162,4 +162,4 @@ def test_the_adder16_dse_runs_with_no_world(tmp_path):
              "--out", str(tmp_path / "adder16.v"), timeout=900)
     # D900: screened only, its fmax limit (judged on confirm) is not measured: the closest, exit 3
     assert r.returncode == 3, r.stdout[-3000:] + r.stderr[-2000:]
-    assert "sweep: 6 point(s) of 6" in r.stdout and "CLOSEST" in r.stdout, r.stdout[-3000:]
+    assert "sweep: 6 points of 6" in r.stdout and "CLOSEST" in r.stdout, r.stdout[-3000:]

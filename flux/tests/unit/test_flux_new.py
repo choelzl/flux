@@ -140,7 +140,7 @@ def test_a_resumed_sweep_with_every_point_on_record_rests_instead_of_spinning(tm
     capsys.readouterr()
     assert main(["task", "run", doc, "--passes", "5", "--db", db]) == 0
     out = capsys.readouterr().out
-    assert "sweep: 0 point(s) of 6" in out and "at rest: the search measured every point" in out
+    assert "sweep: 0 points of 6" in out and "at rest: the search measured every point" in out
     assert "── pass 2 ──" not in out, "at rest with nothing to draft: the remaining passes are not run"
 
 

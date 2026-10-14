@@ -4,7 +4,7 @@
 
 import { codeBlock, codeEditor } from "./highlight.js";
 import { can, me, pageOwner, pageRefresh, setPageRefresh } from "./state.js";
-import { act, ago, api, on, autosave, bytes, card, confirmDialog, createFromText, dialog, dur, empty, enc, h, head, offline, owned, pageShow, saveMark, sortableTable, statePill, toast, toasts, when, withOwner } from "./ui.js";
+import { act, ago, api, on, autosave, bytes, card, confirmDialog, createFromText, dialog, dur, empty, enc, h, head, offline, owned, pageShow, saveMark, sortableTable, statePill, toast, toasts, when, withOwner, plural } from "./ui.js";
 import { num4, sv } from "./charts.js";
 import { flushResultPreferences, mainMeasurements, measurementText, relativeMeasurement } from "./result_table.js";
 import { diffView, lineDiff } from "./configure.js";
@@ -266,7 +266,7 @@ function uploadForm() {
   } }, "Clear files");
   const ready = (got, dir = null) => {
     if (dir && !name.value) name.value = dir.replace(/[^A-Za-z0-9_-]+/g, "_").slice(0, 60);
-    said.replaceChildren(got.length ? `${got.length} file(s) ready` : "Without files: a starter problem.yaml, README and empty library/. Opens in the configurator.", dir ? ` from ${dir}/` : "");
+    said.replaceChildren(got.length ? `${plural(got.length, "file")} ready` : "Without files: a starter problem.yaml, README and empty library/. Opens in the configurator.", dir ? ` from ${dir}/` : "");
     clear.hidden = !got.length;
   };
   const dz = dropZone("Drop the loop's folder, its files or a .zip here", (got, dir) => {
@@ -292,11 +292,11 @@ function uploadForm() {
       location.hash = `#/app/${enc(got.name)}/settings/problem`;
       return;
     }
-    const pd = progressDialog("Uploading", `${chosen.length} file(s) to ${name.value.trim()}`);
+    const pd = progressDialog("Uploading", `${plural(chosen.length, "file")} to ${name.value.trim()}`);
     try {
       const n = await sendFiles(name.value.trim(), chosen, { create: true, onProgress: pd.set, signal: pd.signal });
       pd.close();
-      toast(`${name.value} uploaded: ${n} file(s)`, "ok"); location.hash = `#/app/${enc(name.value.trim())}`;
+      toast(`${name.value} uploaded: ${plural(n, "file")}`, "ok"); location.hash = `#/app/${enc(name.value.trim())}`;
     } catch (x) {
       pd.close();
       toast(pd.signal.aborted ? `The upload was cancelled: ${x.message}.` : `The upload failed: ${x.message}`, pd.signal.aborted ? "warn" : "bad", { timeout: 12000 });
@@ -605,12 +605,12 @@ function advancedCard(e, save, saveLabel = "Save") {
   const mem = f("memory", "no limit"), cpus = f("cpus", "no limit"), pids = f("pids", "4096"), tmp = f("tmp_size", "no limit");
   const par = h("input", { type: "checkbox", checked: !!a.parallel, id: "adv-parallel" });
   const raw = h("input", { type: "checkbox", checked: !!a.raw_network, id: "adv-raw-network" });
-  const hosts = h("textarea", { id: "adv-allow", rows: 2, class: "mono", placeholder: "huggingface.co\n10.1.2.0/24", value: (a.allow || []).join("\n") });
-  const nix = h("textarea", { id: "adv-nix-packages", rows: 2, class: "mono", placeholder: "jq\nripgrep", value: (a.nix_packages || []).join("\n") });
-  const chip = h("textarea", { id: "adv-nixchip-packages", rows: 2, class: "mono", placeholder: "verilator\nsystemc", value: (a.nixchip_packages || []).join("\n") });
+  const hosts = h("textarea", { id: "adv-allow", rows: 2, class: "mono", placeholder: "e.g. huggingface.co\n10.1.2.0/24", value: (a.allow || []).join("\n") });
+  const nix = h("textarea", { id: "adv-nix-packages", rows: 2, class: "mono", placeholder: "e.g. jq\nripgrep", value: (a.nix_packages || []).join("\n") });
+  const chip = h("textarea", { id: "adv-nixchip-packages", rows: 2, class: "mono", placeholder: "e.g. verilator\nsystemc", value: (a.nixchip_packages || []).join("\n") });
   const packageNames = (input) => [...new Set(input.value.split(/[\n,]/).map(x => x.trim()).filter(Boolean))];
   // D936: host folders in the sandbox, one per line: host path:path inside:ro|rw
-  const mounts = h("textarea", { id: "adv-mounts", rows: 2, class: "mono", placeholder: "/srv/datasets:/mnt/datasets:ro\n/srv/scratch:/mnt/scratch:rw",
+  const mounts = h("textarea", { id: "adv-mounts", rows: 2, class: "mono", placeholder: "e.g. /srv/datasets:/mnt/datasets:ro\n/srv/scratch:/mnt/scratch:rw",
     value: (a.mounts || []).map(m => `${m.host}:${m.inside}:${m.mode}`).join("\n") });
   const mountsOf = () => mounts.value.split("\n").map(x => x.trim()).filter(Boolean).map(x => {
     const [host, inside, mode] = x.split(":").map(y => (y || "").trim());
@@ -629,9 +629,10 @@ function advancedCard(e, save, saveLabel = "Save") {
     }
     go();
   });
-  return card("Advanced (admins)", [h("p", { class: "muted" }, "From the next start.",
-      e.sandboxed_server ? "" : " This server runs without the sandbox (--no-sandbox): the limits do nothing."),
+  return card("Advanced (admins)", [h("p", { class: "muted" }, "From the next start."),
     h("label", { class: "check" }, sb, "Run in the sandbox (off: trusted code only)"),
+    // D1094: the server's word beside the loop's choice, not above it as if it contradicted it
+    e.sandboxed_server ? "" : h("p", { class: "callout warn small" }, "This server runs every loop without a sandbox: this choice and the settings below apply once it runs with one."),
     h("div", { class: "row" }, h("label", { class: "stack" }, "Memory", mem), h("label", { class: "stack" }, "CPUs", cpus),
       h("label", { class: "stack" }, "Processes", pids), h("label", { class: "stack" }, "Scratch /tmp", tmp)),
     h("label", { class: "check" }, par, "Allow parallel work"),

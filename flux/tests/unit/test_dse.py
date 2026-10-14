@@ -137,7 +137,7 @@ def test_the_document_names_the_policy_on_its_dse_line():
     assert task.space == {"x": [1, 2, 3], "y": ["a", "b"]}
     prob = PromptProblem(task)
     assert prob.roles().orchestrator.name == "montecarlo" and prob.roles().orchestrator.samples == 4
-    assert any(line.startswith("dse: montecarlo {'samples': 4, 'seed': 1} over 6 point(s): x[3] x y[2]")
+    assert any(line.startswith("dse: montecarlo {'samples': 4, 'seed': 1} over 6 points: x[3] x y[2]")
                for line in describe_flow(task, prob))
     assert prob.instantiate(points(task.space)[:2], None)[1].name == "x=1-y=b"
     with pytest.raises(TaskError, match="available: adaptive, agent, anneal, command, control, explore, finetune, genetic"):
@@ -167,7 +167,7 @@ def test_the_model_names_the_next_points_and_bad_ones_are_dropped():
     assert out.decision.candidate.knobs == {"x": 3, "y": 2} and len(proposer.prompts) == 4
     assert "DESIGN-SPACE EXPLORATION" in proposer.prompts[0] and "MEASURED SO FAR: nothing" in proposer.prompts[0]
     assert '{"x": 3, "y": 2} -> cost 0' in proposer.prompts[2] and "LAST ROUND:" in proposer.prompts[3]
-    assert any("2 point(s) -- the corners first; 1 dropped" in m for m in said)
+    assert any("2 points -- the corners first; 1 dropped" in m for m in said)
     assert any("is measured already" in m for m in said)
 
 
@@ -181,7 +181,7 @@ def test_dse_llm_is_the_documents_word_for_the_model_policy():
            "flow": {"orchestrate": {"by": "model", "batch_size": 3, "space": {"x": [1, 2]}}, "test": {"test": ["true", "{point}"]}}}
     prob = PromptProblem(TaskSpec.from_dict(doc))
     assert isinstance(prob.roles().orchestrator, ModelSearch) and prob.roles().orchestrator.batch_size == 3
-    assert any(line.startswith("dse: model {'batch_size': 3} over 2 point(s)") for line in describe_flow(prob.task, prob))
+    assert any(line.startswith("dse: model {'batch_size': 3} over 2 points") for line in describe_flow(prob.task, prob))
     said = []
     state = LoopState(request=LoopRequest(batch=WHOLE), say=said.append, proposer=None, feedback=None)
     assert list(prob.search(state)) == [] and any("this run has none" in m for m in said)
@@ -288,7 +288,7 @@ def test_a_margin_keeps_the_incumbent_against_a_small_gain_and_moves_and_seeds_a
     prob, _ = _two(Gradient(margin=5, patience=1), seeds=[{"x": 1, "y": 1}], moves=by_three)
     assert prob.measured == [{"x": 1, "y": 1}, {"x": 4, "y": 1}], "a gain of 3 is under the margin of 5"
     d = [d for d in prob.state.dse if d.get("label") == "gradient"][0]
-    assert d["end"] == {"x": 1, "y": 1} and d["stopped"] == "1 flat step(s)"
+    assert d["end"] == {"x": 1, "y": 1} and d["stopped"] == "1 flat step"
 
 
 def test_the_control_measures_the_first_seed_with_the_incumbents_kept_knobs():

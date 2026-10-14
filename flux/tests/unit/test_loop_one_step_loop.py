@@ -177,4 +177,4 @@ def test_a_search_only_problem_still_says_when_it_ran_out_of_steps(tmp_path):
 
     out = run_loop(SearchOnly(batches=9), _request(tmp_path, steps=2), proposer=None,
                    log=lambda _m: None)
-    assert any("used every one of its 2 step(s)" in l for l in out.lessons), out.lessons
+    assert any("used every one of its 2 steps" in l for l in out.lessons), out.lessons

@@ -22,6 +22,7 @@ import time
 from typing import Any, Callable, Iterator
 
 from . import ops
+from .words import plural
 
 __all__ = ["between_passes", "carrying", "mark", "run_passes", "this_run"]
 
@@ -162,7 +163,7 @@ def _remeasure_between(run: Callable[[Any, Any], Any], request: Any, feedback: A
     if not asked:
         return
     mark("pass", n=n + 0.5, remeasure=True)
-    say(f"\n── R: {len(asked)} rejected design(s) measured again ──")
+    say(f"\n── R: {plural(len(asked), 'rejected design')} measured again ──")
     run(dataclasses.replace(request, remeasure=True, baseline=False, baseline_only=False, explore=0), feedback)
 
 

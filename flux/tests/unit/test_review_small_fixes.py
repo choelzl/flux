@@ -8,7 +8,7 @@ def test_the_loops_log_words_are_role_words():
     from flux_profile import role_of
     from flux_tui.panels import _log_role
 
-    assert _log_role("patched recip: 2 edit(s) -- fix") == "generator"
+    assert _log_role("patched recip: 2 edits -- fix") == "generator"
     assert _log_role("ADMITTED recip: lut#3") == "evaluator"
     assert _log_role("resuming exp from its best design") == "mentor"
     assert _log_role("decision lut#3: ...") == "orchestrator"

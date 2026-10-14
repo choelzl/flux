@@ -24,6 +24,7 @@ from typing import Any, Callable, Protocol, Sequence, runtime_checkable
 
 from .observe import _phase
 from .types import BuildError, Candidate, LoopState
+from .words import plural
 
 __all__ = ["Attempt", "Catalog", "Model", "Solver", "Source", "Template", "from_file",
            "iterate"]
@@ -88,7 +89,7 @@ class Catalog:
 
     def draft(self, attempt: Attempt) -> tuple[Candidate | None, str]:
         if attempt.index >= len(self.items):
-            return None, (f"the catalog holds {len(self.items)} design(s) and all of them "
+            return None, (f"the catalog holds {plural(len(self.items), 'design')} and all of them "
                           f"were tried")
         return _as_draft(self.make(self.items[attempt.index], attempt), self.name)
 
@@ -151,7 +152,7 @@ def iterate(problem: Any, source: Source, subgoal: str | None, state: LoopState,
         if sign in seen:
             # The same text cannot pass a check it has just failed: stop and name the source.
             return None, None, (f"{source.name} produced the same design again after "
-                                f"{index} failure(s): {failure!s:.200}")
+                                f"{plural(index, 'failure')}: {failure!s:.200}")
         seen.add(sign)
         if source.name.startswith("agent:"):
             from .novelty import twin, twin_said
@@ -188,15 +189,15 @@ def iterate(problem: Any, source: Source, subgoal: str | None, state: LoopState,
             continue
         if not fails:
             if index:
-                say(f"  {source.name}: {cand.name} passes after {index} repair(s)")
+                say(f"  {source.name}: {cand.name} passes after {plural(index, 'repair')}")
             return cand, built, ""
-        failure, prior = text or f"{fails} failure(s)", cand
+        failure, prior = text or f"{plural(fails, 'failure')}", cand
         from .ideas import record_failure
 
         record_failure(state, cand, "fast-check", failure, fails)
-        say(f"  {source.name}: {cand.name} has {fails} failure(s) on the check")
-    return None, None, (f"{source.name}: no candidate passed the check in {rounds} "
-                        f"attempt(s); last: {failure!s:.200}")
+        say(f"  {source.name}: {cand.name} has {plural(fails, 'failure')} on the check")
+    return None, None, (f"{source.name}: no design passed its check in {plural(rounds, 'try', 'tries')}; "
+                        f"last: {failure!s:.200}")
 
 
 def from_file(path: str | Path, attempt: Attempt, *,

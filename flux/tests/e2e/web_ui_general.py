@@ -199,8 +199,8 @@ def general_flows(r, watch):
                 action("Remove Objective")
                 action("Remove Models and agents")
                 r.check("small cards cannot fall below three", b.js("return document.querySelector('[data-layout-list=stats] [aria-label=\"Remove State\"]').disabled"))
-                action("Move Passes on record up")
-                action("Move Passes on record up")
+                action("Move Passes up")
+                action("Move Passes up")
                 b.js("const select=document.querySelector('[data-layout-list=stats] li select'); select.value='tokens_out'; select.dispatchEvent(new Event('change')); return 1")
                 r.check("the mock preview follows card selection and ordering immediately", b.js("return [...document.querySelectorAll('dialog .overview-layout-preview .ov-stats > .stat')].map(el=>el.dataset.overviewCard).join()==='tokens_out,state,designs' && document.querySelector('dialog .overview-layout-preview [data-overview-card=tokens_out] .big').textContent!=='—'"))
                 r.dialog_button("Cancel")
@@ -212,8 +212,8 @@ def general_flows(r, watch):
                 b.wait("document.querySelector('dialog.overview-layout-dialog[open]')")
                 action("Remove Objective")
                 action("Remove Models and agents")
-                action("Move Passes on record up")
-                action("Move Passes on record up")
+                action("Move Passes up")
+                action("Move Passes up")
                 b.js("const select=document.querySelector('[data-layout-list=stats] li select'); select.value='tokens_out'; select.dispatchEvent(new Event('change')); return 1")
                 action("Move Decision to column 2")
                 action("Move Decision up")
@@ -507,7 +507,7 @@ def general_flows(r, watch):
                     " const v=document.querySelector('.alt-visual'); return v.scrollWidth<=v.clientWidth+1 && n.scrollWidth>n.clientWidth"))
                 r.check("LiveAlt has exactly Tree, Graph and Timeline representations", b.js("return [...document.querySelectorAll('.subrow .subtabs button')].map(b=>b.textContent).join(',')==='Tree,Graph,Timeline'"))
                 r.check("current pass selects the agent and exposes prompt plus conversation together", b.js("const d=document.querySelector('.alt-detail');return d.dataset.task==='4' && d.textContent.includes('Considering a faster design') && !d.querySelector('.dtabs') && document.querySelectorAll('.alt-tree [data-task]').length===2"))
-                r.check("D982: the inspector heads a task as the tree names it, its parents as chips", b.js("const d=document.querySelector('.alt-detail');return d.querySelector('.alt-ihead h2').textContent==='Agent · claude' && [...d.querySelectorAll('.alt-pchip')].map(c=>c.textContent).join(',')==='Design · current' && d.querySelector('.alt-meta').textContent.includes('agent: claude')"))
+                r.check("D982: the inspector heads a task as the tree names it, its parents as chips", b.js("const d=document.querySelector('.alt-detail');return d.querySelector('.alt-ihead h2').textContent==='Agent · claude' && [...d.querySelectorAll('.alt-pchip')].map(c=>c.textContent).join(',')==='Design · current' && d.querySelector('.alt-meta').textContent.includes('agent claude')"))
                 r.check("the agent inspector also exposes recorded stdout", b.js("return document.querySelector('.alt-detail [data-k=stdout]').textContent==='RAW agent output'"))
                 r.check("the inspector links directly to the complete current log", b.js("return document.querySelector('.alt-log-link').getAttribute('href').endsWith('/live/log')"))
                 r.check("D984: an agent's turn is a chat: the prompt a folded bubble, the conversation open at its newest end", b.js("const d=document.querySelector('.alt-detail'), c=d.querySelector('.alt-chat');return !!c && !!c.querySelector('.alt-bubble.me.inspector-input:not([open])') && d.querySelector('.agent-view').getBoundingClientRect().height>0 && c.scrollHeight-c.scrollTop-c.clientHeight<30"))
@@ -595,7 +595,7 @@ def general_flows(r, watch):
                 choose("LiveAlt pass", "current")
                 b.click('.alt-flow-box[data-box="search"] .alt-box')
                 r.check("Search without a task opens its policy and pins the current pass", b.js("""const d=document.querySelector('.alt-box-detail');
-                  return d.dataset.box==='search' && d.dataset.pass==='2' && d.textContent.includes('No task was recorded')
+                  return d.dataset.box==='search' && d.dataset.pass==='2' && d.textContent.includes('Nothing was recorded')
                     && d.querySelector('[data-k=configuration]').textContent.includes('sweep')
                     && document.querySelector('[aria-label="LiveAlt pass"]').value==='2'
                     && document.querySelector('.alt-flow-box[data-box=search]').getAttribute('aria-pressed')==='true';"""))
@@ -606,7 +606,7 @@ def general_flows(r, watch):
                 r.check("Locate reveals the selected empty phase", b.js("return document.activeElement.matches('.alt-flow-box[data-box=search].alt-located')"))
                 b.js("const box=document.querySelector('.alt-flow-box[data-box=measure]');box.focus();box.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}));return 1")
                 r.check("waiting boxes open with the keyboard and show their command", b.js("""const d=document.querySelector('.alt-box-detail');
-                  return d.dataset.box==='measure' && d.textContent.includes('This phase has not started')
+                  return d.dataset.box==='measure' && d.textContent.includes('Not started yet')
                     && d.querySelector('[data-k=configuration]').textContent.includes('latency-bench.py')
                     && document.activeElement.matches('.alt-flow-box[data-box=measure]');"""))
                 b.click('.alt-flow-box[data-box="choose"] .alt-box')
@@ -1842,14 +1842,14 @@ objectives: [{metric: timings.fast, goal: 15, direction: minimize},
                 r.button("Restart", ".ctl-grid")
                 b.wait("document.querySelector('dialog.dlg[open]')", what="restart confirmation")
                 text = b.js("return document.querySelector('dialog.dlg[open]').innerText")
-                r.check("restart confirmation lists remaining finite budget and unlimited settings", "bob/ui-admin-restart: 5 of 10 pass(es) remaining · screen only" in text
+                r.check("restart confirmation lists remaining finite budget and unlimited settings", "bob/ui-admin-restart: 5 of 10 passes remaining · screen only" in text
                         and "ada/unlimited: run forever" in text, text)
                 r.check("restart confirmation explains finishing the pass and retained data", "finish their current pass" in text and "Files, results and logs are kept" in text)
                 r.dialog_button("Cancel")
                 r.check("canceling restart sends no request", b.js("return window.__restartCalls") == 0)
                 r.button("Restart", ".ctl-grid")
                 r.dialog_button("Restart loops")
-                b.wait("window.__restartCalls === 1 && [...document.querySelectorAll('.toast')].some(t => t.textContent.includes('2 loop(s) scheduled to restart'))", what="restart result")
+                b.wait("window.__restartCalls === 1 && [...document.querySelectorAll('.toast')].some(t => t.textContent.includes('2 loops scheduled to restart'))", what="restart result")
                 r.check("confirming restart requests the pass boundary and reports scheduling", b.js("return window.__restartOptions.now===false"))
                 page()
                 b.js("window.__restartFailed = true; return 1")
@@ -2089,10 +2089,10 @@ objectives: [{metric: timings.fast, goal: 15, direction: minimize},
               }; return 1;""", name)
             try:
                 r.page(f"#/app/{name}/agents", "document.querySelector('.open-turn')", "partial agent usage")
-                r.check("usage totals identify partial and wholly uncounted turns", "1 turn(s) without tokens · 3 partial" in r.text())   # D1092: said once
+                r.check("usage totals identify partial and wholly uncounted turns", "1 turn without tokens · 3 partial" in r.text())   # D1092: said once
                 tokens = b.js("return Object.fromEntries([...document.querySelectorAll('.open-turn')].map(b => [b.textContent, b.closest('tr').cells[3].textContent]))")
                 r.check("partial counts and unavailable usage are distinct", tokens == {"claude": "300 → 30 (partial)",
-                        "opencode": "100 → — (partial)", "codex": "Unavailable"}, tokens)
+                        "opencode": "100 → — (partial)", "codex": "—"}, tokens)
                 b.js("[...document.querySelectorAll('.open-turn')].find(b => b.textContent === 'claude').click(); return 1")
                 b.wait("document.querySelector('.detail-card .facts')?.textContent.includes('Partial:')", what="partial token detail")
                 r.check("turn details explain exactly which usage was retained", "includes only tokens the agent reported before stopping" in r.text())

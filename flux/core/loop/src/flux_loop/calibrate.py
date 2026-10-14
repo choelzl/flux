@@ -15,6 +15,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any, Iterable
+from .words import plural
 
 __all__ = ["Bias", "bias"]
 
@@ -37,7 +38,7 @@ class Bias:
     def render(self) -> str:
         """What the costly stage measured against what the cheap one predicted."""
         return (f"the {self.against} stage measures {self.metric} {self.ratio:.3g}x what the "
-                f"{self.stage} stage predicts, over {self.n} design(s) "
+                f"{self.stage} stage predicts, over {plural(self.n, 'design')} "
                 f"(spread {self.spread:.2g})")
 
 

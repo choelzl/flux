@@ -75,7 +75,7 @@ def endpoint_slot(key: str, n: int, what: str = "") -> Iterator[None]:
             phase = None
         started = time.monotonic()
         if phase is not None:
-            with phase(f"wait: {key}, {n} at once", why=f"every loop's calls to {key} share {n} slot(s): {what}"[:200]) as out:
+            with phase(f"wait: {key}, {n} at once", why=f"every loop's calls to {key} share {n} {'slot' if n == 1 else 'slots'}: {what}"[:200]) as out:
                 while fd is None:
                     time.sleep(0.5)
                     fd = _take(folder, n)

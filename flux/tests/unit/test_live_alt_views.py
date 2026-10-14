@@ -27,7 +27,7 @@ MODEL = "data:text/javascript;base64," + base64.b64encode((STATIC / "live_alt_mo
 TREE = """
   const mk = (id, name, why, parent, t0, t1, failed) => ({id, name, why, parent, t0, t1, failed, kids: []});
   const dse = mk(1, "DSE: batch", "", null, 0, 30), gen = mk(2, "tool:gen.py", "generate lut-chunk=4", dse, 0, 1);
-  const test = mk(3, "test: gate", "1 candidate(s)", dse, 1, 10), gold = mk(4, "tool:fluxpreset golden", "test lut-chunk=4", test, 1, 10);
+  const test = mk(3, "test: gate", "1 candidate", dse, 1, 10), gold = mk(4, "tool:fluxpreset golden", "test lut-chunk=4", test, 1, 10);
   const sim = mk(5, "simulation: screen", "", dse, 10, 30), rtl = mk(6, "tool:fluxpreset rtl measure", "stage screen lut-chunk=4", sim, 10, 30);
   const evalu = mk(7, "evaluation", "", null, 31, 31.1), agent = mk(8, "agent: claude", "", null, 0, null);
   dse.kids = [gen, test, sim]; test.kids = [gold]; sim.kids = [rtl];
@@ -88,7 +88,7 @@ def test_a_boxs_count_is_how_many_times_its_work_ran_not_how_many_tasks_it_holds
       const s = m.flowBoxes([doc, ...lib].map(node => ({node})), null, false);
       return [Object.fromEntries(b.map(x => [x.key, x.count])), Object.fromEntries(s.map(x => [x.key, x.count])), [dec, pick, crit].map(m.taskLabel)]; }""")
     assert got == [{"design": 1, "check": 1, "measure": 1, "choose": 1}, {"Document": 1, "Library": 1},
-                   ["Choose", "Choose · pick", "Choose · critique"]]
+                   ["Choose", "Choose", "Choose · critique"]]
 
 
 def test_what_each_box_is_set_to_comes_from_the_document():

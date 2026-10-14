@@ -7,6 +7,7 @@ from __future__ import annotations
 import json
 import re
 from typing import Any
+from flux_loop.words import plural
 
 __all__ = ["Masks", "check"]
 
@@ -42,7 +43,7 @@ class Masks:
         lines = s.split("\n")
         kept = [ln for ln in lines if not any(r.search(ln) for r in self.res)]
         gone = len(lines) - len(kept)
-        return s if not gone else "\n".join(kept) + f"\n[{gone} line(s) hidden by the admin's masks]"
+        return s if not gone else "\n".join(kept) + f"\n[{plural(gone, 'line')} hidden by the admin's masks]"
 
     def fields(self, doc: Any) -> Any:
         """A document with every field named like stderr (or an error) masked, at any depth."""

@@ -54,6 +54,7 @@ from fnmatch import fnmatchcase
 from typing import Any, Iterator
 
 from .roles import Rules, register
+from .words import plural
 
 #: A proposed point not yet made into a design (D739): `instantiate_taken` makes it.
 POINT = "_point"
@@ -216,7 +217,7 @@ class Policy(Rules):
         state.dse.append({"label": "seed", "points": seeds})
         fresh = [p for p in seeds if _key(p) not in seen]
         if fresh:
-            state.say(f"  seeds: {len(fresh)} point(s) measured before the walk")
+            state.say(f"  seeds: {plural(len(fresh), 'point')} measured before the walk")
             yield self.batch(problem, state, fresh, seen, label="seed")
         yield from self.walk(problem, state, space, seen)
 
@@ -364,7 +365,7 @@ class Sweep(Policy):
         if not todo:
             state.search_done = True                  # every point is on record: nothing to propose
         size = int(self.batch_size) or max(1, len(todo))
-        state.say(f"  sweep: {len(todo)} point(s) of {len(pts)}"
+        state.say(f"  sweep: {plural(len(todo), 'point')} of {len(pts)}"
                   + (f" (over {', '.join(moving)})" if len(moving) < len(space) else "") + f", {size} a batch")
         for i in range(0, len(todo), size):
             if i + size >= len(todo):
@@ -386,7 +387,7 @@ class MonteCarlo(Policy):
         rng.shuffle(todo)
         todo = todo[:max(1, int(self.samples))]
         size = max(1, int(self.batch_size))
-        state.say(f"  montecarlo: {len(todo)} of {len(points(space))} point(s), seed {self.seed}, {size} a batch")
+        state.say(f"  montecarlo: {len(todo)} of {plural(len(points(space)), 'point')}, seed {self.seed}, {size} a batch")
         for i in range(0, len(todo), size):
             got = yield self.batch(problem, state, todo[i:i + size], seen)
             del got
@@ -462,7 +463,7 @@ class Gradient(Policy):
         if here is None:
             self.record(state, metric, sign, None, None, 0, "nothing to start from")
             return
-        start, spent, flat, stopped = here, 0, 0, f"{self.steps} step(s)"
+        start, spent, flat, stopped = here, 0, 0, f"{plural(self.steps, 'step')}"
         for _ in range(int(self.steps)):
             room = int(self.budget) - spent if self.budget else None
             if room is not None and room <= 0:
@@ -485,7 +486,7 @@ class Gradient(Policy):
                 state.say(f"  {self.tag}: {cap} measured, none improved {metric} "
                           f"({flat}/{self.patience} flat)" + (f"; best of the wave {sign * best[0]:.6g}" if best else ""))
                 if flat >= int(self.patience):
-                    stopped = f"{self.patience} flat step(s)"
+                    stopped = f"{plural(self.patience, 'flat step')}"
                     break
         self.record(state, metric, sign, start, here, spent, stopped)
 
@@ -752,8 +753,8 @@ class ModelSearch(Policy):
                 *([f"The other knobs are held at the incumbent's: {json.dumps(base, default=str)}"] if base else []),
                 ("OBJECTIVE: " + Objectives(objs).describe()) if goal else        # every limit, then what decides (D660)
                 "OBJECTIVE: none declared; propose points that cover the space",
-                (f"MEASURED SO FAR ({len(measured)} point(s), best first):\n" + "\n".join(rows)) if rows else "MEASURED SO FAR: nothing",
-                f"{size(space)} point(s) in this space.",
+                (f"MEASURED SO FAR ({plural(len(measured), 'point')}, best first):\n" + "\n".join(rows)) if rows else "MEASURED SO FAR: nothing",
+                f"{plural(size(space), 'point')} in this space.",
                 f"Propose the {int(self.batch_size)} NEW points most worth measuring next -- near the best when the trend is clear, "
                 "away from it when the measured points do not tell. Every point names EVERY knob with one of its choices, exactly as written.",
             ]
@@ -788,7 +789,7 @@ class ModelSearch(Policy):
                 else:
                     good.append(q)
             why = str((doc or {}).get("why") or "")[:160] if isinstance(doc, dict) else ""
-            state.say(f"  dse: the {'agent' if self.agent is not None else 'model'} proposes {len(good)} point(s)" + (f" -- {why}" if why else "")
+            state.say(f"  dse: the {'agent' if self.agent is not None else 'model'} proposes {plural(len(good), 'point')}" + (f" -- {why}" if why else "")
                       + (f"; {len(bad)} dropped ({bad[0]})" if bad else ""))
             if not good:
                 if complaint:
@@ -955,7 +956,7 @@ class CommandSearch(Policy):
             cands = [Candidate(name=str(c["name"]), artifact=str(c.get("artifact", "")), knobs=dict(c.get("knobs") or {}),
                                meta={"strategy": str(c.get("by") or "command"), **({"idea": str(c["why"])} if c.get("why") else {})})
                      for c in said.get("candidates") or [] if isinstance(c, dict) and c.get("name")]
-            state.say(f"  command search, round {rounds}: {len(cands)} candidate(s)"
+            state.say(f"  command search, round {rounds}: {plural(len(cands), 'candidate')}"
                       + (f" -- {said['say']}" if said.get("say") else ""))
             if not cands:
                 if hasattr(state, "search_done"):

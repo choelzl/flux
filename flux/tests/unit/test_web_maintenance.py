@@ -76,7 +76,7 @@ def test_compact_leaves_a_running_loops_record_and_vacuums_the_rest(tmp_path):
     size = (busy / "out" / "r.db").stat().st_size
     m = _m(store, [("bob", "idle", idle), ("bob", "busy", busy)], live={("bob", "busy")})
     got = m.run("compact", by="ada")
-    assert "2 database(s) compacted" in got["said"] and "1 running, left alone (bob/busy)" in got["said"], got
+    assert "2 databases compacted" in got["said"] and "1 running, left alone (bob/busy)" in got["said"], got
     assert (idle / "out" / "r.db").stat().st_size < size / 10, "vacuumed"
     assert (busy / "out" / "r.db").stat().st_size == size, "a running loop's record is not touched"
 
@@ -89,7 +89,7 @@ def test_a_long_log_keeps_its_recent_part_and_gzips_the_rest(tmp_path):
     m = _m(_store(tmp_path), [("bob", "x", d)])
     m.set_config("logs", None, None, {"max_mb": 1, "keep_mb": 1})
     got = m.run("logs", by="ada")
-    assert got["said"].startswith("1 log(s) condensed"), got
+    assert got["said"].startswith("1 log condensed"), got
     kept = log.read_text()
     assert kept.startswith("(the log before this line is in loop.log.1.gz")
     assert "started 2026-10-01" not in kept and "started 2026-10-02" not in kept, "only the recent part"
@@ -105,7 +105,7 @@ def test_server_tables_lose_what_expired(tmp_path):
         db.execute("INSERT INTO audit(t, user, action) VALUES (?, 'ada', 'ancient')", (OLD - 86400 * 400,))
     store.server_set("notices:bob", [{"text": "old", "t": OLD}, {"text": "new", "t": time.time()}])
     got = _m(store, []).run("tables", by="ada")
-    assert got["said"].startswith("1 session(s), 0 invitation(s), 1 login failure(s), 1 notification(s), 1 audit line(s)"), got
+    assert got["said"].startswith("1 session, 0 invitations, 1 login failure, 1 notification, 1 audit line"), got
     assert [n["text"] for n in store.server_get("notices:bob")] == ["new"]
 
 
@@ -226,7 +226,7 @@ def test_an_orphaned_cache_goes_and_a_live_loops_stays(tmp_path, monkeypatch):
         (cache_root() / _key("bob", app) / "cache").mkdir(parents=True)
         (cache_root() / _key("bob", app) / "cache" / "f").write_text("x" * 1000)
     got = _m(store, [("bob", "kept", d)]).run("orphans", by="ada")
-    assert got["said"].startswith("1 orphaned cache(s) removed"), got
+    assert got["said"].startswith("1 orphaned cache removed"), got
     assert (cache_root() / _key("bob", "kept")).exists() and not (cache_root() / _key("bob", "deleted")).exists()
 
 
@@ -240,7 +240,7 @@ def test_run_history_keeps_the_latest_starts_and_never_a_running_one(tmp_path):
     m.set_config("runs", None, None, {"keep": 2})
     got = m.run("runs", by="ada")
     left = [r["id"] for r in store.runs(bob, "x")]
-    assert got["said"].startswith("2 old start(s) removed"), got
+    assert got["said"].startswith("2 old starts removed"), got
     assert sorted(left) == sorted([ids[0], ids[3], ids[4]]), left
 
 
@@ -267,7 +267,7 @@ def test_a_long_journal_keeps_its_recent_starts_whole(tmp_path, monkeypatch):
     m = _m(_store(tmp_path), [("bob", "x", d)])
     m.set_config("journals", None, None, {"max_mb": 1, "keep_mb": 1})
     got = m.run("journals", by="ada")
-    assert got["said"].startswith("1 journal(s) condensed"), got
+    assert got["said"].startswith("1 journal condensed"), got
     kept = ev.read_bytes()
     assert kept.startswith(b'{"t": 2, "ev": "hello"'), "cut at the latest start that fits, whole"
     assert gzip.open(run / "events.jsonl.1.gz").read() + kept == body, "nothing lost"
@@ -284,7 +284,7 @@ def test_the_refused_host_log_keeps_its_days_and_the_audit_all_of_it(tmp_path):
     f.write_text("".join(json.dumps({"t": t, "host": h, "port": 443, "how": "proxy"}) + "\n"
                          for t, h in ((OLD - 40 * 86400, "old.example"), (time.time(), "new.example"))))
     got = _m(store, []).run("refused", by="ada")
-    assert got["said"].startswith("1 refused connection(s)"), got
+    assert got["said"].startswith("1 refused connection"), got
     assert "new.example" in f.read_text() and "old.example" not in f.read_text()
     assert store._take_refusals() == 0, "what was kept was already read into the audit"
 
@@ -298,11 +298,11 @@ def test_integrity_reports_corrupt_records_and_skips_busy_loops_and_external_lin
     (idle / "out" / "linked.db").symlink_to(busy / "out" / "bad.db")
     m = _m(store, [("bob", "idle", idle), ("bob", "busy", busy)], live={("bob", "busy")})
     got = m.run("integrity", by="ada")
-    assert not got["ok"] and "1 of 2 database(s) failed" in got["said"] and "bob/idle/out/bad.db" in got["said"], got
+    assert not got["ok"] and "1 of 2 databases failed" in got["said"] and "bob/idle/out/bad.db" in got["said"], got
     assert "1 running, left alone" in got["said"] and bad.read_bytes() == b"not a SQLite database"
     bad.unlink()
     got = m.run("integrity", by="ada", loop=("bob", "idle"))
-    assert got["ok"] and got["said"].startswith("0 database(s) checked"), got
+    assert got["ok"] and got["said"].startswith("0 databases checked"), got
     assert not {"integrity", "documents", "backups"} & set(m.due()), "new schedules require opting in"
 
 
@@ -316,7 +316,7 @@ def test_documents_validate_the_selected_file_and_report_errors_without_writing(
     bad_doc.write_text("statement: [broken\n")
     m = _m(store, [("bob", "good", good), ("bob", "bad", bad), ("bob", "busy", busy)], live={("bob", "busy")})
     got = m.run("documents", by="ada")
-    assert not got["ok"] and "1 of 2 loop document(s) failed" in got["said"] and "bob/bad:" in got["said"], got
+    assert not got["ok"] and "1 of 2 loop documents failed" in got["said"] and "bob/bad:" in got["said"], got
     assert "1 running, left alone" in got["said"] and bad_doc.read_text() == "statement: [broken\n"
     assert m.run("documents", by="ada", loop=("bob", "good"))["ok"]
 
@@ -356,7 +356,7 @@ def test_server_backups_are_consistent_private_and_keep_only_the_requested_numbe
         copies = sorted(p for p in root.glob("server-*") if not p.is_symlink())
         first = first or copies[0]
     assert len(copies) == 2 and not first.exists() and (root / "keep-me").is_dir() and external.exists()
-    assert "1 older backup(s) removed" in got["said"]
+    assert "1 older backup removed" in got["said"]
     for p, expected in zip(copies, (1, 2), strict=True):
         assert p.stat().st_mode & 0o777 == 0o700
         for f in p.iterdir():
@@ -407,7 +407,7 @@ def test_empty_starts_are_pruned_on_idle_loops(tmp_path, monkeypatch):
     m = _m(store, [("ada", "x", x), ("ada", "y", y)], live={("ada", "y")})
     m.runs = SimpleNamespace(forget_if_empty=lambda i: forgot.append(i) or i == 2)
     got = m.run("empty", by="ada")
-    assert got["ok"] and got["said"].startswith("1 empty start(s) removed (ada/x: 1)") and "1 running" in got["said"], got
+    assert got["ok"] and got["said"].startswith("1 empty start removed (ada/x: 1)") and "1 running" in got["said"], got
     assert forgot == [1, 2], "ended starts only, the running loop's none"
 
 

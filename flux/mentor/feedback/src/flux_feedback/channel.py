@@ -246,7 +246,7 @@ def reload_notes(records, say: Callable[[str], None] = lambda _m: None) -> list[
         earlier = [Note(text=t, received_at=0.0, origin="earlier-run", ident=i)
                    for t, i in (records.notes_with_ids() if hasattr(records, "notes_with_ids") else [(t, "") for t in records.notes()])]
         if earlier:
-            say(f"resumed: {len(earlier)} operator note(s) from an earlier run rejoin "
+            say(f"resumed: {len(earlier)} operator {'note' if len(earlier) == 1 else 'notes'} from an earlier run rejoin "
                 "the proposer prompt")
         return earlier
     except Exception:                                                     # noqa: BLE001
@@ -276,7 +276,7 @@ def render_guidance(notes: Sequence[Note], *, max_chars: int = 1200) -> str:
         used += len(line) + 1
     body = "\n".join(reversed(kept))
     header = _LABEL if not omitted else (
-        f"{_LABEL}\n  ({omitted} earlier note(s) omitted to fit)")
+        f"{_LABEL}\n  ({omitted} earlier {'note' if omitted == 1 else 'notes'} omitted to fit)")
     return f"{header}\n{body}"
 
 

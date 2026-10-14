@@ -21,6 +21,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from typing import Any
+from .words import plural
 
 __all__ = ["KINDS", "MIN_ROWS", "Estimator", "by_model", "by_surrogate", "failing", "knobs_of", "measured_rows",
            "predict_fit", "predict_knn"]
@@ -174,7 +175,7 @@ def by_model(state: Any, stage: str, cands: list[Any], metrics: list[str],
     asks = [f"  {i}: {design(c)}" for i, c in enumerate(cands)]
     prompt = (f"ESTIMATE what the {stage} stage will measure ({', '.join(metrics)}) for each design below, "
               "from what it measured before. Numbers only, no advice.\n\n"
-              f"MEASURED ON {stage} ({len(rows)} design(s)):\n" + ("\n".join(table) or "  nothing yet")
+              f"MEASURED ON {stage} ({plural(len(rows), 'design')}):\n" + ("\n".join(table) or "  nothing yet")
               + "\n\nDESIGNS:\n" + "\n".join(asks)
               + "\n\nReply as JSON: {\"estimates\": [{\"index\": i, " + ", ".join(f"\"{m}\": number" for m in metrics) + "}, ...]}")
     schema = {"type": "object", "properties": {"estimates": {"type": "array", "items": {"type": "object"}}},

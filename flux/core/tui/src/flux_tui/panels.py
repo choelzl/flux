@@ -434,8 +434,9 @@ def standings_table(st: dict[str, Any]) -> list[tuple[str, str | None, str, int 
             line = f"  {part['part']:<12} {state or 'not yet tried'}{nums}"
         put(line, STANDINGS.get(state, "dim"), "part", i)     # the loop's words, colored by one table (D443)
     if st.get("measured"):
-        noun = "design(s)" if st.get("searching") else "composed design(s)"
-        put(f"  {'measured':<12} {st['measured']} {noun} on the chain", None, "measured")
+        n = st["measured"]
+        noun = ("design" if n == 1 else "designs") if st.get("searching") else ("composed design" if n == 1 else "composed designs")
+        put(f"  {'measured':<12} {n} {noun} on the chain", None, "measured")
     designs = st.get("designs") or []
     if designs:                                        # D573: a search pass stands on its designs
         groups = list(dict.fromkeys(d.get("deliverable") or "" for d in designs))
@@ -475,7 +476,7 @@ def front_lines(points: list[dict[str, Any]], axes: list[str], width: int = 44, 
         mark = "◆" if p.get("decision") else "·"
         if grid[row][col] != "◆":
             grid[row][col] = mark
-    out = [f"  the front on the {pts[0].get('stage', '?')} stage: {axes[0]} (→) against {axes[1]} (↑); ◆ the decision, {len(pts)} point(s)"]
+    out = [f"  the front on the {pts[0].get('stage', '?')} stage: {axes[0]} (→) against {axes[1]} (↑); ◆ the decision, {len(pts)} {'point' if len(pts) == 1 else 'points'}"]
     for i, row in enumerate(grid):
         label = f"{y1:g}" if i == 0 else (f"{y0:g}" if i == height - 1 else "")
         out.append(f"  {label:>9} │{''.join(row)}│")
@@ -591,7 +592,7 @@ def _results_layout(snap: dict[str, Any], cursor: int | None, *, selected: int |
         want = max(_MIN_DETAIL, rest * 2 // 3 if selected is not None else rest // 3)
         if chart and n + len(chart) + want > rest:                   # the chart folds before the list does
             pts = len(st.get("front") or [])
-            chart = ([(f"  the front: {pts} point(s) -- its chart shows on a taller screen", "dim", None)]
+            chart = ([(f"  the front: {pts} {'point' if pts == 1 else 'points'} -- its chart shows on a taller screen", "dim", None)]
                      if n + 1 + want <= rest else [])
         rows = min(n, max(least, rest - len(chart) - want))
         lo, hi, up, down = _list_window(at, n, rows)

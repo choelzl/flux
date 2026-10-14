@@ -39,7 +39,8 @@ export const notReached = n => n.failed && loopTests.length && (n.kids || []).so
   ? loopTests.filter(t => !(n.kids || []).some(k => ranFor(k) === t)) : [];
 /** D1066: a label whose "what" is the loop's own name is its kind alone ("Design", not "Design · demo-x"). */
 const plain = t => { const at = String(t).lastIndexOf(" · "); return at > 0 && loopNames.includes(String(t).slice(at + 3)) ? String(t).slice(0, at) : byId(t); };
-const byId = t => String(t).replace(/([^\s·#]+)(#[^#\s]+)/g, (_, pre, id) => id === "#baseline" ? "baseline" : !loopNames.length || loopNames.includes(pre) ? id : pre + id);
+const byId = t => String(t).replace(/([^\s·#]+)(#[^#\s]+)/g, (_, pre, id) => id === "#baseline" ? "baseline" : !loopNames.length || loopNames.includes(pre) ? id : pre + id)
+  .replace(/(^|[\s★(])([^\s·#()]+)(?=$|[\s·,)])/g, (all, pre, w) => loopNames.includes(w) ? `${pre}whole` : all);   // D1094: a design named the loop is its parts' whole
 const fmt = v => Math.abs(v) >= 100 ? String(Math.round(v * 10) / 10) : Math.abs(v) >= 1 ? v.toFixed(2).replace(/\.?0+$/, "") : Number(v.toPrecision(2)).toString();
 
 function pill(n) {
@@ -88,7 +89,15 @@ export function inspectorHead(n, env) {
     parents.length ? h("div", { class: "alt-crumbs" }, parents.flatMap((p, i) => [i ? h("span", { class: "muted" }, "›") : "",
       h("button", { type: "button", class: "alt-pchip", style: `--k:${colorOf(p)}`, onclick: () => env.pick?.(p.id), title: taskLabel(p) }, plain(taskLabel(p)))])) : "",
     // D1066: the reason and the engine's name by the same rule -- a reason that is the loop's own name says nothing
-    h("p", { class: "alt-meta muted" }, n.why && !loopNames.includes(String(n.why).trim()) ? `${byId(n.why)} · ` : "", h("span", { class: "mono", title: n.name }, n.tryNo ? byId(n.name).replace(/\bdraft \d+$/, `try ${n.tryNo}`) : byId(n.name)))];   // D1075: the tree's try, not a run's own draft count
+    // D1094: a reason that is only the engine's source name ("agent:python3") says nothing the chips do not
+    h("p", { class: "alt-meta muted" }, ...[n.why && !loopNames.includes(String(n.why).trim()) && !/^\s*(agent|tool|model|llm)\s*:\s*\S+\s*$/i.test(String(n.why)) ? byId(n.why) : "", runner(n)].filter(Boolean).flatMap((x, i) => [i ? " · " : "", x]))];
+}
+/** D1094: who did the work, in words -- the program a command ran, the agent or model that answered, its try;
+    an engine's own step name ("decide", "simulation: esl", "DSE: batch") says nothing the title does not (it is the tooltip). */
+function runner(n) {
+  const name = String(n.name || ""), tool = /^\s*tool\s*:\s*(.+)$/i.exec(name), ai = /^\s*(agent|llm|model)\s*:?\s*(\S+)?/i.exec(name);
+  const said = tool ? `runs ${tool[1].trim()}` : ai ? `${/^agent/i.test(ai[1]) ? "agent" : "model"}${ai[2] ? " " + ai[2] : ""}${n.tryNo ? ` · try ${n.tryNo}` : ""}` : "";   // D1075: the tree's try
+  return said ? h("span", { title: name }, said) : "";
 }
 
 /** The usual time of a task like this one (the same name and purpose's first word), from its earlier runs. */
@@ -114,6 +123,14 @@ function bestOf(n, env) {
       const m = meanOf(d);
       if (goals[k] && m != null && (best[k] == null || goals[k] * m > goals[k] * best[k].m)) best[k] = { v: d, m, who };
     }
+  }
+  // D1094: and the record's -- the designs that meet every requirement, on this stage, from every pass (a long
+  // loop shows its latest passes only): the best so far is the loop's, as the Overview says it
+  const stage = (/^(?:stage|estimate)\s+(\S+)/i.exec(String(n.why || "")) || /^\s*(?:simulation|analytical)\s*:\s*(\S+)/i.exec(String(n.name || "")) || [])[1];
+  for (const d of (stage && env.record?.()) || []) {
+    const nums = d.stages?.[stage], who = String(d.name || "");
+    if (!nums || (mine && (who === mine || who.endsWith(mine)))) continue;
+    for (const [k, v] of Object.entries(nums)) if (goals[k] && typeof v === "number" && (best[k] == null || best[k].m == null && goals[k] * v > goals[k] * best[k].v)) best[k] = { v, who };
   }
   return { best, goals };
 }
@@ -325,8 +342,10 @@ function modelChat(n, env) {
 
 /** A search (P8): the point it proposed and that candidate's way through the pass. */
 function searchBody(n, env) {
-  const c = candidateOf(n);
-  return [h("div", { class: "task-inspector" }, c ? h("div", { class: "kv" }, h("div", { class: "k" }, "point"), h("div", { class: "val mono" }, c)) : "",
+  const c = candidateOf(n), o = n.output || {}, of = Number(o.points), k = Number(o.candidates) || 0, was = Number(o["measured before"]) || 0;
+  // D1094: how much of the space the pass took -- "x=1 · point 1 of 4", "points 3–4 of 4"
+  const where = of > 0 && k > 0 ? (k === 1 ? `point ${was + 1} of ${of}` : `points ${was + 1}–${was + k} of ${of}`) : "";
+  return [h("div", { class: "task-inspector" }, c || where ? h("div", { class: "kv" }, h("div", { class: "k" }, "Point"), h("div", { class: "val mono" }, [c, where].filter(Boolean).join(" · "))) : "",
     n.kids.length ? h("div", { class: "alt-steps" }, n.kids.map(k => stepRow(k, env))) : h("p", { class: "muted" }, running(n) ? "Proposing…" : "Nothing under it."))];
 }
 

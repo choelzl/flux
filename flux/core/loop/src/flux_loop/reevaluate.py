@@ -17,6 +17,7 @@ from .measure import measure_many
 from .observe import _phase
 from .records import _record_trial
 from .types import Candidate, Verdict
+from .words import plural
 
 #: Rows that are not designs: a prototype's Python, the admission of a part.
 _NOT_DESIGNS = ("prototype",)
@@ -55,9 +56,9 @@ def run_reevaluate(problem, state):
         designs = designs_on_record(store, cid)
         through = max((t.seq for t in trials), default=0)
         records.remember("invalidated", {"seq": through, "designs": len(designs)})
-        out["invalidated"] = f"{len(trials)} trial(s), up to #{through}"
+        out["invalidated"] = f"{plural(len(trials), 'trial')}, up to #{through}"
         out["designs"] = len(designs)
-    state.say(f"  invalidated {len(trials)} trial(s); re-evaluating {len(designs)} design(s)")
+    state.say(f"  invalidated {plural(len(trials), 'trial')}; re-evaluating {plural(len(designs), 'design')}")
     return _measure_again(problem, state, designs)
 
 
@@ -81,7 +82,7 @@ def _reevaluate_these(problem, state, of: int):
     order = list(problem.stages() or [])
     if state.on_stage:
         state.reached = max(state.on_stage, key=lambda st: order.index(st) if st in order else -1)
-    state.say(f"  re-evaluating {len(designs)} design(s) invalidated by hand (#{of})")
+    state.say(f"  re-evaluating {plural(len(designs), 'design')} invalidated by hand (#{of})")
     out = _measure_again(problem, state, designs)
     records.remember("reevaluated", {"of": of, "designs": len(designs)})
     return out
@@ -137,7 +138,7 @@ def run_remeasure(problem, state):
     order = list(problem.stages() or [])
     if state.on_stage:
         state.reached = max(state.on_stage, key=lambda st: order.index(st) if st in order else -1)
-    state.say(f"  R: measuring {len(designs)} rejected design(s) again: " + ", ".join(sorted(c.name for c in designs.values())))
+    state.say(f"  R: measuring {plural(len(designs), 'rejected design')} again: " + ", ".join(sorted(c.name for c in designs.values())))
     out = _measure_again(problem, state, list(designs.values()))
     store.remeasured(cid, [r["id"] for r in asked], sorted(designs))
     return out
@@ -175,7 +176,7 @@ def _measure_again(problem, state, designs):
             state.refused.append((cand.name, why))
             _record_trial(state, cand, sg, Verdict(False, 1.0, why), error=why)
             failed += 1
-    state.stopped = f"re-evaluated {len(designs)} design(s): {passed} passed today's checks, {failed} did not"
+    state.stopped = f"re-evaluated {plural(len(designs), 'design')}: {passed} passed today's checks, {failed} did not"
     state.say(f"  {state.stopped}")
     with _phase("decide", why="choice among the designs measured again"):
         result = (_conclude(problem, state, []) if state.scored and state.on_stage

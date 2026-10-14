@@ -15,7 +15,7 @@ def test_banner_fills_to_width():
 def test_sections_render_and_empty_sections_vanish():
     assert established(["a lesson"]) == ["WHAT THIS RUN ESTABLISHED", "  - a lesson"]
     assert not_established(["no P&R"]) == ["NOT ESTABLISHED", "  - no P&R"]
-    assert notes(["prefer x"])[0].startswith("OPERATOR GUIDANCE (1 note(s)")
+    assert notes(["prefer x"])[0].startswith("OPERATOR GUIDANCE (1 note")
     for empty in (established([]), not_established([]), refused([]), notes([])):
         assert empty == []
 

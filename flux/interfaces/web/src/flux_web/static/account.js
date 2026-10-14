@@ -1,7 +1,7 @@
 // Flux web: logging in, an invite's page, one's account and agent logins (D889: split out of app.js).
 
 import { cleanup, me, setMe } from "./state.js";
-import { act, api, card, dur, enc, fmtTok, h, head, pageShow, toast, when } from "./ui.js";
+import { act, api, card, dur, enc, fmtTok, h, head, pageShow, toast, when, plural } from "./ui.js";
 import { logo } from "./charts.js";
 import { envEditor, envTable } from "./loops.js";
 import { MECHANISM, VERIFIED, settingsForm } from "./admin.js";
@@ -67,9 +67,9 @@ async function accountPage() {
   show(head("Account", `Logged in as ${me.name}`),
     card("Overview layout", [h("p", { class: "muted" }, "Choose and order 3–5 small cards and arrange the larger cards in two columns. Applies to every loop in your account, across browsers."),
       !me.impersonator ? act("Customize", editOverviewLayout, { cls: "small" }) : h("p", { class: "muted small" }, "Viewing this account's saved layout; impersonation is read-only.")]),
-    mine && mine.turns ? card("My usage", h("p", {}, `${mine.turns} model and agent turn(s) over ${mine.loops} loop(s), ${dur(mine.seconds)}`,
+    mine && mine.turns ? card("My usage", h("p", {}, `${mine.turns} model and agent ${mine.turns === 1 ? "turn" : "turns"} over ${plural(mine.loops, "loop")}, ${dur(mine.seconds)}`,
       mine.counted ? `, ${fmtTok(mine.tokens_in)} tokens in and ${fmtTok(mine.tokens_out)} out` : "",
-      mine.partial ? ` (${mine.partial} turn(s) with incomplete usage)` : "",
+      mine.partial ? ` (${plural(mine.partial, "turn")} with incomplete usage)` : "",
       mine.cost_usd ? `, $${mine.cost_usd.toFixed(2)} at the prices set` : "", ".")) : "",
     // D814: one card, a tab per tool -- each agent's login and Test, its model, its own variables; Flux's
     // model; the variables every agent of yours gets

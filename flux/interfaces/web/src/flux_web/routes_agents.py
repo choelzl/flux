@@ -19,6 +19,7 @@ from fastapi import Depends, FastAPI, HTTPException
 from .models import LoginInput, EnvVar, AgentConfig, AgentNew, AgentRename, AskOffer
 from .runs import home_ready, sandbox_config, machine_env, run_env, sandbox_env
 from .store import User
+from flux_loop.words import plural
 
 
 def register(app: FastAPI, ctx: SimpleNamespace) -> None:
@@ -538,7 +539,7 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
         cfg = store.server_get("agents") or {}
         cfg[new] = cfg.pop(agent, old_a.stored())
         store.server_set("agents", cfg)
-        store.audit(a.name, "agent renamed", f"{agent} -> {new}" + (f"; {len(loops)} loop(s) still name {agent}" if loops else ""))
+        store.audit(a.name, "agent renamed", f"{agent} -> {new}" + (f"; {plural(len(loops), 'loop')} still name {agent}" if loops else ""))
         return {"ok": f"{agent} is {new} now", "name": new, "loops": loops}
 
     @app.put("/api/admin/agents/{agent}")
@@ -563,7 +564,7 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
         cfg[agent] = x.stored()
         store.server_set("agents", cfg)
         store.audit(a.name, "agent settings", f"{agent}: program {x.bin or '(on PATH)'}; login {x.login or '(default)'}; "
-                    f"{len(x.home)} home path(s), {len(x.hosts)} host(s)")
+                    f"{plural(len(x.home), 'home path')}, {plural(len(x.hosts), 'host')}")
         return {"ok": f"{agent} saved"}
 
     # ---- each agent's own variables (D807): the server's (an admin's), a user's own

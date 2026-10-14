@@ -19,7 +19,7 @@ def lessons_digest(facts: list[dict[str, Any]], *, max_chars: int = 1400,
 
     `facts` are mined facts (from `mine_knowledge`).
     """
-    lines = [f"- {count} group(s) of candidates were refused: {message}"
+    lines = [f"- {count} {'group' if count == 1 else 'groups'} of candidates were refused: {message}"
              for message, count in _refusal_groups(facts, max_refusals)]
     if not lines:
         return "(nothing yet: this is the first run against this store)"

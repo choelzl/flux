@@ -271,7 +271,7 @@ def references(spec: Path, picked: list[tuple[Unit, int]], a: argparse.Namespace
     if not aslref:
         return "ASLRef is not available: put `aslref` on PATH or give --aslref"
     model_text = m.read_text()
-    print(f"reference vectors: {len(todo)} unit(s) on {min(a.jobs, len(todo))} thread(s), one ASLRef run each "
+    print(f"reference vectors: {len(todo)} {'unit' if len(todo) == 1 else 'units'} on {min(a.jobs, len(todo))} {'thread' if min(a.jobs, len(todo)) == 1 else 'threads'}, one ASLRef run each "
           "(and one more after each vector the spec's model asserts on)", file=sys.stderr)
 
     def one(t: tuple) -> str | None:
@@ -531,7 +531,7 @@ def _check(a: argparse.Namespace) -> int:
         return 1
     compared = sum(1 for v in vecs if not v.get("spec_error"))
     if compared < len(vecs):
-        print(f"{len(vecs) - compared} vector(s) not compared: the spec's own model asserts on them "
+        print(f"{len(vecs) - compared} {'vector' if len(vecs) - compared == 1 else 'vectors'} not compared: the spec's own model asserts on them "
               "(`fluxpreset pto ref` lists them)", file=sys.stderr)
     print(f"{len(wrong)} failing of {compared}")
     return 1 if wrong else 0

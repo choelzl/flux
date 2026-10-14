@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Any
 
 from .store import Store, User
+from flux_loop.words import plural
 
 __all__ = ["OK_RC", "RunManager", "loop_files", "run_env"]
 
@@ -484,7 +485,7 @@ class RunManager:
         machine_env(env, sandbox_config(self.store), adv)
         if adv.get("sandbox") is False and self.sandbox:
             options = {**options, "host": True}
-        said = [f"{passes} pass(es)" if passes else "until stopped"] + (["screen only"] if options.get("screen_only") else []) \
+        said = [f"{plural(passes, 'pass', 'passes')}" if passes else "until stopped"] + (["screen only"] if options.get("screen_only") else []) \
             + (["re-evaluation of every design on record"] if options.get("reevaluate") else []) \
             + (["the baseline measured again"] if options.get("rerun_baseline") else []) \
             + (["R: the rejected designs measured again"] if options.get("remeasure") else []) \
@@ -644,7 +645,15 @@ class RunManager:
         lines = [re.sub(r"^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d\.\d{3} ", "", ln).rstrip() for ln in tail[at + 1:]]
         lines = [ln for ln in lines if ln.strip() and not re.match(r"flux [a-z ]+: in the \w+ sandbox ", ln)]   # where it ran, not why
         said = [ln for ln in lines if self._PROBLEM.search(ln)]
-        return [ln[:400] for ln in (said or lines)[-n:]]
+        # D1094: as sentences -- a list's own heading ("REFUSED (1)") and its dashes and indents dropped
+        tidy = [re.sub(r"^\s*(?:[-*•]\s+)?", "", ln) for ln in (said or lines) if not re.fullmatch(r"\s*[A-Z][A-Z ]+\(\d+\):?\s*", ln)]
+        # the engine's own names out ("loop (generate): ", "agent:python3"), and a line said again counted, not repeated
+        tidy = [re.sub(r"\b(agent|tool|model):(\S)", r"\1 \2", re.sub(r"^\S+ \(\w+\):\s*", "", ln)) for ln in tidy]
+        counted: dict[str, int] = {}
+        for ln in tidy:
+            counted[ln] = counted.get(ln, 0) + 1
+        said_once = [f"{ln} ({k} times)" if k > 1 else ln for ln, k in counted.items()]
+        return [ln[:400] for ln in said_once[-n:]]
 
     def state(self, user: User, app: str, run: Any = LOOKUP) -> dict[str, Any]:
         """The loop's state: running or not, since when, its last activity, and while it runs its

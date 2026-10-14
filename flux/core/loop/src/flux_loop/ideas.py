@@ -153,9 +153,10 @@ def bind_code(state: Any, part: str | None, code: str, payload: Any, previous: s
 
 
 def record_failure(state: Any, cand: Any, stage: str, error: str, score: float | None = None) -> None:
-    """Keep failed inner-loop attempts too, before a repair replaces the draft."""
+    """Keep failed inner-loop attempts too, before a repair replaces the draft -- D1094: every one, not
+    only those carrying ideas: a draft its check refused is a design the page lists, with why."""
     rec = _record(state)
-    if rec is None or not cand.meta.get("idea_ids"):
+    if rec is None:
         return
     from .provenance import stamp
 

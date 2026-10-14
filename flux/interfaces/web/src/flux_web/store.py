@@ -15,6 +15,7 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+from flux_loop.words import plural
 
 SESSION_DAYS = 7
 _SCHEMA = """
@@ -546,7 +547,7 @@ class Store:
                 raise ValueError(f"{app} is running")
             n = con.execute(f"SELECT COUNT(*) FROM runs WHERE user_id = ? AND {active}", (user.id, now - self.STARTING_S)).fetchone()[0]
             if n >= limit:
-                raise ValueError(f"at most {limit} loop(s) running at once for {user.name}")
+                raise ValueError(f"at most {plural(limit, 'loop')} running at once for {user.name}")
             cur = con.execute("INSERT INTO runs(user_id, app, db, log, argv, started, options) VALUES (?, ?, ?, ?, ?, ?, ?)",
                               (user.id, app, db_path, log, json.dumps(argv), now, json.dumps(options)))
             con.execute("COMMIT")

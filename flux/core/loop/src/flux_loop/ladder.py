@@ -26,6 +26,7 @@ from typing import TYPE_CHECKING, Any
 from .ledger import Kind
 from .observe import _phase
 from .types import BuildError, Candidate, Improve, Option, Verdict
+from .words import plural
 
 if TYPE_CHECKING:  # pragma: no cover
     from .problem import Problem
@@ -360,9 +361,9 @@ def take(problem: "Problem", part: str, code: str, depth: float, d0: int, state:
         return None, None, f"{part}: the transpiled {depth:g}-level design did not build: {str(exc)[:200]}"
     fails, summary = problem.fast_check(built, cand, part, state)
     if fails:
-        state.say(f"  {part}: the TRANSPILED {depth:g}-level prototype fails {fails} check vector(s) -- a transpiler defect; the old design stands")
+        state.say(f"  {part}: the TRANSPILED {depth:g}-level prototype fails {plural(fails, 'check vector')} -- a transpiler defect; the old design stands")
         state.prototypes.pop(part, None)
-        return None, None, f"{part}: transpiled {depth:g}-level design fails {fails} check vector(s): {summary[:200]}"
+        return None, None, f"{part}: transpiled {depth:g}-level design fails {plural(fails, 'check vector')}: {summary[:200]}"
     state.say(f"  {part}: transpiled from the {depth:g}-level prototype" + (f" at {k} pipeline registers" if k else "") + "; passes the check")
     return cand, built, ""
 
@@ -534,7 +535,7 @@ def options(problem: "Problem", ladder: Ladder, item: Improve, state: "LoopState
                            f"a DIFFERENT algorithm from scratch under the same gate, swept and compared by "
                            f"measurement; {redesigns} of {ladder.redesigns} alternatives tried this pass"
                            + (f"; the alternative on record stands at {alt[0]:g} over" if alt else "")
-                           + (f", and {stalled} pass(es) ended there without improving it" if stalled else ""),
+                           + (f", and {plural(stalled, 'pass', 'passes')} ended there without improving it" if stalled else ""),
                            due=redesigns < ladder.redesigns and stalled < ladder.stalls,
                            run=lambda: redesign(problem, ladder, op, proto, state, item.why)),
     }

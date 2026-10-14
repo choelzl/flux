@@ -283,7 +283,7 @@
     }
     if (setupLeaves.length) out.unshift(branch("setup", "Setup", "", setupLeaves));
     if (m.before || m.cut) {                          // D759: a day-long start opens on its last passes
-      var left = [m.before ? m.before + " pass(es)" : "", m.cut ? "the start of this pass" : ""].filter(Boolean).join(" and ");   // D762
+      var left = [m.before ? m.before + (m.before === 1 ? " pass" : " passes") : "", m.cut ? "the start of this pass" : ""].filter(Boolean).join(" and ");   // D762
       var earlier = branch("earlier", "Earlier", left + " not loaded · load them", []);
       earlier.earlier = true;
       out.unshift(earlier);
@@ -304,13 +304,13 @@
     switch (it.box) {
       case "digest": { var o = latest.output || {};                       // D771: what this Setup digested
         if (o.error) return "failed";
-        return o["in all"] == null ? "" : (o.digested ? o.digested + " new" + (o.by ? " by " + o.by : "") + " · " : "") + o["in all"] + " paper(s) digested"; }
+        return o["in all"] == null ? "" : (o.digested ? o.digested + " new" + (o.by ? " by " + o.by : "") + " · " : "") + o["in all"] + (o["in all"] === 1 ? " paper digested" : " papers digested"); }
       case "dse": return listed(designsOf(it.tasks)) || (latest.output && latest.output.candidates != null ? String(latest.output.candidates) : "");
       case "generate": {
         var made = uniq(toolWhy(/^generate (.+)$/).concat(all.map(function (n) { return (/^generation: build (.+)$/.exec(String(n.name)) || [])[1]; })));
         return [agent ? String(agent.name).replace(/^agent:\s*/, "") : "", listed(made)].filter(Boolean).join(" · ");
       }
-      case "test": return listed(toolWhy(/^test (.+)$/)) || String(latest.why || "").replace(/candidate\(s\)/, "design(s)");
+      case "test": return listed(toolWhy(/^test (.+)$/)) || String(latest.why || "").replace(/candidate\(s\)/, "designs");
       case "measure": {
         var stages = uniq(it.tasks.map(function (n) { return String(n.name).replace(/^[^:]+:\s*/, "").replace(/\s*\(.*\)$/, "").replace(/ alone$/, ""); }));
         return [stages.join(", "), listed(toolWhy(/^stage \S+ (.+)$/))].filter(Boolean).join(" · ");

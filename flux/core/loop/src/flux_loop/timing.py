@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import re
 from typing import Any
+from .words import plural
 
 
 # The critical path as data (D526): the `full_clock_expanded` report parsed into its steps.
@@ -111,7 +112,7 @@ def describe(path: dict[str, Any] | None, *, top: int = 5) -> str:
         head += "; the costliest steps: " + ", ".join(parts)
     heavy = [s for s in cells if (s.get("fanout") or 0) >= 8]
     if heavy:
-        head += (f"; {len(heavy)} step(s) drive 8 or more loads -- a value used in many places at once "
+        head += (f"; {plural(len(heavy), 'step')} drive 8 or more loads -- a value used in many places at once "
                  "costs its fanout in delay")
     if cells and not named:
         head += "; synthesis kept no signal names on this path (abc renames the nets), so the steps are cells, not the prototype's signals"

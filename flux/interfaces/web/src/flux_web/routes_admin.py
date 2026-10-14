@@ -22,6 +22,7 @@ from .runs import login_path
 from .result_preferences import preferences
 from .store import User
 from .workspace import Workspace, WorkspaceError
+from flux_loop.words import plural
 
 RESTART_WAIT_S = 30.0
 
@@ -240,7 +241,7 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
     def stop_all(body: StopAll, a: User = Depends(admin_of)) -> dict[str, Any]:
         said = {f"{u}/{app_name}": ctx.actions.request(r, store.user(name=u), a, now=body.now)
                 for (u, app_name), r in _live_loops().items()}
-        store.audit(a.name, "stop all", f"{len(said)} loop(s){' now' if body.now else ''}")
+        store.audit(a.name, "stop all", f"{plural(len(said), 'loop')}{' now' if body.now else ''}")
         return {"stopped": said}
 
     @app.post("/api/admin/restart-all")
@@ -375,7 +376,7 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
         cfg["path"] = [d.strip() for d in body.path if d.strip()]
         store.server_set("sandbox", cfg)
         store.audit(a.name, "sandbox settings", f"network {cfg['network']}: {', '.join(cfg['allow']) or '-'}; "
-                    f"PATH +{len(cfg['path'])}{' +login' if cfg['login_path'] else ''}; homes start with {len(cfg['home_seed'])} path(s)")
+                    f"PATH +{len(cfg['path'])}{' +login' if cfg['login_path'] else ''}; homes start with {plural(len(cfg['home_seed']), 'path')}")
         return {"config": cfg}
 
     @app.get("/api/audit")
@@ -572,7 +573,7 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
         except ValueError as exc:
             raise fail(exc) from exc
         store.server_set("stderr_masks", got)
-        store.audit(a.name, "stderr masks", f"{len(got)} pattern(s)")
+        store.audit(a.name, "stderr masks", f"{plural(len(got), 'pattern')}")
         return {"masks": got}
 
     @app.post("/api/admin/reprice")
@@ -581,6 +582,6 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
         from .pricing import reprice as price_past
 
         got = price_past(store, runs)
-        store.audit(a.name, "past turns priced", f"{got['turns']} turn(s) in {got['loops']} loop(s), ${got['usd']:.2f}"
+        store.audit(a.name, "past turns priced", f"{plural(got['turns'], 'turn')} in {plural(got['loops'], 'loop')}, ${got['usd']:.2f}"
                     + (f"; skipped, running: {', '.join(got['skipped'])}" if got["skipped"] else ""))
         return got

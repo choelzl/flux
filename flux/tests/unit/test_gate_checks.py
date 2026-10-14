@@ -124,7 +124,7 @@ def test_task_check_lists_the_checks_with_their_pass_rule(tmp_path, capsys):
         "    golden: {run: '{python} {home}/check.py WRONG {artifact} log', fail_re: 'x[1-9]'}\n")
     main(["task", "check", str(tmp_path / "t.problem.yaml")])
     out = capsys.readouterr().out
-    assert "gate: 2 check(s) in order" in out
+    assert "gate: 2 checks in order" in out
     assert out.index("1. lint: ") < out.index("2. golden: ")
     assert "passes when `(\\d+) failing` reads 0; exit 3 = did not build" in out
     assert "passes when no line matches `x[1-9]`" in out

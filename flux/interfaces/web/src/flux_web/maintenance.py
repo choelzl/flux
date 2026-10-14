@@ -20,6 +20,7 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
+from flux_loop.words import plural
 
 __all__ = ["TASKS", "Maintenance"]
 
@@ -254,8 +255,8 @@ class Maintenance:
             except sqlite3.Error as exc:
                 errors.append(f"{label}: {exc}")
         if errors:
-            raise ValueError(f"{len(errors)} of {len(dbs)} database(s) failed: " + "; ".join(errors[:6]) + self._skipped(busy))
-        return f"{len(dbs)} database(s) checked, all OK" + self._skipped(busy), False
+            raise ValueError(f"{len(errors)} of {plural(len(dbs), 'database')} failed: " + "; ".join(errors[:6]) + self._skipped(busy))
+        return f"{plural(len(dbs), 'database')} checked, all OK" + self._skipped(busy), False
 
     def _documents(self, _p: dict[str, Any], loop: tuple[str, str] | None) -> tuple[str, bool]:
         from flux_loop.document import confined, load_task
@@ -273,8 +274,8 @@ class Maintenance:
             except Exception as exc:  # noqa: BLE001 -- report one document and still check the others
                 errors.append(f"{u}/{a}: {' '.join(str(exc).split())[:200]}")
         if errors:
-            raise ValueError(f"{len(errors)} of {len(idle)} loop document(s) failed: " + "; ".join(errors[:6]) + self._skipped(busy))
-        return f"{len(idle)} loop document(s) checked, all OK" + self._skipped(busy), False
+            raise ValueError(f"{len(errors)} of {plural(len(idle), 'loop document')} failed: " + "; ".join(errors[:6]) + self._skipped(busy))
+        return f"{plural(len(idle), 'loop document')} checked, all OK" + self._skipped(busy), False
 
     def _backups(self, p: dict[str, Any], _loop: Any) -> tuple[str, bool]:
         root = self.store.data / "backups"
@@ -305,7 +306,7 @@ class Maintenance:
         old = backups[max(1, int(p["keep_backups"])):]
         for d in old:
             shutil.rmtree(d)
-        return f"saved backups/{dest.name}/ (database and encryption key if present); {len(old)} older backup(s) removed", True
+        return f"saved backups/{dest.name}/ (database and encryption key if present); {plural(len(old), 'older backup')} removed", True
 
     def _scratch(self, p: dict[str, Any], _loop: Any) -> str:
         root, why = scratch_root(self.store.data)
@@ -332,7 +333,7 @@ class Maintenance:
         from .admin import reap
 
         gone = reap()
-        return f"{len(gone)} container(s) removed" + (f": {', '.join(c['name'] for c in gone[:5])}" if gone else ""), bool(gone)
+        return f"{plural(len(gone), 'container')} removed" + (f": {', '.join(c['name'] for c in gone[:5])}" if gone else ""), bool(gone)
 
     def _caches(self, p: dict[str, Any], loop: tuple[str, str] | None) -> str:
         from .admin import _key, cache_root, clean
@@ -347,7 +348,7 @@ class Maintenance:
             for what in ("tools", "scratch"):
                 freed += clean(cache.name, what)
             n += 1
-        return f"{n} loop cache(s) cleaned, {_mb(freed)} freed" + self._skipped(busy), freed > 0
+        return f"{plural(n, 'loop cache')} cleaned, {_mb(freed)} freed" + self._skipped(busy), freed > 0
 
     def _disk(self, p: dict[str, Any], _loop: Any) -> str:
         from .admin import cache_root, machine
@@ -406,8 +407,8 @@ class Maintenance:
             finally:
                 con.close()
             after += _size_db(db)
-        kept = f"; {moved} trial(s)' designs now kept once" if moved else ""
-        return (f"{len(dbs)} database(s) compacted, {_mb(before)} to {_mb(after)}" + kept + self._skipped(busy),
+        kept = f"; {plural(moved, 'trial')}' designs now kept once" if moved else ""
+        return (f"{plural(len(dbs), 'database')} compacted, {_mb(before)} to {_mb(after)}" + kept + self._skipped(busy),
                 bool(dbs) or bool(moved))
 
     def _logs(self, p: dict[str, Any], loop: tuple[str, str] | None) -> str:
@@ -420,7 +421,7 @@ class Maintenance:
                 continue
             freed += _condense(log, int(keep))
             n += 1
-        return f"{n} log(s) condensed, {_mb(freed)} freed" + self._skipped(busy), n > 0
+        return f"{plural(n, 'log')} condensed, {_mb(freed)} freed" + self._skipped(busy), n > 0
 
     def _tables(self, p: dict[str, Any], _loop: Any) -> str:
         now = time.time()
@@ -441,7 +442,7 @@ class Maintenance:
 
             self.store.server_update(f"notices:{u.name}", prune)     # D905: a notice added meanwhile is kept
             notes += gone[0]
-        return (f"{s} session(s), {i} invitation(s), {f} login failure(s), {notes} notification(s), {a} audit line(s) removed",
+        return (f"{plural(s, 'session')}, {plural(i, 'invitation')}, {plural(f, 'login failure')}, {plural(notes, 'notification')}, {plural(a, 'audit line')} removed",
                 bool(s or i or f or notes or a))
 
     def _orphans(self, _p: dict[str, Any], _loop: Any) -> tuple[str, bool]:
@@ -451,7 +452,7 @@ class Maintenance:
         users = {u.name for u in self.store.users()}
         gone = [c for c in caches(live, users) if c["kind"] == "gone"]   # a user's, its loop deleted
         freed = sum(clean(c["key"], "all") for c in gone)
-        return f"{len(gone)} orphaned cache(s) removed, {_mb(freed)} freed", bool(gone)
+        return f"{plural(len(gone), 'orphaned cache')} removed, {_mb(freed)} freed", bool(gone)
 
     def _runs(self, p: dict[str, Any], _loop: Any) -> tuple[str, bool]:
         keep = max(1, int(p["keep"]))
@@ -460,7 +461,7 @@ class Maintenance:
                 "DELETE FROM runs WHERE ended IS NOT NULL AND id NOT IN ("
                 " SELECT id FROM (SELECT id, ROW_NUMBER() OVER (PARTITION BY user_id, app ORDER BY id DESC) AS k FROM runs)"
                 " WHERE k <= ?)", (keep,)).rowcount
-        return f"{n} old start(s) removed, the latest {keep} of each loop kept", n > 0
+        return f"{plural(n, 'old start')} removed, the latest {keep} of each loop kept", n > 0
 
     def _journals(self, p: dict[str, Any], loop: tuple[str, str] | None) -> tuple[str, bool]:
         from .admin import _key, cache_root
@@ -476,7 +477,7 @@ class Maintenance:
                 got = _condense_journal(ev, int(keep))
                 if got:
                     n, freed = n + 1, freed + got
-        return f"{n} journal(s) condensed, {_mb(freed)} freed", n > 0
+        return f"{plural(n, 'journal')} condensed, {_mb(freed)} freed", n > 0
 
     def _transcripts(self, p: dict[str, Any], loop: tuple[str, str] | None) -> tuple[str, bool]:
         from .admin import _key, cache_root
@@ -491,7 +492,7 @@ class Maintenance:
                 got = _thin_transcript(tr, cutoff)
                 if got:
                     n, freed = n + 1, freed + got
-        return f"{n} transcript(s) thinned, {_mb(freed)} freed", n > 0
+        return f"{plural(n, 'transcript')} thinned, {_mb(freed)} freed", n > 0
 
     def _passes(self, p: dict[str, Any], loop: tuple[str, str] | None) -> tuple[str, bool]:
         import re as _re
@@ -517,7 +518,7 @@ class Maintenance:
                     shutil.rmtree(d, ignore_errors=True)
                     if not d.exists():
                         n, freed = n + 1, freed + size
-        return f"{n} pass folder(s) removed, {_mb(freed)} freed", n > 0
+        return f"{plural(n, 'pass folder')} removed, {_mb(freed)} freed", n > 0
 
     def _refused(self, p: dict[str, Any], _loop: Any) -> tuple[str, bool]:
         import json
@@ -549,7 +550,7 @@ class Maintenance:
             os.replace(tmp, f)
             st = f.stat()
             self.store.server_set("refusals_read", {"ino": st.st_ino, "offset": st.st_size - len(late)})
-        return f"{dropped} refused connection(s) older than {p['days']:g} days removed", True
+        return f"{plural(dropped, 'refused connection')} older than {p['days']:g} days removed", True
 
     def _baseline(self, _p: dict[str, Any], loop: tuple[str, str] | None) -> tuple[str, bool]:
         """D1005: marks the loop -- its next start measures the baseline again, then the mark goes."""
@@ -587,7 +588,7 @@ class Maintenance:
             if n:
                 gone += n
                 per.append(f"{u}/{a}: {n}")
-        return (f"{gone} empty start(s) removed" + (f" ({', '.join(per[:6])})" if per else "")
+        return (f"{plural(gone, 'empty start')} removed" + (f" ({', '.join(per[:6])})" if per else "")
                 + self._skipped(busy)), gone > 0
 
     def _stale(self, p: dict[str, Any], loop: tuple[str, str] | None) -> str:
@@ -618,7 +619,7 @@ class Maintenance:
                         gone += len(ids)
                     finally:
                         con.close()
-        head = (f"{found} stale row(s), {gone} deleted" if p.get("delete") else f"{found} stale row(s) found, none deleted (delete: off)")
+        head = (f"{plural(found, 'stale row')}, {gone} deleted" if p.get("delete") else f"{plural(found, 'stale row')} found, none deleted (delete: off)")
         return head + (f" -- {'; '.join(per[:6])}" if per else "") + self._skipped(busy), bool(found)
 
 

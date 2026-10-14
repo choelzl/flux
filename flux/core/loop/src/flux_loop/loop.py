@@ -17,6 +17,7 @@ from .records import _record_trial, _reload, _reload_measured
 from .rejection import reject
 from .types import (BuildError, Candidate, Improve, LoopRequest, LoopResult, LoopState,
                     Scored, SubLoop, Verdict)
+from .words import plural
 
 __all__ = ["run_loop"]
 
@@ -41,7 +42,7 @@ def _describe_parts(goals: list, problem: Problem, state: LoopState) -> str:
                 else f"best on record {state.best[key][0]:g}" if key in state.best
                 else "a sub-loop" if not isinstance(g, str) else "to write")
         lines.append(f"{key}: {note}")
-    return "\n".join(lines) + f"\n({len(goals)} part(s), in the order the problem declares them)"
+    return "\n".join(lines) + f"\n({plural(len(goals), 'part')}, in the order the problem declares them)"
 
 
 def _number_on(problem: Problem, state: LoopState) -> None:
@@ -164,6 +165,8 @@ def run_loop(problem: Problem, request: LoopRequest, *, proposer: Any | None = N
         from .baseline import run_baseline
 
         return run_baseline(problem, state)
+    if state.depth == 0 and request.steps != 0 and hasattr(state.records, "pass_began"):   # D1094: not the decision over a wave
+        state.records.pass_began()
     _rig_agent(problem, state)
     # Both kinds of work are asked for before anything is reloaded (D457): a problem may have
     # batches, parts, or both. Only parts carry memory to re-verify, so the record is read
@@ -237,7 +240,7 @@ def run_loop(problem: Problem, request: LoopRequest, *, proposer: Any | None = N
         if state.ahead is not None:
             waited = state.ahead.drain()
             if waited:
-                say(f"  waited for {waited} measurement(s) taken ahead")
+                say(f"  waited for {plural(waited, 'measurement')} taken ahead")
     state.drain()
 
     if state.fresh:          # something changed after the last climb (or nothing climbed yet)
@@ -399,7 +402,7 @@ def _run_steps(problem: Problem, state: LoopState, searching: "_SearchSession | 
             if request.budget_s is not None and time.monotonic() - started >= request.budget_s:
                 state.stopped = "the wall clock"
                 state.say(f"  the wall-clock budget ({request.budget_s:g}s) is spent after "
-                          f"{step} step(s)")
+                          f"{plural(step, 'step')}")
                 break
             waiting = list(todo)
             if one and not waiting and not state.improve and not directed and state.built == built_before:
@@ -446,7 +449,7 @@ def _run_steps(problem: Problem, state: LoopState, searching: "_SearchSession | 
             elif kind == "batch":
                 # The DSE box, whole (D546, D547): the policy's proposal and the batch through
                 # the gate and first stage, so the generator's own time is attributed here.
-                with _phase("DSE: batch", why="points proposed, checked and measured on the first stage") as out:
+                with _phase("DSE: batch", why="the points this pass tries") as out:
                     # D738: one pass, one design (or `budget.batch` of them): the search picks
                     # between passes, from what the last ones measured
                     batch = searching.take(max(1, int(request.batch or 1) - carried), state)
@@ -456,6 +459,16 @@ def _run_steps(problem: Problem, state: LoopState, searching: "_SearchSession | 
                         state.search_done = True
                         continue           # and this step was not spent
                     out["candidates"] = len(batch)
+                    try:                                # D1094: how much of the space this is -- "1 of 4 points"
+                        from .dse import size
+
+                        space = problem.space(state) if hasattr(problem, "space") else {}
+                        if space:
+                            out["points"] = size(space)
+                            out["measured before"] = len({s.candidate.key() for s in state.scored
+                                                          if not s.candidate.meta.get("baseline")})
+                    except Exception:  # noqa: BLE001 -- a space it cannot say is not a reason to stop
+                        pass
                     state.step = step + 1
                     got = []
                     try:
@@ -487,7 +500,7 @@ def _run_steps(problem: Problem, state: LoopState, searching: "_SearchSession | 
                 _publish_mentor(problem, state)
         if one and not directed and state.built == built_before and not state.out_of_time and not state.agent_broken:
             # D845: a loop that can draft never rests: it tries again next pass
-            state.stopped = f"no new design passed the gate in {step} step(s); the next pass tries again"
+            state.stopped = f"no new design passed the gate in {plural(step, 'step')}; the next pass tries again"
             state.say(f"  {state.stopped}")
         if (not (one and not directed) and not state.improved and not state.pool and not todo and not live and not paused
                 and not (set(state.admitted) - admitted_before) and (state.rested or not state.sent_back)
@@ -512,8 +525,8 @@ def _run_steps(problem: Problem, state: LoopState, searching: "_SearchSession | 
         if step >= request.steps and (live or todo or state.improve):
             state.stopped = state.stopped or "the step budget"
             if live:
-                state.lessons.append(f"[loop] the search used every one of its {request.steps} "
-                                     "step(s); the problem may have had more to propose")
+                state.lessons.append(f"[loop] the search used every one of its {plural(request.steps, 'step')}; "
+                                     "the problem may have had more to propose")
     finally:
         if searching is not None and searching.done:
             searching.close()
@@ -580,7 +593,7 @@ def _explore_items(problem: Problem, state: LoopState) -> list[Improve]:
                              "there is a reasoned hypothesis worth measuring; it must still pass the gate.",
                              stage=stage, subgoal=sub, explore=True, dse="explore"))
     if items:
-        state.say(f"  exploring: {len(items)} design(s) go back to the generator for a better one")
+        state.say(f"  exploring: {plural(len(items), 'design')} go back to the generator for a better one")
     elif not state.admitted:
         # D842: an exploring pass with nothing to explore from says so, not a silent "nothing left to do"
         state.say("  exploring: nothing to explore from -- no design admitted yet, on this pass or the record's")
@@ -627,7 +640,7 @@ def _next_kind(problem: Problem, state: LoopState, waiting: list, live: bool) ->
     if len(kinds) <= 1:
         return kinds[0] if kinds else "part"
     with _phase("propose: what next", why=", ".join(kinds)) as out:
-        out["choices"] = (f"improve: {len(state.improve)} design(s) an evaluator sent back; " if state.improve else "") \
+        out["choices"] = (f"improve: {plural(len(state.improve), 'design')} an evaluator sent back; " if state.improve else "") \
             + (f"part: {', '.join(str(w) for w in waiting if w is not None)} still to prove; " if waiting else "") \
             + ("batch: candidates from the search" if live else "")
         try:
@@ -970,8 +983,8 @@ def _route(problem: Problem, state: LoopState, stage: str, scored: list[Scored])
         return
     state.improve.extend(back)
     state.sent_back += len(back)
-    state.say(f"  [{stage}] {len(back)} design(s) sent back to the generator to improve")
-    state.lessons.append(f"[{stage}] {len(back)} design(s) went back to the generator rather "
+    state.say(f"  [{stage}] {plural(len(back), 'design')} sent back to the generator to improve")
+    state.lessons.append(f"[{stage}] {plural(len(back), 'design')} went back to the generator rather "
                          f"than on to the next stage: {back[0].why[:120]}")
 
 
@@ -1183,7 +1196,7 @@ def _climb(problem: Problem, state: LoopState, goals: list[str]) -> None:
     say = state.say
     state.fresh = False
     stages = problem.stages()
-    with _phase("template-fill: compose", why=f"{len(state.admitted)} part(s)", quiet=True):
+    with _phase("template-fill: compose", why=f"{plural(len(state.admitted), 'part')}", quiet=True):
         composed = problem.compose(dict(state.admitted), state) if state.admitted else None
     if composed is not None and stages:
         many = list(composed) if isinstance(composed, (list, tuple)) else [composed]
@@ -1224,7 +1237,7 @@ def _climb(problem: Problem, state: LoopState, goals: list[str]) -> None:
             climbers = list(problem.finalists(front, state, stage))
             out["frontier"] = "\n".join(f"{c.candidate.name}: {c.metrics}" for c in front[:24]) or "(empty)"
             out["climbing"] = ", ".join(c.candidate.name for c in climbers) or "(none)"
-        say(f"{stage}: {len(climbers)} candidate(s) climbing from {below}")
+        say(f"{stage}: {plural(len(climbers), 'candidate')} climbing from {below}")
         got = measure_many(problem, state, [c.candidate for c in climbers], stage)
         problem.review(stage, got, state)
         if not got:
@@ -1394,7 +1407,7 @@ def _conclude(problem: Problem, state: LoopState, goals: list[str]) -> LoopResul
     if goals:
         unproven = [g for g in goals if g not in state.admitted]
         if unproven:
-            _note_once(state, f"{len(unproven)} part(s) not yet proven: "
+            _note_once(state, f"{plural(len(unproven), 'part')} not yet proven: "
                               f"{', '.join(unproven)}")
         state.lessons.append(
             f"[loop] {len(state.admitted)}/{len(goals)} parts proven: "
@@ -1420,12 +1433,12 @@ def _conclude(problem: Problem, state: LoopState, goals: list[str]) -> LoopResul
     rejected = [s for s in pool if s.payload.get("rejected") or s.candidate.key() in state.rejected]
     if rejected:                        # D1040: a rejected result stays on the record, never chosen
         pool = [s for s in pool if s not in rejected]
-        _note_once(state, f"{len(rejected)} result(s) rejected, not chosen: " + ", ".join(sorted({s.name for s in rejected}))[:300])
+        _note_once(state, f"{plural(len(rejected), 'result')} rejected, not chosen: " + ", ".join(sorted({s.name for s in rejected}))[:300])
         if not pool:
             return _result(problem, state, None, "every measured design was rejected", [], [])
     with _phase("frontier", why=f"{len(pool)} on {reached}", quiet=True):
         front = list(problem.frontier(pool, state))
-    with _phase("decide", why=f"{len(pool)} in the pool") as out:
+    with _phase("decide", why=f"{len(pool)} in the pool" + (f", {len(rejected)} rejected" if rejected else "")) as out:   # D1094: the rows it shows
         pick, decided_by, closest, unmet, standing, ranked_by = _decide(problem, state, pool, stages, out)
     rounds = _rounds(problem, request, "decision")
     while pick is not None and rounds > 0:
@@ -1553,7 +1566,7 @@ def _survivors(problem: Problem, state: LoopState, stage: str, scored: list[Scor
     survivors = list(survivors)
     dropped = len(scored) - len(survivors)
     if dropped > 0:
-        line = (f"[{stage}] {dropped} of {len(scored)} measured design(s) went no further"
+        line = (f"[{stage}] {dropped} of {plural(len(scored), 'measured design')} went no further"
                 + (f": {why}" if why else ""))
         state.say(f"  {line}")
         state.lessons.append(line)

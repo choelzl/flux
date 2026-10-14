@@ -14,6 +14,7 @@ import dataclasses
 import json
 import os
 from typing import TYPE_CHECKING, Any
+from .words import plural
 
 if TYPE_CHECKING:  # pragma: no cover
     from .problem import Problem
@@ -433,7 +434,7 @@ def plan_with_agent(problem: "Problem", state: "LoopState", clean: dict[str, Any
             except Exception as exc:  # noqa: BLE001
                 errors += [f"the problem refused the plan: {exc!s:.120}"]
         if not errors:
-            out["agent"] = f"planned in {round_ + 1} round(s): {str(got.get('why') or '')[:300]}"
+            out["agent"] = f"planned in {plural(round_ + 1, 'round')}: {str(got.get('why') or '')[:300]}"
             return got
         out[f"round {round_ + 1} refused"] = "\n".join(errors)
     state.say("  plan: the agent's plan was refused three times (" + "; ".join(errors)[:200] + "); the defaults stand for the open fields")

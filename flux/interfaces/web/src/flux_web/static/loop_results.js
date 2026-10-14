@@ -2,7 +2,7 @@
 // charts (D892: out of loopPage; D916: Results and Graphs two views).
 
 import { codeBlock } from "./highlight.js";
-import { act, ago, api, card, dialog, empty, enc, h, skeleton, toast } from "./ui.js";
+import { act, ago, api, card, dialog, empty, enc, h, skeleton, toast, plural } from "./ui.js";
 import { bestChart, designPoints, directionOf, groupList, groupStyles, legend, paretoChart, scopesOf } from "./charts.js";
 import { diffView, lineDiff } from "./configure.js";
 import { viewerTools } from "./viewer.js";
@@ -10,6 +10,23 @@ import { dictionaryClasses, defaultMainMeasurements, designLabels, mainMeasureme
 import { measurementComparison } from "./measurementdata.js";
 
 // `ctx`: the loop's page as its tabs read it (loop_page.js).
+
+/** D1094: the designs only their checks judged -- refused there, or passed with no stage measuring
+    them (chosen on its checks): apart from the measured, one line each; "" when there is none. */
+function checkedCard(ctx, r) {
+  const rows = r.checked || [];
+  if (!rows.length) return "";
+  const own = (n) => String(n) === ctx.name ? "whole" : String(n).startsWith(`${ctx.name}#`) ? String(n).slice(ctx.name.length) : String(n);
+  const chosen = String((r.passes || []).map(p => p.conclusion?.decision).filter(Boolean).at(-1) || "");
+  return card(`Checked, not measured (${rows.length})`, h("div", { class: "scroll-x" }, h("table", { class: "list compact checked-designs" },
+    h("thead", {}, h("tr", {}, h("th", {}, "Design"), h("th", {}, "Checks"), h("th", {}, "Why"), h("th", {}, "When"))),
+    h("tbody", {}, rows.map(u => h("tr", { class: u.verdict === "failed" ? "failed" : "" },
+      h("td", { class: "mono", title: u.name }, u.name === chosen ? "★ " : "", own(u.name)),
+      h("td", {}, u.verdict === "failed" ? h("span", { class: "bad" }, "✗ failed") : u.verdict === "rejected" ? h("span", { class: "muted" }, "⊘ rejected") : h("span", { class: "ok" }, "✓ passed"), u.name === chosen ? " · chosen" : ""),
+      h("td", { class: "small" }, (u.why || "").split("\n")[0] || "—"),
+      h("td", { class: "muted small" }, u.when ? ago(Date.parse(u.when) / 1000) : "")))))),
+    { cls: "checked-card" });
+}
 
 /** The loop's designs (D690): accepted or failed, with their measurements against the limits. */
 function resultsView(ctx, r) {
@@ -142,7 +159,7 @@ function resultsView(ctx, r) {
       h("table", { class: "list compact" }, h("thead", {}, h("tr", {}, h("th", {}, "stage"), h("th", {}, "metric"),
           h("th", { class: "num" }, "A ", verdictPill(a)), h("th", { class: "num" }, "B ", verdictPill(b)), h("th", { class: "num" }, "B − A"))),
         h("tbody", {}, rows.map(row => h("tr", {}, h("td", { class: "muted" }, row.st), h("td", {}, row.m), cell(row.va), cell(row.vb), delta(row))))),
-      h("h3", {}, "Source", ops ? h("span", { class: "muted" }, changed ? ` · ${changed} line(s) differ` : " · the same") : ""),
+      h("h3", {}, "Source", ops ? h("span", { class: "muted" }, changed ? ` · ${plural(changed, "line")} differ` : " · the same") : ""),
       ops ? (changed ? diffView(ops) : empty("The two sources are the same.")) : empty("A source is missing.")),
       [["Close", null, "primary"]]);
   }
@@ -309,7 +326,7 @@ function resultsView(ctx, r) {
     return h("div", { class: "graphs" },
       card(null, [scopeBox, h("p", { class: "muted small graphs-note" }, `Measured search designs are drawn (${r.designs.filter(d => !d.baseline).length}); baseline measurements are gray reference lines. The table's filter does not apply. `,
           "The best so far and the front count only designs that meet every requirement", groups.length ? ", within the scope" : "", "."),
-        legend(styles, { front: true, pending: r.designs.some(d => d.verdict === "pending"), baseline: r.designs.some(d => d.baseline) })], { cls: "graphs-ctl" }),
+        legend(styles, { front: true, rejected: r.designs.some(d => d.verdict === "rejected"), pending: r.designs.some(d => d.verdict === "pending"), baseline: r.designs.some(d => d.baseline) })], { cls: "graphs-ctl" }),
       h("div", { class: "grid-2 charts" }, card("Pareto front", paretoBox), card("Improvement by design", timeBox)),
       card(null, graphsDetail, { cls: "detail-card" }));
   }
@@ -321,7 +338,8 @@ function resultsView(ctx, r) {
       h("span", { class: "muted" }, `measured at ${dec.shown}`),
       ...mainMeasurements(ctx, r.metrics, defaultMainMeasurements(r)).map(m => {
         const display = measurementText(dec, m, r.decision_measurements?.[m] ? () => r.decision_measurements[m] : comparison, fmt, relativeMeasurement(ctx, m));
-        return h("span", { class: "mono small", "data-summary-metric": m, title: display.title }, `${m} ${display.text || "—"}`);
+        const ag = r.metric_info?.[m]?.aggregate || r.metric_groups?.[m]?.aggregate;     // D1094: "sim_us (sum) 26"
+        return h("span", { class: "mono small", "data-summary-metric": m, title: display.title }, `${m}${ag && ag !== "none" ? ` (${ag})` : ""} ${display.text || "—"}`);
       })]
     : r.closest ? [h("strong", {}, "No feasible design yet"), h("span", { class: "muted" }, "· closest"), near ? nameBtn(near) : h("span", { class: "mono" }, r.closest.name),
       (r.closest.reasons || []).length ? h("span", { class: "muted small" }, `not met: ${r.closest.reasons.join("; ")}`) : ""]
@@ -330,8 +348,9 @@ function resultsView(ctx, r) {
       r.total > r.designs.length ? ` · the newest ${r.designs.length} of ${r.total} designs` : "")),
     h("div", { class: "actions" }, ...viewerTools(() => shownEl, { title: "Results", rawUrl: `${base}/results${qs}${qs ? "&" : "?"}raw=true` }),
       r.answer ? h("a", { class: "btn small", href: `/api/apps/${enc(name)}/file?path=runs/answer.json&download=1${q}` }, "Answer (JSON)") : "",
-      h("a", { class: "btn small", href: `${base}/report${qs}`, target: "_blank", rel: "noopener" }, "Open the report"))), decisionLine, invalidated]);
-  const resultsEl = h("div", { class: "split results" }, card(null, [chipBox, table]), card(null, resultsDetail, { cls: "detail-card" }));
+      h("a", { class: "btn small", href: `${base}/report${qs}`, target: "_blank", rel: "noopener" }, "Report"))), decisionLine, invalidated]);
+  const resultsEl = h("div", {}, h("div", { class: "split results" }, card(null, [chipBox, table]), card(null, resultsDetail, { cls: "detail-card" })),
+    checkedCard(ctx, r));
   /** The view to show, "results" or "graphs": the decision and the detail move to it; the graphs are
       built the first time (D916) and kept, as are the selection, the filter and the controls. */
   function show(v) {
@@ -344,4 +363,4 @@ function resultsView(ctx, r) {
   return { show, built: () => !!graphsEl };
 }
 
-export { resultsView };
+export { checkedCard, resultsView };

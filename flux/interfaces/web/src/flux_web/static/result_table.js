@@ -207,7 +207,7 @@ export function designLabels(designs, appName) {
   });
   const parts = parsed.some(({ d, group }) => d.part || group);
   const entries = parsed.map(({ d, match, group }) => ({ d,
-    label: match ? `${parts ? group || "whole" : ""}#${match[2]}` : d.name }));
+    label: match ? `${parts ? group || "whole" : ""}#${match[2]}` : (d.base || d.name) === appName ? "whole" : d.name }));   // D1094: the parts' composition
   const byLabel = new Map();
   for (const entry of entries) {
     if (!byLabel.has(entry.label)) byLabel.set(entry.label, []);

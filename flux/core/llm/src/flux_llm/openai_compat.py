@@ -504,7 +504,7 @@ class OpenAIChatProposer:
                     self._compact_rounds(messages, budget, out, notes)
                 # one name for every round, so the timing tab sums a turn into one row
                 with phase("llm: round", why=f"hop {round_ + 1} of {budget.hops + 1}"
-                           + (", the answer, no tools" if last else "") + f", {len(messages)} message(s)") as inner:
+                           + (", the answer, no tools" if last else "") + f", {len(messages)} {'message' if len(messages) == 1 else 'messages'}") as inner:
                     try:
                         message = self._exchange(messages, schema if last else None, think, inner,
                                                  tools=None if last or prompted else tools, hop_share=budget.hop_share,

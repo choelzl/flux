@@ -46,6 +46,7 @@ from .task_measure import MeasureMixin, _metrics_in  # noqa: F401
 from .task_knowledge import KnowledgeMixin, library_queries  # noqa: F401
 from .task_draft import DraftMixin, _printed_artifact  # noqa: F401
 from .task_parts import PartsMixin
+from .words import plural
 
 __all__ = ["PromptProblem", "model_use", "task_report_lines"]
 
@@ -638,14 +639,14 @@ def task_report_lines(task: TaskSpec, out: Any, problem: Any = None) -> list[str
         lines.append("  NO CANDIDATE SURVIVED -- see NOT ESTABLISHED below")
     pool = out.confirmed or out.frontier
     if len(pool) > 1:
-        lines.append(f"  frontier ({len(pool)} point(s)):")
+        lines.append(f"  frontier ({plural(len(pool), 'point')}):")
         for p in pool:
             lines.append("    " + p.name + ": " + ", ".join(f"{k}={v:g}" for k, v in p.metrics.items()))
     if out.admitted:
         lines.append("  proven: " + ", ".join(f"{k}={c.name}" for k, c in sorted(out.admitted.items())))
     cited = (getattr(out, "provenance", None) or {}).get("library") or []
     if cited:                                                  # D648
-        lines.append(f"  library: the prompts cited {len(cited)} file(s): " + ", ".join(cited))
+        lines.append(f"  library: the prompts cited {plural(len(cited), 'file')}: " + ", ".join(cited))
     skipped = problem.skipped_stages() if callable(getattr(problem, "skipped_stages", None)) else []
     for name, tools in skipped:
         lines.append(f"  NOT RUN: stage {name} -- needs {', '.join(tools)}, not on PATH; every number above "

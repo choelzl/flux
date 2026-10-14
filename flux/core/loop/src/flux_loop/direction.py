@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from typing import Any
 import threading
+from .words import plural
 
 __all__ = ["choose", "decide", "stood"]
 
@@ -158,7 +159,7 @@ def decide(problem: Any, state: Any, standing: Any, said: str, *, consult: bool 
     ask = getattr(orch, "direction", None)
     if consult and callable(ask):
         lines = [f"The standing design: {standing.name}. {said}",
-                 f"The standing design has stood for {n} pass(es)." if n else "The last pass moved the standing design.",
+                 f"The standing design has stood for {plural(n, 'pass', 'passes')}." if n else "The last pass moved the standing design.",
                  guidance(problem, state, active=False),
                  "improve: any reasoned improvement, local or structural; explore: a new approach, with no need to win immediately; "
                  "tune: parameters or implementation choices; finetune: small edits; variations: develop distinct alternatives; refine: use the existing ladder.",
@@ -180,4 +181,4 @@ def decide(problem: Any, state: Any, standing: Any, said: str, *, consult: bool 
     if n < after:
         return "improve", "choose a reasoned improvement; structural changes are allowed before stagnation", rule_scope
     pick = "explore" if (n - after) % 2 == 0 else "refine"
-    return pick, f"the decision has stood {n} pass(es): {'a new design' if pick == 'explore' else 'its ladder again'}, in turn", rule_scope
+    return pick, f"the decision has stood {plural(n, 'pass', 'passes')}: {'a new design' if pick == 'explore' else 'its ladder again'}, in turn", rule_scope

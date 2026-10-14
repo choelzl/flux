@@ -27,7 +27,7 @@ from typing import Any
 
 __all__ = ["content_key", "decision_doc", "decision_of", "decision_said", "designs", "measurement_summary", "thin"]
 
-_NOT_MEASURED = ("gate", "admit", "prototype")
+_NOT_MEASURED = ("gate", "admit", "prototype", "build", "fast-check")     # D1094: a draft's own check too
 
 
 def measurement_summary(result: dict[str, Any], decision: dict[str, Any]) -> dict[str, Any]:
@@ -361,12 +361,27 @@ def _when(s: Any) -> float:
         return 0.0
 
 
+def _checked(into: dict[str, dict[str, Any]], t: Any, how: str) -> None:
+    """D1094: a design its checks judged -- refused there ("failed", with why), or admitted ("passed")
+    and, when no stage measures it, chosen on its checks: listed apart from the measured ones, the
+    latest word on each name standing. A draft that never became a design (no name) is not one."""
+    c = t.candidate or {}
+    name = str(c.get("name") or "")
+    if not name or name == "?":
+        return
+    if how == "failed" and str(t.error or "").startswith("rejected by"):   # a critic's word on it, not its checks
+        how = "rejected"
+    into[name] = {"name": name, "key": trial_key(t), "verdict": how, "stage": t.stage or "",
+                  "why": str(t.error or "").strip() if how != "passed" else "", "when": t.created_at}
+
+
 def _designs(db: str, stages: list[dict[str, Any]], decision: str | None, limit: int | None,
              campaign: str | None = None, until: float | None = None) -> dict[str, Any]:
     from flux_store import CampaignStore
 
     store = CampaignStore(db)
     by: dict[tuple[str, str], dict[str, Any]] = {}
+    unmeasured: dict[str, dict[str, Any]] = {}
     definitions = {item["name"]: {k: v for k, v in item.items() if k != "name"}
                    for stage in stages for item in stage.get("metrics", []) if isinstance(item, dict) and "name" in item}
     groups = {name: {**spec, "metrics": []} for name, spec in definitions.items() if spec.get("type") == "dict"}
@@ -374,10 +389,16 @@ def _designs(db: str, stages: list[dict[str, Any]], decision: str | None, limit:
         for camp in store.list_campaigns():
             if campaign is not None and camp["campaign_id"] != campaign:
                 continue
+            for t in store.trials(camp["campaign_id"], status="refused", current=True, artifacts=False):
+                if (until is None or _when(t.created_at) <= until) and t.stage in _NOT_MEASURED:
+                    _checked(unmeasured, t, "failed")
             for t in store.trials(camp["campaign_id"], status="ok", current=True, artifacts=False):   # D1072
                 if until is not None and _when(t.created_at) > until:
                     continue
-                if t.result is None or not t.stage or t.stage in _NOT_MEASURED:
+                if t.stage in _NOT_MEASURED:
+                    _checked(unmeasured, t, "passed")       # D1094: checked; measured below, or never
+                    continue
+                if t.result is None or not t.stage:
                     continue
                 raw = {m: t.result.value_of(m) for m in t.result.metrics}
                 numbers = {k: float(v) for k, v in raw.items() if isinstance(v, (int, float)) and not isinstance(v, bool)}
@@ -494,7 +515,7 @@ def _designs(db: str, stages: list[dict[str, Any]], decision: str | None, limit:
     undone = next((d for d in out if d["decision"] and d.get("rejected")), None)
     if undone is not None:                                      # D1043: rejected since: the next pass decides again
         undone["decision"] = False
-    out.sort(key=lambda d: d["last"] or "", reverse=True)       # newest first,
+    out.sort(key=lambda d: d["first"] or "", reverse=True)      # newest first -- D1094: by when it was made, not re-measured,
     out.sort(key=lambda d: not (d["decision"] or d["closest"]))  # the decided design (or the closest) on top
     metrics: list[str] = []
     for parent, group in groups.items():
@@ -522,6 +543,9 @@ def _designs(db: str, stages: list[dict[str, Any]], decision: str | None, limit:
             "metric_groups": groups,
             "metric_info": {m: definitions.get(m) or next(({k: v for k, v in g.items() if k not in ("metrics", "type")}
                             for parent, g in groups.items() if m in g["metrics"]), {}) for m in metrics}}
+    measured_names = {d["base"] for d in out}
+    result["checked"] = sorted((u for u in unmeasured.values() if u["name"] not in measured_names),
+                               key=lambda u: u["when"] or "", reverse=True)[:200]
     chosen = next((d for d in out if d["decision"]), None)
     result["decision_measurements"] = measurement_summary({**result, "designs": out}, chosen) if chosen else {}
     return result

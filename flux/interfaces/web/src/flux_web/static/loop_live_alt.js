@@ -1,11 +1,11 @@
 // An optional Live layout: one task scope, three representations, one inspector.
-import { api, appHref, card, dur, empty, enc, h, loopStream, request, skeleton, streamPill, when } from "./ui.js";
+import { api, appHref, card, dur, empty, enc, h, loopStream, plural, request, skeleton, streamPill, when } from "./ui.js";
 import { liveTree } from "./live.js";
 import { sv } from "./charts.js";
 import { restoreScroll, scrollState } from "./scroll.js";
 import { campaignForStart, currentTask, notePass, taskScope, taskState as state, taskWindow } from "./live_alt_model.js";
 import { WORK_COLORS as COLORS, AGENT_COLOR, kindOf, workLabel, phaseKind, ownSpans } from "./work_style.js";
-import { boxKind, candidateOf, docNotes, flowBoxes, isDraft, triesOf, passKind, passName, passShort, repaired, taskLabel, taskNote } from "./live_alt_views.js";
+import { boxKind, candidateOf, ownView, docNotes, flowBoxes, isDraft, triesOf, passKind, passName, passShort, repaired, taskLabel, taskNote } from "./live_alt_views.js";
 import { nameLoop, nameTests, notReached, passSummary } from "./live_alt_inspector.js";
 
 // D977: work is classified as Live's timeline classifies it, so a task sits in the same lane in both
@@ -25,7 +25,7 @@ export function liveAltTab(ctx) {
   let resizeObserver = null, locateTimer = null, choice = null;
   let memo = null;                                    // D1089: per render -- the passes, and what each design run's answer is
   const folded = new Set(), opened = new Set(), viewPlaces = new Map(), allTries = new Set();   // D1044: lists showing every try
-let notes = {}, goals = [], chainPass, openBox = null;      // D1038: chainPass undefined until one is clicked -- null is the setup pass
+let notes = {}, goals = [], record = [], chainPass, openBox = null;      // D1038: chainPass undefined until one is clicked -- null is the setup pass
   // D1052: the notes written in a pass with no task to hang on (a scripted search) -- its boxes count them
   const passNotes = p => (inspector.model.notes || []).filter(n => notePass(n, inspector.model.marks) === p);
   let boxView = null, problem = null;
@@ -60,10 +60,18 @@ let notes = {}, goals = [], chainPass, openBox = null;      // D1038: chainPass 
   };
   const noteSaid = (n, p) => {
     const what = String(n.name).replace(/^\s*\w+\s*:\s*/, ""), k = n.output?.scopes, took = p !== undefined ? scopeOf(p) : "";
-    if (/^scope list$/i.test(what) && k != null) return Number(k) ? `${k} scope${Number(k) === 1 ? "" : "s"} listed; the pass ${took ? `took ${took}` : "picks one"}.` : "No scopes listed: the pass works on the whole design.";
+    if (/^scope list$/i.test(what) && k != null) return Number(k) ? `${k} scope${Number(k) === 1 ? "" : "s"} listed; the pass ${took ? `took ${took}` : "picks one"}.` : "The pass works on the whole design.";   // D1094: a loop without scopes is not told of them
     return what;
   };
-  function showBox(p, key) {
+  /** D1094: a document's value as YAML lines -- the words the person wrote, not JSON. */
+function asYaml(v, pad = "") {
+  const one = x => typeof x === "string" ? (/^[\w./{} -]*$/.test(x) && x.trim() === x && x ? x : JSON.stringify(x)) : String(x);
+  if (Array.isArray(v)) return v.map(x => x !== null && typeof x === "object" ? `${pad}-\n${asYaml(x, pad + "  ")}` : `${pad}- ${one(x)}`).join("\n");
+  if (v !== null && typeof v === "object") return Object.entries(v).map(([k, x]) => x !== null && typeof x === "object"
+    ? `${pad}${k}:\n${asYaml(x, pad + "  ")}` : `${pad}${k}: ${one(x)}`).join("\n");
+  return pad + one(v);
+}
+function showBox(p, key) {
     boxView = { p, key }; passView = NO_PASS; following = false; choice = null;
     if (pass === "current") pass = p == null ? "all" : String(p);
     render(); revealDetails();
@@ -184,10 +192,10 @@ let notes = {}, goals = [], chainPass, openBox = null;      // D1038: chainPass 
               ...Object.entries(b.notes[0].output || {}).filter(([k]) => k !== "scopes").map(([k, v]) => h("div", { class: "kv" }, h("div", { class: "k" }, k), h("div", { class: "val" }, typeof v === "object" ? JSON.stringify(v) : String(v)))))
           : b?.notes?.length ? h("div", { class: "alt-steps" }, b.notes.map(n => h("div", { class: "alt-step-row note" }, h("span", {}, String(n.name).replace(/^\s*\w+\s*:\s*/, "")),
             Object.keys(n.output || {}).length ? h("span", { class: "mono muted small" }, Object.entries(n.output).map(([k, v]) => `${k} ${typeof v === "object" ? JSON.stringify(v) : v}`).join(" · ")) : "")))
-          : h("p", { class: "muted" }, b?.done ? "Baseline stored as a reference." : later ? "No task was recorded for this phase in this pass." : "This phase has not started. No task output is available yet."),
+          : h("p", { class: "muted" }, b?.done ? "Baseline stored as a reference." : later ? "Nothing was recorded for it in this pass." : "Not started yet."),
         boxView.key === "record" && b?.done ? passSummary(boxView.p, rows.map(r => r.node), { pick: id => select(id) }).slice(1) : "",
-        config != null && !b?.runs.length && !b?.notes?.length ? h("section", {}, h("div", { class: "alt-label" }, `Configuration · ${problem.document || "problem.yaml"}`),   // D1059: what it is set to, until it runs
-          h("pre", { class: "val tall", "data-k": "configuration" }, typeof config === "string" ? config : JSON.stringify(config, null, 2)))
+        config != null && !b?.runs.length && !b?.notes?.length ? h("section", {}, h("div", { class: "alt-label" }, `Set to · ${problem.document || "problem.yaml"}`),   // D1059: what it is set to, until it runs
+          h("pre", { class: "val tall", "data-k": "configuration" }, typeof config === "string" ? config : asYaml(config)))   // D1094: as the document writes it, not JSON
           : notes[boxView.key] ? h("p", { class: "mono" }, notes[boxView.key]) : ""));
     } else if (passView !== NO_PASS) {
       const m = taskScope(inspector.model, "all").membership, nodes = [...inspector.model.nodes.values()].filter(n => (m.get(n.id) ?? null) === passView);
@@ -306,8 +314,10 @@ let notes = {}, goals = [], chainPass, openBox = null;      // D1038: chainPass 
     const now = Date.now() / 1000, secs = n => n.seconds ?? (n.t1 ?? now) - n.t0, below = failedUnder();
     // D1064: only the loop's own name goes -- a part's design keeps its part ("lo#1"); a baseline is "baseline"
     const idOf = (pre, id) => id === "#baseline" ? "baseline" : !pre || pre === ctx.name || pre === problem?.raw?.id || pre === String(problem?.raw?.id || "").split("/").pop() ? id : pre + id;
-    const short = c => String(c).replace(/^(.*?)(#[^#\s]+)$/, (_, pre, id) => idOf(pre, id));     // "#4": the loop's name is the page's already
-    const shortAll = t => typeof t === "string" ? t.replace(/([^\s·#]+)(#[^#\s]+)/g, (_, pre, id) => idOf(pre, id)) : t;   // D1059: every design said by its id
+    const loopNamed = w => w === ctx.name || w === problem?.raw?.id || w === String(problem?.raw?.id || "").split("/").pop();
+    const short = c => loopNamed(String(c)) ? "whole" : String(c).replace(/^(.*?)(#[^#\s]+)$/, (_, pre, id) => idOf(pre, id));     // "#4": the loop's name is the page's already; D1094: the parts' whole
+    const shortAll = t => typeof t === "string" ? t.replace(/([^\s·#]+)(#[^#\s]+)/g, (_, pre, id) => idOf(pre, id))
+      .replace(/(^|[\s★(])([^\s·#()]+)(?=$|[\s·,)])/g, (all, pre, w) => loopNamed(w) ? `${pre}whole` : all) : t;   // D1059: every design said by its id; D1094: the parts' whole
     const fold = (key, collapsed, label) => h("button", { type: "button", class: "alt-fold", "data-fold": String(key), "aria-label": `${collapsed ? "Expand" : "Collapse"} ${label}`,
       "aria-expanded": String(!collapsed), onclick: event => { event.stopPropagation(); toggleFold(key, collapsed); } }, collapsed ? "▸" : "▾");
     // D1044: a critique that rejected what it judged; D1075: guidance, "!" -- not a failure
@@ -331,7 +341,7 @@ let notes = {}, goals = [], chainPass, openBox = null;      // D1038: chainPass 
     const skipRows = (n, depth) => { for (const t of notReached(n)) out.push(h("div", { class: "alt-tree-row step quiet skipped", style: `--depth:${depth};--k:${COLORS.check}` },
       h("span", { class: "alt-fold-space" }), h("span", { class: "alt-task", title: "not run: a check before it failed" }, h("span", { class: "alt-task-state muted" }, "○"), h("span", { class: "alt-task-name muted" }, `${t} · not run`)))); };
     const line = (r, depth, named = "", box = false, extra = "", flat = false) => {
-      const n = r.node, under = flat ? [] : kids.get(n.id) || [], finished = n.t1 != null, collapsed = under.length && isFolded(n.id, finished, holds(n.id) && n.id !== selected);
+      const n = box ? ownView(r.node) : r.node, under = flat ? [] : kids.get(n.id) || [], finished = n.t1 != null, collapsed = under.length && isFolded(n.id, finished, holds(n.id) && n.id !== selected);
       const kind = phaseKind(n), opens = aiOf.get(n.id) || n, label = named || said(n, box), rejected = rejectedBy(n);
       const picked = n.id === selected || opens.id === selected || (merged.get(n.id) || []).some(c => c.id === selected);   // D1064: its merged command too
       out.push(h("div", { class: `alt-tree-row ${box ? "box" : "step"}${secs(n) < .05 && !under.length ? " quiet" : ""}`, style: `--depth:${depth};--k:${COLORS[kind] || (AI.test(String(n.params?.turn || n.name)) ? AGENT_COLOR : COLORS.setup)}` },
@@ -467,7 +477,7 @@ let notes = {}, goals = [], chainPass, openBox = null;      // D1038: chainPass 
     const madeOf = t => { const opens = aiOf.get(t.lead.id) || t.lead;
       return candidateOf(t.lead) || t.steps.map(candidateOf).find(Boolean) || (/\S+#\S+/.exec(String(t.lead.params?.["turn why"] || opens.why || t.lead.why || "")) || [""])[0] || ""; };
     const tryLine = (t, i, depth, onlyLine = false) => {
-      const nodes = [t.lead, ...t.steps], all = nodes.flatMap(flat), key = `try:${t.lead.id}`;
+      const nodes = [t.lead, ...t.steps], all = nodes.flatMap(flat).map(ownView), key = `try:${t.lead.id}`;   // D1094
       const running = all.some(n => n.t1 == null), failedStep = t.steps.find(n => n.failed || n.rejected || below.has(n.id) || below.soft?.has(n.id));
       const under = t.run ? (kids.get(t.lead.id) || []) : t.steps.map(n => ({ node: n, parent: null }));
       const collapsed = onlyLine || !under.length || isFolded(key, !running, all.some(n => holds(n.id)) && !all.slice(0, 1).some(n => n.id === selected));
@@ -498,7 +508,7 @@ let notes = {}, goals = [], chainPass, openBox = null;      // D1038: chainPass 
       if (tries && tries.length < 2) tries = null;
       // D1061: its own work only -- work moved to the boxes after it (a sweep point's design and gate) is theirs
       const flatK = n => [n, ...(kids.get(n.id) || []).flatMap(r => flatK(r.node))];
-      const all = nodes.flatMap(flatK), running = all.some(n => n.t1 == null);
+      const all = nodes.flatMap(flatK).filter(n => kind !== "design" || !["check", "measure"].includes(boxKind(n))).map(ownView), running = all.some(n => n.t1 == null);   // D1094: a design handed on to its check is done there
       // D1050: a design of one draft is that draft -- the box opens its conversation, its checks under it
       const lone = !tries && kind === "design" && nodes.length === 1 ? draftsIn(first) : null;
       const sole = nodes.length === 1 && !lone ? soleOf(first) : null;
@@ -638,7 +648,8 @@ let notes = {}, goals = [], chainPass, openBox = null;      // D1038: chainPass 
             finished ? doneMark(nodes.some(n => n.failed), nodes.some(n => n.rejected || below.has(n.id) || below.soft?.has(n.id))) : h("span", { class: "alt-spin" }),
             h("span", { class: "alt-task-name" }, `Setup · ${lead.length} steps`), h("span", { class: "mono muted small" }, dur(nodes.reduce((t, n) => t + secs(n), 0))))));
         if (!collapsed) runs(lead, depth + 1);    // D1045: the same step again in a row is one line, ×N
-      } else lead.forEach(r => line(r, depth));
+      } else lead.forEach(r => { const l = taskLabel(r.node), at = l.indexOf(" · ");   // D1094: one setup step is a Setup line too, as two are
+        line(r, depth, `Setup · ${at < 0 ? l : l.slice(at + 3)}`); });
       // D1054: a search done as a note (D1052) is the pass's Search line, as it is the graph's Search box
       const searched = g.p != null && !rest.some(r => phaseKind(r.node) === "search") ? passNotes(g.p).filter(n => kindOf(n.name, n.why) === "search") : [];
       if (searched.length) out.push(h("div", { class: "alt-tree-row box", style: `--depth:${depth};--k:${COLORS.search}` }, h("span", { class: "alt-fold-space" }),
@@ -664,17 +675,27 @@ let notes = {}, goals = [], chainPass, openBox = null;      // D1038: chainPass 
     const inPass = rows.filter(r => (membership.get(r.node.id) ?? null) === shown);
     const running = inPass.some(r => r.node.t1 == null);
     const boxes = flowBoxes(inPass, shown, running, passNotes(shown)), back = repaired(boxes);
-    // D1078: the latest passes and the one shown -- sixty chips were five rows above the drawing; the Pass menu has every one
-    const CHIPS = 12, chips = passes.filter((p, i) => i >= passes.length - CHIPS || p === shown), hidden = passes.length - chips.length;
+    // D1094: the chain is where one is -- the first (Setup), the pass before the one shown, it, the one after, and the
+    // latest; what lies between is a gap that says how many (the Pass menu has every one, Earlier passes those not loaded)
+    const idx = Math.max(0, passes.indexOf(shown)), keep = new Set([0, idx - 1, idx, idx + 1, passes.length - 1]);
+    const before = inspector.model.before || 0, seq = [];
+    for (let i = 0, prev = -1; i < passes.length; i++) {
+      if (!keep.has(i)) continue;
+      const skipped = i - prev - 1 + (prev === 0 && passes[0] == null ? before : 0);   // the passes not loaded sit after the start's Setup
+      if (skipped > 0) seq.push({ gap: skipped, to: passes[i] });
+      seq.push(passes[i]); prev = i;
+    }
+    if (before && !(passes[0] == null && passes.length > 1)) seq.unshift({ gap: before, to: passes[0] });
+    const gapChip = g => h("span", { class: "alt-chain-more muted small", title: `${plural(g.gap, "pass", "passes")} between -- in the Pass menu${before ? ", and under Earlier passes" : ""}` }, `··· ${g.gap}`);
     const chain = pass === "all" && passes.length > 1 ? h("div", { class: "alt-chain", role: "group", "aria-label": "Passes" },
-      hidden > 0 ? h("span", { class: "alt-chain-more muted small", title: "Earlier passes: in the Pass menu" }, `${hidden} earlier`) : "", chips.map(p => {
+      seq.map(p => typeof p === "object" && p !== null ? gapChip(p) : (() => {
       const nodes = rows.filter(r => (membership.get(r.node.id) ?? null) === p).map(r => r.node);
       const top = nodes.filter(n => n.parent == null || (membership.get(n.parent.id) ?? null) !== p);
       const lastBad = p != null && flowBoxes(rows.filter(r => (membership.get(r.node.id) ?? null) === p), p, false, passNotes(p)).filter(b => b.runs.length).at(-1)?.state === "bad";   // D1078
       const st = nodes.some(n => n.t1 == null) ? "running" : ended(top.length ? top : nodes) || lastBad ? "failed" : nodes.some(n => hardFail(n) || n.timedOut && !recovered(n) || n.rejected) ? "part" : "done";   // D1031; D1059: "!" as the tree says
       return h("button", { type: "button", class: `alt-chip ${st}${p === shown ? " sel" : ""}`, "data-chain": String(p ?? "S"), "aria-pressed": String(p === shown),
         title: passName(p), onclick: () => { chainPass = p; showPass(p); } }, passShort(p));
-    })) : "";
+    })())) : "";
     const W = 300, X = 26, BW = W - 2 * X, GAP = 16, RH = 28, g = [];
     const at = {};
     let y = 6;
@@ -855,7 +876,7 @@ let notes = {}, goals = [], chainPass, openBox = null;      // D1038: chainPass 
     const pill = streamPill();
     notice.append(pill.el);
     if (startId === "current") transport = loopStream(ctx.base, ctx.qs);
-    inspector = liveTree(ctx.base, ctx.qs, () => {}, port, { unifiedDetail: true, inspectorOnly: true, pick: id => select(id), goals: () => goals });
+    inspector = liveTree(ctx.base, ctx.qs, () => {}, port, { unifiedDetail: true, inspectorOnly: true, pick: id => select(id), goals: () => goals, record: () => record });
     loadEarlier = () => { listeners.events.onData({ ev: "hello" }); transport?.restart("events", { window: 0 }); queue(); };
     inspector.detail.classList.add("alt-detail");
     detailHost.replaceChildren(inspector.detail);
@@ -925,7 +946,9 @@ let notes = {}, goals = [], chainPass, openBox = null;      // D1038: chainPass 
     catch (error) { if (validPage()) ctx.body.replaceChildren(card(null, empty(`Starts unavailable: ${error.message}`), { actions: [h("button", { type: "button", onclick: show }, "Retry")] })); return; }
     if (!validPage()) return;
     history = got;
-    notes = {}; problem = null;
+    notes = {}; problem = null; record = [];
+    // D1094: the record's designs, for a measurement's "best so far" -- the passes loaded here are not all of them
+    api(`/apps/${enc(ctx.name)}/results${ctx.qs}`).then(r => { record = (r.designs || []).filter(d => d.verdict === "accepted" && !d.baseline); }).catch(() => {});
     api(`/apps/${enc(ctx.name)}/document${ctx.qs}`).then(d => {
       problem = d; notes = docNotes(d.raw, d.document);
       // D1065: the panels name designs as the lines do

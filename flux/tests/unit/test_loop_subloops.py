@@ -98,7 +98,7 @@ def test_a_child_that_decides_nothing_leaves_the_part_unproven(tmp_path):
                    log=lambda _m: None)
     assert list(out.admitted) == ["sim"], "the refused child admitted nothing"
     assert out.decision is None, "the parent could not compose, so there was nothing to measure"
-    assert any("1 part(s) not yet proven: arch" in n for n in out.not_established)
+    assert any("1 part not yet proven: arch" in n for n in out.not_established)
     assert any(name.startswith("arch: ") for name, _why in out.refused), (
         "the child's own refusal travels with the parent's report"
 

@@ -2,7 +2,7 @@
 // an agent writing its problem (D892: out of loopPage).
 
 import { cleanup } from "./state.js";
-import { ago, api, card, dur, empty, enc, fmtTok, h, toast } from "./ui.js";
+import { ago, api, card, dur, empty, enc, fmtTok, h, toast, plural } from "./ui.js";
 import { bestChart, designPoints, directionOf, groupList, num4 } from "./charts.js";
 import { authoringCard, binButton } from "./loops.js";
 import { dictionaryClasses, defaultMainMeasurements, designLabels, mainMeasurements, measurementColumns, measurementGroupRow, measurementHeader, measurementLabels, measurementText, measurementUnitsFor, relativeMeasurement, relativeToggle, verdictBadge } from "./result_table.js";
@@ -13,6 +13,8 @@ import { restoreScroll, scrollState } from "./scroll.js";
 
 // `ctx`: the loop's page as its tabs read it (loop_page.js).
 
+/** D1094: a dictionary metric's one number says how it was made -- "sim_us (sum)". */
+const aggName = (r, m) => { const a = r.metric_info?.[m]?.aggregate || r.metric_groups?.[m]?.aggregate; return a && a !== "none" ? `${m} (${a})` : m; };
 /** A pass's conclusion as lines (D701: it is a record, not text): each field on its own line,
     a list one item a line. */
 function conclusionText(c) {
@@ -33,16 +35,16 @@ function lastPass(ctx, r) {
   // D856: what the pass decided, in words, first; the record's own fields behind a fold
   const c = p.conclusion && typeof p.conclusion === "object" ? p.conclusion : null;
   // D900: a pass with no design meeting every requirement says so, and names its closest
-  const own = (x) => String(x).startsWith(`${ctx.name}#`) ? String(x).slice(ctx.name.length) : String(x);   // D1093: "#3", as everywhere
+  const own = (x) => String(x) === ctx.name ? "whole" : String(x).startsWith(`${ctx.name}#`) ? String(x).slice(ctx.name.length) : String(x);   // D1093: "#3", as everywhere; D1094: the parts' whole
   const said = c ? (c.decision ? [h("strong", { title: String(c.decision) }, own(c.decision)), c.decided_by ? ` — ${c.decided_by}` : ""]
     : c.closest ? ["No feasible design yet; the closest is ", h("strong", {}, String(c.closest)), (c.unmet || []).length ? ` — not met: ${c.unmet.join("; ")}` : ""]
     : "No decision.")
     : p.conclusion ? String(p.conclusion) : "";
-  return card(`Last pass (${ps.length})`, [h("p", {}, ago(p.when), took ? ` · ${took} new design(s)` : ""),
+  return card("Last decision", [   // D1094: the latest pass that decided -- a count beside it read as the passes runh("p", {}, ago(p.when), took ? ` · ${plural(took, "new design")}` : ""),
     said ? h("p", { class: "pass-said" }, said) : "",
     c ? h("details", { class: "pass-record" }, h("summary", { class: "small muted" }, "Record"),
       h("pre", { class: "val small conclusion" }, conclusionText(c))) : "",
-    h("div", { class: "form-actions" }, h("button", { class: "small", type: "button", onclick: () => goTab("Live", "timeline") }, "Where its time went"))]);
+    h("div", { class: "form-actions" }, h("button", { class: "small", type: "button", onclick: () => goTab("Live", "timeline") }, "Timeline"))]);
 }
 /** The best designs (D696): the decision, then the others by the loop's own order -- accepted
     first, the deepest stage reached, then each objective without a limit in turn. */
@@ -126,7 +128,7 @@ function renderOverview(ctx, r, notes, bench, use, prefs, ideas = null) {
     h("small", {}, label), h("div", { class: "big" }, value), sub ? h("div", { class: "muted" }, sub) : "");
   // D1092: the decision said "#3", as everywhere -- its whole name on hover
   const decisionCard = dec ? card("Decision", [
-      h("div", { class: "decision-head" }, h("span", { class: "mono strong", title: dec.name }, String(dec.name).startsWith(`${ctx.name}#`) ? dec.name.slice(ctx.name.length) : dec.name), dec.verdict === "accepted" ? h("span", { class: "pill ok" }, "meets the limits") : h("span", { class: "pill bad" }, "misses a limit"),
+      h("div", { class: "decision-head" }, h("span", { class: "mono strong", title: dec.name }, dec.name === ctx.name ? "whole" : String(dec.name).startsWith(`${ctx.name}#`) ? dec.name.slice(ctx.name.length) : dec.name), dec.verdict === "accepted" ? h("span", { class: "pill ok" }, "meets every requirement") : h("span", { class: "pill bad" }, "misses a requirement"),
         h("span", { class: "muted" }, `measured at ${dec.shown}`)),
       // D815: why this one, as the loop said it -- a limit is a floor to meet, the next objective decides among those that meet it
       r.decided_by ? h("p", { class: "small decided-by" }, h("span", { class: "muted" }, "Decided by: "), r.decided_by) : "",   // D1092: says the rule
@@ -134,7 +136,7 @@ function renderOverview(ctx, r, notes, bench, use, prefs, ideas = null) {
         const lim = (r.limits || []).find(l => l.metric === m), ok = dec.meets[m];
         const display = measurementText(dec, m, r.decision_measurements?.[m] ? () => r.decision_measurements[m] : comparison, num4, relativeMeasurement(ctx, m));
         return h("div", { class: "num-cell" + (ok === false ? " misses" : ok === true ? " meets" : ""),
-          "data-summary-metric": m, title: `${display.title}${unit[m] ? " (" + unit[m] + ")" : ""}${ok === true ? " · meets the limit" : ok === false ? " · misses the limit" : ""}` }, h("small", {}, m),
+          "data-summary-metric": m, title: `${display.title}${unit[m] ? " (" + unit[m] + ")" : ""}${ok === true ? " · meets the limit" : ok === false ? " · misses the limit" : ""}` }, h("small", {}, aggName(r, m)),
           h("div", { class: "big mono" }, display.text || "—"), lim ? h("small", { class: "muted" }, `${lim.direction === "maximize" ? "≥" : "≤"} ${lim.goal}`) : "");
       })),
       dec.why.length ? h("ul", { class: "misses" }, dec.why.map(w => h("li", {}, w))) : "",
@@ -157,11 +159,16 @@ function renderOverview(ctx, r, notes, bench, use, prefs, ideas = null) {
     state: () => stat("State", st.running ? "running" : st.last_active ? (st.failed ? "failed" : st.stopped ? "stopped" : "idle") : "never run",
         st.running ? ["since ", ago(st.since), st.passes != null ? ` · pass ${st.passes + (st.at_rest ? 0 : 1)}` : ""] : st.last_active ? ["last active ", ago(st.last_active)] : "", () => goTab("Live")),
     // D1092: a loop with no measure stage still chooses -- on its checks; said, not "0 accepted · 0 failed" beside a decision
+    // D1094: the designs only their checks judged, said beside the measured -- a refused one is not "0 failed"
     designs: () => stat("Designs measured", String(designs.length), !designs.length && (r.passes || []).some(p => p.conclusion?.decision)
       ? "no measure stage: chosen on its checks"
+      : !designs.length && (r.checked || []).length
+      ? `${r.checked.length} checked, not measured · ${r.checked.filter(u => u.verdict === "failed").length} failed its checks`
       : `${r.counts ? r.counts.accepted : 0} accepted · ${r.counts && r.counts.pending ? r.counts.pending + " pending · " : ""}${r.counts && r.counts.rejected ? r.counts.rejected + " rejected · " : ""}${r.counts ? r.counts.failed : 0} failed`, () => goTab("Results")),
-    passes: () => stat("Passes on record", String((r.passes || []).length), r.passes && r.passes.length ? ["last ", ago(r.passes[r.passes.length - 1].when)] : "", null),
-    usage: () => stat("Models and agents", total ? `${total.turns} turn(s)` : "—", total ? [dur(total.seconds) || "0s",
+    // D1094: every pass begun, a failed one too -- as many as the tree shows; those that decided nothing said apart
+    passes: () => { const ps = r.passes || [], n = Math.max(r.passes_begun || 0, ps.length), none = n - ps.length;
+      return stat("Passes", String(n), [none ? `${none} without a decision · ` : "", ps.length ? ["last decided ", ago(ps[ps.length - 1].when)] : n ? "none decided" : ""], null); },
+    usage: () => stat("Models and agents", total ? `${plural(total.turns, "turn")}` : "—", total ? [dur(total.seconds) || "0s",
       total.counted ? ` · ${fmtTok(total.tokens_in)} → ${fmtTok(total.tokens_out)} tokens` : "",
       total.cost_usd ? ` · $${total.cost_usd.toFixed(2)}` : ""] : "Usage unavailable", () => goTab("Agents")),
     objective: () => stat("Objective", h("span", { class: "obj-line" }, r.objectives || "—"), "", null),
@@ -182,9 +189,9 @@ function renderOverview(ctx, r, notes, bench, use, prefs, ideas = null) {
       h("a", { href: "javascript:void 0", onclick: () => goTab("Files", "workbench") }, b.path.split("/").pop()), h("small", { class: "muted" }, " ", ago(b.mtime)),
       b.first ? h("div", { class: "first" }, b.first) : "")))) : "",
     usage: () => card("Models and agents", total ? [
-      h("p", {}, `${total.turns} turn(s) · ${dur(total.seconds) || "0s"}`),
+      h("p", {}, `${plural(total.turns, "turn")} · ${dur(total.seconds) || "0s"}`),
       h("p", {}, total.counted ? `${fmtTok(total.tokens_in)} tokens in · ${fmtTok(total.tokens_out)} tokens out` : "No token usage reported."),
-      total.partial ? h("p", { class: "muted small" }, `${total.partial} turn(s) with incomplete usage.`) : "",
+      total.partial ? h("p", { class: "muted small" }, `${plural(total.partial, "turn")} with incomplete usage.`) : "",
       total.cost_usd ? h("p", {}, `$${total.cost_usd.toFixed(2)} at the configured prices.`) : "",
     ] : empty("Usage unavailable."), { actions: [h("button", { class: "small", onclick: () => goTab("Agents") }, "Agents")] }),
   };

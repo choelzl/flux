@@ -97,7 +97,7 @@ def test_the_standings_say_what_a_search_has_done_not_what_it_has_proven(monkeyp
     assert last["measured"] == 3, "two on the coarse stage, one finalist on the fine one"
     lines, _roles = standings_lines(last)
     assert "2 gated, 2 refused" in lines[0] and "proven" not in lines[0]
-    assert any("3 design(s) on the chain" in l for l in lines)
+    assert any("3 designs on the chain" in l for l in lines)
 
 
 def test_the_frontier_and_the_finalists_are_the_problems_to_choose(tmp_path):

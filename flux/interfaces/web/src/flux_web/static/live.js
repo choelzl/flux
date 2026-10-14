@@ -165,7 +165,7 @@ function logView(base, qs, stream) {
 
 /** The live task tree: follow the running task, collapse what finished, search; as a tree or as a
     graph (D723), the same tasks, selection and collapse either way. */
-function liveTree(base, qs, onQuestion, stream, { unifiedDetail = false, inspectorOnly = false, pick = null, goals = null } = {}) {
+function liveTree(base, qs, onQuestion, stream, { unifiedDetail = false, inspectorOnly = false, pick = null, goals = null, record = null } = {}) {
   const LT = window.FluxLoopTree;                   // D752: the tree's building, in looptree.js
   let loadAll = () => {};                           // D759: the passes a window left out
   const mdl = LT.model(), nodes = mdl.nodes, roots = mdl.roots, standings = mdl.standings;
@@ -558,6 +558,7 @@ function liveTree(base, qs, onQuestion, stream, { unifiedDetail = false, inspect
       .replace(/(^|\s)\S*python3?(?:\.\d+)?(?: -W ignore)? -m flux_presets(?:\.(\w+))?(?=\s|$)/g, (_, pre, sub) => `${pre}fluxpreset${sub ? " " + sub : ""}`)
       .replace(/(^|\s)\S*python3?(?:\.\d+)?(?: -W ignore)? -m flux_cli(?=\s|$)/g, "$1flux");
     if (folder && folder.length > 1) text = text.split(folder.replace(/\/$/, "") + "/").join("");
+    text = text.replace(/(^|[\s=])\/\S*?\/users\/[^/\s]+\/apps\/[^/\s]+\//g, "$1");   // D1094: a path in the loop's folder, from there
     return text;
   }
   let detailTab = "";
@@ -633,7 +634,7 @@ function liveTree(base, qs, onQuestion, stream, { unifiedDetail = false, inspect
     // Live keeps this one
     if (unifiedDetail) {
       (same ? kids => morph(detail, kids) : kids => detail.replaceChildren(...kids))(altInspector(n, {
-        now, nodes, place, goals, tidy: tidyCommand, block, redraw: () => drawDetail(Date.now() / 1000),
+        now, nodes, place, goals, record, tidy: tidyCommand, block, redraw: () => drawDetail(Date.now() / 1000),
         steps: (file, start, count) => api(`${base.replace(/^\/api/, "")}/steps?file=${encodeURIComponent(file)}&start=${start}&count=${count}`),   // D1036
         turnSteps: (t0, t1, agent) => api(`${base.replace(/^\/api/, "")}/turn-steps?t0=${t0}&t1=${t1}&agent=${encodeURIComponent(agent)}`),   // D1039
         pick: id => { if (pick) pick(id); },

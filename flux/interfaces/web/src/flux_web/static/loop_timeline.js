@@ -1,6 +1,6 @@
 // Flux web: a loop's timeline, under Live -- where the time goes (D892: out of loopPage).
 
-import { api, card, dur, empty, enc, h } from "./ui.js";
+import { api, card, dur, empty, enc, h, plural } from "./ui.js";
 import { sv } from "./charts.js";
 import { WORK_COLORS as COLORS, AGENT_COLOR, workLabel as label } from "./work_style.js";
 
@@ -72,7 +72,7 @@ function timelineTab(ctx) {
     draw();
     body.replaceChildren(
       card(null, h("div", { class: "tl-head" }, startSel, passSel,
-        h("span", { class: "muted" }, t.running ? "running · " : "", `${dur(t.wall)} on the wall clock · ${t.bars.length} phase(s) · ${t.passes.length} pass(es)`))),
+        h("span", { class: "muted" }, t.running ? "running · " : "", `${dur(t.wall)} on the wall clock · ${plural(t.bars.length, "phase")} · ${plural(t.passes.length, "pass", "passes")}`))),
       card("Phases over time", [chartBox, h("p", { class: "muted small tl-legend" },
         h("span", {}, h("i", { class: "sw", style: `background:${AGENT_COLOR}` }), "Agent activity within the work"), "Dashed: a pass begins.")]),
       card("Where the time goes", [kindsTable, h("p", { class: "muted small" }, "Share: total % (agent %). Agent time is included in the total; both use the wall clock.")]));

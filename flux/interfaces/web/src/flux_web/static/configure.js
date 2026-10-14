@@ -3,7 +3,7 @@
 
 import { codeEditor, langOf } from "./highlight.js";
 import { can, cleanup, crafterCatalog, me, setCrafterCatalog } from "./state.js";
-import { act, api, apiUpload, appHref, bytes, card, confirmDialog, crumbs, createFromText, dialog, empty, enc, h, head, owned, pageShow, request, skeleton, toast, when } from "./ui.js";
+import { act, api, apiUpload, appHref, bytes, card, confirmDialog, crumbs, createFromText, dialog, empty, enc, h, head, owned, pageShow, request, skeleton, toast, when, plural } from "./ui.js";
 import { advancedCard, agentSelect, attachBox, authoringCard, dropZone, progressDialog, sendFiles, uploadForm, permissionChoice } from "./loops.js";
 
 // ================================================================ the configurator (D686)
@@ -32,7 +32,7 @@ function diffView(ops, context = 3) {
   ops.forEach((o, k) => { if (o[0] !== " ") for (let d = -context; d <= context; d++) if (ops[k + d]) keep[k + d] = true; });
   const pre = h("pre", { class: "diff" });
   let a = 0, b = 0, folded = 0;
-  const fold = () => { if (folded) { pre.append(h("div", { class: "d-fold" }, `⋯ ${folded} unchanged line(s)`)); folded = 0; } };
+  const fold = () => { if (folded) { pre.append(h("div", { class: "d-fold" }, `⋯ ${plural(folded, "unchanged line")}`)); folded = 0; } };
   ops.forEach((o, k) => {
     if (o[0] !== "+") a++; if (o[0] !== "-") b++;
     if (!keep[k]) { folded++; return; }
@@ -87,8 +87,8 @@ function filesPanel(name, yamlOf, { staged = new Map(), namedOf = null, onDraw =
   const dz = dropZone("Drop scripts, models or folders here", async (got) => {
     const pre = into.value.trim().replace(/^\/+|\/+$/g, "");
     if (!name) { for (const g of got) staged.set(pre ? `${pre}/${g.path}` : g.path, { file: g.file }); draw(); return; }
-    const pd = progressDialog("Adding files", `${got.length} file(s)`);
-    try { const n = await sendFiles(name, got, { folder: pre, onProgress: pd.set, signal: pd.signal }); toast(`Added ${n} file(s)`, "ok"); }
+    const pd = progressDialog("Adding files", `${plural(got.length, "file")}`);
+    try { const n = await sendFiles(name, got, { folder: pre, onProgress: pd.set, signal: pd.signal }); toast(`Added ${plural(n, "file")}`, "ok"); }
     catch (x) { toast(pd.signal.aborted ? `The upload was cancelled: ${x.message}.` : `The upload failed: ${x.message}`, pd.signal.aborted ? "warn" : "bad", { timeout: 12000 }); }
     finally { pd.close(); draw(); }
   });
@@ -100,7 +100,7 @@ function filesPanel(name, yamlOf, { staged = new Map(), namedOf = null, onDraw =
     have = new Set(files.map(f => f.path));
     const missing = named().filter(p => !have.has(p));
     if (onDraw) onDraw(missing);
-    count.textContent = ` · ${files.length} file(s)` + (missing.length ? ` · ${missing.length} named and missing` : "");
+    count.textContent = ` · ${plural(files.length, "file")}` + (missing.length ? ` · ${missing.length} named and missing` : "");
     if (files.length || missing.length) fold.open = true;
     box.replaceChildren(
       files.length ? h("ul", { class: "files flist" }, files.map(f => h("li", {},
@@ -123,7 +123,7 @@ function filesPanel(name, yamlOf, { staged = new Map(), namedOf = null, onDraw =
     async upload(appName) {                                  // a new loop: its files, once it exists
       if (!staged.size) return 0;
       // D1075: its files go with their progress -- a large set said as it goes, cancellable
-      const pd = progressDialog("Uploading", `${staged.size} file(s) to ${appName}`);
+      const pd = progressDialog("Uploading", `${plural(staged.size, "file")} to ${appName}`);
       try {
         return await sendFiles(appName, [...staged].map(([p, x]) => ({ file: x.file || new File([x.text], p.split("/").pop(), { type: "text/plain" }), path: p })),
           { onProgress: pd.set, signal: pd.signal });
@@ -220,7 +220,7 @@ function configureInto(host, name, owner, mode, base, { small = false, barHost =
     if (!draft || !draftUsed(draft)) { keptLine.replaceChildren(); return; }
     const s = draft.state || {};
     keptLine.replaceChildren(`Draft kept across the ways: ${String(s.id || "").trim() || "unnamed"}`,
-      draft.staged.size ? ` · ${draft.staged.size} file(s) staged` : "", " · ",
+      draft.staged.size ? ` · ${plural(draft.staged.size, "file")} staged` : "", " · ",
       h("button", { type: "button", class: "link", onclick: async () => {
         if (!await confirmDialog("Discard the draft?", "Its name, statement, checks, measurements and staged files go.", { ok: "Discard", danger: true })) return;
         Object.assign(draft, newDraft()); forgetDraft(); draw(); drawKept();
@@ -284,7 +284,7 @@ async function crafterView(body, name, owner, draft = null, onDraft = null) {
         const p = await api(`/apps/${enc(name)}/document/preview`, { method: "POST", body: { text: yaml, kept: got.kept } });
         if (p.before === p.after) return h("p", { class: "muted" }, "No change: the document already says this.");
         const ops = lineDiff(p.before, p.after);
-        return h("div", {}, h("p", { class: "muted small" }, `${ops.filter(o => o[0] === "+").length} line(s) added, ${ops.filter(o => o[0] === "-").length} removed.`), diffView(ops));
+        return h("div", {}, h("p", { class: "muted small" }, `${plural(ops.filter(o => o[0] === "+").length, "line")} added, ${ops.filter(o => o[0] === "-").length} removed.`), diffView(ops));
       },
       save: async (yaml) => {
         // D693: what the save changes, line by line, before it writes
@@ -321,7 +321,7 @@ async function crafterView(body, name, owner, draft = null, onDraft = null) {
     },
     onChange: () => { panel.watch(); if (onDraft) onDraft(); }, files: (paths) => panel.missing(paths),
     checked: () => ["note", "not checked yet: once created, Check runs it where it will run"],
-    saveLabel: "Create the loop", nextSteps: false, calmChecks: true, foldSteps: true,
+    saveLabel: "Create loop", nextSteps: false, calmChecks: true, foldSteps: true,
     nameLabel: "Loop name", namePlaceholder: "my_loop", nameHint: "Letters, digits, - and _ (1–60 characters): the loop's name and its problem's id",
     save: async (yaml, state) => {
       const name = String(state.id || "").trim();
@@ -331,7 +331,7 @@ async function crafterView(body, name, owner, draft = null, onDraft = null) {
       const n = await panel.upload(name);
       if (adv) await api(`/apps/${enc(name)}/advanced`, { method: "PUT", body: adv });
       if (DRAFT === draft) { DRAFT = null; forgetDraft(); }  // made: the draft is the loop now
-      toast(`${name} created${n ? ` with ${n} file(s)` : ""}`, "ok");
+      toast(`${name} created${n ? ` with ${plural(n, "file")}` : ""}`, "ok");
       setTimeout(() => { location.hash = `#/app/${enc(name)}`; }, 400);
       return "Created.";
     } });
@@ -353,7 +353,7 @@ async function confirmDiff(file, before, after, problem = "") {
   return dialog(`Save ${file}?`, h("div", {},
     problem ? h("div", { class: "callout bad" }, h("strong", {}, "This document does not load: "), problem,
       h("p", { class: "small" }, "A start or a check of it will be refused until it is fixed.")) : "",
-    h("p", { class: "muted" }, `${plus} line(s) added, ${minus} removed.`), diffView(ops)),
+    h("p", { class: "muted" }, `${plural(plus, "line")} added, ${minus} removed.`), diffView(ops)),
     [["Cancel", false], problem ? ["Save anyway", true, "danger"] : ["Save", true, "primary"]]);
 }
 
@@ -418,7 +418,7 @@ async function newByAgent(body, draft = null, onDraft = null) {
     const fd = new FormData(); fd.append("name", name.value.trim()); fd.append("prompt", ask.value); fd.append("author", who.value); files.form(fd);
     // D1075: the files go with their progress
     const n = [...fd.values()].filter(v => v instanceof File).length;
-    const pd = n ? progressDialog("Uploading", `${n} file(s) for the agent`) : null;
+    const pd = n ? progressDialog("Uploading", `${plural(n, "file")} for the agent`) : null;
     let r;
     try { r = await apiUpload("/apps/new-by-agent", fd, pd ? { onProgress: pd.set, signal: pd.signal } : {}); }
     finally { if (pd) pd.close(); }

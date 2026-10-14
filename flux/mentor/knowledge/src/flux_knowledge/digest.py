@@ -159,7 +159,7 @@ def digest_library(db: str, proposer: Any, *, index: Any = None, say=lambda _m: 
             todo.remove((path, text))
             kept += 1
     if kept:
-        say(f"  digest: {kept} document(s) taken from the digests kept before (no call)")
+        say(f"  digest: {kept} {'document' if kept == 1 else 'documents'} taken from the digests kept before (no call)")
     if not todo:
         say(f"  digest: every library document is digested ({len(have) + kept})")
         return made
@@ -170,7 +170,7 @@ def digest_library(db: str, proposer: Any, *, index: Any = None, say=lambda _m: 
                               os.path.splitext(pt[0])[1].lower() not in PAPERS, pt[0]))
     limit = len(todo) if limit is None else max(0, int(limit))
     now, later = todo[:limit], len(todo) - min(limit, len(todo))
-    say(f"  digest: {len(todo)} library document(s) to digest, one {'agent' if ask else 'model'} call each"
+    say(f"  digest: {len(todo)} library {'document' if len(todo) == 1 else 'documents'} to digest, one {'agent' if ask else 'model'} call each"
         + (f"; {len(now)} now, {later} in the passes after" if later else ""))
     failed: list[str] = []
     for path, text in now:

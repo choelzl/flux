@@ -29,6 +29,7 @@ from typing import Any, Callable, Sequence
 
 from .ledger import Kind
 from .objective import Objective, Objectives
+from .words import plural
 
 __all__ = ["Report", "load", "render", "write"]
 
@@ -59,6 +60,7 @@ class Report:
     notes: list[str] = field(default_factory=list)
     agent_turns: list[dict[str, Any]] = field(default_factory=list)   # a box answered by an agent (D640)
     library: dict[str, int] = field(default_factory=dict)   # library file -> drafts whose prompt cited it (D648)
+    begun: int = 0                                  # D1094: passes begun, a failed one too
 
     @property
     def stage(self) -> str | None:
@@ -168,7 +170,8 @@ def load(db: str, campaign: str | None = None, objectives: Objectives | None = N
         for t in store.trials(cid, artifacts=False):
             for name in (((t.candidate or {}).get("meta") or {}).get("provenance") or {}).get("library") or ():
                 library[name] = library.get(name, 0) + 1
-        return Report(cid, objective_doc, objectives, rows, passes, ledger, notes, turns, library)
+        begun = sum(1 for e in events if e.get("kind") == "pass")
+        return Report(cid, objective_doc, objectives, rows, passes, ledger, notes, turns, library, begun)
     finally:
         store.close()
 
@@ -395,7 +398,7 @@ def render(rep: Report) -> str:
     o1 = objs[0] if objs else None
     head = [f"<h1>{html.escape(rep.campaign[:12])} -- how the campaign moved</h1>",
             f"<p class=lead>objective: <b>{html.escape(objs.describe() or '(none)')}</b>; "
-            f"{len(rep.rows)} measured rows on {len({r.stage for r in rep.rows})} stage(s), {len(rep.passes)} pass(es)"
+            f"{len(rep.rows)} measured rows on {plural(len({r.stage for r in rep.rows}), 'stage')}, {plural(len(rep.passes), 'pass', 'passes')}"
             + (f"; the whole design: {sum(1 for r in rep.rows if r.whole)} measurements" if any(r.whole for r in rep.rows) else "")
             + ".</p>"]
     if rep.objective_doc:
@@ -447,7 +450,7 @@ def render(rep: Report) -> str:
                         + "".join(f"<th>{html.escape(o.metric)}</th>" for o in objs) + "</tr>")
         shown = rep.passes[-40:]
         if len(rep.passes) > 40:
-            sections.append(f"<tr><td colspan=99 class=note>{len(rep.passes) - 40} earlier pass(es) not shown</td></tr>")
+            sections.append(f"<tr><td colspan=99 class=note>{plural(len(rep.passes) - 40, 'earlier pass', 'earlier passes')} not shown</td></tr>")
         for when, con in shown:
             sections.append(f"<tr><td>{_day(when)}</td><td>{html.escape(str(con.get('decision') or ('none; closest ' + str(con['closest']) if con.get('closest') else '')))[:60]}</td>"
                             f"<td>{html.escape(str(con.get('decided_by') or ''))[:60]}</td>"
@@ -514,5 +517,5 @@ def notes(texts: Sequence[str]) -> list[str]:
     """The operator's guidance during the run, echoed in the report it influenced."""
     if not texts:
         return []
-    return [f"OPERATOR GUIDANCE ({len(texts)} note(s), advisory; persisted in the "
+    return [f"OPERATOR GUIDANCE ({plural(len(texts), 'note')}, advisory; persisted in the "
             "campaign record)", *[f'  * "{t}"' for t in texts]]

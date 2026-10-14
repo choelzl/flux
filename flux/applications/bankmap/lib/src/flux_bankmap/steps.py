@@ -222,7 +222,7 @@ def search(history_path: str, state_path: str, params_path: str) -> dict[str, An
         st["phase"], st["round"] = "model", 0
         if fold is not None:
             save()
-            out["lessons"].append(f"z3 found {fold.describe()} -- {fold.hardware_cost()} XOR gate(s), in {trace.rounds} round(s)")
+            out["lessons"].append(f"z3 found {fold.describe()} -- {fold.hardware_cost()} XOR {'gate' if fold.hardware_cost() == 1 else 'gates'}, in {trace.rounds} {'round' if trace.rounds == 1 else 'rounds'}")
             return {**out, "candidates": [candidate(fold, req, "z3", partition=st.get("wiring"))], "say": "z3's fold"}
         if "unsat" in trace.outcome:
             out["lessons"].append(f"NO XOR-fold is conflict-free for {req.concurrent} concurrent accesses across strides "
@@ -237,7 +237,7 @@ def search(history_path: str, state_path: str, params_path: str) -> dict[str, An
             got = propose(req, st, history, params)
             if got:
                 return {**out, "candidates": [candidate(m, req, "llm", why, partition=st.get("wiring")) for m, why in got],
-                        "say": f"model round {st['round']}: {len(got)} proposal(s)"}
+                        "say": f"model round {st['round']}: {len(got)} {'proposal' if len(got) == 1 else 'proposals'}"}
         st["phase"] = "done"
         save()
         out["not_established"].append(

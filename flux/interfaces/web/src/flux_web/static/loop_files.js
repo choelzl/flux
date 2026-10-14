@@ -3,7 +3,7 @@
 // and time, and an Actions menu (Rename, Move, Delete) on its head (D937: not on each row).
 
 import { codeEditor, langOf } from "./highlight.js";
-import { act, ago, api, bytes, card, dialog, empty, enc, h, request, skeleton, toast } from "./ui.js";
+import { act, ago, api, bytes, card, dialog, empty, enc, h, request, skeleton, toast, plural } from "./ui.js";
 import { dropZone, progressDialog, sendFiles } from "./loops.js";
 import { viewerTools } from "./viewer.js";
 
@@ -87,7 +87,7 @@ function filesTab(ctx) {
     api(itemUrl(path, "/size")).then((s) => {
       if (my !== seq) return;
       box.replaceChildren(" · ", h("span", { title: `${s.bytes} bytes; hidden and ignored files counted, links not followed` },
-        `${s.partial ? "at least " : ""}${size(s.bytes)} in ${s.files} file(s), ${s.folders} folder(s)${s.links ? `, ${s.links} link(s)` : ""}`));
+        `${s.partial ? "at least " : ""}${size(s.bytes)} in ${plural(s.files, "file")}, ${plural(s.folders, "folder")}${s.links ? `, ${plural(s.links, "link")}` : ""}`));
     }).catch(() => box.replaceChildren(" · ", act("Calculate size", () => { box.replaceWith(folderSize(path)); }, { cls: "small link" })));
     return box;
   }
@@ -152,7 +152,7 @@ function filesTab(ctx) {
     const folder = it.kind === "folder";
     const s = folder ? await api(itemUrl(it.path, "/size")).catch(() => null) : null;
     const ok = await dialog(`Delete ${baseOf(it.path)}?`, h("div", {}, h("p", { class: "mono path-preview" }, `${name}/${it.path}`),
-      folder ? h("p", {}, "The folder and everything in it", s ? `: ${s.partial ? "at least " : ""}${s.files} file(s), ${s.folders} folder(s), ${size(s.bytes)}.` : ".")
+      folder ? h("p", {}, "The folder and everything in it", s ? `: ${s.partial ? "at least " : ""}${plural(s.files, "file")}, ${plural(s.folders, "folder")}, ${size(s.bytes)}.` : ".")
         : it.kind === "link" ? h("p", {}, `The link only: what it points to (${it.target}) stays.`) : "",
       h("p", { class: "muted small" }, "It cannot be undone.")),
       [["Cancel", false], [folder ? "Delete the folder" : "Delete", true, "danger solid"]]);
@@ -233,10 +233,10 @@ function filesTab(ctx) {
     const addFiles = h("input", { type: "file", multiple: true });
     const addFolder = h("input", { placeholder: "folder (optional)" });
     const dz = dropZone("Drop files or folders to add them", async (got) => {
-      const pd = progressDialog("Adding files", `${got.length} file(s)${addFolder.value ? " into " + addFolder.value : ""}`);
+      const pd = progressDialog("Adding files", `${plural(got.length, "file")}${addFolder.value ? " into " + addFolder.value : ""}`);
       try {
         const n = await sendFiles(name, got, { folder: addFolder.value.trim(), onProgress: pd.set, signal: pd.signal });
-        toast(`Added ${n} file(s)${addFolder.value ? " into " + addFolder.value : ""}`, "ok");
+        toast(`Added ${plural(n, "file")}${addFolder.value ? " into " + addFolder.value : ""}`, "ok");
       } catch (x) { toast(pd.signal.aborted ? `The upload was cancelled: ${x.message}.` : `The upload failed: ${x.message}`, pd.signal.aborted ? "warn" : "bad", { timeout: 12000 }); }
       finally { pd.close(); drawBody(); }
     });
@@ -245,7 +245,7 @@ function filesTab(ctx) {
       act("Add", async () => {
         if (!addFiles.files.length) { toast("Choose files or a .zip.", "warn"); return; }
         const n = await sendFiles(name, [...addFiles.files].map(f => ({ file: f, path: f.name })), { folder: addFolder.value.trim() });
-        toast(`Added ${n} file(s)`, "ok"); drawBody();
+        toast(`Added ${plural(n, "file")}`, "ok"); drawBody();
       }, { cls: "small primary" })));
   }
   const rootList = () => api(`/apps/${enc(name)}/files${qs}${showIgnored() ? (qs ? "&" : "?") + "ignored=true" : ""}`);

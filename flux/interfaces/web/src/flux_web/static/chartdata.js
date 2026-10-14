@@ -16,10 +16,10 @@ function designPoints(designs, obj) {
 }
 
 /** A design's standing as the results say it (D899): eligible only when it meets every requirement. */
-function verdictOf(d) {
+function verdictOf(d) {     // D1094: a rejected design is set aside, not failed
   const eligible = d.eligible != null ? !!d.eligible : d.verdict === "accepted";
   const pending = !eligible && !!(d.pending || d.verdict === "pending");
-  return { eligible, pending, verdict: eligible ? "accepted" : pending ? "pending" : "failed", reasons: (d.reasons && d.reasons.length ? d.reasons : d.why) || [] };
+  return { eligible, pending, verdict: d.verdict === "rejected" ? "rejected" : eligible ? "accepted" : pending ? "pending" : "failed", reasons: (d.reasons && d.reasons.length ? d.reasons : d.why) || [] };
 }
 
 /** The objective's direction, otherwise the metric name's usual meaning. */

@@ -227,6 +227,6 @@ def test_a_clocked_design_is_checked_and_its_latency_measured(tmp_path):
     r = _test(str(art), "--golden", str(tmp_path / "g2.py"))
     assert r.returncode == 0 and "latency=2" in r.stdout and r.stdout.strip().splitlines()[-1].startswith("0 failing of "), r.stdout + r.stderr
     r = _test(str(art), "--golden", str(tmp_path / "g3.py"))
-    assert r.returncode == 1 and "claims 3 cycle(s) of latency, measured 2" in r.stdout, r.stdout
+    assert r.returncode == 1 and "claims 3 cycles of latency, measured 2" in r.stdout, r.stdout
 
 

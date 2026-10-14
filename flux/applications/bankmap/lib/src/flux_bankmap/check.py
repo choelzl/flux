@@ -54,7 +54,7 @@ class Verdict:
     def summary(self, n: int) -> str:
         if self.conflict_free:
             stages = {v.stage for v in self.per_stride}
-            extra = f" and {len(stages) - 1} crossbar stage(s)" if len(stages) > 1 else ""
+            extra = f" and {len(stages) - 1} crossbar {'stage' if len(stages) - 1 == 1 else 'stages'}" if len(stages) > 1 else ""
             return f"conflict-free for all strides at the bank{extra}"
         w = self.worst
         share = w.conflicting_starts / max(w.total_starts, 1)

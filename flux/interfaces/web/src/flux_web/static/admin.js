@@ -1,7 +1,7 @@
 // Flux web: the admin's pages and the model settings form (D889: split out of app.js).
 
 import { cleanup, me, setPageRefresh } from "./state.js";
-import { act, ago, api, appHref, autosave, bytes, card, confirmDialog, crumbs, dialog, dur, empty, enc, fmtTok, h, head, markSaved, pageShow, saveMark, skeleton, sortableTable, toast, when } from "./ui.js";
+import { act, ago, api, appHref, autosave, bytes, card, confirmDialog, crumbs, dialog, dur, empty, enc, fmtTok, h, head, markSaved, pageShow, saveMark, skeleton, sortableTable, toast, when, plural } from "./ui.js";
 import { timeChart } from "./charts.js";
 import { binButton, envEditor, envTable, loopsBrowser, stopLoop } from "./loops.js";
 import { route } from "./app.js";
@@ -147,7 +147,7 @@ async function notifyDialog() {
   const to = all.checked ? [] : picks.map(l => l.querySelector("input")).filter(i => i.checked).map(i => i.value);
   if (!text.value.trim() || (!all.checked && !to.length)) { toast("Nothing sent: a message and someone to send it to", "warn"); return; }
   const r = await api("/admin/notify", { method: "POST", body: { text: text.value, to, kind: kind.value } });
-  toast(`Sent to ${r.sent} user(s)`, "ok");
+  toast(`Sent to ${plural(r.sent, "user")}`, "ok");
 }
 
 async function adminLoops(body) {
@@ -159,14 +159,14 @@ async function adminLoops(body) {
   const restart = act("Restart", async () => {
     const loops = allApps.filter(l => l.running);
     const go = await dialog("Restart all active loops?", h("div", {},
-      h("p", {}, `${loops.length} active loop(s) will finish their current pass, then resume from their records with the same run settings. Files, results and logs are kept.`),
+      h("p", {}, `${plural(loops.length, "active loop")} will finish their current pass, then resume from their records with the same run settings. Files, results and logs are kept.`),
       h("p", {}, "Completed passes reduce each finite run's remaining budget; run forever stays unlimited. Counts are checked after stopping. Loops with no passes left stay stopped. Only loops still active when the request begins are restarted."),
-      h("ul", {}, loops.map(l => h("li", {}, `${l.owner}/${l.name}: ${l.options?.passes == null ? "run forever" : `${Math.max(0, l.options.passes - (l.passes || 0))} of ${l.options.passes} pass(es) remaining`}${l.options?.screen_only ? " · screen only" : ""}`)))),
+      h("ul", {}, loops.map(l => h("li", {}, `${l.owner}/${l.name}: ${l.options?.passes == null ? "run forever" : `${Math.max(0, l.options.passes - (l.passes || 0))} of ${plural(l.options.passes, "pass", "passes")} remaining`}${l.options?.screen_only ? " · screen only" : ""}`)))),
       [["Cancel", false], ["Restart loops", true, "primary"]]);
     if (!go) return;
     const r = await api("/admin/restart-all", { method: "POST", body: { now: false } });
     const errors = Object.entries(r.failed), skipped = Object.entries(r.skipped);
-    toast(`${Object.keys(r.scheduled || r.restarted).length} loop(s) ${r.scheduled ? "scheduled to restart after this pass" : "restarted"}${errors.length ? ` · ${errors.length} could not restart` : ""}${skipped.length ? ` · ${skipped.length} skipped` : ""}`, errors.length ? "warn" : "ok");
+    toast(`${plural(Object.keys(r.scheduled || r.restarted).length, "loop")} ${r.scheduled ? "scheduled to restart after this pass" : "restarted"}${errors.length ? ` · ${errors.length} could not restart` : ""}${skipped.length ? ` · ${skipped.length} skipped` : ""}`, errors.length ? "warn" : "ok");
     if (errors.length || skipped.length) await dialog("Restart results", h("ul", {},
       [...errors, ...skipped].map(([loop, why]) => h("li", {}, `${loop}: ${why}`))), [["Close", true, "primary"]]);
     route();
@@ -183,8 +183,8 @@ async function adminLoops(body) {
         }, { cls: "small" })),
     line(`Running: ${running}`,
       act("Stop", async () => {
-        if (!await confirmDialog("Stop every loop?", `${running} loop(s) stop at the end of their pass.`, { ok: "Stop after the pass" })) return;
-        const r = await api("/admin/stop-all", { method: "POST", body: { now: false } }); toast(`${Object.keys(r.stopped).length} loop(s) asked to stop`, "ok"); route();
+        if (!await confirmDialog("Stop every loop?", `${plural(running, "loop")} stop at the end of their pass.`, { ok: "Stop after the pass" })) return;
+        const r = await api("/admin/stop-all", { method: "POST", body: { now: false } }); toast(`${plural(Object.keys(r.stopped).length, "loop")} asked to stop`, "ok"); route();
       }, { cls: "small" }),
       restart),
     line("Users", act("Send a notification…", () => notifyDialog(), { cls: "small" }))));
@@ -330,7 +330,7 @@ async function adminDocuments(body) {
   const run = async (b, what) => {
     const got = await api("/admin/documents/migrate", { method: "POST", body: b });
     const left = got.done.flatMap(x => x.why ? [`${x.user}/${x.app}: ${x.why}`] : x.documents.filter(d => d.status !== "migrated" && d.status !== "current").map(d => `${x.user}/${x.app}/${d.file}: ${d.status}`));
-    toast(`${what}: ${got.migrated} document(s) migrated${left.length ? `; left: ${left.join("; ")}` : ""}`, left.length ? "warn" : "ok");
+    toast(`${what}: ${plural(got.migrated, "document")} migrated${left.length ? `; left: ${left.join("; ")}` : ""}`, left.length ? "warn" : "ok");
     route();
   };
   const ready = r.loops.filter(l => !l.running && l.documents.some(d => d.status === "would migrate"));
@@ -348,11 +348,11 @@ async function adminDocuments(body) {
         h("span", { class: `pill ${PILL[d.status] || ""}` }, d.status)),
       d.why ? h("p", { class: "small bad" }, d.why) : "",
       d.manual.length ? h("ul", { class: "small bad" }, d.manual.map(m => h("li", {}, m))) : "",
-      d.said.length ? h("details", {}, h("summary", { class: "small" }, `${d.said.length} change(s)`),
+      d.said.length ? h("details", {}, h("summary", { class: "small" }, `${plural(d.said.length, "change")}`),
         h("ul", { class: "small mono" }, d.said.map(x => h("li", {}, x))),
         d.text ? h("pre", { class: "log small" }, d.text) : "") : ""))));
   body.replaceChildren(card("Old documents", [
-    h("p", { class: "muted small" }, `${r.loops.length} of ${r.total} loop(s) to migrate. `,
+    h("p", { class: "muted small" }, `${r.loops.length} of ${plural(r.total, "loop")} to migrate. `,
       "Originals kept as ", h("code", {}, "<file>.orig"), "."),
     ready.length ? h("div", { class: "toolbar" }, act(`Migrate all (${ready.length})`, () => run({}, "Every loop"), { cls: "primary" })) : "",
     ...rows]));
@@ -577,7 +577,7 @@ async function adminInsights(body, part = "failures", ok = () => true) {   // D8
             + "(the admin's; a user's own only with their own endpoint). A turn is priced once: one priced here, or when it was recorded, is never priced again. "
             + "Running loops are skipped: price them once they stop.", { ok: "Price them" })) return;
           const got = await api("/admin/reprice", { method: "POST" });
-          toast(`${got.turns} turn(s) in ${got.loops} loop(s) priced: $${got.usd.toFixed(2)}`
+          toast(`${plural(got.turns, "turn")} in ${plural(got.loops, "loop")} priced: $${got.usd.toFixed(2)}`
             + (got.skipped.length ? `; skipped, running: ${got.skipped.join(", ")}` : ""), got.skipped.length ? "warn" : "ok");
           route();
         }, { cls: "small" }))]);
@@ -681,7 +681,7 @@ async function adminAgents(body) {
               if (!v || v === a.id) { warn.replaceChildren(); return; }
               try {
                 const r = await api(`/admin/agents/${a.id}/rename`, { method: "POST", body: { name: v, dry_run: true } });
-                warn.replaceChildren(r.loops.length ? h("p", { class: "callout bad" }, `${r.loops.length} loop(s) name ${a.id} and will not start until their documents say ${v}: `,
+                warn.replaceChildren(r.loops.length ? h("p", { class: "callout bad" }, `${plural(r.loops.length, "loop")} name ${a.id} and will not start until their documents say ${v}: `,
                   h("span", { class: "mono" }, r.loops.join(", "))) : h("p", { class: "muted" }, `No loop names ${a.id}.`));
               } catch (x) { warn.replaceChildren(h("p", { class: "bad" }, x.message)); }
             };
@@ -692,7 +692,7 @@ async function adminAgents(body) {
               [["Cancel", false], ["Rename", true, "danger"]]);
             if (!go) return;
             const r = await api(`/admin/agents/${a.id}/rename`, { method: "POST", body: { name: box.value.trim() } });
-            toast(r.ok + (r.loops.length ? ` -- ${r.loops.length} loop(s) still name ${a.id}` : ""), r.loops.length ? "warn" : "ok");
+            toast(r.ok + (r.loops.length ? ` -- ${plural(r.loops.length, "loop")} still name ${a.id}` : ""), r.loops.length ? "warn" : "ok");
             route();
           }, { cls: "small" })]),
         h("span", { class: "mono muted" }, a.found ? [a.found, h("span", { class: "agent-version" }, a.version ? " · " + a.version : "")]
@@ -829,7 +829,7 @@ async function adminUsers(body, ok = () => true) {
         h("td", {}, permissionsButton(u)),
         limitCell(u),
         h("td", { class: "num mono" }, String(x.loops ?? "")), h("td", { class: "num mono" }, String(x.turns ?? "")), h("td", { class: "num mono" }, x.seconds ? dur(x.seconds) : ""),
-        h("td", { class: "num mono", title: x.partial ? `${x.partial} turn(s) with incomplete usage` : "" }, x.counted ? `${fmtTok(x.tokens_in)} → ${fmtTok(x.tokens_out)}` : "—"), h("td", { class: "num mono" }, x.cost_usd ? `$${x.cost_usd.toFixed(2)}` : "—"),
+        h("td", { class: "num mono", title: x.partial ? `${plural(x.partial, "turn")} with incomplete usage` : "" }, x.counted ? `${fmtTok(x.tokens_in)} → ${fmtTok(x.tokens_out)}` : "—"), h("td", { class: "num mono" }, x.cost_usd ? `$${x.cost_usd.toFixed(2)}` : "—"),
         h("td", { class: "num" }, u.last_active ? ago(u.last_active) : h("span", { class: "muted" }, "never")),
         h("td", { class: "right" }, h("div", { class: "actions end" },
           u.name !== me.name ? Object.assign(act("View as", async () => {

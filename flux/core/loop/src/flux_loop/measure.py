@@ -9,6 +9,7 @@ from .observe import _phase
 from .metrics import metric_groups, numeric_metrics
 from .provenance import stamp
 from .types import Candidate, LoopState, Scored
+from .words import plural
 
 if TYPE_CHECKING:  # pragma: no cover
     from .problem import Problem
@@ -161,8 +162,8 @@ def measure_many(problem: Problem, state: LoopState, cands: list[Candidate], sta
     seconds = round(time.monotonic() - t0, 3)
     prov = stamp(seconds=seconds, batch=(len(cands) if len(cands) > 1 else None))
     if len(got) != len(cands):
-        raise RuntimeError(f"{problem.name}.measure_batch returned {len(got)} result(s) for "
-                           f"{len(cands)} candidate(s) on {stage}; one per candidate, in order")
+        raise RuntimeError(f"{problem.name}.measure_batch returned {plural(len(got), 'result')} for "
+                           f"{plural(len(cands), 'candidate')} on {stage}; one per candidate, in order")
     judging = problem.critic("measurement") is not None and state.request.critique_rounds > 0
     analytic: bool | frozenset[str] = (True if stage in problem.analytic_stages()
                                        else (problem.analytic_metrics() or False))

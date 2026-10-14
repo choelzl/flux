@@ -98,7 +98,7 @@ def test_refusals_group_by_the_exact_message(campaign):
     (fact,) = mine_refusal_patterns(path)
     assert fact.evidence["message"] == "NotExpressibleError: K=10 is not a multiple of LANES=16"
     assert fact.pointers["trial_seqs"] == seqs["err"]
-    assert "2 trial(s)" in fact.statement
+    assert "2 trials" in fact.statement
 
 
 def test_measured_points_are_mined_whatever_phase_the_writer_used(tmp_path):

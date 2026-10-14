@@ -841,7 +841,7 @@ def test_log_tab_stamps_colors_and_filters():
 
     bus = EventBus()
     bus.log("plan: attempt exp via range reduction")
-    bus.log("  patched exp: 2 edit(s) -- fix")
+    bus.log("  patched exp: 2 edits -- fix")
     bus.log("[tui] loop -> ON")
     bus.log("ADMITTED recip: seed")
     snap = bus.snapshot()

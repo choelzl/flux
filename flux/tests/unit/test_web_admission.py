@@ -47,7 +47,7 @@ def test_two_starts_of_one_loop_at_once_admit_one(tmp_path):
 def test_starts_of_different_loops_stop_at_the_users_limit(tmp_path):
     store, bob = _store(tmp_path)
     ok, bad = _many(lambda i: store.reserve_run(bob, f"loop{i}", 2, "db", "log", ["x"], {}), 6)
-    assert len(ok) == 2 and all("at most 2 loop(s)" in b for b in bad), (ok, bad)
+    assert len(ok) == 2 and all("at most 2 loops" in b for b in bad), (ok, bad)
 
 
 def test_a_reservation_counts_until_its_process_starts_and_lapses_after(tmp_path, monkeypatch):

@@ -260,7 +260,7 @@ class Settings(BaseModel):
 
 
 OVERVIEW_SMALL_CARDS = {
-    "state": "State", "designs": "Designs measured", "passes": "Passes on record",
+    "state": "State", "designs": "Designs measured", "passes": "Passes",
     "usage": "Models and agents", "objective": "Objective",
     "tokens_in": "Tokens in", "tokens_out": "Tokens out", "cost": "Model and agent cost",
     "primary_metric": "Main metric", "reference_change": "Change vs reference", "acceptance": "Acceptance rate",

@@ -60,7 +60,7 @@ def test_the_setup_makes_the_missing_digests_when_the_run_has_a_model_and_says_s
     with_model = SimpleNamespace(request=SimpleNamespace(db=db), proposer=_Model(), say=said.append)
     Digest().make_now(with_model)                  # the Setup's (D782): a prompt only reads
     text = Digest().render(with_model)
-    assert text.startswith("[PACE.pdf]\nPACE.pdf: a method") and any("1 library document(s) to digest" in m for m in said)
+    assert text.startswith("[PACE.pdf]\nPACE.pdf: a method") and any("1 library document to digest" in m for m in said)
     assert Digest().render(no_model) == text, "the next run reads the store, model or not"
     assert Digest().render(SimpleNamespace(request=SimpleNamespace(db=""), proposer=None, say=said.append)) == ""
 
@@ -153,6 +153,6 @@ def test_a_digest_is_kept_for_the_next_loop_and_never_asked_twice(tmp_path, monk
     again = digest_library(str(tmp_path / "two.db"), second, documents=[("elsewhere/PACE.pdf", docs[0][1])] + docs[1:], say=said.append)
     assert second.prompts == [] and all(d["reused"] for d in again), "another loop's record: no call"
     assert set(digests_in(str(tmp_path / "two.db"))) == {"elsewhere/PACE.pdf", "b/other.pdf"}
-    assert any("2 document(s) taken from the digests kept before" in m for m in said), said
+    assert any("2 documents taken from the digests kept before" in m for m in said), said
     changed = digest_library(str(tmp_path / "two.db"), second, documents=[("b/other.pdf", "another paper, revised")])
     assert len(second.prompts) == 1 and not changed[0].get("reused"), "new content is digested"

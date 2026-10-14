@@ -37,7 +37,7 @@ def focus_window(artifact: str, lines: list[int], context: int = 40) -> str:
     shown = sorted(keep)
     if len(shown) >= len(rows):
         return "\n".join(f"{i + 1:4d} | {ln}" for i, ln in enumerate(rows))
-    out = [f"(window around line(s) {', '.join(str(x) for x in lines)}; "
+    out = [f"(window around {'line' if len(lines) == 1 else 'lines'} {', '.join(str(x) for x in lines)}; "
            f"{len(rows)} lines in all -- an edit may anchor on ANY line of the artifact)"]
     prev = 0
     for i in shown:
