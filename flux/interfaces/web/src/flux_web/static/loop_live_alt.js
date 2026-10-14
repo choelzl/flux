@@ -43,6 +43,12 @@ export function liveAltTab(ctx) {
     pass = n == null ? "all" : String(n);
   }
   function showPass(p) { boxView = null; passView = p; following = false; render(); }
+  // D1064: a note said as what it means -- a scope list of none is the whole design, not "found nothing"
+  const noteSaid = n => {
+    const what = String(n.name).replace(/^\s*\w+\s*:\s*/, ""), k = n.output?.scopes;
+    if (/^scope list$/i.test(what) && k != null) return Number(k) ? `${k} scope${Number(k) === 1 ? "" : "s"} listed; the pass picks one` : "No scopes listed: the pass works on the whole design.";
+    return what;
+  };
   function showBox(p, key) {
     boxView = { p, key }; passView = NO_PASS; following = false; choice = null;
     if (pass === "current") pass = p == null ? "all" : String(p);
@@ -129,6 +135,10 @@ export function liveAltTab(ctx) {
     if (boxView) {
       const scope = taskScope(inspector.model, "all"), rows = scope.rows.filter(r => (scope.membership.get(r.node.id) ?? null) === boxView.p);
       const boxes = flowBoxes(rows, boxView.p, rows.some(r => r.node.t1 == null), passNotes(boxView.p)), b = boxes.find(b => b.key === boxView.key);
+      // D1064: a box opened while it waited, now at work or done -- its run, as clicking it now would open
+      if (b?.runs.length && boxView.waited === undefined) boxView.waited = false;
+      if (b && !b.runs.length && boxView.waited === undefined) boxView.waited = true;
+      if (boxView.waited && b?.runs.length) { const run = b.runs.at(-1); boxView = null; queueMicrotask(() => select(run.id)); return; }
       const config = { search: problem?.raw?.flow?.orchestrate, design: problem?.raw?.flow?.generate,
         check: problem?.raw?.flow?.test, measure: problem?.raw?.flow?.measure, choose: problem?.raw?.objectives }[boxView.key];
       const later = b && boxes.slice(boxes.indexOf(b) + 1).some(b => b.runs.length);
@@ -137,8 +147,8 @@ export function liveAltTab(ctx) {
           h("h2", {}, b?.title || workLabel(boxView.key)), h("span", { class: "pill" }, b?.done ? "done" : b?.runs.length || b?.notes?.length ? { ok: "done", bad: "failed", part: "partly failed", run: "running" }[b.state] || "done" : later ? "not recorded" : "waiting")),   // D1059: as its box says
         h("p", { class: "muted small" }, passName(boxView.p)),
         b?.runs.length ? h("div", { class: "alt-steps" }, b.runs.map(n => h("button", { type: "button", class: "alt-step-row", onclick: () => select(n.id) }, taskLabel(n))))
-          : b?.notes?.length === 1 ? h("div", {}, h("p", { class: "muted" }, String(b.notes[0].name).replace(/^\s*\w+\s*:\s*/, "")),   // D1063: one note is the box itself
-              ...Object.entries(b.notes[0].output || {}).map(([k, v]) => h("div", { class: "kv" }, h("div", { class: "k" }, k), h("div", { class: "val" }, typeof v === "object" ? JSON.stringify(v) : String(v)))))
+          : b?.notes?.length === 1 ? h("div", {}, h("p", {}, noteSaid(b.notes[0])),   // D1063: one note is the box itself; D1064: said in words
+              ...Object.entries(b.notes[0].output || {}).filter(([k]) => k !== "scopes").map(([k, v]) => h("div", { class: "kv" }, h("div", { class: "k" }, k), h("div", { class: "val" }, typeof v === "object" ? JSON.stringify(v) : String(v)))))
           : b?.notes?.length ? h("div", { class: "alt-steps" }, b.notes.map(n => h("div", { class: "alt-step-row note" }, h("span", {}, String(n.name).replace(/^\s*\w+\s*:\s*/, "")),
             Object.keys(n.output || {}).length ? h("span", { class: "mono muted small" }, Object.entries(n.output).map(([k, v]) => `${k} ${typeof v === "object" ? JSON.stringify(v) : v}`).join(" · ")) : "")))
           : h("p", { class: "muted" }, b?.done ? "Baseline stored as a reference." : later ? "No task was recorded for this phase in this pass." : "This phase has not started. No task output is available yet."),
@@ -237,8 +247,10 @@ export function liveAltTab(ctx) {
       .filter(x => x && !taskLabel(n).endsWith(` · ${x}`)).join(" › ");
     const sel = inspector.model.nodes.get(selected), holds = id => { for (let p = sel; p; p = p.parent) if (p.id === id) return true; return false; };
     const now = Date.now() / 1000, secs = n => n.seconds ?? (n.t1 ?? now) - n.t0, below = failedUnder();
-    const short = c => String(c).replace(/^.*?(#[^#\s]+)$/, "$1");     // "#4": the loop's name is the page's already
-    const shortAll = t => typeof t === "string" ? t.replace(/[^\s·#]+(#[^#\s]+)/g, "$1") : t;   // D1059: every design said by its id
+    // D1064: only the loop's own name goes -- a part's design keeps its part ("lo#1"); a baseline is "baseline"
+    const idOf = (pre, id) => id === "#baseline" ? "baseline" : !pre || pre === ctx.name || pre === problem?.raw?.id || pre === String(problem?.raw?.id || "").split("/").pop() ? id : pre + id;
+    const short = c => String(c).replace(/^(.*?)(#[^#\s]+)$/, (_, pre, id) => idOf(pre, id));     // "#4": the loop's name is the page's already
+    const shortAll = t => typeof t === "string" ? t.replace(/([^\s·#]+)(#[^#\s]+)/g, (_, pre, id) => idOf(pre, id)) : t;   // D1059: every design said by its id
     const fold = (key, collapsed, label) => h("button", { type: "button", class: "alt-fold", "data-fold": String(key), "aria-label": `${collapsed ? "Expand" : "Collapse"} ${label}`,
       "aria-expanded": String(!collapsed), onclick: event => { event.stopPropagation(); toggleFold(key, collapsed); } }, collapsed ? "▸" : "▾");
     // D1044: a critique that rejected what it judged is a failure of that work: red, the critic pill says who
@@ -248,7 +260,10 @@ export function liveAltTab(ctx) {
     // D1044: a box's line says the box, then what it worked on; a step under it drops the box's name
     const said = (n, box) => {
       const full = taskLabel(n), at = full.indexOf(" · "), rest = at < 0 ? "" : full.slice(at + 3);
-      if (/^\s*critique\s*:/i.test(String(n.name))) return box ? [h("b", {}, workLabel(phaseKind(n) || "check")), " critique"] : "critique";
+      // D1064: a critique says whose and what it said ("critique · #3 · rejected")
+      const verdict = String(n.output?.verdict ?? n.fields?.verdict ?? ""), of = String(n.why || "").replace(/@\S*$/, "").trim();
+      const crit = ["critique", of && !/^round\b/i.test(of) ? short(of) : "", /^(rejected|sent back)/i.test(verdict) ? "rejected" : verdict ? "no objection" : ""].filter(Boolean).join(" · ");
+      if (/^\s*critique\s*:/i.test(String(n.name))) return box ? [h("b", {}, workLabel(phaseKind(n) || "check")), ` ${crit}`] : crit;
       if (box) return [h("b", {}, workLabel(phaseKind(n) || "setup")), rest ? h("span", { class: "alt-what", title: rest }, ` ${shortAll(rest)}`) : ""];
       const parentKind = n.parent ? phaseKind(n.parent) : null, kind = phaseKind(n);
       if (!rest) return kind ? kind : full;                           // D1045: "Check" alone under Design is "check"
@@ -257,7 +272,7 @@ export function liveAltTab(ctx) {
     const line = (r, depth, named = "", box = false, extra = "", flat = false) => {
       const n = r.node, under = flat ? [] : kids.get(n.id) || [], finished = n.t1 != null, collapsed = under.length && isFolded(n.id, finished, holds(n.id) && n.id !== selected);
       const kind = phaseKind(n), opens = aiOf.get(n.id) || n, label = named || said(n, box), rejected = rejectedBy(n);
-      const picked = n.id === selected || opens.id === selected;
+      const picked = n.id === selected || opens.id === selected || (merged.get(n.id) || []).some(c => c.id === selected);   // D1064: its merged command too
       out.push(h("div", { class: `alt-tree-row ${box ? "box" : "step"}${secs(n) < .05 && !under.length ? " quiet" : ""}`, style: `--depth:${depth};--k:${COLORS[kind] || (AI.test(String(n.params?.turn || n.name)) ? AGENT_COLOR : COLORS.setup)}` },
         under.length ? fold(n.id, collapsed, typeof label === "string" ? label : n.name) : h("span", { class: "alt-fold-space" }),
         h("button", { ...taskButton(opens), type: "button", class: `alt-task ${state(n)}${picked ? " sel" : ""}`, "aria-pressed": String(picked), title: n.name + (n.why ? " · " + n.why : "") },
@@ -393,7 +408,7 @@ export function liveAltTab(ctx) {
       const collapsed = onlyLine || !under.length || isFolded(key, !running, all.some(n => holds(n.id)) && !all.slice(0, 1).some(n => n.id === selected));
       const opens = aiOf.get(t.lead.id) || t.lead, picked = all.some(n => n.id === selected) && (opens.id === selected || t.lead.id === selected);
       const made = madeOf(t);
-      const why = failedStep ? (firstFailing(failedStep) ? `${checkWord(failedStep)}: ${firstFailing(failedStep)}` : `${checkWord(failedStep)} failed`) : "";   // D1063: which test
+      const why = failedStep ? (firstFailing(failedStep) ? (onlyLine ? firstFailing(failedStep) : `${checkWord(failedStep)}: ${firstFailing(failedStep)}`) : `${checkWord(failedStep)} failed`) : "";   // D1063: which test; D1064: the graph's narrow line, the test alone
       const shortMade = made.replace(/^.*?(#[^#\s]+)$/, "$1");                 // "#4": the loop's name is the page's already
       const t0 = Math.min(...all.map(n => n.t0)), t1 = Math.max(...all.map(n => n.t1 ?? now));
       out.push(h("div", { class: "alt-tree-row step try", style: `--depth:${depth};--k:${COLORS[phaseKind(t.lead) || "design"] || COLORS.design}` },
@@ -612,6 +627,9 @@ export function liveAltTab(ctx) {
       if (b.count > 1) { kids.push(sv("rect", { x: right - 22, y: y + 6, width: 22, height: 14, rx: 7, class: "alt-count-pill" }), sv("text", { x: right - 11, y: y + 16, class: "alt-count-text" }, `×${b.count}`)); right -= 28; }
       if (note) kids.push(sv("foreignObject", { x: X + 14, y: y + 22, width: BW - 28, height: 16, "pointer-events": "none" },
         h("div", { class: "alt-box-note" }, note)));
+      // D1064: a check that stopped at a failure -- the checks it never reached, drawn skipped
+      const declared = b.kind === "check" ? Number((/^(\d+) check/.exec(note) || [])[1] || 0) : 0;
+      if (b.steps && b.steps.includes("bad") && declared > b.steps.length) b.steps = [...b.steps, ...Array(declared - b.steps.length).fill("skip")];
       if (b.steps) { const w = (BW - 24) / b.steps.length; b.steps.forEach((v, k) => kids.push(sv("rect", { x: X + 14 + k * w, y: y + BH - 11, width: w - 3, height: 5, rx: 2,
         class: `alt-step ${v}`, style: `--k:${c}` }))); }
       // D1053: a box at work says so in its corner, as a finished one does -- the selection is not the running mark

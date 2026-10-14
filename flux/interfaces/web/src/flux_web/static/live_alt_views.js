@@ -51,6 +51,8 @@ export function taskLabel(n) {
   if (head === "knowledge") return `Setup · ${/^digest/i.test(rest) ? "papers" : /^mentor/i.test(rest) ? "mentor" : "inputs"}`;
   // D1063: a design's generator says the design it made ("Design · x=1"), its program the line's note
   if (head === "tool" && kind === "Design" && candidateOf(n)) return `${kind} · ${candidateOf(n)}`;
+  // D1064: a stage's command says the design it measures ("Measure · slow · x#4")
+  if (head === "tool" && kind === "Measure" && candidateOf(n) && ranFor(n)) return `${kind} · ${ranFor(n)} · ${candidateOf(n)}`;
   if (head === "tool") return `${kind} · ${ranFor(n) || rest.replace(/^fluxpreset\s+/, "") || "a command"}`;   // D1037: the document's name
   // D1063: a measurement says the design it measured ("Measure · esl · x#4"; the views say "#4")
   if ((head === "simulation" || head === "analytical") && rest) { const c = candidateOf(n); return c ? `${kind} · ${rest} · ${c}` : `${kind} · ${rest}`; }
@@ -185,7 +187,9 @@ function stretches(rows) {
 function finish(b) {
   const st = b.done || !b.runs.length && b.notes?.length ? "ok" : boxState(b.runs);
   const last = b.runs[b.runs.length - 1];
-  const steps = (b.kind === "check" || b.kind === "measure" || b.key === "Papers") && last ? leaves(last).map(n => boxState([n])) : null;
+  // D1064: the bar is the box's own work -- its latest run that is not a critique of it
+  const work = [...b.runs].reverse().find(n => !/^\s*critique\s*:/i.test(String(n.name))) || last;
+  const steps = (b.kind === "check" || b.kind === "measure" || b.key === "Papers") && work ? leaves(work).map(n => boxState([n])) : null;
   const critic = b.runs.some(function judged(n) { return /^\s*critique\s*:/i.test(String(n.name)) || (n.kids || []).some(judged); });
   return { ...b, ids: b.runs.inBox || new Set(), state: st, steps: steps && steps.length > 1 ? steps : steps && b.kind !== "setup" ? steps : null, who: who(b.runs), count: b.runs.length, critic };
 }
@@ -210,7 +214,9 @@ export function docNotes(raw, documentName) {
   const script = String(Array.isArray(cmd) ? cmd.join(" ") : cmd).split(/\s+/).map(w => w.replace(/^\{home\}\//, "")).find(w => /\.\w+$/.test(w) && !w.startsWith("{")) || (cmd ? String(cmd).split(/\s+/)[0] : "");
   // D1058: a goal written as its name alone is maximized, as the loop reads it
   const goals = objectives.map(o => typeof o === "string" ? { metric: o } : o).filter(o => o && o.metric).map(o => `${o.metric} ${/min/i.test(o.direction || "") ? "↓" : "↑"}`);
-  const tests = count(flow.test), measures = count(flow.measure);
+  // D1064: a box's critic is not one of its checks or measurements
+  const own = v => v && typeof v === "object" && !Array.isArray(v) ? Object.fromEntries(Object.entries(v).filter(([k]) => k !== "critic")) : v;
+  const tests = count(own(flow.test)), measures = count(own(flow.measure));
   return {
     search: policy, design: script.replace(/^.*\//, ""), check: tests ? plural(tests, "check") : "", measure: measures ? plural(measures, "measurement") : "",
     choose: goals.slice(0, 2).join(" · ") + (goals.length > 2 ? ` +${goals.length - 2}` : ""), Document: documentName || "", record: "reference",

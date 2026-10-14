@@ -799,7 +799,7 @@ svg.alt-flow { display: block; width: 100%; height: auto; margin: 0 auto; overfl
 .alt-box-title { font: 600 12px var(--sans, sans-serif); fill: var(--ink); }
 .alt-box-note { font: 10px/16px var(--mono, monospace); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .alt-pill-text { font: 9px var(--sans, sans-serif); fill: #fff; text-anchor: middle; } .alt-count-pill { fill: var(--line); } .alt-count-text { font: 9px var(--mono, monospace); fill: var(--ink); text-anchor: middle; }
-.alt-step { fill: var(--k); } .alt-step.wait { fill: var(--line); } .alt-step.bad { fill: var(--bad); }
+.alt-step { fill: var(--k); } .alt-step.wait { fill: var(--line); } .alt-step.skip { fill: none; stroke: var(--line); stroke-dasharray: 2 2; } .alt-step.bad { fill: var(--bad); }
 @media (prefers-reduced-motion: no-preference) { .alt-step.run { animation: alt-glow 1s ease-in-out infinite alternate; } }
 .alt-metrics tr.alt-rejected td { color: var(--bad); text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--bad) 50%, transparent); } .alt-metrics tr.alt-rejected .alt-critic-tag { margin-left: 6px; text-decoration: none; display: inline-block; }
 .alt-done.ok { fill: var(--ok); } .alt-done.bad { fill: var(--bad); } .alt-done.part { fill: var(--warn); } .alt-done-mark { font: 600 9.5px var(--sans, sans-serif); fill: #fff; text-anchor: middle; }

@@ -91,10 +91,17 @@ function bestOf(n, env) {
   const stageOf = x => String(x.why || "").split(/\s+/).slice(0, 2).join(" "), mine = candidateOf(n);
   for (const x of env.nodes.values()) {
     if (x === n || x.t1 == null || x.failed || x.name !== n.name || stageOf(x) !== stageOf(n) || x.t0 > n.t0 || (mine && candidateOf(x) === mine)) continue;
-    for (const [k, v] of Object.entries(metricsOf(stdoutOf(x)))) if (goals[k] && (best[k] == null || goals[k] * v > goals[k] * best[k])) best[k] = v;
+    const who = candidateOf(x);
+    for (const [k, v] of Object.entries(metricsOf(stdoutOf(x)))) if (goals[k] && (best[k] == null || goals[k] * v > goals[k] * best[k].v)) best[k] = { v, who };
+    // D1064: a dictionary goal's best -- the design whose values average best, in the goal's direction
+    for (const [k, d] of Object.entries(dictsOf(stdoutOf(x)))) {
+      const m = meanOf(d);
+      if (goals[k] && m != null && (best[k] == null || goals[k] * m > goals[k] * best[k].m)) best[k] = { v: d, m, who };
+    }
   }
   return { best, goals };
 }
+const meanOf = d => { const xs = Object.values(d || {}).filter(x => typeof x === "number"); return xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null; };
 
 /** A command (P2-P6): what it gave first -- running time and the latest lines, a check's failing
     count and its first failures, a measurement's numbers against the best so far -- then the input,
@@ -117,15 +124,22 @@ function toolBody(n, env) {
         h("pre", { class: "val alt-cases" }, before.slice(0, 3).join("\n") + (before.length > 3 ? `\n… and ${before.length - 3} more` : ""))));
     } else if (Object.keys(metrics).length) {
       const { best, goals } = bestOf(n, env), dicts = dictsOf(out), me = candidateOf(n);
+      // D1064: one row per number, a dictionary's too; "best so far" says whose; no comparison columns when nothing compares
+      const rows = [...Object.entries(metrics).map(([k, v]) => [k, v, v]), ...Object.entries(dicts).map(([k, d]) => [k, d, meanOf(d)])];
+      const compares = rows.some(([k]) => best[k]);
+      const change = (k, m) => { const b = best[k], bm = b && (b.m ?? b.v), dir = goals[k];
+        if (b == null || m == null || !dir || !bm) return ["", ""];
+        const c = (m - bm) / Math.abs(bm);
+        return [Math.abs(c) < 0.0005 ? "=" : `${c > 0 ? "+" : "−"}${Math.abs(c * 100).toFixed(1)}%`, dir * c > 0 ? "up" : dir * c < 0 ? "down" : ""]; };
       top.push(h("div", { class: "alt-table-wrap" }, h("table", { class: "list compact alt-metrics" },
-        h("thead", {}, h("tr", {}, h("th", {}, "metric"), h("th", { class: "num", title: me }, me ? byId(me) : "this design"), h("th", { class: "num" }, "best so far"), h("th", {}, ""))),
-        h("tbody", {}, Object.entries(metrics).map(([k, v]) => {
-          const b = best[k], dir = goals[k], change = b != null && b !== 0 ? (v - b) / Math.abs(b) : null;
-          const better = change == null || dir == null ? "" : dir * change > 0 ? "up" : dir * change < 0 ? "down" : "";
-          return h("tr", {}, h("td", {}, k, dir ? ` ${dir > 0 ? "↑" : "↓"}` : ""), h("td", { class: "num mono" }, fmt(v)), h("td", { class: "num mono" }, b != null ? fmt(b) : "—"),
-            h("td", { class: `alt-change ${better}` }, change == null || !dir ? "" : Math.abs(change) < 0.0005 ? "=" : `${change > 0 ? "+" : "−"}${Math.abs(change * 100).toFixed(1)}%`));
-        }), Object.entries(dicts).map(([k, v]) => h("tr", {}, h("td", {}, k, goals[k] ? ` ${goals[k] > 0 ? "↑" : "↓"}` : ""),    // D1063: a dictionary goal too
-          h("td", { class: "num mono" }, cell(v)), h("td", { class: "num mono" }, ""), h("td", {}, "")))))));
+        h("thead", {}, h("tr", {}, h("th", {}, "metric"), h("th", { class: "num", title: me }, me ? byId(me) : "this design"),
+          compares ? [h("th", { class: "num" }, "best so far"), h("th", { class: "num" }, "change")] : "")),
+        h("tbody", {}, rows.map(([k, v, m]) => {
+          const b = best[k], [said, better] = change(k, m);
+          return h("tr", {}, h("td", {}, k, goals[k] ? ` ${goals[k] > 0 ? "↑" : "↓"}` : ""), h("td", { class: "num mono" }, cell(v)),
+            compares ? [h("td", { class: "num mono", title: b?.who || "" }, b ? [cell(b.v), h("span", { class: "muted small" }, ` ${byId(b.who || "")}`)] : "—"),
+              h("td", { class: `alt-change ${better}` }, said)] : "");
+        })))));
     } else if (n.timedOut) top.push(h("div", { class: "alt-result warn", style: "--k:var(--warn)" },     // D997: a time limit warns
       h("span", { class: "alt-big" }, `! exit ${f.exit} · time limit`)));
     else if (f.exit != null) top.push(h("div", { class: `alt-result ${f.exit === 0 ? "ok" : "bad"}`, style: `--k:${f.exit === 0 ? colorOf(n) : "var(--bad)"}` },
@@ -299,7 +313,9 @@ function chooseBody(n, env) {
   const chosen = names.find(c => c === dec) || names.filter(c => text.includes(c)).sort((a, b) => b.length - a.length)[0] || "";
   // D1059: a design the select critic rejected stays on the record, marked -- never shown as chosen
   const rejected = new Map();
-  for (const x of env.nodes.values()) if (x.failed && /^\s*critique\s*:\s*decision/i.test(String(x.name))) rejected.set(String(x.why || ""), String(fieldsOf(x).verdict || "").replace(/^REJECTED:\s*/i, ""));
+  // D1064: the measure critic's too -- a rejected measurement is never chosen either (its why is "x#3@stage")
+  for (const x of env.nodes.values()) if (x.failed && /^\s*critique\s*:\s*(decision|measurement)/i.test(String(x.name)))
+    rejected.set(String(x.why || "").replace(/@\S*$/, ""), String(fieldsOf(x).verdict || "").replace(/^REJECTED:\s*/i, ""));
   const refused = chosen && rejected.has(chosen);
   // D1055: a goal written as its name alone takes its direction from what the decision said ("the largest score")
   const g0 = goals[0], dir = g0?.direction || (/\b(largest|highest|most)\b/i.test(String(said["decided by"] || "")) ? "maximize" : /\b(smallest|lowest|least)\b/i.test(String(said["decided by"] || "")) ? "minimize" : "");
