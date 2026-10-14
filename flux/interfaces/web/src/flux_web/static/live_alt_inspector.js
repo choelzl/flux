@@ -265,7 +265,7 @@ const lostSaid = (n, kept, steps, lost) => running(n) ? `${lost} earlier step${l
   : kept === steps ? `${lost} earliest step${lost === 1 ? " was" : "s were"} not kept`
   : `${lost} earlier step${lost === 1 ? " is" : "s are"} not in the transcript`;
 function agentChat(n, env) {
-  const f = { ...(running(n) ? {} : (n.output || {})), ...(n.fields || {}) }, p = n.params || {};
+  const f = fieldsOf(n), p = n.params || {};          // D1083: ended, its output is the last word -- not its last live update
   const live = Array.isArray(f.steps) ? f.steps : [], total = Number(f["steps total"] || live.length), file = f["steps file"];
   const kept = !file && total > live.length && !running(n) ? transcriptSteps(n, env, String(f.agent || "")) : null;
   const steps = kept && kept.length > live.length ? kept : live;
