@@ -75,7 +75,7 @@ async function accountPage() {
     // model; the variables every agent of yours gets
     card("My agents and models", [
       h("p", { class: "muted" }, st.external ? "Your own settings only. Keys are encrypted and never shown."
-        : "Empty: From Server where a field says so. Your own endpoint uses only your values. Keys are encrypted and never shown."),
+        : "An empty field takes the server's value. With your own endpoint, only your values are used. Keys are encrypted and never shown."),
       ...settingsForm(st, { server: st.inherited || {}, save, scope: "me", panels: logins.panels,
         extraTabs: [{ tab: "Every agent", noSave: true, el: h("fieldset", { class: "set-group" }, h("legend", {}, "Variables for every run and every agent of yours"),
           h("p", { class: "muted small" }, "Every run and agent of yours gets these; a loop's own win."),

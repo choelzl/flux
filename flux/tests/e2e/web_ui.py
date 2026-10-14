@@ -2338,7 +2338,7 @@ def flows(r: Run) -> None:
         rows = b.js("return [...document.querySelectorAll('.card table.list tbody tr')].map(t => t.children[0].textContent)")
         r.check("an external user logs their agents in from their account", "My agents and models" in r.text(), str(rows))
         offered = b.js("return [...document.querySelectorAll('#main input')].map(i => i.placeholder).filter(p => /the server's/.test(p))")
-        r.check("and is offered nothing of the server's", not offered and "the server's settings apply" not in r.text(), str(offered))
+        r.check("and is offered nothing of the server's", not offered and "Server settings apply" not in r.text(), str(offered))
         r.clean("external user")
     r.step("an external user", external_user)
 

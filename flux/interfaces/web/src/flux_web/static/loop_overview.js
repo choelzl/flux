@@ -33,7 +33,8 @@ function lastPass(ctx, r) {
   // D856: what the pass decided, in words, first; the record's own fields behind a fold
   const c = p.conclusion && typeof p.conclusion === "object" ? p.conclusion : null;
   // D900: a pass with no design meeting every requirement says so, and names its closest
-  const said = c ? (c.decision ? [h("strong", {}, String(c.decision)), c.decided_by ? ` — ${c.decided_by}` : ""]
+  const own = (x) => String(x).startsWith(`${ctx.name}#`) ? String(x).slice(ctx.name.length) : String(x);   // D1093: "#3", as everywhere
+  const said = c ? (c.decision ? [h("strong", { title: String(c.decision) }, own(c.decision)), c.decided_by ? ` — ${c.decided_by}` : ""]
     : c.closest ? ["No feasible design yet; the closest is ", h("strong", {}, String(c.closest)), (c.unmet || []).length ? ` — not met: ${c.unmet.join("; ")}` : ""]
     : "No decision.")
     : p.conclusion ? String(p.conclusion) : "";
@@ -140,7 +141,11 @@ function renderOverview(ctx, r, notes, bench, use, prefs, ideas = null) {
       topDesigns(ctx, r, 3)],
       { actions: [h("button", { class: "small", onclick: () => goTab("Results") }, "All results")] })
     : r.closest ? closestCard(ctx, r)
-    : card("Decision", [empty(designs.length ? "No decision yet." : "No design measured yet."),
+    : card("Decision", [empty(designs.length ? "No decision yet."
+        // D1093: chosen on its checks (no measure stage) -- said, not "nothing measured" beside a decision
+        : (r.passes || []).map(p => p.conclusion?.decision).filter(Boolean).at(-1)
+          ? `${String((r.passes || []).map(p => p.conclusion?.decision).filter(Boolean).at(-1)).replace(`${ctx.name}#`, "#")}: chosen on its checks (no measure stage)`
+          : "No design measured yet."),
         topDesigns(ctx, r, 3)]);
   const st = ctx.st;                                // D892: the state as it is now, after the wait
   const q0 = st.question;
@@ -154,7 +159,7 @@ function renderOverview(ctx, r, notes, bench, use, prefs, ideas = null) {
     // D1092: a loop with no measure stage still chooses -- on its checks; said, not "0 accepted · 0 failed" beside a decision
     designs: () => stat("Designs measured", String(designs.length), !designs.length && (r.passes || []).some(p => p.conclusion?.decision)
       ? "no measure stage: chosen on its checks"
-      : `${r.counts ? r.counts.accepted : 0} accepted · ${r.counts && r.counts.pending ? r.counts.pending + " pending · " : ""}${r.counts ? r.counts.failed : 0} failed`, () => goTab("Results")),
+      : `${r.counts ? r.counts.accepted : 0} accepted · ${r.counts && r.counts.pending ? r.counts.pending + " pending · " : ""}${r.counts && r.counts.rejected ? r.counts.rejected + " rejected · " : ""}${r.counts ? r.counts.failed : 0} failed`, () => goTab("Results")),
     passes: () => stat("Passes on record", String((r.passes || []).length), r.passes && r.passes.length ? ["last ", ago(r.passes[r.passes.length - 1].when)] : "", null),
     usage: () => stat("Models and agents", total ? `${total.turns} turn(s)` : "—", total ? [dur(total.seconds) || "0s",
       total.counted ? ` · ${fmtTok(total.tokens_in)} → ${fmtTok(total.tokens_out)} tokens` : "",

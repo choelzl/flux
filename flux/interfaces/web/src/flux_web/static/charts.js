@@ -113,7 +113,7 @@ function bestChart(rows, obj, passes, opts = {}) {
     sv("text", { x: W - R, y: H - 8, class: "tick", "text-anchor": "end" }, new Date(t1 * 1000).toLocaleDateString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })));
   return h("figure", { class: "chart-box" }, h("figcaption", {}, h("strong", {}, obj.metric), h("span", { class: "muted" },
     ` ${maxi ? "higher" : "lower"} is better${obj.stage && obj.stage !== "deepest" ? " · at " + obj.stage : ""} · `),
-    said ? h("span", { class: "best-said" }, said) : [h("span", { class: "muted" }, `best feasible search design so far${sw} `), h("strong", { class: "best-said" }, num4(best))],
+    said ? h("span", { class: "best-said" }, said) : [h("span", { class: "muted" }, `best so far${sw} `), h("strong", { class: "best-said" }, num4(best))],
     opts.legend === false ? "" : [" ", legend(S, { pending: pts.some(p => p.pending), baseline: refs.length > 0 })]), g);
 }
 /** Two metrics against each other (D693): every design measured with both, the limits dashed, a

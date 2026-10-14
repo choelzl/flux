@@ -83,7 +83,7 @@ async function agentsView(ctx) {
           roleOf(t) ? h("span", { class: "muted" }, `${roleOf(t)} · `) : "",
           h("button", { type: "button", class: "link strong open-turn", onclick: (e) => { e.stopPropagation(); pick(t, tr); } },   // D929: Tab, Enter
             t.agent || t.model || t.kind), t.session === "resumed" ? h("span", { class: "muted small" }, " · resumed") : ""),
-        h("td", {}, ago(t.ts)), h("td", { class: "muted" }, dur(t.seconds)),
+        h("td", { style: "white-space:nowrap" }, ago(t.ts)), h("td", { class: "muted", style: "white-space:nowrap" }, dur(t.seconds)),   // D1093: one line a turn
         h("td", { class: "num mono muted" }, tokOf(t)), h("td", { class: "num mono muted" }, t.tool_calls != null ? String(t.tool_calls) : t.hops ? String(t.hops) : ""),
         h("td", {}, t.error ? h("span", { class: "pill bad" }, "error") : t.ok === false ? h("span", { class: `pill ${t.rc === 124 ? "warn" : "bad"}`, title: t.rc === 124 ? "stopped at its time limit" : null }, t.rc === 124 ? "time limit" : `exit ${t.rc}`) : h("span", { class: "pill ok" }, "ok"))); return tr; }))))
       : empty("No model or agent turn yet.")),

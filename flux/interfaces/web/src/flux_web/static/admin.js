@@ -964,7 +964,7 @@ function settingsForm(st, { server = null, save, scope, agentEnv = null, panels 
   const groups = st.groups.map(g => {
     const own = [...g.public, ...g.secret].some(k => st.values[k]);
     const note = server && st.values[g.endpoint] ? "your own endpoint: none of the server's values of this group are used"
-      : server && [...g.public, ...g.secret].some(k => server[k]) && !own ? "the server's settings apply" : "";
+      : server && [...g.public, ...g.secret].some(k => server[k]) && !own ? "Server settings apply" : "";
     const vars = g.agent && agentEnv ? agentEnv(g.agent) : null;
     const panel = (panels || {})[g.agent || g.id] || null;
     // D823: an agent's model and its own variables fold away, open by themselves when something is set
