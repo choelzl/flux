@@ -485,7 +485,7 @@ const canAsk = info.can_ask ?? (mine && canRun);          // D991: a group membe
         return;
       }
       body.replaceChildren(h("div", { class: "live-wrap" },
-        h("div", { class: "split" }, card(null, [st.running ? "" : h("p", { class: "muted" }, "The last start."), live.tree], { cls: "tree-card" }),
+        h("div", { class: "split" }, card(null, [st.running ? "" : h("p", { class: "muted" }, "Last start."), live.tree], { cls: "tree-card" }),
           h("div", { class: "side-col" }, card(null, live.detail, { cls: "detail-card" }), liveLog.el, card(null, live.stand, { cls: "stand-card" }))),
         ""));
       live.draw(); liveLog.fill(); composer.update();

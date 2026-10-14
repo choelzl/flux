@@ -23,7 +23,7 @@ function resultsView(ctx, r) {
   const limitOf = (m) => r.limits.find(l => l.metric === m);
   // D899: accepted only when it meets every requirement; pending while a later stage must judge one
   // D1090: a critic's rejection is "rejected · critic" -- which box's critic ("the select critic") says nothing more; a person's keeps the name
-  const byCritic = (by) => /^the \w+ critic\b/.test(String(by || ""));
+  const byCritic = (by) => /^(the )?\w+ critic\b/.test(String(by || ""));
   const verdictPill = (d) => d.verdict === "accepted" ? h("span", { class: "pill ok" }, "accepted")
     : d.verdict === "pending" ? h("span", { class: "pill warn" }, "pending")
     : d.verdict === "rejected" ? h("span", { class: "pill rejected" }, !d.rejected?.by ? "rejected" : byCritic(d.rejected.by) ? "rejected · critic" : `rejected · ${d.rejected.by}`)
@@ -195,7 +195,7 @@ function resultsView(ctx, r) {
           l ? h("div", { class: "lim" }, `${l.direction === "maximize" ? "≥" : "≤"} ${l.goal}`) : ""); }))),
       h("tbody", {}, shown.map(d => { const tr = h("tr", { class: `clickable ${d.verdict}${d.decision ? " decided" : ""}${keyOf(d) === selectedKey ? " sel" : ""}`, onclick: () => open(d, tr) },
         tick(d),
-        h("td", { class: "mono", title: `${d.name} · ${d.shown}${d.last ? " · " + d.last : ""}` }, d.decision ? h("span", { class: "star", title: "the decision" }, "★ ") : "",
+        h("td", { class: "mono", title: `${d.name} · ${d.shown}${d.last ? " · " + d.last : ""}` }, d.decision ? h("span", { class: "star", title: "decision" }, "★ ") : "",
           h("button", { type: "button", class: "link mono open-design", title: `Open ${d.name}`, "aria-label": `Open ${d.name}`,          // D929: the keyboard opens it too
             onclick: (e) => { e.stopPropagation(); open(d, tr); } }, h("span", { class: `table-design-name${(d.base || d.name).includes("#") ? " design-id" : ""}` }, names.get(d))),
           d.part && !(d.base || d.name).includes("#") ? h("div", { class: "muted small table-part", title: d.part }, d.part) : ""),

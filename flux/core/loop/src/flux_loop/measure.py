@@ -209,7 +209,7 @@ def _judged(problem: Problem, state: LoopState, got: Scored) -> None:
         out["rejected"] = not c.ok                        # D1075: a critic\'s rejection is guidance, "!" -- not a failed step
         out["subject"] = f"{got.name}: {got.metrics}"
     if not c.ok:
-        reject(state, got, c.why, list((c.payload or {}).get("wrong") or []), f"the measure critic ({got.stage})")
+        reject(state, got, c.why, list((c.payload or {}).get("wrong") or []), f"measure critic ({got.stage})")
 
 
 def _estimated(problem: Problem, state: LoopState, cands: list[Candidate], stage: str

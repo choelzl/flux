@@ -27,7 +27,7 @@ def _publish_mentor(problem: Problem, state: LoopState) -> None:
         return
     # D981: reading the knowledge and the record back takes time (the library's first read takes
     # seconds); like all the loop's work it is a task's time, not a gap between tasks
-    with _phase("knowledge: mentor", why="the knowledge and the record, read back for the mentor panel", quiet=True):
+    with _phase("knowledge: mentor", why="knowledge and record, read back for the mentor panel", quiet=True):
         sections = _mentor_sections(problem, state)
     publish("mentor", {"sections": sections})
 

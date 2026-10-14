@@ -80,7 +80,7 @@ async function accountPage() {
         extraTabs: [{ tab: "Every agent", noSave: true, el: h("fieldset", { class: "set-group" }, h("legend", {}, "Variables for every run and every agent of yours"),
           h("p", { class: "muted small" }, "Every run and agent of yours gets these; a loop's own win."),
           envEditor(myEnv.mine, async (v) => { await api("/env", { method: "PUT", body: v }); route(); }, "me"),
-          myEnv.server.length ? h("div", { class: "blk" }, h("h4", {}, "The server's"), envTable(myEnv.server.map(x => ({ ...x, from: "the server" })), new Set(myEnv.mine.map(x => x.name)))) : "") }],
+          myEnv.server.length ? h("div", { class: "blk" }, h("h4", {}, "Server"), envTable(myEnv.server.map(x => ({ ...x, from: "server" })), new Set(myEnv.mine.map(x => x.name)))) : "") }],
         agentEnv: (a) => { const e = (st.agent_env || {})[a] || { mine: [], server: [] };
           return { rows: e.mine, server: e.server, save: async (v) => { await api(`/agents/${a}/env`, { method: "PUT", body: v }); route(); } }; } }),
       logins.box, logins.term]),

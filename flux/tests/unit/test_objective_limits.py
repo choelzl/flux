@@ -25,7 +25,7 @@ def test_every_goal_is_a_limit_and_the_goal_less_one_decides_among_those_meeting
             _sc("ok-cool", fmax_mhz=1010, area_um2=79, power_w=0.4)]
     pick, why = objs.decide(pool)
     assert pick.candidate.name == "ok-cool"
-    assert why == "the least power_w at fmax_mhz >= 1000 and area_um2 <= 80"
+    assert why == "least power_w at fmax_mhz >= 1000 and area_um2 <= 80"
     # the pairwise rule agrees: meeting both beats missing one, however cool
     assert objs.better(pool[3].metrics, pool[0].metrics) and not objs.better(pool[0].metrics, pool[3].metrics)
     assert objs.better(pool[3].metrics, pool[2].metrics)
@@ -43,7 +43,7 @@ def test_none_meets_every_limit_the_closest_wins_and_the_words_say_so():
             _sc("nearer-miss", fmax_mhz=990, area_um2=60, power_w=0.5)]  # misses fmax by 1%
     pick, why = objs.decide(pool)
     assert pick.candidate.name == "nearer-miss"
-    assert why == "nothing meets every limit (fmax_mhz >= 1000 and area_um2 <= 80); the closest misses fmax_mhz (990 for 1000)"
+    assert why == "nothing meets every limit (fmax_mhz >= 1000 and area_um2 <= 80); closest misses fmax_mhz (990 for 1000)"
     assert objs.better(pool[1].metrics, pool[0].metrics)                 # fewer limits missed
     assert objs.better(pool[2].metrics, pool[1].metrics)                 # the smaller relative shortfall
 
@@ -57,7 +57,7 @@ def test_the_balance_is_the_knee_among_the_designs_meeting_every_limit():
             _sc("knee", fmax_mhz=800, area_um2=45, power_w=0.5),
             _sc("small", fmax_mhz=300, area_um2=30, power_w=0.5)]
     pick, why = objs.decide(pool)
-    assert pick.candidate.name == "knee" and why == "the knee of fmax_mhz / area_um2 at power_w <= 1"
+    assert pick.candidate.name == "knee" and why == "knee of fmax_mhz / area_um2 at power_w <= 1"
     assert objs.describe() == "power_w at most 1, then the balance of fmax_mhz and area_um2"
     with pytest.raises(ValueError, match="balance objective has no goal"):
         Objectives.from_doc([{"metric": "x", "goal": 1, "balance": True}])
@@ -74,7 +74,7 @@ def test_a_limit_on_a_deeper_stages_metric_waits_for_that_stage():
     screen = [_sc("fast", "analytic", lat=1, area=100), _sc("knee", "analytic", lat=2, area=20),
               _sc("small", "analytic", lat=9, area=10)]
     pick, why = objs.decide(screen, stages)
-    assert pick.candidate.name == "knee" and why == "the knee of lat / area"
+    assert pick.candidate.name == "knee" and why == "knee of lat / area"
     synth = [_sc("knee", "synth", lat=2, area=20, slack=-5.0), _sc("fast", "synth", lat=1, area=100, slack=3.0),
              _sc("small", "synth", lat=9, area=10, slack=float("nan"))]
     pick, why = objs.decide(synth, stages)

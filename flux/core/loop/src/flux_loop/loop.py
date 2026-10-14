@@ -171,7 +171,7 @@ def run_loop(problem: Problem, request: LoopRequest, *, proposer: Any | None = N
     searching = _search_session(problem, state)     # D738: the search lives across passes
     if searching is not None:
         _reload_measured(problem, state)     # D682: before the walk's first step reads what is measured
-    with _phase("propose: decompose", why="the parts this pass works on", quiet=True) as out:
+    with _phase("propose: decompose", why="parts this pass works on", quiet=True) as out:
         goals: list[str] = _work(state, problem.decompose(state))
         out["parts"] = _describe_parts(goals, problem, state)
     for round_ in range(_rounds(problem, request, "decomposition")):
@@ -200,7 +200,7 @@ def run_loop(problem: Problem, request: LoopRequest, *, proposer: Any | None = N
         todo = [] if "*" in state.admitted else [None]
     hunting = searching is not None
     if depth == 0 and getattr(problem, "digesting", lambda: False)():   # D771: the papers digested in the Setup, before the Reading (D774)
-        with _phase("knowledge: digest", why="the library's papers, each once") as out:
+        with _phase("knowledge: digest", why="library papers, each once") as out:
             out.update(problem.digest(state) or {})
     if depth == 0:            # a sub-loop does not own the live panels (D455)
         _publish(problem, state, todo, goals, "resumed", searching=hunting)
@@ -241,12 +241,12 @@ def run_loop(problem: Problem, request: LoopRequest, *, proposer: Any | None = N
     state.drain()
 
     if state.fresh:          # something changed after the last climb (or nothing climbed yet)
-        with _phase("evaluation", why="the measured designs taken through the stages", quiet=not state.scored):   # D1053: nothing measured, nothing to evaluate
+        with _phase("evaluation", why="measured designs through the stages", quiet=not state.scored):   # D1053: nothing measured, nothing to evaluate
             _climb(problem, state, goals)
     from .boxes import flush_turns
 
     flush_turns(state)
-    with _phase("decide", why="the choice among the measured designs", quiet=not state.scored) as chose:   # D1053: nothing measured, nothing to choose
+    with _phase("decide", why="choice among the measured designs", quiet=not state.scored) as chose:   # D1053: nothing measured, nothing to choose
         out = _conclude(problem, state, goals)
         # D1061: the critic rejected every pick -- nothing chosen: the choice failed, as its critiques did
         chose["failed"] = getattr(out, "decision", None) is None and "rejected" in str(getattr(out, "decided_by", "") or "")
@@ -417,7 +417,7 @@ def _run_steps(problem: Problem, state: LoopState, searching: "_SearchSession | 
                     state.stopped = state.stopped or "nothing left to do"
                     break
                 state.step = step + 1
-                with _phase("evaluation", why="the measured designs taken through the stages", quiet=not state.scored):   # D1053: nothing measured, nothing to evaluate
+                with _phase("evaluation", why="measured designs through the stages", quiet=not state.scored):   # D1053: nothing measured, nothing to evaluate
                     _climb(problem, state, goals)
                 step += 1
                 if state.depth == 0:
@@ -1434,7 +1434,7 @@ def _conclude(problem: Problem, state: LoopState, goals: list[str]) -> LoopResul
             break
         # D1040: the select critic rejects the pick: marked rejected with why (the values it calls
         # wrong cleared), never chosen; the decision is made again without it
-        reject(state, pick, c.why, list((c.payload or {}).get("wrong") or []), "the select critic")
+        reject(state, pick, c.why, list((c.payload or {}).get("wrong") or []), "select critic")
         pool = [s for s in pool if s.candidate.key() != pick.candidate.key()]
         front = [s for s in front if s.candidate.key() != pick.candidate.key()]
         if not pool:

@@ -68,7 +68,7 @@ def test_a_shrink_under_a_relative_floor_refuses_and_the_goal_keeps_a_share_of_t
     assert out.refused and all("shrink: below the floor" in why for _n, why in out.refused)
     best = max(s.metrics["speedup"] for s in out.scored)
     assert out.decision.metrics["bytes"] == 8192 and out.decision.metrics["speedup"] >= 1 + 0.9 * (best - 1)
-    assert "the least bytes at speedup >=" in out.decided_by
+    assert "least bytes at speedup >=" in out.decided_by
 
 
 def test_finalists_are_spread_along_the_frontier_not_the_top_by_speed():

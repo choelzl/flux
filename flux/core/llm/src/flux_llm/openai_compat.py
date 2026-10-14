@@ -563,7 +563,7 @@ class OpenAIChatProposer:
                         # D1086: a round that said nothing at all (a call the server swallowed, or a last round that
                         # still wanted a tool): once more, no tools, thinking off, asked for the answer from what it has
                         notes["empty_round"] = int(notes.get("empty_round", 0)) + 1
-                        with phase("llm: the answer, asked again", why="the round came back empty") as inner:
+                        with phase("llm: the answer, asked again", why="round came back empty") as inner:
                             ask = messages + [{"role": "user", "content": "Answer now, in plain text, from what you have "
                                                                           "found so far; call no tool."}]
                             message = self._exchange(ask, schema, False, inner, notes=notes)
@@ -609,7 +609,7 @@ class OpenAIChatProposer:
         if budget.compact == "llm":
             ask = older_rounds_prompt(messages)
             if ask:
-                with phase("llm: condense", why="the older rounds of this turn, as facts") as inner:
+                with phase("llm: condense", why="older rounds of this turn, as facts") as inner:
                     try:
                         reply = self._exchange([{"role": "user", "content": ask}], None, False, inner, notes={})
                         digest = str(reply.get("content") or "").strip()

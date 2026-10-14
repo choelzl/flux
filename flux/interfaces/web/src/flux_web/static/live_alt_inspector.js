@@ -136,7 +136,7 @@ function toolBody(n, env) {
       const ok = fails.failing === 0, before = lines(out.slice(0, fails.index)).filter(l => !/^\s*\d+\s+failing/.test(l));
       top.push(h("div", { class: `alt-result ${ok ? "ok" : "bad"}`, style: `--k:${ok ? colorOf(n) : "var(--bad)"}` },
         h("span", { class: "alt-big" }, `${ok ? "✓" : "✗"} ${fails.failing} failing`), h("span", { class: "muted" }, [fails.of != null ? `of ${fails.of}` : "", f.exit && f.exit !== 0 ? `exit ${f.exit}` : ""].filter(Boolean).join(" · "))));   // D1061: an exit 0 beside failures says nothing
-      if (!ok && before.length) top.push(h("div", {}, h("div", { class: "alt-label" }, "The first failures"),
+      if (!ok && before.length) top.push(h("div", {}, h("div", { class: "alt-label" }, "First failures"),
         h("pre", { class: "val alt-cases" }, before.slice(0, 3).join("\n") + (before.length > 3 ? `\n… and ${before.length - 3} more` : ""))));
     } else if (Object.keys(metrics).length) {
       const { best, goals } = bestOf(n, env), dicts = dictsOf(out), me = candidateOf(n);

@@ -987,7 +987,7 @@ function settingsForm(st, { server = null, save, scope, agentEnv = null, panels 
     const nVars = vars ? vars.rows.length + ((vars.server || []).length) : 0;
     const varsEl = vars ? fold("Variables (this agent only)", nVars, nVars > 0,
       envEditor(vars.rows, vars.save, `${scope}-${g.agent}`),
-      vars.server && vars.server.length ? h("div", {}, h("p", { class: "muted small" }, "The server's, under yours:"),
+      vars.server && vars.server.length ? h("div", {}, h("p", { class: "muted small" }, "Server's, under yours:"),
         envTable(vars.server.map(x => ({ ...x, from: "the server" })), new Set(vars.rows.map(x => x.name)))) : "") : "";
     const el = h("fieldset", { class: "set-group" + (panel ? " with-panel" : "") }, h("legend", {}, g.label), panel ? panel.el : "",
       g.agent ? fold("Model", setHere, setHere > 0, ...rows) : rows,

@@ -198,14 +198,14 @@ class PrototypeMixin:
             if translate is None or icsc() is None:
                 return None
             generator, how = "icsc", "transpiled from the verified prototype by ICSC"
-            with _phase(f"generate: translate {subgoal or self.task.id} (ICSC)", why="the verified prototype, no model") as out:
+            with _phase(f"generate: translate {subgoal or self.task.id} (ICSC)", why="verified prototype, no model") as out:
                 sv, why = translate(prototype)
                 out["result"] = f"{sv.count(chr(10))} lines" if sv else f"not translated: {why}"
         else:
             from .golden_proto import spell_prototype
 
             generator, how = "py2sv", "spelled from the verified prototype by the loop"
-            with _phase(f"generate: spell {subgoal or self.task.id} (py2sv)", why="the verified prototype, no model") as out:
+            with _phase(f"generate: spell {subgoal or self.task.id} (py2sv)", why="verified prototype, no model") as out:
                 sv, why = spell_prototype(prototype, self.task)
                 out["result"] = f"{sv.count(chr(10))} lines" if sv else f"not spelled: {why}"
         if not sv:

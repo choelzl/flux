@@ -192,7 +192,7 @@
       var d = outs.decision;
       var nums = d && d.metrics ? Object.entries(d.metrics).map(function (kv) { return kv[0] + "=" + (typeof kv[1] === "number" ? Number(kv[1].toPrecision(5)) : kv[1]); }).join(", ") : "";
       pseudo("decision", "Decision", d ? d.name + (nums ? " · " + nums : "") : "none",
-        { decision: d, "decided by": outs.decided_by, "the front": outs.front, refused: outs.refused, stopped: outs.stopped }, outs.t);
+        { decision: d, "decided by": outs.decided_by, front: outs.front, refused: outs.refused, stopped: outs.stopped }, outs.t);
       if (outs.lessons && outs.lessons.length) pseudo("lessons", "Lessons", String(outs.lessons.length), { lessons: outs.lessons }, outs.t);
       var est = outs.established || [], not = outs.not_established || [];
       if (est.length || not.length) pseudo("established", "Established", est.length + (not.length ? " · " + not.length + " not" : ""),

@@ -375,7 +375,7 @@ class Objectives(tuple):
         if not pool:
             return None, "nothing measured"
         if not self:
-            return pool[0], "the only kind of answer this problem has"
+            return pool[0], "only candidate"
         if any(o.keep is not None for o in self):
             resolved = Objectives(o.resolved(pool) for o in self)
             if resolved != self:
@@ -398,10 +398,10 @@ class Objectives(tuple):
             if len(limits) == 1:
                 o = limits[0]
                 return pick, (f"nothing reaches {o.metric} {o.goal_at(stage, stages):g}{o._margin_said(stage, stages)}; "
-                              f"the {'most' if o.direction == 'maximize' else 'least'} {o.metric}")
+                              f"{'most' if o.direction == 'maximize' else 'least'} {o.metric}")
             short = ", ".join(f"{o.metric} ({_num(o.value(pick.metrics))} for {o.goal_at(stage, stages):g})"
                               for o in self.missed(pick.metrics, getattr(pick, "stage", None), stages))
-            return pick, f"nothing meets every limit ({at}); the closest misses {short}"
+            return pick, f"nothing meets every limit ({at}); closest misses {short}"
         steps = self._steps()
         free = [s for s in steps if not isinstance(s, tuple)]
         if self.balance:
@@ -409,13 +409,13 @@ class Objectives(tuple):
 
             ties = sorted(meeting, key=lambda p: tuple(_cost(o, p) for o in free))    # stable: the knee's ties
             ranked = knee_ranked(ties, [(lambda p, o=o: o.signed(p.metrics)) for o in self.balance])
-            why = "the knee of " + " / ".join(o.metric for o in self.balance)
+            why = "knee of " + " / ".join(o.metric for o in self.balance)
             return (ranked[0] if ranked else meeting[0]), why + (f" at {at}" if limits else "")
         if not free:
             # only limits: the first one's best
             o = limits[0]
             pick = min(meeting, key=lambda p: _cost(o, p))
-            words = f"the {'largest' if o.direction == 'maximize' else 'smallest'} {o.metric}"
+            words = f"{'largest' if o.direction == 'maximize' else 'smallest'} {o.metric}"
             return pick, words + (f" at {at}" if len(limits) > 1 else "")
         cands, used = list(meeting), []
         for o in free:
@@ -428,9 +428,9 @@ class Objectives(tuple):
         pick = min(cands, key=lambda p: tuple(_cost(o, p) for o in used))
         head = used[0]
         if limits:
-            words = f"the {'least' if head.direction == 'minimize' else 'most'} {head.metric} at {at}"
+            words = f"{'least' if head.direction == 'minimize' else 'most'} {head.metric} at {at}"
         else:
-            words = f"the {'smallest' if head.direction == 'minimize' else 'largest'} {head.metric}"
+            words = f"{'smallest' if head.direction == 'minimize' else 'largest'} {head.metric}"
         return pick, words + "".join(f", then {o.describe()}" for o in used[1:])
 
     def good_enough(self, metrics: dict[str, Any] | None, stage: str | None = None,

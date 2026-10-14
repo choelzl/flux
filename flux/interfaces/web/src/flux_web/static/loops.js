@@ -35,7 +35,7 @@ async function startLoopOwned(name) {
     h("div", { class: "row" }, h("label", { class: "stack" }, "Passes", passes), h("label", { class: "check" }, forever, "until I stop it")),
     h("label", { class: "check" }, screen, "screen only (skip the costly stages)"));
   const said = (ok, text, output) => checkBox.replaceChildren(h("div", { class: `callout ${ok === true ? "good" : ok === false ? "bad" : ""}` },
-    h("strong", {}, text), output ? h("details", {}, h("summary", {}, "the check's output"), h("pre", { class: "log small" }, output)) : ""));
+    h("strong", {}, text), output ? h("details", {}, h("summary", {}, "Check output"), h("pre", { class: "log small" }, output)) : ""));
   const waiting = dialog(`Start ${name}`, body, [["Cancel", false], ["Start", true, "primary"]]);
   const dlg = [...document.querySelectorAll("dialog.dlg")].pop();
   const startBtn = dlg ? dlg.querySelector("button.primary") : null;

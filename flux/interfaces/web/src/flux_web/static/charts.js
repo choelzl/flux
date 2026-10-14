@@ -56,7 +56,7 @@ function legend(S, { front = false, pending = false, baseline = false } = {}) {
     h("span", { class: "key-item" }, key(plain, "accepted"), "meets every requirement"),
     h("span", { class: "key-item" }, key(plain, "failed"), "misses one"),
     pending ? h("span", { class: "key-item" }, key(plain, "pending"), "waits for a later stage") : "",
-    h("span", { class: "key-item" }, key(plain, "accepted", ring(0, 0, 1.2)), "the decision"),
+    h("span", { class: "key-item" }, key(plain, "accepted", ring(0, 0, 1.2)), "decision"),
     front ? h("span", { class: "key-item" }, sv("svg", { viewBox: "0 0 14 8", class: "chart key wide", "aria-hidden": "true" }, sv("path", { d: "M1,7L1,4L7,4L7,1L13,1", class: "front" })), "feasible front") : "");
 }
 /** A point's details (D914): which design, its piece, its standing and what it does not meet. */

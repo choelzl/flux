@@ -71,17 +71,17 @@ def test_the_decision_follows_the_vector():
     pool = [_sc("slow-small", fmax_mhz=700, area_um2=100, power_w=1), _sc("fast-big", fmax_mhz=820, area_um2=900, power_w=3),
             _sc("fast-mid", fmax_mhz=805, area_um2=600, power_w=2)]
     pick, why = objs.decide(pool)
-    assert pick.candidate.name == "fast-mid" and why == "the least area_um2 at fmax_mhz >= 800"
+    assert pick.candidate.name == "fast-mid" and why == "least area_um2 at fmax_mhz >= 800"
     pick, why = objs.decide(pool[:1])
-    assert pick.candidate.name == "slow-small" and why.startswith("nothing reaches fmax_mhz 800; the most fmax_mhz")
+    assert pick.candidate.name == "slow-small" and why.startswith("nothing reaches fmax_mhz 800; most fmax_mhz")
     assert objs.decide([]) == (None, "nothing measured")
     one = Objectives([Objective("bytes", "minimize")])
     pick, why = one.decide([_sc("x", bytes=3), _sc("y", bytes=2)])
-    assert pick.candidate.name == "y" and why == "the smallest bytes"
+    assert pick.candidate.name == "y" and why == "smallest bytes"
     knee = Objectives([Objective("value", balance=True), Objective("cost", "minimize", balance=True)])   # D658
     pick, why = knee.decide([_sc("p", value=1, cost=1), _sc("q", value=10, cost=2), _sc("r", value=11, cost=9)])
-    assert pick.candidate.name == "q" and why == "the knee of value / cost"
-    assert Objectives().decide([_sc("only")])[1] == "the only kind of answer this problem has"
+    assert pick.candidate.name == "q" and why == "knee of value / cost"
+    assert Objectives().decide([_sc("only")])[1] == "only candidate"
 
 
 def test_the_frontier_axes_and_the_early_stop_come_from_the_first_objectives():
@@ -114,7 +114,7 @@ def test_a_task_document_carries_the_full_objective_and_the_loop_derives_the_res
     problem = PromptProblem(task)
     assert problem.objectives().goal.metric == "fmax_mhz" and problem.frontier_axes() is not None
     pick, why = problem.decide([_sc("a", fmax_mhz=820, area_um2=5), _sc("b", fmax_mhz=830, area_um2=9)], None)
-    assert pick.candidate.name == "a" and why == "the least area_um2 at fmax_mhz >= 800"
+    assert pick.candidate.name == "a" and why == "least area_um2 at fmax_mhz >= 800"
 
 
 def test_a_shallower_stage_must_clear_the_goal_plus_the_margin():
@@ -137,7 +137,7 @@ def test_a_shallower_stage_must_clear_the_goal_plus_the_margin():
     routed = [Scored(Candidate("a", ""), stage="route", metrics={"fmax_mhz": 810, "area_um2": 5}),
               Scored(Candidate("b", ""), stage="route", metrics={"fmax_mhz": 830, "area_um2": 9})]
     pick, why = objs.decide(routed, chain)
-    assert pick.candidate.name == "a" and why == "the least area_um2 at fmax_mhz >= 800"
+    assert pick.candidate.name == "a" and why == "least area_um2 at fmax_mhz >= 800"
     assert objs.better({"fmax_mhz": 830, "area_um2": 9}, {"fmax_mhz": 810, "area_um2": 5}, "confirm", chain)
     assert not objs.better({"fmax_mhz": 830, "area_um2": 9}, {"fmax_mhz": 810, "area_um2": 5}, "route", chain)
     assert objs.good_enough({"fmax_mhz": 810}, "confirm", chain) is None

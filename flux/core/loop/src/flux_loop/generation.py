@@ -85,7 +85,7 @@ def _generate_with_model(problem: Problem, subgoal: str | None, method: str,
         # Transpiled, not transcribed (D478): the prototype is the design and translating it is
         # mechanical, so the model is not asked to (it lost widths, signs and shifts). The gate
         # proves bit-exactness; a mismatch is reported as a transpiler defect.
-        with _phase(f"generate: transpile {tag}", why="the verified prototype, no model") as out:
+        with _phase(f"generate: transpile {tag}", why="verified prototype, no model") as out:
             out["prototype"] = state.prototypes[key][:6000]
             try:
                 cand = problem.transpile(state.prototypes[key], subgoal, state)

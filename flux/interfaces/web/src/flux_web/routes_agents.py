@@ -254,7 +254,7 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
         """D935: the admin tests the server's configuration of `agent` once, for everyone who has
         no settings of their own for it."""
         offered(agent)
-        return run_agent_test(a, agent, why="the server's configuration", server=True)
+        return run_agent_test(a, agent, why="server configuration", server=True)
 
     @app.get("/api/logins")
     def get_logins(user: User = Depends(user_of)) -> dict[str, Any]:

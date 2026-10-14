@@ -265,7 +265,7 @@ def apply_plan(problem: "Problem", state: "LoopState") -> dict[str, Any]:
     req = state.request
     agent = "plan" in (req.agent or ())
     surface = plan_surface(problem, state)
-    with _phase("plan: the loop", why="the agent plans" if agent else "a plan document", absorb=True) as out:
+    with _phase("plan: the loop", why="agent plans" if agent else "a plan document", absorb=True) as out:
         doc, err = _read_file(req.plan_file or "")
         from_file = bool(doc)
         source = f"file {req.plan_file}" if doc else ""

@@ -315,10 +315,10 @@ def test_a_select_critic_rejects_the_pick_and_the_decision_is_made_again_without
     proposer = ScriptedProposer([_reply(GOOD), _critic(False, "the decision ignores width")])
     out = run_loop(PromptProblem(task), request_for(task, db=str(tmp_path / "s.db")), proposer=proposer, log=lambda m: None)
     assert out.decision is None and out.decided_by == "every measured design was rejected"
-    assert any("rejected by the select critic: the decision ignores width" in ln for ln in out.lessons)
+    assert any("rejected by select critic: the decision ignores width" in ln for ln in out.lessons)
     problem = PromptProblem(task)
     r = problem.open_records(request_for(task, db=str(tmp_path / "s.db")), lambda _m: None)
-    assert [(x["name"], x["by"]) for x in r.rejections()] == [("digits#1", "the select critic")]
+    assert [(x["name"], x["by"]) for x in r.rejections()] == [("digits#1", "select critic")]
 
 
 def test_a_measure_critic_marks_a_result_rejected_clears_the_wrong_value_and_it_is_never_chosen(tmp_path):
@@ -335,7 +335,7 @@ def test_a_measure_critic_marks_a_result_rejected_clears_the_wrong_value_and_it_
     out = run_loop(PromptProblem(task), request_for(task, db=str(tmp_path / "m.db")), proposer=proposer, log=lambda m: None)
     assert "THE MEASUREMENT of digits#1 on stage bench" in proposer.prompts[1] and '"wrong"' in proposer.prompts[1]
     assert out.decision is None and out.decided_by == "every measured design was rejected"
-    assert any("rejected by the measure critic (bench): 1 cycle cannot hold ten lines (wrong: cycles)" in ln for ln in out.lessons)
+    assert any("rejected by measure critic (bench): 1 cycle cannot hold ten lines (wrong: cycles)" in ln for ln in out.lessons)
     problem = PromptProblem(task)
     r = problem.open_records(request_for(task, db=str(tmp_path / "m.db")), lambda _m: None)
     assert [(x["name"], x["cleared"]) for x in r.rejections()] == [("digits#1", [{"stage": "bench", "metric": "cycles", "value": 1.0}])]

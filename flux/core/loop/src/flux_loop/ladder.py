@@ -344,7 +344,7 @@ def take(problem: "Problem", part: str, code: str, depth: float, d0: int, state:
 
     state.prototypes[part] = code
     _record_prototype(state, part, code, Verdict(True, depth, f"0 over, logic depth {depth:g} (from {d0}; {how})"), ok=True)
-    with _phase(f"generate: transpile {part}", why="the shallower prototype, at the part's register count") as out:
+    with _phase(f"generate: transpile {part}", why="shallower prototype, at the part's register count") as out:
         out["prototype"] = code[:6000]
         cand = problem.transpile(code, part, state)
         if cand is not None:
