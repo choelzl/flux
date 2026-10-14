@@ -843,7 +843,7 @@ class _Live:
 
     def _say(self, text: str, *, sep: str = "\n") -> None:
         self.words = (self.words + text + sep)[-self.TAIL:]
-        self._step("text", text + sep)
+        self._step("text", text + ("\n\n" if sep == "\n" else sep))   # D1075: a message whole is a paragraph of its own
 
     def _think(self, text: str, *, sep: str = "\n") -> None:
         self.thinking = (self.thinking + text + sep)[-self.TAIL:]

@@ -106,9 +106,9 @@ def _generate_with_model(problem: Problem, subgoal: str | None, method: str,
             if built is not None:
                 fails, summary = problem.fast_check(built, cand, subgoal, state)
                 if fails == 0:
-                    state.say(f"  {tag}: transpiled from the verified prototype; passes the fast check")
+                    state.say(f"  {tag}: transpiled from the verified prototype; passes the check")
                     return cand, built, ""
-                state.say(f"  {tag}: the TRANSPILED prototype fails {fails} fast-check vector(s) -- "
+                state.say(f"  {tag}: the TRANSPILED prototype fails {fails} check vector(s) -- "
                           "a transpiler defect, not the design's; the model transcribes instead")
                 state.lessons.append(f"[transpile] {tag}: {fails} failing after transpilation: {summary[:200]}")
             else:
@@ -247,13 +247,13 @@ def _generate_with_model(problem: Problem, subgoal: str | None, method: str,
             last_good, broke = cand.artifact, 0
             fails, summary = problem.fast_check(built, cand, subgoal, state)
             if fails == 0:
-                state.say(f"  {tag} passes the fast check; handing it to the gate")
+                state.say(f"  {tag} passes the check; handing it to the gate")
                 return cand, built, ""
             record_failure(state, cand, "fast-check", summary or f"{fails} failure(s)", fails)
             # the trend: did the last edit help, by how much, and where it stands against the best
             trend, is_best = grad.observe(fails, (cand, built), key=cand.artifact, failure=summary)
             if is_best:
-                state.say(f"  {tag}: {gate_score(fails)} fast-check failure(s) (best so far)")
+                state.say(f"  {tag}: {gate_score(fails)} check failure(s) (best so far)")
             if grad.revert_due(cand.artifact):
                 # too many regressions in a row: back to the best attempt, and say so
                 state.say(f"  {tag}: the tolerance for worsening edits is spent; backtracking "

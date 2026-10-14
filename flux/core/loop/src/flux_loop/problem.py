@@ -737,7 +737,7 @@ class GeneratorRole(_Role):
 
 
 class EvaluatorRole(_Role):
-    """test / analytical / simulation nodes: the fast check, the gate, the chain."""
+    """test / analytical / simulation nodes: the check, the gate, the chain."""
 
     def build(self, cand: Candidate, subgoal: str | None, state: LoopState) -> Any:
         """Compile / elaborate / sanity-check; raise BuildError(text) to refuse."""

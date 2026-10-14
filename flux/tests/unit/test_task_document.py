@@ -109,7 +109,7 @@ def test_a_task_runs_from_the_document_alone(tmp_path):
     assert "TASK digits:" in proposer.prompts[0] and "CONTRACT:" in proposer.prompts[0]
     assert "REPLY SHAPE" in proposer.prompts[0] and "artifact" in proposer.prompts[0]
     assert "FAIL line 4: expected 3" in proposer.prompts[1] and "1 failing" in proposer.prompts[1]
-    assert any("passes the fast check" in ln for ln in log)
+    assert any("passes the check" in ln for ln in log)
     lines = task_report_lines(task, out)
     assert lines[0].startswith("TASK digits:") and "DECISION" in lines[1]
     # the record is the loop's: a second run resumes it

@@ -180,7 +180,7 @@ def run_loop(problem: Problem, request: LoopRequest, *, proposer: Any | None = N
         with _phase("critique: decomposition", why=f"round {round_ + 1}", absorb=True) as out:
             c = problem.critique("decomposition", list(goals), state)
             out["verdict"] = "the division stands" if c.ok else f"SENT BACK: {c.why}"
-            out["failed"] = not c.ok                    # D1053: a rejection is a red ✗, counted as failed
+            out["rejected"] = not c.ok                    # D1075: a critic\'s rejection is guidance, "!" -- not a failed step
             out["subject"] = ", ".join(str(g) for g in goals)
         if c.ok:
             break
@@ -1037,7 +1037,7 @@ def _pick(problem: Problem, state: LoopState, todo: list, goals: list[str], huma
 
 
 def _draft(problem: Problem, state: LoopState, sg: str | None, method: str, human: str | None) -> tuple:
-    """The generation box for one part -- the model's turns, the build, the fast check -- as
+    """The generation box for one part -- the model's turns, the build, the check -- as
     `problem.generate` runs it. Safe on a worker thread (D569): it writes only its own part's
     entries of the state and the record."""
     tag = sg or problem.name
@@ -1078,7 +1078,7 @@ def _admit(problem: Problem, state: LoopState, todo: list, goals: list[str], sg:
         with _phase(f"critique: {tag}", why=cand.name, absorb=True) as out:
             c = problem.critique("candidate", cand, state)
             out["verdict"] = "no objection" if c.ok else f"REJECTED: {c.why}"
-            out["failed"] = not c.ok                    # D1053: a rejection is a red ✗, counted as failed
+            out["rejected"] = not c.ok                    # D1075: a critic\'s rejection is guidance, "!" -- not a failed step
             out["subject"] = f"{cand.name}: {len(cand.artifact or '')} chars of artifact, {verdict.why[:300] if verdict.why else 'gate passed'}"
         if not c.ok:
             # D1040: the gate passed and the test critic rejects it: the design FAILS, the critic's
@@ -1428,7 +1428,7 @@ def _conclude(problem: Problem, state: LoopState, goals: list[str]) -> LoopResul
         with _phase("critique: decision", why=pick.name, absorb=True) as out:
             c = problem.critique("decision", pick, state)
             out["verdict"] = "no objection" if c.ok else f"REJECTED: {c.why}"
-            out["failed"] = not c.ok                    # D1053: a rejection is a red ✗, counted as failed
+            out["rejected"] = not c.ok                    # D1075: a critic\'s rejection is guidance, "!" -- not a failed step
             out["subject"] = f"{pick.name}: {pick.metrics}"
         if c.ok:
             break

@@ -12,7 +12,8 @@ const isModel = n => /^\s*(llm\b|model\b)/i.test(turnOf(n));
 const head = n => String(n.name).toLowerCase().split(":")[0].trim();
 const colorOf = n => isAgent(n) ? AGENT_COLOR : COLORS[phaseKind(n)] || COLORS.setup;
 const running = n => n.t1 == null;
-const stateOf = n => running(n) ? ["live", "running"] : n.interrupted ? ["warn", "interrupted"] : n.failed ? ["bad", "failed"] : n.timedOut ? ["warn", "time limit"] : ["ok", "done"];
+const stateOf = n => running(n) ? ["live", "running"] : n.interrupted ? ["warn", "interrupted"] : n.failed ? ["bad", "failed"] : n.timedOut ? ["warn", "time limit"]
+  : n.tryFailed ? ["bad", `failed · ${n.tryFailed}`] : n.rejected ? ["warn", "rejected"] : ["ok", "done"];   // D1075: a try whose check failed is a failed try
 const fieldsOf = n => ({ ...(n.fields || {}), ...(running(n) ? {} : (n.output || {})) });
 const stdoutOf = n => { const f = fieldsOf(n); return String(f.stdout ?? f["stdout (live tail)"] ?? ""); };
 const lines = s => String(s).split("\n").filter(l => l.trim());
@@ -48,7 +49,7 @@ function pill(n) {
 function stepRow(x, env) {
   const s = summaryOf(x);
   return h("button", { type: "button", class: "alt-step-row", style: `--k:${x.failed ? "var(--bad)" : colorOf(x)}`, "data-task": String(x.id), onclick: () => env.pick?.(x.id) },
-    running(x) ? h("span", { class: "alt-spin", "aria-hidden": "true" }) : h("span", { class: `alt-task-state ${x.failed ? "failed" : "done"}` }, x.failed ? "✗" : "✓"),
+    running(x) ? h("span", { class: "alt-spin", "aria-hidden": "true" }) : h("span", { class: `alt-task-state ${x.failed ? "failed" : x.rejected ? "partial" : "done"}` }, x.failed ? "✗" : x.rejected ? "!" : "✓"),
     h("span", { class: "alt-task-name", title: taskLabel(x) }, byId(taskLabel(x)), s ? h("span", { class: "muted" }, ` — ${s}`) : "",
       /^\s*critique\s*:/i.test(String(x.name)) ? h("span", { class: "muted" }, ` — ${/^(rejected|sent back)/i.test(String(x.output?.verdict ?? "")) ? "rejected" : x.output?.verdict ? "no objection" : ""}`) : ""),   // D1065: its verdict
     h("span", { class: "mono muted small" }, dur(x.seconds ?? (x.t1 ?? Date.now() / 1000) - x.t0)));
@@ -87,7 +88,7 @@ export function inspectorHead(n, env) {
     parents.length ? h("div", { class: "alt-crumbs" }, parents.flatMap((p, i) => [i ? h("span", { class: "muted" }, "›") : "",
       h("button", { type: "button", class: "alt-pchip", style: `--k:${colorOf(p)}`, onclick: () => env.pick?.(p.id), title: taskLabel(p) }, plain(taskLabel(p)))])) : "",
     // D1066: the reason and the engine's name by the same rule -- a reason that is the loop's own name says nothing
-    h("p", { class: "alt-meta muted" }, n.why && !loopNames.includes(String(n.why).trim()) ? `${byId(n.why)} · ` : "", h("span", { class: "mono", title: n.name }, byId(n.name)))];
+    h("p", { class: "alt-meta muted" }, n.why && !loopNames.includes(String(n.why).trim()) ? `${byId(n.why)} · ` : "", h("span", { class: "mono", title: n.name }, n.tryNo ? byId(n.name).replace(/\bdraft \d+$/, `try ${n.tryNo}`) : byId(n.name)))];   // D1075: the tree's try, not a run's own draft count
 }
 
 /** The usual time of a task like this one (the same name and purpose's first word), from its earlier runs. */
@@ -150,8 +151,9 @@ function toolBody(n, env) {
         // D1068: a dictionary key by key -- one mean's percentage hides a key that moved the other way
         if (b.m != null && dicts[k] && typeof b.v === "object") {
           const keys = Object.keys(dicts[k]).filter(x => typeof dicts[k][x] === "number" && typeof b.v[x] === "number" && b.v[x]);
-          const mc = (m - bm) / Math.abs(bm);
-          return [keys.map(x => `${x} ${pct((dicts[k][x] - b.v[x]) / Math.abs(b.v[x]))}`).join(" · "), dir * mc > 0 ? "up" : dir * mc < 0 ? "down" : ""];
+          // D1075: each key coloured by its own way -- t1 down is better under a minimised goal though t2 went up
+          return [keys.flatMap((x, i) => { const c = (dicts[k][x] - b.v[x]) / Math.abs(b.v[x]);
+            return [i ? " · " : "", h("span", { class: `alt-change ${dir * c > 0 ? "up" : dir * c < 0 ? "down" : ""}` }, `${x} ${pct(c)}`)]; }), ""];
         }
         const c = (m - bm) / Math.abs(bm);
         return [Math.abs(c) < 0.0005 ? "=" : `${c > 0 ? "+" : "−"}${Math.abs(c * 100).toFixed(1)}%`, dir * c > 0 ? "up" : dir * c < 0 ? "down" : ""]; };

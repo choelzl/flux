@@ -206,7 +206,7 @@ def _judged(problem: Problem, state: LoopState, got: Scored) -> None:
     with _phase("critique: measurement", why=f"{got.name}@{got.stage}", absorb=True) as out:
         c = problem.critique("measurement", got, state)
         out["verdict"] = "no objection" if c.ok else f"REJECTED: {c.why}"
-        out["failed"] = not c.ok                        # D1053: a rejection is a red ✗, counted as failed
+        out["rejected"] = not c.ok                        # D1075: a critic\'s rejection is guidance, "!" -- not a failed step
         out["subject"] = f"{got.name}: {got.metrics}"
     if not c.ok:
         reject(state, got, c.why, list((c.payload or {}).get("wrong") or []), f"the measure critic ({got.stage})")

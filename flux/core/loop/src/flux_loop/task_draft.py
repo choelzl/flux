@@ -68,10 +68,14 @@ class DraftMixin:
         (`x#4`), then a revision of it for each repair or continuation in the pass (`x#4.2`, `x#4.3`)."""
         ps = state.part(sg) if state is not None else None
         if ps is None or ps.design_no is None:
-            self._count += 1
+            # D1075: the parts a pass designs share its number (lo#4, hi#4): one pass, one design of parts
+            shared = next((q.design_no for q in state.parts.values() if q.design_no is not None), None) if ps is not None else None
+            if shared is None:
+                self._count += 1
+                shared = self._count
             if ps is not None:
-                ps.design_no, ps.revision = self._count, 1
-            return f"{base}#{self._count}"
+                ps.design_no, ps.revision = shared, 1
+            return f"{base}#{shared}"
         ps.revision += 1
         return f"{base}#{ps.design_no}.{ps.revision}"
 

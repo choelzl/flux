@@ -32,7 +32,7 @@ __all__ = ["Attempt", "Catalog", "Model", "Solver", "Source", "Template", "from_
 @dataclass(frozen=True)
 class Attempt:
     """One draft request. `index` 0 is the first try of this pass; 1 and up carry `prior`
-    (what was drafted last) and `failure` (what the build or the fast check said about it)."""
+    (what was drafted last) and `failure` (what the build or the check said about it)."""
 
     subgoal: str | None
     state: LoopState
@@ -167,8 +167,8 @@ def iterate(problem: Any, source: Source, subgoal: str | None, state: LoopState,
                     brief = f"{brief}\n\n{failure}".strip()
                 say(f"  {source.name}: {cand.name} is {again.candidate.name} again, already measured; asking for a different one")
                 continue
-        # D1046: the build and the fast check are one task -- the checks it ran under it, failing when they failed
-        with _phase(f"test: fast check {cand.name}", why=source.name) as checked:
+        # D1046: the build and the check are one task -- the checks it ran under it, failing when they failed
+        with _phase(f"test: check {cand.name}", why=source.name) as checked:
             try:
                 built = problem.build(cand, subgoal, state)
             except BuildError as exc:
@@ -194,8 +194,8 @@ def iterate(problem: Any, source: Source, subgoal: str | None, state: LoopState,
         from .ideas import record_failure
 
         record_failure(state, cand, "fast-check", failure, fails)
-        say(f"  {source.name}: {cand.name} has {fails} failure(s) on the fast check")
-    return None, None, (f"{source.name}: no candidate passed the fast check in {rounds} "
+        say(f"  {source.name}: {cand.name} has {fails} failure(s) on the check")
+    return None, None, (f"{source.name}: no candidate passed the check in {rounds} "
                         f"attempt(s); last: {failure!s:.200}")
 
 

@@ -360,10 +360,10 @@ def take(problem: "Problem", part: str, code: str, depth: float, d0: int, state:
         return None, None, f"{part}: the transpiled {depth:g}-level design did not build: {str(exc)[:200]}"
     fails, summary = problem.fast_check(built, cand, part, state)
     if fails:
-        state.say(f"  {part}: the TRANSPILED {depth:g}-level prototype fails {fails} fast-check vector(s) -- a transpiler defect; the old design stands")
+        state.say(f"  {part}: the TRANSPILED {depth:g}-level prototype fails {fails} check vector(s) -- a transpiler defect; the old design stands")
         state.prototypes.pop(part, None)
-        return None, None, f"{part}: transpiled {depth:g}-level design fails {fails} fast-check vector(s): {summary[:200]}"
-    state.say(f"  {part}: transpiled from the {depth:g}-level prototype" + (f" at {k} pipeline registers" if k else "") + "; passes the fast check")
+        return None, None, f"{part}: transpiled {depth:g}-level design fails {fails} check vector(s): {summary[:200]}"
+    state.say(f"  {part}: transpiled from the {depth:g}-level prototype" + (f" at {k} pipeline registers" if k else "") + "; passes the check")
     return cand, built, ""
 
 

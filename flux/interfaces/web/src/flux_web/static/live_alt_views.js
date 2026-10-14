@@ -59,7 +59,7 @@ export function taskLabel(n) {
   if (head === "dse") { const c = candidateOf(n); return c ? `Search · ${c}` : "Search"; }
   if (head === "test" && rest === "gate") { const c = candidateOf(n); return c ? `Check · ${c}` : "Check"; }   // D1051; D1061: a check, said "check"
   // D1050: a design's checks said one way -- its build and check, the gate's verdict on it
-  if (head === "test" && /^fast check\s/i.test(rest)) return `${kind} · ${rest.slice(11).trim()}`;      // D1054: a check, said "check"
+  if (head === "test" && /^(?:fast )?check\s/i.test(rest)) return `${kind} · ${rest.replace(/^(?:fast )?check\s+/i, "").trim()}`;      // D1054: a check, said "check"
   if (head === "test" && /^judge\s/i.test(rest)) return `${kind} · ${rest.slice(6).trim()}`;
   // D1038: the decision's own steps said apart -- the step that holds them, the pick, a critique of what it judges
   if (head === "decide" && !rest) return /^\s*decide\b/i.test(String(n.parent?.name || "")) ? `${kind} · pick` : kind;
@@ -78,7 +78,7 @@ function draftDesign(n) {
   const sib = n.parent?.kids || [], at = sib.indexOf(n);
   for (const x of sib.slice(at + 1)) {
     if (/\bdraft\s+\d+\s*$/i.test(String(x.name))) break;
-    const m = /^\s*test\s*:\s*(?:fast check|judge)\s+(\S+)/i.exec(String(x.name)) || /\s(\S+#\S+)\s*$/.exec(String(x.why || ""));
+    const m = /^\s*test\s*:\s*(?:(?:fast )?check|judge)\s+(\S+)/i.exec(String(x.name)) || /\s(\S+#\S+)\s*$/.exec(String(x.why || ""));
     if (m) return m[1];                           // D1065: the whole name -- each view says it by its own rule
   }
   // D1059: no check after it (stopped at its time limit) -- the design it was asked for, as its try line says
@@ -121,10 +121,10 @@ function runsOf(rows, test) {
 function leaves(n) { return n.kids?.length ? n.kids.flatMap(leaves) : [n]; }
 function boxState(runs) {
   if (!runs.length) return "wait";
-  // D1065: a box whose result a critic rejected did its work -- "!", the critique its red ✗; its own last run decides the rest
+  // D1065: a box whose result a critic rejected did its work -- "!" (D1075: the critique's "!" too); its own last run decides the rest
   const critique = n => /^\s*critique\s*:/i.test(String(n.name));
   const own = runs.filter(n => !critique(n));
-  if (own.length && own.length < runs.length) { const s0 = boxState(own); return s0 === "ok" && runs.some(n => critique(n) && n.failed) ? "part" : s0; }
+  if (own.length && own.length < runs.length) { const s0 = boxState(own); return s0 === "ok" && runs.some(n => critique(n) && (n.failed || n.rejected)) ? "part" : s0; }
   const last = runs[runs.length - 1], s = state(last);
   if (s === "running") return "run";
   if (s === "failed" || s === "interrupted") return "bad";
