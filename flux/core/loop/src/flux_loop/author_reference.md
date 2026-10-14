@@ -135,7 +135,7 @@ Say only what is yours; the rest is inferred.
     `prototype_agent_attempts` (8), `prototype_agent_patience` (+2) up to
     `prototype_agent_attempts_max` (20) instead. The log says which budget a pass uses (D933).
 - Advanced `budget` knobs, rarely needed: agent, ahead, budget_s, compact,
-  agent_continues, compact_share, compute_timeout_s, cooldown_after, critique_rounds, explore, explore_after, explore_every,
+  agent_continues, agent_grace_s, compact_share, compute_timeout_s, cooldown_after, critique_rounds, explore, explore_after, explore_every,
   hop_share, knowledge_share, max_depth, max_tolerance, parallel_parts, patch_context_lines,
   patching, plan_file, prototype_agent_attempts, prototype_agent_attempts_max, prototype_agent_patience,
   prototype_attempts, prototype_attempts_max, prototype_patience,

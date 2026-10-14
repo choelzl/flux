@@ -179,6 +179,8 @@ class LoopRequest:
     explore_after: int = 2          # D845: passes the decision stands before a pass explores (then in turn)
     agent_continues: int = 3        # D1026: a design agent's session continued this many times past its time limit,
                                     # then the pass gives up: no design, its notes on the record
+    agent_grace_s: float | None = None   # D1088: after the continues, one short turn to hand in a design -- this long
+                                    # (None: a fifth of its time limit, 1 to 5 minutes; 0: no such turn)
     exploration_quota: float = 0.0  # minimum share of attempted improvements devoted to new approaches
     cooldown_after: int = 3         # consecutive no-builds before a subgoal yields
     structured: bool = True         # schema-constrained decoding when the proposer allows

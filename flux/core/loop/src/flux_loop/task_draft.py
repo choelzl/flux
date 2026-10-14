@@ -129,6 +129,10 @@ class DraftMixin:
             message = (f"YOUR LAST TURN RAN PAST ITS TIME LIMIT before the design was finished. Continue where you "
                        f"stopped: finish the design in `{path}` (what you already wrote there is kept), "
                        "without starting over. Then reply with one line saying the file is written.\n")
+            if sess.timeouts >= max(0, int(getattr(state.request, "agent_continues", 3))):
+                # D1088: said -- after this turn only a short one is left, to hand in what there is
+                message += ("THIS IS YOUR LAST FULL TURN. Stop exploring alternatives: bring the design to a state that "
+                            "builds and passes the checks, and write it. After this turn you only get a few minutes to hand it in.\n")
             message += "\n\n" + instructions(path)
         elif resume:
             # the session holds the brief: what failed, the file, fix it (D669)
@@ -165,7 +169,11 @@ class DraftMixin:
         self._session_turn(state, sess, turn, "generate", sg, agent.tool, path.is_file(),
                            f"exited {turn.rc}, wrote no {path.name}", message or brief, t0, probe_ctx)
         if sess.timeouts > max(0, int(getattr(state.request, "agent_continues", 3))):
-            return None, self._out_of_time(state, sess, turn, path, agent)
+            graced = self._grace(state, sess, agent, path, subs, prompt_file, safe)
+            if graced is None:                         # no final turn, or it wrote nothing: what was left is not a design
+                return None, self._out_of_time(state, sess, turn, path, agent)
+            turn = graced
+            sess.timed_out, sess.timeouts = False, 0          # D1088: it handed one in -- judged as any draft
         if sess.timed_out:                        # D1026: cut off mid-design -- not judged; its session continues it
             return None, (f"the coding agent {agent.tool} ran past its time limit ({agent.timeout_s:g} s) before it finished; "
                           f"its session continues ({sess.timeouts} of {1 + int(getattr(state.request, 'agent_continues', 3))} turns)")
@@ -189,6 +197,37 @@ class DraftMixin:
                  else " (it asked, and its questions are answered by nobody here)" if question_in(turn.text) is not None else "")
         return None, (f"the coding agent {agent.tool} exited {turn.rc} and wrote no {path.name}{still}"
                       + (f": {tail}" if tail else ""))
+
+    def _grace(self, state: LoopState, sess: Any, agent: Any, path: Path, subs: dict, prompt_file: Path, safe: str) -> Any:
+        """D1088: the continues used up, one short last turn in the same session -- no more experiments, the
+        design handed in as it stands -- so a pass that ran out of time still has something to check. Its turn
+        when it wrote the design; None when it wrote nothing, cannot resume its session, or the grace is off
+        (`agent_grace_s: 0`)."""
+        import dataclasses
+
+        from .agent import converse
+        from .ideas import instructions
+
+        want = getattr(state.request, "agent_grace_s", None)
+        grace = min(300.0, max(60.0, agent.timeout_s / 5)) if want is None else float(want)
+        if grace <= 0 or not (agent.resume and sess.id):
+            return None
+        message = (f"TIME IS UP. This is your final turn, and it is short ({grace:.0f} s). Do not experiment, test or explore "
+                   f"any further. Write your best design as it stands to `{path}` now -- complete enough to build, "
+                   "whatever is unfinished left as simply as it can be -- then reply with one line saying the file is written.\n")
+        message += "\n\n" + instructions(path)
+        grace_file = prompt_file.with_name(f"PROMPT-{safe}-grace.md")
+        grace_file.write_text(message)
+        state.say(f"  {agent.tool}: out of time after its continues; a final {grace:.0f} s turn to hand in its design")
+        t0, before = time.monotonic(), path.stat().st_mtime_ns if path.is_file() else None
+        turn, _asked = converse(dataclasses.replace(agent, timeout_s=grace), {**subs, "prompt_file": str(grace_file)},
+                                workdir=Path(subs["workdir"]), artifact=path, prompt_file=grace_file, answer=None,
+                                say=state.say, session=sess.id, message=message)
+        self._session_turn(state, sess, turn, "generate", subs.get("part") or None, agent.tool, path.is_file(),
+                           f"final turn: exited {turn.rc}, wrote no {path.name}", message, t0, "")
+        wrote = path.is_file() and path.stat().st_mtime_ns != before      # written in this turn, not left from before
+        state.say(f"  {agent.tool}: " + (f"handed in {path.name} in its final turn" if wrote else "wrote nothing in its final turn"))
+        return turn if wrote else None
 
     def _out_of_time(self, state: LoopState, sess: Any, turn: Any, path: Path, agent: Any) -> str:
         """D1026: the design agent ran past its time limit on its first turn and on every continue: the
