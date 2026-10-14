@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import json
 import math
-import os
 import re
 import time
 from typing import Any
@@ -17,10 +16,9 @@ from .runs import OK_RC
 
 _ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]|\[[0-9;]*m")
 
-__all__ = ["disk", "endpoints", "failures", "network", "token_rate", "turns", "usage_by_day", "window"]
+__all__ = ["disk", "failures", "network", "transcripts", "turn_of", "window"]
 
 DAY = 86400.0
-_TURNS: dict[str, tuple[int, int, list[tuple]]] = {}   # path -> (inode, bytes read, its turns): D921
 
 
 def window(days: float, now: float | None = None) -> tuple[float, float]:
@@ -51,162 +49,53 @@ def failures(store: Any, runs: Any, since: float, until: float | None = None) ->
     return {"starts": starts[:100], "tests": sorted(tests, key=lambda x: -x["when"])}
 
 
-def _rows(path: str) -> list[tuple]:
-    """A loop's turns, each (ts, kind, who, endpoint, ok, seconds, tokens in, out, cost, error).
-    `ok=None` marks an agent's local time limit, neutral for endpoint health.
-    D921: read as the file grows -- a turn appended is that turn read, not the transcript again
-    (another file, or one cut, from its start)."""
-    from .usage import grown
-
+def turn_of(t: Any) -> tuple | None:
+    """A transcript line as a turn: (ts, kind, who, endpoint, ok, seconds, tokens in, out, cost, error).
+    `ok=None` marks an agent's local time limit, neutral for endpoint health."""
+    if not isinstance(t, dict):
+        return None
+    kind = str(t.get("kind") or "turn")
+    if kind == "agent":
+        who = str(t.get("agent") or "agent")
+        model = str(t.get("about") or "").split(",")[0].strip()
+        where = f"{who} · {model}" if model and not model.startswith(who) else (model or who)
+        ok = bool(t.get("ok")) and not t.get("error")
+        err = "" if ok else (str(t.get("error") or "") or f"exit {t.get('rc')}: " + " ".join(str(t.get("stderr") or "").split())[-200:])
+        if t.get("rc") == 124:                  # Flux stopped the agent at its local time budget
+            ok = None
+    else:
+        who = str(t.get("model") or kind)
+        where = (urlsplit(str(t.get("server") or "")).hostname or "local") + " · " + who
+        ok = not t.get("error")
+        err = str(t.get("error") or "")[:300]
+    err = " ".join(_ANSI.sub("", err).split())
+    notes = t.get("notes") if isinstance(t.get("notes"), dict) else {}
+    tin = t.get("tokens_in", notes.get("input_tokens")) or 0
+    tout = t.get("tokens_out", notes.get("output_tokens")) or 0
     try:
-        st = os.stat(path)
-    except OSError:
-        return []
-    got = _TURNS.get(path)
-    if got is None or got[0] != st.st_ino or got[1] > st.st_size:
-        got = (st.st_ino, 0, [])
-    ino, read, out = got
-    more = grown(path, read)
-    if more is None:
-        return []
-    if more[0] != ino:
-        ino, out = more[0], []
-        more = grown(path, 0) or (ino, [], 0)
-    for raw in more[1]:
-        try:
-            t = json.loads(raw)
-        except ValueError:
-            continue
-        if not isinstance(t, dict):
-            continue
-        kind = str(t.get("kind") or "turn")
-        if kind == "agent":
-            who = str(t.get("agent") or "agent")
-            model = str(t.get("about") or "").split(",")[0].strip()
-            where = f"{who} · {model}" if model and not model.startswith(who) else (model or who)
-            ok = bool(t.get("ok")) and not t.get("error")
-            err = "" if ok else (str(t.get("error") or "") or f"exit {t.get('rc')}: " + " ".join(str(t.get("stderr") or "").split())[-200:])
-            if t.get("rc") == 124:                  # Flux stopped the agent at its local time budget
-                ok = None
-        else:
-            who = str(t.get("model") or kind)
-            where = (urlsplit(str(t.get("server") or "")).hostname or "local") + " · " + who
-            ok = not t.get("error")
-            err = str(t.get("error") or "")[:300]
-        err = " ".join(_ANSI.sub("", err).split())
-        notes = t.get("notes") if isinstance(t.get("notes"), dict) else {}
-        tin = t.get("tokens_in", notes.get("input_tokens")) or 0
-        tout = t.get("tokens_out", notes.get("output_tokens")) or 0
-        try:
-            out.append((float(t.get("ts") or 0), kind, who, where, ok, float(t.get("seconds") or 0), float(tin), float(tout),
-                        float(t.get("cost_usd") or 0), err))
-        except (TypeError, ValueError):
-            continue
-    _TURNS[path] = (ino, more[2], out)
-    return out
+        got = (float(t.get("ts") or 0), kind, who, where, ok, float(t.get("seconds") or 0), float(tin), float(tout),
+               float(t.get("cost_usd") or 0), err)
+    except (TypeError, ValueError):
+        return None
+    # D1069: a number that is not one (NaN, infinity) would poison every sum it joins -- the turn is skipped
+    return got if all(math.isfinite(v) for v in (got[0], got[5], got[6], got[7], got[8])) and got[6] >= 0 and got[7] >= 0 else None
 
 
-def turns(store: Any, runs: Any, *, retained: bool = False) -> list[tuple]:
-    """Every loop's turns, each (user, app, *turn). With `retained`, include old campaigns
-    and records once each, so restarting a loop cannot erase its token-rate history."""
+def transcripts(store: Any, runs: Any) -> list[tuple[str, str, str]]:
+    """D1069: every loop's transcripts, (user, app, path) -- the latest start's and every retained
+    campaign's, so restarting a loop cannot erase its history -- for the usage log to read."""
     from .workspace import Workspace
 
-    out = []
-    records: dict[tuple[str, str], dict[str, dict]] = {}
-    if retained:
-        for run in store.runs():
-            records.setdefault((run["user"], run["app"]), {}).setdefault(run["db"], run)
+    out = set()
+    for run in store.runs():
+        for p in runs.turns_paths(run):
+            out.add((run["user"], run["app"], p))
     for u in store.users():
         for a in Workspace(store.data, u.name).apps():
-            if retained:
-                paths = {p for run in records.get((u.name, a["name"]), {}).values() for p in runs.turns_paths(run)}
-            else:
-                path = runs.turns_path(runs.latest(u, a["name"]))
-                paths = {path} if path else set()
-            for path in sorted(paths):
-                out.extend((u.name, a["name"], *t) for t in _rows(path))
-    return out
-
-
-def token_rate(rows: list[tuple], hours: float = 24, points: int = 180, now: float | None = None) -> list[dict[str, Any]]:
-    """Every loop's tokens per second over the last `hours` (D838), in and out, the coding agents'
-    and Flux's own model's apart: each turn's tokens spread evenly over the time it took, summed per
-    bucket of `hours / points`. A turn counts once it ends (the transcript is written then), so the
-    newest bucket may grow."""
-    now = now if now is not None else time.time()
-    size = hours * 3600 / points
-    t0 = now - hours * 3600
-    out = [{"start_t": t0 + i * size, "t": t0 + (i + 1) * size,
-            "in_agent": 0.0, "in_model": 0.0, "out_agent": 0.0, "out_model": 0.0} for i in range(points)]
-    for _user, _app, ts, kind, _who, _where, _ok, secs, tin, tout, _cost, _err in rows:
-        end = float(ts or 0)
-        duration = float(secs or 0)
-        if not all(math.isfinite(v) for v in (end, duration, tin, tout)) or tin < 0 or tout < 0:
-            continue
-        start = end - (duration if duration > 0 else 1.0)
-        if end <= t0 or end > now or start >= now or not (tin or tout):
-            continue
-        k = "agent" if kind == "agent" else "model"
-        for i in range(max(0, int((start - t0) // size)), min(points, int((end - t0) // size) + 1)):
-            lo, hi = t0 + i * size, t0 + (i + 1) * size
-            share = (min(end, hi) - max(start, lo)) / (end - start)
-            if share > 0:
-                out[i][f"in_{k}"] += float(tin or 0) * share / size
-                out[i][f"out_{k}"] += float(tout or 0) * share / size
-    return out
-
-
-def usage_by_day(rows: list[tuple], days: int = 14, now: float | None = None) -> dict[str, Any]:
-    """Turns, tokens and cost over the last `days` × 24 h up to `now` (D920: the interval, not UTC
-    calendar days -- a turn outside it, or after `now`, is not counted), per user and per agent or
-    model; the loops that cost most in that time. Bucketed for the sparklines only, back from `now`:
-    an hour each over one day, else a day each; the totals are the rows' whatever the buckets."""
-    start, now = window(days, now)
-    hourly = days <= 1
-    size = 3600.0 if hourly else DAY
-    n = int(round((now - start) / size))
-    labels = [time.strftime("%H:%M" if hourly else "%m-%d", time.gmtime(start + (i + 1) * size)) for i in range(n)]
-    blank = lambda: {"turns": [0] * n, "tokens": [0.0] * n, "cost": [0.0] * n}   # noqa: E731
-    by_user: dict[str, dict] = {}
-    by_who: dict[str, dict] = {}
-    loops: dict[tuple[str, str], dict[str, float]] = {}
-    for user, app, ts, _kind, who, _where, _ok, secs, tin, tout, cost, _err in rows:
-        if not start <= ts <= now:
-            continue
-        d = min(n - 1, int((ts - start) // size))
-        for into in (by_user.setdefault(user, blank()), by_who.setdefault(who, blank())):
-            into["turns"][d] += 1
-            into["tokens"][d] += tin + tout
-            into["cost"][d] += cost
-        lp = loops.setdefault((user, app), {"turns": 0, "tokens": 0.0, "cost": 0.0, "seconds": 0.0})
-        lp["turns"] += 1
-        lp["tokens"] += tin + tout
-        lp["cost"] += cost
-        lp["seconds"] += secs
-    top = sorted(({"user": u, "app": a, **v} for (u, a), v in loops.items()), key=lambda x: (-x["cost"], -x["tokens"]))[:10]
-    return {"days": labels, "bucket": "hour" if hourly else "day", "users": by_user, "agents": by_who, "top": top}
-
-
-def endpoints(rows: list[tuple], since: float, forgot: dict[str, float] | None = None) -> list[dict[str, Any]]:
-    """Each model endpoint and agent as its turns since `since` found it: turns, failures and
-    their rate, the median and the slow (95th) seconds, the last failure, when last used. `forgot`
-    (D850): `kind|where` -> when the admin removed it; only turns after that count.
-    Local agent time limits count as turns and timing, but not failures."""
-    forgot = forgot or {}
-    by: dict[tuple[str, str], list[tuple]] = {}
-    for _user, _app, ts, kind, who, where, ok, secs, *_rest, err in rows:
-        if ts >= since and ts > forgot.get(f"{kind}|{where}", 0.0):
-            by.setdefault((kind, where), []).append((ts, ok, secs, err))
-    out = []
-    for (kind, where), xs in by.items():
-        secs = sorted(s for _t, _ok, s, _e in xs)
-        bad = [x for x in xs if x[1] is False]
-        q = lambda f: secs[min(len(secs) - 1, int(f * len(secs)))] if secs else 0.0   # noqa: E731
-        last_bad = max(bad, key=lambda x: x[0]) if bad else None
-        out.append({"key": f"{kind}|{where}", "kind": kind, "where": where, "turns": len(xs), "failed": len(bad), "rate": len(bad) / len(xs),
-                    "p50": q(0.5), "p95": q(0.95), "last": max(x[0] for x in xs),
-                    "last_error": last_bad[3] if last_bad else "", "last_error_at": last_bad[0] if last_bad else None})
-    return sorted(out, key=lambda e: (-e["rate"], -e["turns"]))
+            p = runs.turns_path(runs.latest(u, a["name"]))
+            if p:
+                out.add((u.name, a["name"], p))
+    return sorted(out)
 
 
 def network(path: str, since: float, forgot: dict[str, float] | None = None, until: float | None = None) -> list[dict[str, Any]]:

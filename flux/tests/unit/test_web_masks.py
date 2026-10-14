@@ -10,7 +10,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from flux_web import create_app
-from flux_web.insights import endpoints, network
+from flux_web.insights import network
+from flux_web.usage_log import UsageLog
 from flux_web.masks import Masks, check
 from flux_web.store import Store
 
@@ -33,11 +34,15 @@ def test_masks_hide_matching_lines_and_say_how_many():
 
 def test_forgotten_endpoints_and_hosts_leave_until_used_again(tmp_path):
     now = time.time()
-    rows = [("bob", "x", now - 100, "agent", "codex", "codex · old", True, 1.0, 0, 0, 0.0, ""),
-            ("bob", "x", now - 50, "model", "qwen", "10.0.0.9 · qwen", True, 1.0, 0, 0, 0.0, "")]
-    assert {e["key"] for e in endpoints(rows, now - 1000)} == {"agent|codex · old", "model|10.0.0.9 · qwen"}
-    assert [e["key"] for e in endpoints(rows, now - 1000, {"agent|codex · old": now - 10})] == ["model|10.0.0.9 · qwen"]
-    assert [e["key"] for e in endpoints(rows, now - 1000, {"agent|codex · old": now - 200})] != ["model|10.0.0.9 · qwen"], "used after: back"
+    turns = tmp_path / "turns.jsonl"                 # D1069: the turns read into the usage log
+    turns.write_text(json.dumps({"ts": now - 100, "kind": "agent", "agent": "codex", "about": "old", "ok": True, "seconds": 1.0}) + "\n"
+                     + json.dumps({"ts": now - 50, "kind": "model", "model": "qwen", "server": "http://10.0.0.9/v1", "seconds": 1.0}) + "\n")
+    log = UsageLog(tmp_path / "usage.db")
+    log.ingest([("bob", "x", str(turns))])
+    endpoints = lambda forgot=None: log.endpoints(now - 1000, now, forgot)   # noqa: E731
+    assert {e["key"] for e in endpoints()} == {"agent|codex · old", "model|10.0.0.9 · qwen"}
+    assert [e["key"] for e in endpoints({"agent|codex · old": now - 10})] == ["model|10.0.0.9 · qwen"]
+    assert [e["key"] for e in endpoints({"agent|codex · old": now - 200})] != ["model|10.0.0.9 · qwen"], "used after: back"
     refusals = tmp_path / "refusals.jsonl"
     refusals.write_text("\n".join(json.dumps(e) for e in [{"t": now - 100, "host": "a.example", "port": 443, "app": "x"},
                                                           {"t": now - 5, "host": "b.example", "port": 443, "app": "x"}]))

@@ -63,6 +63,11 @@ TASKS: dict[str, Task] = {t.key: t for t in (
     Task("journals", "Condense task journals", "A loop's task journal (the Live tree's history) over a size keeps "
          "its recent starts whole; older ones are gzipped beside it.", 24, True, {"max_mb": 20, "keep_mb": 4},
          per_loop=True),
+    # D1069: every model and agent turn's prompt, reply and tool calls -- gigabytes after days of running
+    Task("transcripts", "Thin old transcripts", "A loop's transcript (every model and agent turn: its prompt, reply "
+         "and tool calls) keeps its last days whole; an older turn keeps only what usage counts -- when, who, "
+         "tokens, cost, whether it failed and why. Insights reads the usage log, summed as turns happen. Running "
+         "loops too: a turn is appended on its own.", 24, True, {"days": 14}, per_loop=True),
     Task("refused", "Prune refused-host log", "The sandbox proxies' log of refused connections keeps its last "
          "days (Insights > Network reads it).", 24, True, {"days": 30}),
     Task("stale", "Prune stale records", "Record rows measured under other inputs (D853): the loop no longer "
@@ -445,6 +450,21 @@ class Maintenance:
                     n, freed = n + 1, freed + got
         return f"{n} journal(s) condensed, {_mb(freed)} freed" + self._skipped(busy), n > 0
 
+    def _transcripts(self, p: dict[str, Any], loop: tuple[str, str] | None) -> tuple[str, bool]:
+        from .admin import _key, cache_root
+
+        idle, busy = self._loops(loop)
+        cutoff = time.time() - float(p["days"]) * DAY
+        n, freed = 0, 0
+        for u, a, _d in idle + [x for x in self.loops() if f"{x[0]}/{x[1]}" in busy]:
+            for tr in sorted((cache_root() / _key(u, a)).glob("tmp/flux-traces/*/turns.jsonl")):
+                if tr.is_symlink():
+                    continue
+                got = _thin_transcript(tr, cutoff)
+                if got:
+                    n, freed = n + 1, freed + got
+        return f"{n} transcript(s) thinned, {_mb(freed)} freed", n > 0
+
     def _refused(self, p: dict[str, Any], _loop: Any) -> tuple[str, bool]:
         import json
 
@@ -688,6 +708,55 @@ def _last_run(app_dir: Path) -> float:
         except OSError:
             continue
     return got
+
+
+#: D1069: what a thinned turn keeps -- what usage and Insights count
+_TURN_KEEPS = ("ts", "kind", "agent", "model", "about", "server", "ok", "rc", "seconds", "tokens_in", "tokens_out",
+               "tokens_cached", "tokens_complete", "cost_usd", "priced")
+
+
+def _thin_transcript(tr: Path, cutoff: float) -> int:
+    """A transcript's turns before `cutoff` keep only `_TURN_KEEPS` (and an error's first words); the
+    newer ones stay whole. Read and written a line at a time; a turn appended meanwhile is kept (the
+    loop opens the file for each one). Returns the bytes freed, 0 when nothing was older."""
+    size = tr.stat().st_size
+    tmp = tr.with_name(tr.name + ".thinning")
+    thinned = 0
+    with open(tr, "rb") as src, open(tmp, "wb") as dst:
+        read = 0
+        for raw in src:
+            if read + len(raw) > size or not raw.endswith(b"\n"):
+                break
+            read += len(raw)
+            try:
+                t = json.loads(raw)
+            except ValueError:
+                dst.write(raw)
+                continue
+            if not isinstance(t, dict) or float(t.get("ts") or 0) >= cutoff or t.get("thinned"):
+                dst.write(raw)
+                continue
+            kept = {k: t[k] for k in _TURN_KEEPS if k in t}
+            notes = t.get("notes") if isinstance(t.get("notes"), dict) else {}
+            if any(k in notes for k in ("input_tokens", "output_tokens")):   # an agent's own count, where usage reads it
+                kept["notes"] = {k: notes[k] for k in ("input_tokens", "output_tokens") if k in notes}
+            for k in ("error", "stderr"):
+                if t.get(k):
+                    kept[k] = " ".join(str(t[k]).split())[-300:]
+            kept["thinned"] = True
+            line = json.dumps(kept, ensure_ascii=False).encode() + b"\n"
+            if len(line) < len(raw):
+                thinned += len(raw) - len(line)
+            dst.write(line if len(line) < len(raw) else raw)
+        if not thinned:
+            dst.close()
+            tmp.unlink(missing_ok=True)
+            return 0
+        src.seek(read)
+        shutil.copyfileobj(src, dst)                  # turns written while it was read
+    os.chmod(tmp, tr.stat().st_mode & 0o777)
+    os.replace(tmp, tr)
+    return thinned
 
 
 def _condense_journal(ev: Path, keep: int) -> int:

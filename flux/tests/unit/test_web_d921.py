@@ -9,7 +9,6 @@ import os
 
 from test_web import H, _client, server  # noqa: F401 -- the fixture
 
-from flux_web import insights as ins
 from flux_web import usage as us
 
 
@@ -19,33 +18,38 @@ def _turn(i, **kw):
 
 def _fresh(path):
     us._CACHE.pop(str(path), None)
-    ins._TURNS.pop(str(path), None)
-    return us.usage(str(path)), list(ins._rows(str(path)))
+    return us.usage(str(path))
 
 
 def test_a_transcript_is_summed_as_it_grows(tmp_path, monkeypatch):
+    from flux_web.usage_log import UsageLog
+
     p = tmp_path / "turns.jsonl"
     p.write_text("".join(_turn(i) for i in range(5)))
-    assert us.usage(str(p))["total"]["turns"] == 5 and len(ins._rows(str(p))) == 5
+    log = UsageLog(tmp_path / "usage.db", clock=lambda: 2000)
+    counted = lambda: log.usage_by_day(1, 2000)["top"][0]["turns"]   # noqa: E731 -- D1069: the usage log's sums
+    assert us.usage(str(p))["total"]["turns"] == 5 and log.ingest([("a", "b", str(p))]) == 5 and counted() == 5
     read = []
-    real = us.grown
-    monkeypatch.setattr(us, "grown", lambda path, at: read.append(at) or real(path, at))
+    real = us.Lines
+    monkeypatch.setattr(us, "Lines", lambda path, at: read.append(at) or real(path, at))
     with p.open("a") as fh:
         fh.write(_turn(5, kind="turn", model="qwen", error="timed out") + _turn(6)[:20])       # one whole turn, one being written
-    got, rows = us.usage(str(p)), list(ins._rows(str(p)))
+    got = us.usage(str(p))
     assert read and all(at > 0 for at in read), "read from where it was, not from the start"
-    assert got["total"]["turns"] == 6 and got["total"]["errors"] == 1 and len(rows) == 6
-    assert (got, rows) == _fresh(p), "the same sums as read whole"
+    assert got["total"]["turns"] == 6 and got["total"]["errors"] == 1 and log.ingest([("a", "b", str(p))]) == 1 and counted() == 6
+    assert got == _fresh(p), "the same sums as read whole"
     with p.open("a") as fh:
         fh.write(_turn(6)[20:])                                   # the rest of the line
-    assert us.usage(str(p))["total"]["turns"] == 7 and len(ins._rows(str(p))) == 7
-    # replaced (as pricing does: another file in its place), then cut: read again from the start
+    assert us.usage(str(p))["total"]["turns"] == 7 and log.ingest([("a", "b", str(p))]) == 1 and counted() == 7
+    # replaced (as pricing does: another file in its place), then cut: counted again from the start, not twice
     tmp = tmp_path / "t.tmp"
     tmp.write_text("".join(_turn(i, cost_usd=2.0) for i in range(7)))
     os.replace(tmp, p)
-    assert us.usage(str(p))["total"]["cost_usd"] == 14.0 and ins._rows(str(p))[0][8] == 2.0
+    log.ingest([("a", "b", str(p))])
+    assert us.usage(str(p))["total"]["cost_usd"] == 14.0 and log.usage_by_day(1, 2000)["top"][0]["cost"] == 14.0 and counted() == 7
     p.write_text(_turn(0))
-    assert us.usage(str(p))["total"]["turns"] == 1 and len(ins._rows(str(p))) == 1
+    log.ingest([("a", "b", str(p))])
+    assert us.usage(str(p))["total"]["turns"] == 1 and counted() == 1
 
 
 def test_admin_home_and_agents_draw_without_the_slow_probes(server, monkeypatch):  # noqa: F811

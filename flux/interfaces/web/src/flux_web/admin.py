@@ -21,32 +21,49 @@ from typing import Any
 __all__ = ["cache_root", "caches", "clean", "containers", "dir_size", "kill_container", "loop_disk", "machine"]
 
 _SIZES: dict[str, tuple[float, int]] = {}
-_TTL = 60.0
+_TTL = 600.0       # D1069: a walk of a long-running loop's files is costly; sizes kept ten minutes
 
 
 def dir_size(path: str | Path, *, fresh: bool = False) -> int:
-    """Bytes under `path` (links not followed), kept for a minute."""
+    """Bytes under `path` (links not followed), kept for ten minutes. D1069: one walk -- the sizes of
+    the folders directly under it are kept from it too (a loop's record, log, workbench), and a folder
+    whose size is already kept is not walked again (a user's home holds their loops)."""
     p = str(path)
     now = time.time()
     got = _SIZES.get(p)
     if got and not fresh and now - got[0] < _TTL:
         return got[1]
-    total = 0
-    stack = [p]
+    total, children = 0, {}
+    stack: list[tuple[str, str | None]] = [(p, None)]
     while stack:
-        d = stack.pop()
+        d, top = stack.pop()
         try:
             with os.scandir(d) as it:
                 for e in it:
                     try:
                         if e.is_dir(follow_symlinks=False):
-                            stack.append(e.path)
+                            kept = _SIZES.get(e.path)
+                            if kept and not fresh and now - kept[0] < _TTL:
+                                size = kept[1]
+                            else:
+                                stack.append((e.path, top or e.path))
+                                if top is None:
+                                    children.setdefault(e.path, 0)
+                                continue
                         else:
-                            total += e.stat(follow_symlinks=False).st_size
+                            size = e.stat(follow_symlinks=False).st_size
+                        total += size
+                        if (top or (e.path if e.is_dir(follow_symlinks=False) else None)) in children:
+                            children[top or e.path] += size
                     except OSError:
                         continue
         except OSError:
             continue
+    if len(_SIZES) > 4096:                  # D1069: the sizes kept are those still fresh
+        for k in [k for k, (t, _n) in _SIZES.items() if now - t >= _TTL]:
+            del _SIZES[k]
+    for k, n in children.items():
+        _SIZES[k] = (now, n)
     _SIZES[p] = (now, total)
     return total
 
@@ -262,8 +279,9 @@ def reap(grace_s: float = 120.0, now: float | None = None) -> list[dict[str, Any
 def loop_disk(app_dir: Path, user: str, app: str) -> dict[str, Any]:
     """A loop's bytes: its inputs, record (`out/`), log and inbox (`runs/`), workbench, and cache."""
     parts = {"record": app_dir / "out", "log": app_dir / "runs", "workbench": app_dir / "workbench"}
+    whole = dir_size(app_dir)               # D1069: one walk; its parts' sizes are kept from it
     got = {k: dir_size(p) for k, p in parts.items()}
-    got["inputs"] = max(0, dir_size(app_dir) - sum(got.values()))
+    got["inputs"] = max(0, whole - sum(got.values()))
     cache = cache_root() / _key(user, app)
     got["cache"] = dir_size(cache) if cache.is_dir() else 0
     got["total"] = sum(got.values())

@@ -41,20 +41,31 @@ def _add(into: dict[str, Any], t: dict[str, Any]) -> None:
     into["cost_usd"] += _num(t.get("cost_usd"))
 
 
-def grown(path: str, read: int) -> tuple[int, list[bytes], int] | None:
-    """D921: a transcript's whole lines after byte `read` -- (its inode, the lines, the offset after
-    them); a line being written waits. None when it is gone."""
-    try:
-        with open(path, "rb") as fh:
-            st = os.fstat(fh.fileno())
-            if st.st_size <= read:
-                return st.st_ino, [], read
-            fh.seek(read)
-            data = fh.read(st.st_size - read)
-    except OSError:
-        return None
-    end = data.rfind(b"\n") + 1
-    return st.st_ino, data[:end].splitlines(), read + end
+class Lines:
+    """D1069: a transcript's whole lines after byte `read`, one at a time -- never the file at once (a loop
+    that ran for days writes gigabytes, every turn's prompt and reply). `ino` is None when it is gone;
+    after the lines are read, `offset` is where the next read starts (a line being written waits)."""
+
+    def __init__(self, path: str, read: int) -> None:
+        self.offset, self.ino, self.size, self._fh = read, None, 0, None
+        try:
+            self._fh = open(path, "rb")
+            st = os.fstat(self._fh.fileno())
+            self.ino, self.size = st.st_ino, st.st_size
+        except OSError:
+            self._fh = None
+
+    def __iter__(self):
+        if self._fh is None:
+            return
+        with self._fh as fh:
+            fh.seek(self.offset)
+            for raw in fh:
+                if not raw.endswith(b"\n"):
+                    break
+                self.offset += len(raw)
+                yield raw[:-1]
+        self._fh = None
 
 
 def usage(path: str | None) -> dict[str, Any]:
@@ -72,13 +83,13 @@ def usage(path: str | None) -> dict[str, Any]:
     if got is None or got[0] != st.st_ino or got[1] > st.st_size:
         got = (st.st_ino, 0, {"total": _empty(), "by": {}, "first": None, "last": None})
     ino, read, s = got
-    more = grown(path, read)
-    if more is None:
+    lines = Lines(path, read)
+    if lines.ino is None:
         return out
-    if more[0] != ino:                                         # replaced between the look and the read: from its start
-        ino, read, s = more[0], 0, {"total": _empty(), "by": {}, "first": None, "last": None}
-        more = grown(path, 0) or (ino, [], 0)
-    for raw in more[1]:
+    if lines.ino != ino:                                       # replaced between the look and the read: from its start
+        ino, s = lines.ino, {"total": _empty(), "by": {}, "first": None, "last": None}
+        lines = Lines(path, 0)
+    for raw in lines:                                          # D1069: a line at a time
         try:
             t = json.loads(raw)
         except ValueError:
@@ -93,6 +104,6 @@ def usage(path: str | None) -> dict[str, Any]:
         if ts:
             s["first"] = min(s["first"] or ts, ts)
             s["last"] = max(s["last"] or ts, ts)
-    _CACHE[path] = (ino, more[2], s)
+    _CACHE[path] = (lines.ino or ino, lines.offset, s)
     return {"total": dict(s["total"]), "by": sorted((dict(b) for b in s["by"].values()), key=lambda b: -b["seconds"]),
             "first": s["first"], "last": s["last"]}

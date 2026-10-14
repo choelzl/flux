@@ -154,10 +154,13 @@ def test_real_timeout_records_tokens_including_updates_during_shutdown(tmp_path,
     assert record["cost_usd"] == pytest.approx(0.000206)
     total = web_usage(str(path))["total"]
     assert total["tokens_in"] == 168 and total["tokens_out"] == 19 and total["partial"] == 1 and total["counted"] == 1
-    rows = [("bob", "test", *row) for row in insights._rows(str(path))]
+    from flux_web.usage_log import UsageLog     # D1069: the turns summed into the usage log
+
     end = record["ts"] + 1
-    rates = insights.token_rate(rows, hours=1, now=end)
+    log = UsageLog(tmp_path / "usage.db", clock=lambda: end)
+    log.ingest([("bob", "test", str(path))])
+    rates = log.token_rate(1, end)
     assert sum(p["in_agent"] for p in rates) * 20 == pytest.approx(168)
     assert sum(p["out_agent"] for p in rates) * 20 == pytest.approx(19)
-    endpoint, = insights.endpoints(rows, since=end - 3600)
+    endpoint, = log.endpoints(end - 3600, end)
     assert endpoint["failed"] == 0, "an agent time budget remains neutral for endpoint health"

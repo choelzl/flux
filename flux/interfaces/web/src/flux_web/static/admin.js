@@ -523,7 +523,9 @@ async function adminInsights(body, part = "failures", ok = () => true) {   // D8
     try { r = await api(`/admin/insights?days=${insightsDays}&part=${part}`); }
     catch (x) { if (mine() && x.message !== "log in") box.replaceChildren(empty(`Insights could not be read: ${x.message}`, act("Retry", load, { cls: "small" }))); return; }
     if (!mine()) return;
-    const said = h("p", { class: "muted small range-said" }, `${when(r.range.start)} – ${when(r.range.end)}`);
+    // D1069: after an update the server reads every loop's past turns into its usage log once -- the numbers fill in meanwhile
+    const said = h("p", { class: "muted small range-said" }, `${when(r.range.start)} – ${when(r.range.end)}`,
+      r.catching_up ? " · counting past turns after the update: the numbers fill in within minutes" : "");
     const fill = (...kids) => box.replaceChildren(h("div", {}, said, ...kids));   // h() flattens what replaceChildren would not
     const spark = (xs, label) => {                       // a bar per bucket, to its row's own scale
       const max = Math.max(...xs, 0) || 1, w = 6, gap = 2;

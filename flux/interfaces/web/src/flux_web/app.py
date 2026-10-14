@@ -57,6 +57,10 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
 
     history = History(store.path)                    # D699: the machine over time, in the server's database
     app.state.history = history
+    from .usage_log import UsageLog
+
+    usage_log = UsageLog(store.path)                 # D1069: the turns summed as they happen, in the server's database
+    app.state.usage_log = usage_log
     from .maintenance import Maintenance
 
     def _all_loops() -> list[tuple[str, str, Path]]:
@@ -259,7 +263,7 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
         return out
 
     ctx = SimpleNamespace(store=store, runs=runs, sandbox=sandbox, secure_cookie=secure_cookie, cookie=COOKIE, authoring=authoring,
-                          asks=asks, history=history, maintenance=maintenance, user_of=user_of, admin_of=admin_of, ws=ws,
+                          asks=asks, history=history, usage_log=usage_log, maintenance=maintenance, user_of=user_of, admin_of=admin_of, ws=ws,
                           access=access, reader=reader, editor=editor, runner=runner, creator=creator,
                           fail=fail, loop_of=loop_of, env_list=_env_list,
                           set_env=_set_env, rules=_rules, masks=_masks, summary=_summary, stages=_stages, all_loops=_all_loops)

@@ -28,6 +28,7 @@ RESTART_WAIT_S = 30.0
 
 def register(app: FastAPI, ctx: SimpleNamespace) -> None:
     """The admin's routes; the minute's sample of the machine goes into `app.state` (D888)."""
+    usage_log = ctx.usage_log
     store, runs, sandbox, history, maintenance = ctx.store, ctx.runs, ctx.sandbox, ctx.history, ctx.maintenance
     admin_of, ws, fail = ctx.admin_of, ctx.ws, ctx.fail
     _summary, _rules, _masks, _all_loops, retest_due = ctx.summary, ctx.rules, ctx.masks, ctx.all_loops, ctx.retest_due
@@ -102,8 +103,9 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
         from . import insights
 
         hours = max(0.25, min(hours, 720))
-        samples = insights.token_rate(insights.turns(store, runs, retained=True), hours)
-        return {"hours": hours, "bucket_seconds": hours * 3600 / 180, "samples": samples}
+        usage_log.fresh(lambda: insights.transcripts(store, runs))    # D1069: the summed minutes, never a transcript
+        samples = usage_log.token_rate(hours, insights.time.time())
+        return {"hours": hours, "bucket_seconds": hours * 3600 / 180, "samples": samples, "catching_up": usage_log.catching_up}
 
     @app.get("/api/admin/resources")
     def resources(_a: User = Depends(admin_of)) -> dict[str, Any]:
@@ -511,13 +513,15 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
         forgot = store.server_get("insights_forgot") or {}
         hide = _masks()
         out: dict[str, Any] = {"days": days, "range": {"start": since, "end": until, "timezone": "UTC"}}
-        rows = [r for r in ins.turns(store, runs) if since <= r[2] <= until] if want & {"usage", "endpoints"} else []
+        if want & {"usage", "endpoints"}:
+            usage_log.fresh(lambda: ins.transcripts(store, runs))   # D1069: the summed minutes, never a transcript
+            out["catching_up"] = usage_log.catching_up          # the first read after an update: the numbers so far
         if "failures" in want:
             out["failures"] = hide.fields(ins.failures(store, runs, since, until))
         if "usage" in want:
-            out["usage"] = ins.usage_by_day(rows, days, until)
+            out["usage"] = usage_log.usage_by_day(days, until)
         if "endpoints" in want:
-            out["endpoints"] = hide.fields(ins.endpoints(rows, since, forgot.get("endpoint")))
+            out["endpoints"] = hide.fields(usage_log.endpoints(since, until, forgot.get("endpoint")))
             out["network"] = ins.network(str(store.refusals_file), since, forgot.get("network"), until)
         return out
 

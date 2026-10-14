@@ -15,30 +15,36 @@ DAY = ins.DAY
 NOW = 100 * DAY + 12 * 3600                                      # noon UTC
 
 
-def _rows(ages_and_tokens):
-    return [("ada", "nlu", NOW - age, "turn", "qwen", "x · qwen", True, 1.0, float(tok), 0.0, tok / 100, "")
-            for age, tok in ages_and_tokens]
+def _log(tmp_path, ages_and_tokens):
+    """D1069: the turns in a transcript, read into a usage log at their own time."""
+    from flux_web.usage_log import UsageLog
+
+    p = tmp_path / "turns.jsonl"
+    p.write_text("".join(json.dumps({"ts": NOW - age, "kind": "turn", "model": "qwen", "server": "https://x/v1", "seconds": 1.0,
+                                     "tokens_in": tok, "cost_usd": tok / 100}) + "\n" for age, tok in ages_and_tokens))
+    log = UsageLog(tmp_path / "usage.db", clock=lambda: NOW)
+    log.ingest([("ada", "nlu", str(p))])
+    return log
 
 
-def test_one_day_is_the_last_24_hours_not_seven_days():
+def test_one_day_is_the_last_24_hours_not_seven_days(tmp_path):
     """The review's fixture: activity 0.1, 3, 20 and 45 days old with 100 / 1,000 / 10,000 /
     100,000 tokens. A day counted 1,100 (seven days' worth); now 100."""
-    rows = _rows([(0.1 * DAY, 100), (3 * DAY, 1000), (20 * DAY, 10000), (45 * DAY, 100000)])
+    log = _log(tmp_path, [(0.1 * DAY, 100), (3 * DAY, 1000), (20 * DAY, 10000), (45 * DAY, 100000)])
     total = lambda u: sum(u["users"]["ada"]["tokens"]) if u["users"] else 0   # noqa: E731
-    assert total(ins.usage_by_day(rows, 1, NOW)) == 100
-    assert total(ins.usage_by_day(rows, 7, NOW)) == 1100
-    assert total(ins.usage_by_day(rows, 30, NOW)) == 11100
-    one = ins.usage_by_day(rows, 1, NOW)
+    assert total(log.usage_by_day(1, NOW)) == 100
+    assert total(log.usage_by_day(7, NOW)) == 1100
+    assert total(log.usage_by_day(30, NOW)) == 11100
+    one = log.usage_by_day(1, NOW)
     assert one["bucket"] == "hour" and len(one["days"]) == 24 and one["top"][0]["tokens"] == 100
-    seven = ins.usage_by_day(rows, 7, NOW)
+    seven = log.usage_by_day(7, NOW)
     assert seven["bucket"] == "day" and len(seven["days"]) == 7
 
 
-def test_the_interval_has_both_ends():
+def test_the_interval_has_both_ends(tmp_path):
     """Rolling: 24 h back from noon is yesterday noon, not today's midnight; a turn just inside
     counts, just outside not; a turn after now (a clock ahead) not."""
-    rows = _rows([(DAY - 1, 1), (DAY + 1, 10), (-60, 1000), (0, 5)])
-    u = ins.usage_by_day(rows, 1, NOW)
+    u = _log(tmp_path, [(DAY - 1, 1), (DAY + 1, 10), (-60, 1000), (0, 5)]).usage_by_day(1, NOW)
     assert sum(u["users"]["ada"]["tokens"]) == 6, u["users"]
     assert u["users"]["ada"]["tokens"][-1] == 5 and u["users"]["ada"]["tokens"][0] == 1
     assert ins.window(1, NOW) == (NOW - DAY, NOW)
