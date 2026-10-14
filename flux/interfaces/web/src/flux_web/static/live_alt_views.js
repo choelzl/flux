@@ -195,7 +195,10 @@ function finish(b) {
   const last = b.runs[b.runs.length - 1];
   // D1064: the bar is the box's own work -- its latest run that is not a critique of it
   const work = [...b.runs].reverse().find(n => !/^\s*critique\s*:/i.test(String(n.name))) || last;
-  const steps = (b.kind === "check" || b.kind === "measure" || b.key === "Papers") && work ? leaves(work).map(n => boxState([n])) : null;
+  // D1084: a Measure's bar is each of its measurements -- every stage it ran (screen, confirm), not its last run's
+  const measured = b.kind === "measure" ? b.runs.filter(n => !/^\s*critique\s*:/i.test(String(n.name))).flatMap(leaves) : null;
+  const steps = measured && measured.length ? measured.map(n => boxState([n]))
+    : (b.kind === "check" || b.kind === "measure" || b.key === "Papers") && work ? leaves(work).map(n => boxState([n])) : null;
   const critic = b.runs.some(function judged(n) { return /^\s*critique\s*:/i.test(String(n.name)) || (n.kids || []).some(judged); });
   return { ...b, ids: b.runs.inBox || new Set(), state: st, steps: steps && steps.length > 1 ? steps : steps && b.kind !== "setup" ? steps : null, who: who(b.runs), count: b.runs.length, critic };
 }

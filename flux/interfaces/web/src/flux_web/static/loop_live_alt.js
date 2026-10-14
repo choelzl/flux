@@ -107,6 +107,9 @@ let notes = {}, goals = [], chainPass, openBox = null;      // D1038: chainPass 
       if (next !== chosen) inspector.inspect(next);
     }
     const selected = inspector.taskId();
+    // D1084: what the drawing learns of the selected task's try (its number, how it ended) -- the panel was drawn
+    // before it; drawn again when it changed
+    const sel = inspector.model.nodes.get(selected), tryWas = sel ? `${sel.tryNo}|${sel.tryFailed}` : "";
     const rows = taskWindow(scope.rows, limit, selected);
     visibleRows = scope.rows;
     if (startId !== "current" && pass === "current") pass = "all";         // D994: a past start has no current pass
@@ -120,7 +123,9 @@ let notes = {}, goals = [], chainPass, openBox = null;      // D1038: chainPass 
     followBtn.classList.toggle("on", following); followBtn.setAttribute("aria-pressed", String(following));
     followBtn.title = following ? "Pause automatic task selection" : "Follow the latest task in the current pass";
     // D1063: a task at work inside another at work is one piece of work -- the running count is the innermost
-    const counts = Object.fromEntries(["running", "done", "failed", "rejected", "interrupted", "timeout"].map(s => [s, scope.rows.filter(r => state(r.node) === s
+    // D1084: a failure a design got past (a try's check before the try that passed) is "retried", not "failed"
+    const counts = Object.fromEntries(["running", "done", "failed", "retried", "rejected", "interrupted", "timeout"].map(s => [s, scope.rows.filter(r =>
+      s === "retried" ? state(r.node) === "failed" && recovered(r.node) : state(r.node) === s && (s !== "failed" || !recovered(r.node))
       && (s !== "running" || !(r.node.kids || []).some(k => k.t1 == null))).length]));
     const scopeName = pass === "all" ? "All passes" : pass === "current" ? scope.current.length ? scope.current.map(passName).join(", ") : "Setup" : passName(Number(pass));
     summary.replaceChildren(h("strong", {}, scopeName === "Pass 0" ? "Pass 0 · baseline" : scopeName),
@@ -140,6 +145,7 @@ let notes = {}, goals = [], chainPass, openBox = null;      // D1038: chainPass 
       : mode === "graph" ? [graph(scope.rows, selected)] : mode === "timeline" ? [timeline(scope.rows, selected)] : [tree(rows, selected)]),
       mode === "tree" && scope.rows.length > rows.length ? h("button", { class: "small alt-more", type: "button", onclick: () => { limit += 200; render(); } }, `Earlier tasks (${scope.rows.length - rows.length})`) : "");
     if (!loadMessage && !rows.length) panel.replaceChildren(empty(startId === "current" && ctx.st.running ? "Waiting for tasks from this start…" : "No tasks recorded for this selection."));
+    if (sel && `${sel.tryNo}|${sel.tryFailed}` !== tryWas) inspector.inspect(selected);
     const switched = mode !== lastMode;                 // D1067: a view just switched to brings the selected task into sight
     const savedPlace = mode === lastMode ? place : viewPlaces.get(mode);
     if (savedPlace) restoreScroll(panel, savedPlace); else panel.scrollTop = panel.scrollLeft = 0;
@@ -224,7 +230,9 @@ let notes = {}, goals = [], chainPass, openBox = null;      // D1038: chainPass 
   // D995: a finished task that did not fail itself but holds one that did is marked "!", not ✓
   // D1082: a failure a design got past -- a try's check that failed before the try that passed: the design
   // that ended well is ✓, and nothing above it is "!" for it (the try itself is still ✗ in its list)
-  const getsPast = p => phaseKind(p) === "design" && p.t1 != null && !p.failed && !p.timedOut && !p.interrupted;
+  const getsPast = p => { if (phaseKind(p) !== "design" || p.t1 == null || p.failed || p.timedOut || p.interrupted) return false;
+    const last = [...(p.kids || [])].sort((a, b) => a.t0 - b.t0).at(-1);   // and its last step ended well (not one cut off)
+    return !last || (last.t1 != null && !last.failed && !last.interrupted && !last.timedOut); };
   const recovered = n => { for (let p = n.parent; p; p = p.parent) if (getsPast(p)) return true; return false; };
   const hardFail = n => n.failed && !recovered(n);
   const failedUnder = () => { const s = new Set(), soft = new Set(); for (const n of inspector.model.nodes.values()) {

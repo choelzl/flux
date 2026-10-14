@@ -760,7 +760,7 @@ pre.author-log { max-height: 260px; overflow: auto; white-space: pre-wrap; }
 .alt-split > .card { min-width: 0; scroll-margin-top: 64px; }
 .alt-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin-bottom: 12px; }
 .alt-count { font-size: 11px; color: var(--muted); }
-.alt-count.running { color: var(--run); } .alt-count.failed { color: var(--bad); } .alt-count.timeout { color: var(--warn); } .alt-count.rejected { color: var(--warn); } .alt-count.interrupted { color: var(--warn); }
+.alt-count.running { color: var(--run); } .alt-count.failed { color: var(--bad); } .alt-count.timeout { color: var(--warn); } .alt-count.rejected { color: var(--warn); } .alt-count.retried { color: var(--muted); } .alt-count.interrupted { color: var(--warn); }
 .alt-visual { overflow: auto; max-height: 74vh; }
 .alt-pass-heading { font-weight: 600; }
 /* D978: one line per task, tinted by its kind; the selected deeper and outlined; quiet when it took no time */

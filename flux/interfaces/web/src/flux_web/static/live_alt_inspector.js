@@ -301,10 +301,10 @@ function stopSaid(n, f, env) {
   const after = next ? " The next try continues its session, where it stopped." : loopRuns
     ? " Its session is kept: the next try continues where it stopped."
     : " Its session was kept for a next try; none followed in this pass (its continues used up, or the pass ended).";
-  if (n.timedOut || f["timed out"]) return `Reached its time limit${f["timed out"] ? ` (${String(f["timed out"]).replace(/^stopped /, "")})` : ""} and was stopped${Number.isFinite(exit) ? ` (exit ${exit})` : ""}.` + after;
+  if (n.timedOut || f["timed out"]) return `Reached its time limit${f["timed out"] ? ` (${String(f["timed out"]).replace(/^stopped /, "")})` : ""} and Flux stopped it.` + after;   // D1084: in words -- its exit (-15, 124, 143) is in the facts above
   if (f["endpoint recovery"]) return "Stopped: the model's API failed and then went silent." + after;
   if (n.interrupted) return "Stopped with the loop.";
-  if (signal) return `Ended by a signal (${signal}, exit ${exit}), not by the agent itself: the loop was stopped, or the machine ended it.`;
+  if (signal) return `Ended from outside (it was ${signal === "KILL" ? "killed" : "told to stop"}), not by the agent itself: the loop was stopped, or the machine ended it.`;
   return "";
 }
 function modelChat(n, env) {
