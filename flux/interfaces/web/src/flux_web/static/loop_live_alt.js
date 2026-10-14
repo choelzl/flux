@@ -686,7 +686,7 @@ function showBox(p, key) {
       seq.push(passes[i]); prev = i;
     }
     if (before && !(passes[0] == null && passes.length > 1)) seq.unshift({ gap: before, to: passes[0] });
-    const gapChip = g => h("span", { class: "alt-chain-more muted small", title: `${plural(g.gap, "pass", "passes")} between -- in the Pass menu${before ? ", and under Earlier passes" : ""}` }, `··· ${g.gap} more`);   // D1094: a count, not a pass's number
+    const gapChip = g => h("span", { class: "alt-chain-more muted small", title: `${plural(g.gap, "pass", "passes")} between -- in the Pass menu${before ? ", and under Earlier passes" : ""}` }, "…");   // D1094: the chips' own numbers say how many lie between
     const chain = pass === "all" && passes.length > 1 ? h("div", { class: "alt-chain", role: "group", "aria-label": "Passes" },
       seq.map(p => typeof p === "object" && p !== null ? gapChip(p) : (() => {
       const nodes = rows.filter(r => (membership.get(r.node.id) ?? null) === p).map(r => r.node);
