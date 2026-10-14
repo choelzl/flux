@@ -13,7 +13,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from flux_llm import ScriptedProposer
-from flux_loop.consult import ANSWER, brief, consult, snapshot
+from flux_loop.consult import ANSWER, brief, consult, record_tool, snapshot
 from flux_web import create_app
 from flux_web.store import Store
 
@@ -45,8 +45,30 @@ def test_the_model_answers_from_the_document_the_record_and_the_log(tmp_path):
     assert "x.problem.yaml" in text and "statement: an adder" in text and "DECISION d1" in text and "THE QUESTION:\nwhy?" in text
     agent_text = brief("why?", loop, out, rec, inline=False)
     assert str(out / ANSWER) in agent_text and "do not write in the loop's folder" in agent_text and "statement: an adder" not in agent_text
-    got = consult("why?", loop, tmp_path / "a2", author="model", proposer=ScriptedProposer(["## Because\nit was smaller."]))
+    model = ScriptedProposer(["## Because\nit was smaller."])
+    got = consult("why?", loop, tmp_path / "a2", author="model", proposer=model)
     assert got["ok"] and (tmp_path / "a2" / ANSWER).read_text().startswith("## Because")
+    assert model.tools == [["sql"]] and "your `sql` tool" in model.prompts[0], "D1074: the model queries the record itself"
+
+
+def test_the_models_sql_tool_reads_the_record_and_changes_nothing(tmp_path):
+    """D1074: a model that runs nothing itself queries the record: a SELECT at a time, read-only."""
+    loop, out = _loop(tmp_path), tmp_path / "answer"
+    out.mkdir()
+    rec = snapshot(loop, out)
+    sql = record_tool(rec).run
+    assert sql({"query": ".tables"}) == "name\nt" and "CREATE TABLE t" in sql({"query": ".schema t"})
+    assert sql({"query": "SELECT a, a * 2 AS b FROM t;"}) == "a | b\n42 | 84"
+    assert sql({"query": "SELECT a FROM t WHERE a < 0"}) == "a\n(no rows)"
+    for q in ("DELETE FROM t", "UPDATE t SET a = 1", "CREATE TABLE u (b)", "INSERT INTO t VALUES (1)",
+              f"ATTACH '{tmp_path / 'other.db'}' AS o", "nonsense"):
+        assert sql({"query": q}).startswith("error:"), q
+    assert not (tmp_path / "other.db").exists()
+    assert sqlite3.connect(rec).execute("SELECT a FROM t").fetchall() == [(42,)], "nothing changed"
+    long = sql({"query": "SELECT printf('%.5000c', 'x') AS s"})
+    assert "(5000 characters; substr() reads the rest)" in long and len(long) < 2200
+    many = sql({"query": "WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < 500) SELECT i FROM n"})
+    assert many.count("\n") == 201 and "more than 200 rows" in many
 
 
 FAKE = r'''#!/usr/bin/env python3
