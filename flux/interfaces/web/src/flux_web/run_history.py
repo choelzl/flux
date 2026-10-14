@@ -101,7 +101,11 @@ def empty_start(run: dict[str, Any], runs: Any) -> bool:
     path, lo, hi = seg
     with open(path, "rb") as fh:
         fh.seek(lo)
-        for raw in fh.read(hi - lo).splitlines():
+        left = hi - lo
+        for raw in fh:                             # D1071: a line at a time -- the first sign of work ends it
+            if left <= 0:
+                break
+            left -= len(raw)
             try:
                 e = json.loads(raw)
             except ValueError:

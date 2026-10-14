@@ -75,6 +75,11 @@ def kind_of(name: str, why: str = "") -> str | None:
     return None
 
 
+#: D1071: how much of a long journal the timeline reads, and how many events it keeps
+TAIL = 64 << 20
+MAX_EVENTS = 300_000
+
+
 def starts(path: str) -> list[list[dict[str, Any]]]:
     """The journal's events, one list per start (process). D779: read as it grows -- the file is
     only appended to, so a running loop's next look parses only what was added since the last,
@@ -89,23 +94,38 @@ def starts(path: str) -> list[list[dict[str, Any]]]:
         if got is not None and got[0] == st.st_ino and got[1] <= st.st_size:
             _ino, offset, out = got
         else:
-            offset, out = 0, []
+            # D1071: a journal of days (gigabytes) is read from its last part, from a line on -- the
+            # older part is the journal's Earlier passes; the timeline is where the time goes now
+            offset, out = max(0, st.st_size - TAIL), []
+            if offset:
+                with open(path, "rb") as fh:
+                    fh.seek(offset)
+                    offset += len(fh.readline())
         if offset < st.st_size:
             with open(path, "rb") as fh:
                 fh.seek(offset)
-                data = fh.read()
-            end = data.rfind(b"\n") + 1                     # a line being written waits for the next look
-            for raw in data[:end].splitlines():
-                if b'"ev": "update"' in raw or b'"ev": "publish"' in raw:
-                    continue                               # live fields and standings: not the bars
-                try:
-                    e = json.loads(raw)
-                except ValueError:
-                    continue
-                if e.get("ev") == "hello" or not out:
-                    out.append([])
-                out[-1].append({k: (str(v)[:200] if k == "why" else v) for k, v in e.items() if k in _KEPT})
-            offset += end
+                for raw in fh:                             # D1071: a line at a time, never the journal at once
+                    if not raw.endswith(b"\n"):
+                        break                              # a line being written waits for the next look
+                    offset += len(raw)
+                    if b'"ev": "update"' in raw or b'"ev": "publish"' in raw:
+                        continue                           # live fields and standings: not the bars
+                    try:
+                        e = json.loads(raw)
+                    except ValueError:
+                        continue
+                    if e.get("ev") == "hello" or not out:
+                        out.append([])
+                    out[-1].append({k: (str(v)[:200] if k == "why" else v) for k, v in e.items() if k in _KEPT})
+            # D1071: at most MAX_EVENTS kept, the oldest let go -- whole earlier starts first
+            total = sum(len(x) for x in out)
+            if total > MAX_EVENTS:
+                while len(out) > 1 and total - len(out[0]) >= MAX_EVENTS // 2:
+                    total -= len(out.pop(0))
+                if total > MAX_EVENTS:
+                    out[0] = out[0][total - MAX_EVENTS:]
+                for k in [k for k in _TABLES if k[0] == path]:
+                    _TABLES.pop(k, None)
         _CACHE[path] = (st.st_ino, offset, out)
         # the earlier starts are done; the last may still grow under another look
         return [*out[:-1], list(out[-1])] if out else []

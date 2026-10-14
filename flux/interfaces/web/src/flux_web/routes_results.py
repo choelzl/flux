@@ -413,40 +413,42 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
                                  headers={"Content-Disposition": f'{"attachment" if download else "inline"}; filename="{name}.log"',
                                           "X-Flux-Size": str(size), **({"X-Flux-Truncated": "1"} if cut else {})})
 
-    turn_index: dict[str, tuple[int, int, list[int], list[dict[str, Any]]]] = {}   # path -> (inode, read, offsets, summaries)
+    turn_index: dict[str, tuple[int, int, Any, Any]] = {}   # path -> (inode, read, every turn's offset, the latest summaries)
     turn_lock = threading.Lock()
+    TURNS_KEPT = 5000                                     # D1071: the summaries kept -- the list shows the last 500
 
-    def _turn_summaries(path: str) -> tuple[list[int], list[dict[str, Any]]]:
+    def _turn_summaries(path: str) -> tuple[Any, list[dict[str, Any] | None], int]:
         """D779: each turn's byte offset and its summary (long text cut, hops and steps counted),
-        read as the file grows -- a day's turns are not parsed again on every look."""
+        read as the file grows -- a day's turns are not parsed again on every look. D1071: a line at a
+        time, never the transcript at once (gigabytes after days); every turn's offset kept (8 bytes
+        each), the summaries of the latest TURNS_KEPT only. Returns (offsets, summaries, the first
+        summary's index)."""
+        from array import array
+        from collections import deque
+
         st = os.stat(path)
         with turn_lock:
             got = turn_index.get(path)
             ino, read, offsets, rows = got if got is not None and got[0] == st.st_ino and got[1] <= st.st_size \
-                else (st.st_ino, 0, [], [])
+                else (st.st_ino, 0, array("q"), deque(maxlen=TURNS_KEPT))
             if read < st.st_size:
                 with open(path, "rb") as fh:
                     fh.seek(read)
-                    data = fh.read()
-                at = 0
-                while True:
-                    nl = data.find(b"\n", at)
-                    if nl < 0:
-                        break                                # a line being written waits
-                    line = data[at:nl]
-                    offsets.append(read + at)
-                    try:
-                        t = json.loads(line)
-                        t = {key: (v[:300] + "..." if isinstance(v, str) and len(v) > 300 else v)
-                             for key, v in t.items() if key not in ("hops", "steps")} | {"hops": len(t.get("hops") or []),
-                                                                                         "steps": len(t.get("steps") or [])}
-                    except ValueError:
-                        t = None
-                    rows.append(t)
-                    at = nl + 1
-                read += at
+                    for line in fh:
+                        if not line.endswith(b"\n"):
+                            break                            # a line being written waits
+                        offsets.append(read)
+                        read += len(line)
+                        try:
+                            t = json.loads(line)
+                            t = {key: (v[:300] + "..." if isinstance(v, str) and len(v) > 300 else v)
+                                 for key, v in t.items() if key not in ("hops", "steps")} | {"hops": len(t.get("hops") or []),
+                                                                                             "steps": len(t.get("steps") or [])}
+                        except (ValueError, AttributeError):
+                            t = None
+                        rows.append(t)
             turn_index[path] = (ino, read, offsets, rows)
-            return list(offsets), list(rows)
+            return offsets, list(rows), len(offsets) - len(rows)
 
     @app.get("/api/apps/{name}/turns")
     def turns(name: str, k: int | None = None, owner: str | None = None, run_id: int | None = None,
@@ -467,7 +469,7 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
             if campaign is not None:
                 raise HTTPException(404, "this campaign's transcript is no longer available")
             return {"turns": []}
-        offsets, rows = _turn_summaries(path)
+        offsets, rows, first = _turn_summaries(path)
         hide = _masks()                                       # D850: the admin's stderr masks
         lo, hi = 0.0, float("inf")
         if start_id is not None:
@@ -478,11 +480,13 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
             following = next((r for r in reversed(store.runs(whose, name)) if r["id"] > start_id), None)
             hi = float(following["started"]) if following else float("inf")
         if k is None:
-            listed = [{"k": n, **t} for n, t in enumerate(rows, 1) if t is not None and lo <= float(t.get("ts") or 0) < hi]
-            return {"turns": hide.fields(listed if start_id is not None else listed[-500:]), "total": len(listed)}
+            listed = [{"k": n, **t} for n, t in enumerate(rows, first + 1) if t is not None and lo <= float(t.get("ts") or 0) < hi]
+            return {"turns": hide.fields(listed if start_id is not None else listed[-500:]), "total": len(listed),
+                    **({"older": first} if first else {})}       # D1071: turns before these are not summed up here
         if not 1 <= k <= len(offsets):
             return {"turns": []}
-        if rows[k - 1] is None or not lo <= float(rows[k - 1].get("ts") or 0) < hi:
+        summary = rows[k - 1 - first] if k - 1 >= first else None
+        if summary is not None and not lo <= float(summary.get("ts") or 0) < hi:
             return {"turns": []}
         with open(path, "rb") as fh:                         # the one turn, read from its place
             fh.seek(offsets[k - 1])
@@ -501,10 +505,10 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
         best: tuple[float, str, int] | None = None
         for path in runs.turns_paths(run):
             try:
-                offsets, rows = _turn_summaries(path)
+                offsets, rows, first = _turn_summaries(path)
             except OSError:
                 continue
-            for i, t in enumerate(rows):
+            for i, t in enumerate(rows, first):
                 if not t or t.get("kind") != "agent" or (agent and str(t.get("agent") or "") not in agent):
                     continue
                 ts = float(t.get("ts") or 0)

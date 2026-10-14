@@ -287,9 +287,12 @@ def test_scaling_tells_linear_from_quadratic(tmp_path):
             break
     assert linear.returncode == 0 and 0.6 < k(linear) < 1.4, linear.stdout + linear.stderr
     assert square.returncode == 0 and k(square) > 1.5 and k(square) - k(linear) > 0.4, square.stdout + square.stderr
-    gate = _fluxpreset("scaling", "--sizes", "100,141,200,283", "--runs", "1", "--max-exponent", "1.3",
-                       *sleeps("(n / 100) ^ 2 * 300e-3"))
-    assert gate.returncode == 1 and gate.stdout.strip().endswith("1 failing")
+    for _ in range(3):                                  # D1070: a load spike tried again
+        gate = _fluxpreset("scaling", "--sizes", "100,141,200,283", "--runs", "1", "--max-exponent", "1.3",
+                           *sleeps("(n / 100) ^ 2 * 300e-3"))
+        if gate.returncode == 1:
+            break
+    assert gate.returncode == 1 and gate.stdout.strip().endswith("1 failing"), gate.stdout + gate.stderr
     assert _fluxpreset("scaling", "--", "true").returncode == 2, "a command without {n} is refused"
 
 

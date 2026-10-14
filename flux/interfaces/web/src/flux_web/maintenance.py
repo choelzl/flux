@@ -68,6 +68,11 @@ TASKS: dict[str, Task] = {t.key: t for t in (
          "and tool calls) keeps its last days whole; an older turn keeps only what usage counts -- when, who, "
          "tokens, cost, whether it failed and why. Insights reads the usage log, summed as turns happen. Running "
          "loops too: a turn is appended on its own.", 24, True, {"days": 14}, per_loop=True),
+    # D1071: a pass's agent folders (its prompts, drafts, scratch) -- a running loop's too: ~100 MB a pass
+    Task("passes", "Prune old agent folders", "A loop's working folders of passes started more than the days ago "
+         "(each agent's prompt, drafts and scratch) go -- its newest folder always stays, and the journal, the "
+         "transcript, the record and the workbench. Running loops too: an old pass's folder is not written to.",
+         24, True, {"days": 3}, per_loop=True),
     Task("refused", "Prune refused-host log", "The sandbox proxies' log of refused connections keeps its last "
          "days (Insights > Network reads it).", 24, True, {"days": 30}),
     Task("stale", "Prune stale records", "Record rows measured under other inputs (D853): the loop no longer "
@@ -441,14 +446,15 @@ class Maintenance:
         idle, busy = self._loops(loop)
         limit, keep = float(p["max_mb"]) * 1e6, float(p["keep_mb"]) * 1e6
         n, freed = 0, 0
-        for u, a, _d in idle:
+        # D1071: running loops too -- a journal line is appended on its own, as a transcript's turn
+        for u, a, _d in idle + [x for x in self.loops() if f"{x[0]}/{x[1]}" in busy]:
             for ev in sorted((cache_root() / _key(u, a)).glob("tmp/flux-traces/*/events.jsonl")):
                 if ev.is_symlink() or ev.stat().st_size <= limit:
                     continue
                 got = _condense_journal(ev, int(keep))
                 if got:
                     n, freed = n + 1, freed + got
-        return f"{n} journal(s) condensed, {_mb(freed)} freed" + self._skipped(busy), n > 0
+        return f"{n} journal(s) condensed, {_mb(freed)} freed", n > 0
 
     def _transcripts(self, p: dict[str, Any], loop: tuple[str, str] | None) -> tuple[str, bool]:
         from .admin import _key, cache_root
@@ -464,6 +470,32 @@ class Maintenance:
                 if got:
                     n, freed = n + 1, freed + got
         return f"{n} transcript(s) thinned, {_mb(freed)} freed", n > 0
+
+    def _passes(self, p: dict[str, Any], loop: tuple[str, str] | None) -> tuple[str, bool]:
+        import re as _re
+
+        from .admin import _key, cache_root
+
+        idle, busy = self._loops(loop)
+        cutoff = time.time() - float(p["days"]) * DAY
+        n, freed = 0, 0
+        for u, a, _d in idle + [x for x in self.loops() if f"{x[0]}/{x[1]}" in busy]:
+            for run in (cache_root() / _key(u, a)).glob("tmp/flux-traces/*"):
+                if not run.is_dir() or run.is_symlink():
+                    continue
+                dated = sorted(d for d in run.iterdir() if d.is_dir() and not d.is_symlink() and _re.fullmatch(r"\d{8}T\d{6}.*", d.name))
+                for d in dated[:-1]:                                  # the newest stays: the pass at work
+                    try:
+                        started = time.mktime(time.strptime(d.name[:15], "%Y%m%dT%H%M%S"))
+                    except ValueError:
+                        continue
+                    if started >= cutoff or _in_use(d):
+                        continue
+                    size = _tree_bytes(d)
+                    shutil.rmtree(d, ignore_errors=True)
+                    if not d.exists():
+                        n, freed = n + 1, freed + size
+        return f"{n} pass folder(s) removed, {_mb(freed)} freed", n > 0
 
     def _refused(self, p: dict[str, Any], _loop: Any) -> tuple[str, bool]:
         import json
@@ -762,7 +794,10 @@ def _thin_transcript(tr: Path, cutoff: float) -> int:
 def _condense_journal(ev: Path, keep: int) -> int:
     """A task journal (D761) keeps its recent starts whole: cut at the earliest start (a hello mark)
     within the last `keep` bytes -- else at the latest start, so it alone is kept -- the part before
-    appended to `events.jsonl.1.gz`, `marks.jsonl`'s offsets moved to match. The bytes freed."""
+    appended to `events.jsonl.1.gz`, `marks.jsonl`'s offsets moved to match. The bytes freed.
+    D1071: a start that alone is far over `keep` (a loop running for days in one start) is cut at a
+    pass within it, the kept part headed by its start's own hello line; read and written in pieces,
+    never the journal at once; a line appended meanwhile is kept (the loop opens it for each line)."""
     import json
 
     marks = ev.with_name("marks.jsonl")
@@ -770,39 +805,97 @@ def _condense_journal(ev: Path, keep: int) -> int:
         rows = [json.loads(x) for x in marks.read_bytes().splitlines() if x.strip()]
     except (OSError, ValueError):
         return 0                                         # no index to trust: left whole
-    data = ev.read_bytes()
-    hellos = [int(r["at"]) for r in rows if r.get("ev") == "hello" and int(r.get("at", -1)) < len(data)]
+    size = ev.stat().st_size
+    at = lambda r: int(r.get("at", -1))                  # noqa: E731
+    hellos = [at(r) for r in rows if r.get("ev") == "hello" and 0 <= at(r) < size]
     if not hellos:
         return 0
-    cut = next((at for at in hellos if at >= len(data) - keep), hellos[-1])
+    cut = next((x for x in hellos if x >= size - keep), hellos[-1])
+    head = b""
+    if cut == hellos[-1] and size - cut > 2 * keep:      # one start, far over what is kept: cut at a pass in it
+        passes = [at(r) for r in rows if r.get("ev") == "pass" and cut < at(r) < size]
+        within = next((x for x in passes if x >= size - keep), passes[-1] if passes else None)
+        if within is not None:
+            with open(ev, "rb") as fh:
+                fh.seek(cut)
+                head = fh.readline()                     # its hello: the kept part is still that start
+            cut = within
     if cut <= 0:
         return 0
-    with gzip.open(ev.with_name(ev.name + ".1.gz"), "ab") as gz:
-        gz.write(data[:cut])
-    for path, body in ((ev, data[cut:]),
-                       (marks, b"".join(json.dumps({**r, "at": int(r["at"]) - cut}).encode() + b"\n"
-                                        for r in rows if int(r.get("at", -1)) >= cut))):
-        tmp = path.with_name(path.name + ".condensing")
-        tmp.write_bytes(body)
-        os.chmod(tmp, path.stat().st_mode & 0o777)
-        os.replace(tmp, path)
-    return cut
+    chunk = 8 << 20
+    tmp = ev.with_name(ev.name + ".condensing")
+    with open(ev, "rb") as src:
+        _gz_head(src, cut, ev.with_name(ev.name + ".1.gz"), chunk)
+        with open(tmp, "wb") as dst:
+            dst.write(head)
+            src.seek(cut)
+            shutil.copyfileobj(src, dst, chunk)          # the rest, and what was appended while it ran
+    shift = cut - len(head)
+    kept = ([json.dumps({"at": 0, "ev": "hello", "n": None}).encode() + b"\n"] if head else []) + [
+        json.dumps({**r, "at": at(r) - shift}).encode() + b"\n" for r in rows if at(r) >= cut]
+    mtmp = marks.with_name(marks.name + ".condensing")
+    mtmp.write_bytes(b"".join(kept))
+    for t, path in ((tmp, ev), (mtmp, marks)):
+        os.chmod(t, path.stat().st_mode & 0o777)
+        os.replace(t, path)
+    return shift
+
+
+def _tree_bytes(d: Path) -> int:
+    total = 0
+    for root, _dirs, files in os.walk(d):
+        for f in files:
+            with contextlib.suppress(OSError):
+                total += os.lstat(os.path.join(root, f)).st_size
+    return total
+
+
+def _in_use(d: Path) -> bool:
+    """D1071: a process works in it (its current folder is under it) -- an agent still continuing an old pass."""
+    real = str(d.resolve())
+    for proc in Path("/proc").glob("[0-9]*"):
+        with contextlib.suppress(OSError):
+            cwd = os.readlink(proc / "cwd")
+            if cwd == real or cwd.startswith(real + os.sep):
+                return True
+    return False
+
+
+def _gz_head(src, cut: int, gz_path: Path, chunk: int) -> None:
+    """D1071: the first `cut` bytes of `src` appended to `gz_path`, a piece at a time."""
+    src.seek(0)
+    with gzip.open(gz_path, "ab") as gz:
+        left = cut
+        while left > 0:
+            piece = src.read(min(chunk, left))
+            if not piece:
+                break
+            gz.write(piece)
+            left -= len(piece)
 
 
 def _condense(log: Path, keep: int) -> int:
     """The log's last `keep` bytes stay, from a start's header (or a line) on; what came before is
-    appended to `loop.log.1.gz` beside it. The bytes freed."""
-    data = log.read_bytes()
-    cut = max(0, len(data) - keep)
-    start = data.find("\n── started ".encode(), cut)
-    cut = start + 1 if start >= 0 else (data.find(b"\n", cut) + 1 or cut)
+    appended to `loop.log.1.gz` beside it. The bytes freed. D1071: read and written in pieces."""
+    size = log.stat().st_size
+    cut = max(0, size - keep)
+    with open(log, "rb") as fh:
+        fh.seek(cut)
+        tail = fh.read(keep)                             # only the kept part is looked through
+    start = tail.find("\n── started ".encode())
+    nl = tail.find(b"\n")
+    cut = cut + (start + 1 if start >= 0 else nl + 1 if nl >= 0 else 0)
     if cut <= 0:
         return 0
-    with gzip.open(log.with_name(log.name + ".1.gz"), "ab") as gz:
-        gz.write(data[:cut])
+    chunk = 8 << 20
     note = f"(the log before this line is in {log.name}.1.gz -- condensed {time.strftime('%Y-%m-%d %H:%M')})\n".encode()
     tmp = log.with_name(log.name + ".condensing")
-    tmp.write_bytes(note + data[cut:])
+    with open(log, "rb") as src:
+        _gz_head(src, cut, log.with_name(log.name + ".1.gz"), chunk)
+        with open(tmp, "wb") as dst:
+            dst.write(note)
+            src.seek(cut)
+            shutil.copyfileobj(src, dst, chunk)
     os.chmod(tmp, log.stat().st_mode & 0o777)
     os.replace(tmp, log)
     return cut - len(note)

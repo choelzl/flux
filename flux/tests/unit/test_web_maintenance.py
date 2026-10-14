@@ -409,3 +409,65 @@ def test_empty_starts_are_pruned_on_idle_loops(tmp_path, monkeypatch):
     got = m.run("empty", by="ada")
     assert got["ok"] and got["said"].startswith("1 empty start(s) removed (ada/x: 1)") and "1 running" in got["said"], got
     assert forgot == [1, 2], "ended starts only, the running loop's none"
+
+
+def test_a_long_single_start_is_condensed_at_a_pass_and_stays_that_start(tmp_path):
+    """D1071: a loop running for days in one start: its journal is cut at a pass in it (not left whole),
+    the kept part headed by the start's own hello, the marks moved; read in pieces."""
+    import gzip
+    import json
+
+    from flux_web.maintenance import _condense_journal
+
+    ev, marks = tmp_path / "events.jsonl", tmp_path / "marks.jsonl"
+    lines, idx, at = [], [], 0
+    hello = json.dumps({"t": 1, "ev": "hello", "pid": 7}) + "\n"
+    lines.append(hello)
+    idx.append({"at": 0, "ev": "hello", "n": None})
+    at += len(hello)
+    for n in range(1, 41):
+        mark = json.dumps({"t": n, "ev": "mark", "name": "pass", "why": json.dumps({"n": n})}) + "\n"
+        idx.append({"at": at, "ev": "pass", "n": n})
+        body = mark + "".join(json.dumps({"t": n, "ev": "start", "id": n * 100 + i, "name": "x" * 200}) + "\n" for i in range(20))
+        lines.append(body)
+        at += len(body)
+    ev.write_text("".join(lines))
+    marks.write_text("".join(json.dumps(r) + "\n" for r in idx))
+    size = ev.stat().st_size
+    keep = size // 10
+    freed = _condense_journal(ev, keep)
+    assert freed > size // 2, "a start far over what is kept is cut within it"
+    kept = ev.read_text().splitlines()
+    assert json.loads(kept[0])["ev"] == "hello" and json.loads(kept[1])["name"] == "pass", "the kept part is still that start"
+    rows = [json.loads(x) for x in marks.read_text().splitlines()]
+    assert rows[0] == {"at": 0, "ev": "hello", "n": None}
+    with open(ev, "rb") as fh:
+        for r in rows[1:]:
+            fh.seek(r["at"])
+            assert json.loads(fh.readline())["name"] == "pass", "every pass mark points at its pass"
+    with gzip.open(tmp_path / "events.jsonl.1.gz", "rb") as gz:
+        assert gz.read().startswith(hello.encode()), "the part before it, gzipped beside"
+
+
+def test_old_pass_folders_go_and_the_newest_stays(tmp_path, monkeypatch):
+    """D1071: a pass's agent folders older than the days go -- a running loop's too; the newest stays,
+    and the journal and transcript."""
+    import time as _time
+
+    from flux_web.maintenance import Maintenance
+
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
+    from flux_web.admin import _key, cache_root
+
+    run = cache_root() / _key("ada", "nlu") / "tmp" / "flux-traces" / "abc"
+    old = _time.strftime("%Y%m%dT%H%M%S", _time.localtime(_time.time() - 10 * 86400))
+    older = _time.strftime("%Y%m%dT%H%M%S", _time.localtime(_time.time() - 12 * 86400))
+    for name in (older, old):
+        (run / name / "agents" / "generate").mkdir(parents=True)
+        (run / name / "agents" / "generate" / "PROMPT-x.md").write_text("p" * 1000)
+    (run / "events.jsonl").write_text("{}\n")
+    (run / "turns.jsonl").write_text("{}\n")
+    m = Maintenance(store=None, live=lambda u, a: True, loops=lambda: [("ada", "nlu", tmp_path / "nlu")])
+    said, did = m._passes({"days": 3}, None)
+    assert did and not (run / older).exists() and (run / old).exists(), said
+    assert (run / "events.jsonl").exists() and (run / "turns.jsonl").exists()
