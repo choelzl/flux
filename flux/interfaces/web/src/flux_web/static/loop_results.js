@@ -22,9 +22,12 @@ function resultsView(ctx, r) {
     : Math.abs(v) >= 1000 || Number.isInteger(v) ? String(Math.round(v * 100) / 100) : String(Number(Number(v).toPrecision(4)));
   const limitOf = (m) => r.limits.find(l => l.metric === m);
   // D899: accepted only when it meets every requirement; pending while a later stage must judge one
+  // D1090: a critic's rejection is "rejected · critic" -- which box's critic ("the select critic") says nothing more; a person's keeps the name
+  const byCritic = (by) => /^the \w+ critic\b/.test(String(by || ""));
   const verdictPill = (d) => d.verdict === "accepted" ? h("span", { class: "pill ok" }, "accepted")
     : d.verdict === "pending" ? h("span", { class: "pill warn" }, "pending")
-    : d.verdict === "rejected" ? h("span", { class: "pill rejected" }, `rejected · ${d.rejected?.by || "?"}`) : h("span", { class: "pill bad" }, "failed");
+    : d.verdict === "rejected" ? h("span", { class: "pill rejected" }, !d.rejected?.by ? "rejected" : byCritic(d.rejected.by) ? "rejected · critic" : `rejected · ${d.rejected.by}`)
+    : h("span", { class: "pill bad" }, "failed");
   const detail = h("div", { class: "detail" }, empty("Select a design."));
   // D1001: a design taken out of the evidence by hand, with why -- the loop at rest, by whoever may change it
   const canChange = () => ctx.mine && !ctx.st?.running;
@@ -57,7 +60,7 @@ function resultsView(ctx, r) {
     toast(res.ok, "ok"); reload();
   }, { cls: "small reject-design", title: "Mark this result rejected, with why: it stays shown and is never chosen" }) : "";
   const rejectedBlock = (d) => d.rejected ? h("div", { class: "blk rejected-blk" }, h("h3", {}, "Rejected"),
-    h("p", {}, d.rejected.why), h("p", { class: "muted small" }, `${d.rejected.by} · `, ago(Date.parse(d.rejected.at) / 1000),
+    h("p", {}, d.rejected.why), h("p", { class: "muted small" }, `${byCritic(d.rejected.by) ? "critic" : d.rejected.by} · `, ago(Date.parse(d.rejected.at) / 1000),
       (d.cleared || []).length ? ` · cleared ${d.cleared.map(c => `${c.stage} ${c.metric}`).join(", ")}` : ""),
     (d.rejected.again || []).length ? h("span", { class: "pill warn" }, ctx.st?.running ? "measured again before the next pass" : "to be measured again") : "",
     canReject() ? act("Restore", async () => {
