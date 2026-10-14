@@ -386,9 +386,10 @@ class Maintenance:
                     continue
                 try:
                     moved += store.share_artifacts()[0]
-                    store._conn.execute("DELETE FROM artifacts WHERE key NOT IN "
-                                        "(SELECT artifact_key FROM trials WHERE artifact_key IS NOT NULL)")
-                    store._conn.commit()
+                    if store._ok:
+                        store._conn.execute("DELETE FROM artifacts WHERE key NOT IN "
+                                            "(SELECT artifact_key FROM trials WHERE artifact_key IS NOT NULL)")
+                        store._conn.commit()
                 finally:
                     store.close()
         dbs = [] if loop else [Path(self.store.path)]

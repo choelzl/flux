@@ -63,3 +63,34 @@ def test_rows_written_before_are_moved_over_and_read_meanwhile(tmp_path):
     assert store._conn.execute("SELECT count(*) FROM artifacts").fetchone()[0] == 2
     assert [t.candidate["artifact"] for t in store.trials(cid)] == ["text 0", "text 1", "text 0", "text 1", "text 0"]
     store.close()
+
+
+def test_a_record_made_before_opens_read_only_and_writes_in_its_own_shape(tmp_path):
+    """An Ask's sandbox opens the loop's record read-only: a record made before D1072 cannot gain the
+    table there, and is read as it is; one that cannot gain it at a write keeps the text in the row."""
+    db = tmp_path / "r.db"
+    store, cid = _record(db)
+    _trial(store, cid, {"name": "m#1", "artifact": "text"}, "screen")
+    store.close()
+    con = sqlite3.connect(db)
+    with con:
+        con.execute("UPDATE trials SET candidate_json = ?", (json.dumps({"name": "m#1", "artifact": "text"}),))
+        con.execute("DROP TABLE artifacts")
+        con.execute("ALTER TABLE trials DROP COLUMN artifact_key")
+    con.close()
+    db.chmod(0o444)
+    try:
+        ro = CampaignStore(str(db))
+        assert [t.candidate["artifact"] for t in ro.trials(cid)] == ["text"]
+        assert ro.trials(cid, artifacts=False)[0].artifact_key is None and ro.share_artifacts() == (0, False)
+        ro.close()
+    finally:
+        db.chmod(0o644)
+        for side in ("-wal", "-shm"):              # made read-only with it (a mount read-only makes none)
+            (tmp_path / f"r.db{side}").unlink(missing_ok=True)
+    store = CampaignStore(str(db))                 # writable again: the table comes, the old row moves on compact
+    _trial(store, cid, {"name": "m#2", "artifact": "text"}, "screen")
+    assert store.share_artifacts() == (1, True)
+    assert [t.candidate["artifact"] for t in store.trials(cid)] == ["text", "text"]
+    assert store._conn.execute("SELECT count(*) FROM artifacts").fetchone()[0] == 1
+    store.close()

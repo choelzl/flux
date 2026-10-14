@@ -58,11 +58,6 @@ CREATE TABLE IF NOT EXISTS campaign_events (
 );
 
 CREATE INDEX IF NOT EXISTS idx_trials_campaign ON trials(campaign_id, seq);
-
-CREATE TABLE IF NOT EXISTS artifacts (
-    key TEXT PRIMARY KEY,
-    text TEXT NOT NULL
-);
 """
 
 # Trial statuses. `running` is the intent record: a `running` row found at load time belongs to
@@ -118,12 +113,28 @@ class CampaignStore:
         self._conn: sqlite3.Connection = self.results._conn
         self._conn.execute("PRAGMA journal_mode = WAL")
         self._conn.executescript(_CAMPAIGN_SCHEMA)
-        if not any(r[1] == "artifact_key" for r in self._conn.execute("PRAGMA table_info(trials)").fetchall()):
-            try:                                          # D1072: appended, so no row is rewritten
-                self._conn.execute("ALTER TABLE trials ADD COLUMN artifact_key TEXT")
-            except sqlite3.OperationalError:              # another opener added it first
-                pass
         self._conn.commit()
+        self._ok: bool | None = None
+        self._share_ready()
+
+    def _share_ready(self) -> bool:
+        """Whether the record keeps each design's text once (D1072), made so when it can be: a record made
+        before gains the table and the rows' column (appended, so no row is rewritten); one opened read-only
+        (an Ask's sandbox) or locked is read and written as it is, and asked again on the next write."""
+        if self._ok:
+            return True
+        has = lambda: (self._conn.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'artifacts'").fetchone() is not None  # noqa: E731
+                       and any(r[1] == "artifact_key" for r in self._conn.execute("PRAGMA table_info(trials)").fetchall()))
+        if not has():
+            try:
+                self._conn.execute("CREATE TABLE IF NOT EXISTS artifacts (key TEXT PRIMARY KEY, text TEXT NOT NULL)")
+                if not any(r[1] == "artifact_key" for r in self._conn.execute("PRAGMA table_info(trials)").fetchall()):
+                    self._conn.execute("ALTER TABLE trials ADD COLUMN artifact_key TEXT")
+                self._conn.commit()
+            except sqlite3.OperationalError:              # read-only, locked, or another opener added it first
+                self._conn.rollback()
+        self._ok = has()
+        return self._ok
 
     def close(self) -> None:
         self.results.close()
@@ -365,18 +376,23 @@ class CampaignStore:
         # D747: the next seq taken in the insert itself -- one statement holds the write lock, so
         # passes at once on their own connections never take the same one (a row was lost)
         col, val = self._filler()
-        body, key = self._share(candidate)
+        if self._share_ready():
+            body, key = self._share(candidate)
+            col, val = f", artifact_key{col}", f", ?{val}"
+            extra: tuple[Any, ...] = (key,)
+        else:                                             # D1072: a record that cannot gain the table yet
+            body, extra = candidate, ()
         row = self._conn.execute(
             "INSERT INTO trials (campaign_id, seq, phase, stage, candidate_json, "
-            f"candidate_key, status, strategy_kind, created_at, artifact_key{col}) "
+            f"candidate_key, status, strategy_kind, created_at{col}) "
             "VALUES (?, (SELECT COALESCE(MAX(seq), 0) + 1 FROM trials WHERE campaign_id = ?), "
-            f"?, ?, ?, ?, 'running', ?, ?, ?{val}) RETURNING seq",
+            f"?, ?, ?, ?, 'running', ?, ?{val}) RETURNING seq",
             (
                 # default=str: a non-JSON object in the candidate is recorded as text rather
                 # than failing the whole trial write.
                 campaign_id, campaign_id, phase, stage,
                 json.dumps(body, default=str), candidate_key,
-                strategy_kind, _now(), key,
+                strategy_kind, _now(), *extra,
             ),
         ).fetchone()
         self._conn.commit()
@@ -447,6 +463,8 @@ class CampaignStore:
         running loop writes between them): (rows moved, all done). `budget_s`: stop after so long."""
         import time
 
+        if not self._share_ready():
+            return 0, False
         self._conn.commit()
         t0, moved, last = time.monotonic(), 0, 0
         while budget_s is None or time.monotonic() - t0 < budget_s:
@@ -478,6 +496,8 @@ class CampaignStore:
     def artifacts(self, keys: Any) -> dict[str, str]:
         """D1072: the artifacts' texts by key."""
         keys, got = list(keys), {}
+        if keys and not self._ok:
+            return got
         for i in range(0, len(keys), 500):
             part = keys[i:i + 500]
             got.update(self._conn.execute(f"SELECT key, text FROM artifacts WHERE key IN ({','.join('?' * len(part))})",
@@ -506,7 +526,8 @@ class CampaignStore:
         # of 40k trials took 126k queries)
         rows = self._conn.execute(
             "SELECT t.seq, t.phase, t.stage, t.candidate_json, t.candidate_key, "
-            "t.status, t.result_id, t.error, t.cache_hit, t.wall_clock_s, t.created_at, r.result_json, t.artifact_key "
+            "t.status, t.result_id, t.error, t.cache_hit, t.wall_clock_s, t.created_at, r.result_json, "
+            f"{'t.artifact_key' if self._ok else 'NULL'} "
             "FROM trials t LEFT JOIN results r ON r.id = t.result_id "
             f"WHERE {' AND '.join('t.' + c for c in clauses)} "
             "ORDER BY t.seq",
