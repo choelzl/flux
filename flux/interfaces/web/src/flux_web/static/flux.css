@@ -789,6 +789,7 @@ pre.author-log { max-height: 260px; overflow: auto; white-space: pre-wrap; }
 /* D978: the pass as a flow, the chain of passes */
 .alt-chain { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 2px 0 12px; }
 .alt-chip { position: relative; min-width: 30px; padding: 2px 8px; border-radius: 12px; font: 12px var(--mono, monospace); }
+.alt-chain-more { align-self: center; }
 .alt-chip:not(:first-child)::after { content: "→"; position: absolute; left: -13px; color: var(--muted); }   /* D1075: on the chip it leads to -- a wrapped chip keeps its arrow */
 .alt-chip::before { content: ""; position: absolute; top: -2px; right: -2px; width: 7px; height: 7px; border-radius: 50%; background: var(--ok); }
 .alt-chip.failed::before { background: var(--bad); } .alt-chip.part::before { background: var(--warn); } .alt-chip.running::before { background: var(--run); }

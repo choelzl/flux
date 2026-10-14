@@ -338,7 +338,7 @@ export function liveAltTab(ctx) {
       const opensTries = phaseKind(first) === "design";             // D1045: a step repeated elsewhere is one line, ×N
       out.push(h("div", { class: `alt-tree-row ${box ? "box" : "step"}`, style: `--depth:${depth};--k:${COLORS[phaseKind(first)] || COLORS.setup}` }, opensTries ? fold(key, collapsed, taskLabel(first)) : h("span", { class: "alt-fold-space" }),
         h("button", { type: "button", class: `alt-task ${finished ? "" : "running"}`, onclick: () => toggleFold(key, collapsed) },
-          finished ? doneMark(ended(nodes), nodes.some(n => n.failed || below.has(n.id))) : h("span", { class: "alt-spin", role: "img", "aria-label": "running" }),
+          finished ? doneMark(ended(nodes), nodes.some(n => n.failed || n.rejected || below.has(n.id) || below.soft?.has(n.id))) : h("span", { class: "alt-spin", role: "img", "aria-label": "running" }),
           h("span", { class: "alt-task-name" }, said(first, box)),
           h("span", { class: "alt-again", title: `${run.length} tries in this pass` }, `×${run.length}`), ai ? h("span", { class: "alt-ai-pill" }, "ai") : "",
           h("span", { class: "mono muted small" }, dur(t1 - t0)))));
@@ -362,7 +362,7 @@ export function liveAltTab(ctx) {
       const tries = Array.from({ length: m }, (_, i) => [run[2 * i].node, run[2 * i + 1].node]);
       out.push(h("div", { class: "alt-tree-row", style: `--depth:${depth};--k:${COLORS[phaseKind(first)] || COLORS.setup}` }, fold(key, collapsed, taskLabel(first)),
         h("button", { type: "button", class: `alt-task ${finished ? "" : "running"}`, onclick: () => toggleFold(key, collapsed) },
-          finished ? doneMark(ended(tries.at(-1)), nodes.some(n => n.failed || below.has(n.id))) : h("span", { class: "alt-spin", role: "img", "aria-label": "running" }),
+          finished ? doneMark(ended(tries.at(-1)), nodes.some(n => n.failed || n.rejected || below.has(n.id) || below.soft?.has(n.id))) : h("span", { class: "alt-spin", role: "img", "aria-label": "running" }),
           h("span", { class: "alt-task-name" }, taskLabel(first), h("span", { class: "muted small" }, ` · ${taskLabel(nodes[1]).replace(/^[^·]*·\s*/, "")}`)),
           h("span", { class: "alt-again", title: `${m} tries in a row` }, `×${m}`),
           h("span", { class: "mono muted small" }, dur(t1 - t0)))));
@@ -377,7 +377,7 @@ export function liveAltTab(ctx) {
       const t0 = Math.min(...nodes.map(n => n.t0)), t1 = Math.max(...nodes.map(n => n.t1 ?? now));
       out.push(h("div", { class: `alt-tree-row ${box ? "box" : "step"}`, style: `--depth:${depth};--k:${COLORS[kind] || COLORS.setup}` }, fold(key, collapsed, workLabel(kind)),
         h("button", { type: "button", class: `alt-task ${finished ? "" : "running"}`, onclick: () => toggleFold(key, collapsed) },
-          finished ? doneMark(ended(nodes), nodes.some(n => n.failed || below.has(n.id))) : h("span", { class: "alt-spin", role: "img", "aria-label": "running" }),
+          finished ? doneMark(ended(nodes), nodes.some(n => n.failed || n.rejected || below.has(n.id) || below.soft?.has(n.id))) : h("span", { class: "alt-spin", role: "img", "aria-label": "running" }),
           h("span", { class: "alt-task-name" }, box ? h("b", {}, workLabel(kind)) : workLabel(kind)), h("span", { class: "mono muted small" }, dur(t1 - t0)))));
       if (!collapsed) runs(run, depth + 1, true);
     };
@@ -434,13 +434,13 @@ export function liveAltTab(ctx) {
       return candidateOf(t.lead) || t.steps.map(candidateOf).find(Boolean) || (/\S+#\S+/.exec(String(t.lead.params?.["turn why"] || opens.why || t.lead.why || "")) || [""])[0] || ""; };
     const tryLine = (t, i, depth, onlyLine = false) => {
       const nodes = [t.lead, ...t.steps], all = nodes.flatMap(flat), key = `try:${t.lead.id}`;
-      const running = all.some(n => n.t1 == null), failedStep = t.steps.find(n => n.failed || below.has(n.id));
+      const running = all.some(n => n.t1 == null), failedStep = t.steps.find(n => n.failed || n.rejected || below.has(n.id) || below.soft?.has(n.id));
       const under = t.run ? (kids.get(t.lead.id) || []) : t.steps.map(n => ({ node: n, parent: null }));
       const collapsed = onlyLine || !under.length || isFolded(key, !running, all.some(n => holds(n.id)) && !all.slice(0, 1).some(n => n.id === selected));
       const opens = aiOf.get(t.lead.id) || t.lead, picked = all.some(n => n.id === selected) && (onlyLine || opens.id === selected || t.lead.id === selected);   // D1075: a line alone holds its steps
       const made = madeOf(t);
       const why = failedStep ? (firstFailing(failedStep) ? (onlyLine ? firstFailing(failedStep) : `${checkWord(failedStep)}: ${firstFailing(failedStep)}`) : `${checkWord(failedStep)} failed`) : "";   // D1063: which test; D1064: the graph's narrow line, the test alone
-      opens.tryNo = t.part ? null : i;
+      opens.tryNo = t.lead.tryNo = t.part ? null : i;
       opens.tryFailed = !running && failedStep && !opens.failed ? why || "its check failed" : null;   // D1075: the panel says how the try ended
       const shortMade = short(made);                                            // "#4"; a part's "lo#1" (D1064)
       const asPart = t.part && shortMade.startsWith(t.part.split(" ")[0]);     // D1066: "lo#1", not "lo #1"
@@ -450,7 +450,7 @@ export function liveAltTab(ctx) {
         h("button", { ...taskButton(opens), type: "button", class: `alt-task ${state(opens)}${picked ? " sel" : ""}`, "aria-pressed": String(picked), title: t.lead.name },
           running ? h("span", { class: "alt-spin", role: "img", "aria-label": "running" })
             : !failedStep && (opens.timedOut || t.lead.timedOut) ? mark(opens.timedOut ? opens : t.lead, below)     // D1059: stopped at its time limit, "!"
-            : doneMark(!!failedStep || !!t.lead.failed, all.some(n => below.has(n.id))),
+            : doneMark(!!failedStep || !!t.lead.failed, all.some(n => below.has(n.id) || below.soft?.has(n.id))),
           h("span", { class: "alt-task-name" }, asPart ? shortMade : t.part || `try ${i}`, made && !asPart ? h("span", { class: "alt-what", title: made }, ` ${shortMade}`) : "", why ? h("span", { class: "alt-what" }, ` · ${why}`) : ""),
           aiOf.has(t.lead.id) || AI.test(String(t.lead.params?.turn || t.lead.name)) ? h("span", { class: "alt-ai-pill" }, "ai") : "",
           h("span", { class: "mono muted small" }, dur(t1 - t0)))));
@@ -496,7 +496,7 @@ export function liveAltTab(ctx) {
             : lone && (opens.interrupted || opens.timedOut) ? mark(opens, below)      // its one draft's own end: interrupted, a time limit
             // D1065: a rejected result is "!" -- its critique the ✗; a box of only its critique's failure is ✗
             : doneMark(ended(nodes.filter(n => !/^\s*critique\s*:/i.test(String(n.name)))) || (rejected && nodes.every(n => /^\s*critique\s*:/i.test(String(n.name)))),
-              all.some(n => n.failed || aiOf.get(n.id)?.failed)),     // D1061: its own work's failures; D1063: its folded model turn's too
+              all.some(n => n.failed || n.rejected || aiOf.get(n.id)?.failed)),     // D1061: its own work's failures; D1063: its folded model turn's too; D1075: a rejection
           h("span", { class: "alt-task-name" }, h("b", {}, workLabel(kind)), what ? h("span", { class: "alt-what", title: what }, ` ${shortAll(what)}`) : "", nodes.length === 1 && note(first) ? h("span", { class: "alt-what" }, ` · ${note(first)}`) : ""),
           // D1067: the graph's order -- how many, a critic, the ai
           tries && tries.length > 1 ? h("span", { class: "alt-again" }, `×${tries.length}`) : "",
@@ -580,11 +580,13 @@ export function liveAltTab(ctx) {
       if (pass === "all") {
         const key = `pass:${g.p ?? "setup"}`, nodes = g.rows.map(r => r.node), finished = nodes.every(n => n.t1 != null);
         const collapsed = isFolded(key, finished, nodes.some(n => holds(n.id)));
-        const failed = ended(nodes), t0 = Math.min(...nodes.map(n => n.t0)), t1 = Math.max(...nodes.map(n => n.t1 ?? now));
+        // D1078: a pass also failed when the box it ended on did (a gate that let nothing through: nothing measured after it)
+        const lastBad = g.p != null && flowBoxes(rows.filter(r => (membership.get(r.node.id) ?? null) === g.p), g.p, false, passNotes(g.p)).filter(b => b.runs.length).at(-1)?.state === "bad";
+        const failed = ended(nodes) || lastBad, t0 = Math.min(...nodes.map(n => n.t0)), t1 = Math.max(...nodes.map(n => n.t1 ?? now));
         const name = passName(g.p);
         out.push(h("div", { class: "alt-tree-row alt-pass-row", style: "--depth:0" }, fold(key, collapsed, name),
           h("button", { type: "button", class: `alt-task alt-pass-heading${passView === g.p ? " sel" : ""}`, "data-pass": String(g.p ?? "setup"), onclick: () => showPass(g.p) },
-            finished ? doneMark(failed, nodes.some(n => n.failed || below.has(n.id))) : h("span", { class: "alt-spin", role: "img", "aria-label": "running" }),
+            finished ? doneMark(failed, nodes.some(n => n.failed || n.rejected || below.has(n.id) || below.soft?.has(n.id))) : h("span", { class: "alt-spin", role: "img", "aria-label": "running" }),
             h("span", { class: "alt-task-name" }, name), h("span", { class: "mono muted small" }, dur(t1 - t0)))));
         if (collapsed) continue;
         depth = 1;
@@ -598,7 +600,7 @@ export function liveAltTab(ctx) {
         const collapsed = isFolded(key, finished, nodes.some(n => holds(n.id))) || (!opened.has(key) && !nodes.some(n => holds(n.id)));
         out.push(h("div", { class: `alt-tree-row quiet`, style: `--depth:${depth};--k:${COLORS.setup}` }, fold(key, collapsed, "Setup"),
           h("button", { type: "button", class: "alt-task alt-setup-steps", onclick: () => toggleFold(key, collapsed) },
-            finished ? doneMark(nodes.some(n => n.failed), nodes.some(n => below.has(n.id))) : h("span", { class: "alt-spin" }),
+            finished ? doneMark(nodes.some(n => n.failed), nodes.some(n => n.rejected || below.has(n.id) || below.soft?.has(n.id))) : h("span", { class: "alt-spin" }),
             h("span", { class: "alt-task-name" }, `Setup · ${lead.length} steps`), h("span", { class: "mono muted small" }, dur(nodes.reduce((t, n) => t + secs(n), 0))))));
         if (!collapsed) runs(lead, depth + 1);    // D1045: the same step again in a row is one line, ×N
       } else lead.forEach(r => line(r, depth));
@@ -627,10 +629,14 @@ export function liveAltTab(ctx) {
     const inPass = rows.filter(r => (membership.get(r.node.id) ?? null) === shown);
     const running = inPass.some(r => r.node.t1 == null);
     const boxes = flowBoxes(inPass, shown, running, passNotes(shown)), back = repaired(boxes);
-    const chain = pass === "all" && passes.length > 1 ? h("div", { class: "alt-chain", role: "group", "aria-label": "Passes" }, passes.map(p => {
+    // D1078: the latest passes and the one shown -- sixty chips were five rows above the drawing; the Pass menu has every one
+    const CHIPS = 12, chips = passes.filter((p, i) => i >= passes.length - CHIPS || p === shown), hidden = passes.length - chips.length;
+    const chain = pass === "all" && passes.length > 1 ? h("div", { class: "alt-chain", role: "group", "aria-label": "Passes" },
+      hidden > 0 ? h("span", { class: "alt-chain-more muted small", title: "Earlier passes: in the Pass menu" }, `${hidden} earlier`) : "", chips.map(p => {
       const nodes = rows.filter(r => (membership.get(r.node.id) ?? null) === p).map(r => r.node);
       const top = nodes.filter(n => n.parent == null || (membership.get(n.parent.id) ?? null) !== p);
-      const st = nodes.some(n => n.t1 == null) ? "running" : ended(top.length ? top : nodes) ? "failed" : nodes.some(n => n.failed || n.timedOut || n.rejected) ? "part" : "done";   // D1031; D1059: "!" as the tree says
+      const lastBad = p != null && flowBoxes(rows.filter(r => (membership.get(r.node.id) ?? null) === p), p, false, passNotes(p)).filter(b => b.runs.length).at(-1)?.state === "bad";   // D1078
+      const st = nodes.some(n => n.t1 == null) ? "running" : ended(top.length ? top : nodes) || lastBad ? "failed" : nodes.some(n => n.failed || n.timedOut || n.rejected) ? "part" : "done";   // D1031; D1059: "!" as the tree says
       return h("button", { type: "button", class: `alt-chip ${st}${p === shown ? " sel" : ""}`, "data-chain": String(p ?? "S"), "aria-pressed": String(p === shown),
         title: passName(p), onclick: () => { chainPass = p; showPass(p); } }, passShort(p));
     })) : "";
