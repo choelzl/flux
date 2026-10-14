@@ -272,8 +272,9 @@ export function liveAltTab(ctx) {
       "aria-expanded": String(!collapsed), onclick: event => { event.stopPropagation(); toggleFold(key, collapsed); } }, collapsed ? "▸" : "▾");
     // D1044: a critique that rejected what it judged is a failure of that work: red, the critic pill says who
     const rejectedBy = n => /^\s*critique\s*:/i.test(String(n.name)) && /^(rejected|sent back|objection)/i.test(String(n.output?.verdict ?? n.fields?.verdict ?? ""));
-    const pills = n => [AI.test(String(n.params?.turn || n.name)) || aiOf.has(n.id) ? h("span", { class: "alt-ai-pill", title: (aiOf.get(n.id) || n).name }, "ai") : "",
-      /^\s*critique\s*:/i.test(String(n.name)) ? h("span", { class: "alt-critic-tag" }, "critic") : ""];
+    // D1068: the boxes' order -- a critic, then the ai
+    const pills = n => [/^\s*critique\s*:/i.test(String(n.name)) ? h("span", { class: "alt-critic-tag" }, "critic") : "",
+      AI.test(String(n.params?.turn || n.name)) || aiOf.has(n.id) ? h("span", { class: "alt-ai-pill", title: (aiOf.get(n.id) || n).name }, "ai") : ""];
     // D1044: a box's line says the box, then what it worked on; a step under it drops the box's name
     const said = (n, box) => {
       const full = taskLabel(n), at = full.indexOf(" · "), rest = at < 0 ? "" : full.slice(at + 3);
@@ -288,7 +289,7 @@ export function liveAltTab(ctx) {
     };
     // D1066: the checks a failed check never reached, rows of their own under it; D1067: under a box line too
     const skipRows = (n, depth) => { for (const t of notReached(n)) out.push(h("div", { class: "alt-tree-row step quiet skipped", style: `--depth:${depth};--k:${COLORS.check}` },
-      h("span", { class: "alt-fold-space" }), h("span", { class: "alt-task", title: "not run: a check before it failed" }, h("span", { class: "alt-task-state" }, "○"), h("span", { class: "alt-task-name muted" }, `${t} · not run`)))); };
+      h("span", { class: "alt-fold-space" }), h("span", { class: "alt-task", title: "not run: a check before it failed" }, h("span", { class: "alt-task-state muted" }, "○"), h("span", { class: "alt-task-name muted" }, `${t} · not run`)))); };
     const line = (r, depth, named = "", box = false, extra = "", flat = false) => {
       const n = r.node, under = flat ? [] : kids.get(n.id) || [], finished = n.t1 != null, collapsed = under.length && isFolded(n.id, finished, holds(n.id) && n.id !== selected);
       const kind = phaseKind(n), opens = aiOf.get(n.id) || n, label = named || said(n, box), rejected = rejectedBy(n);
@@ -418,7 +419,9 @@ export function liveAltTab(ctx) {
       if (at < 0) return "";
       // key=value pairs whose value is a plain number; a dictionary's {...} or a list is skipped whole (D1051)
       const pairs = [...line.slice(at + 2).matchAll(/([A-Za-z][\w.]*)=(\{[^}]*\}|\[[^\]]*\]|[^,]+)/g)];
-      return pairs.filter(([, k, v]) => !k.startsWith("_") && /^-?[\d.]+(e-?\d+)?$/i.test(v.trim())).slice(0, 3).map(([, k, v]) => `${k} ${v.trim()}`).join(" · ");
+      // D1068: the goals' numbers first -- a goal is never the one cut off
+      const g = goals.map(x => x.metric), rank = k => { const i = g.findIndex(m => k === m || k.startsWith(m + ".")); return i < 0 ? g.length : i; };
+      return pairs.filter(([, k, v]) => !k.startsWith("_") && /^-?[\d.]+(e-?\d+)?$/i.test(v.trim())).sort((a, b) => rank(a[1]) - rank(b[1])).slice(0, 3).map(([, k, v]) => `${k} ${v.trim()}`).join(" · ");
     };
     // the design a try made: its draft's own, the check after it, or the design it was asked for
     const madeOf = t => { const opens = aiOf.get(t.lead.id) || t.lead;

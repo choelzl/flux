@@ -59,6 +59,8 @@ function summaryOf(x) {
   // D1059: a step that failed says so first -- which test, and how many of its cases
   const bad = leaves.length > 1 && leaves.find(l => l.failed && failingOf(stdoutOf(l))?.failing);
   if (bad) { const f = failingOf(stdoutOf(bad)); return `${ranFor(bad) || "a test"} ${f.failing} failing${f.of != null ? ` of ${f.of}` : ""}`; }
+  // D1068: several checks that passed -- how many, not the first one's own line
+  if (leaves.length > 1 && leaves.every(l => !l.failed && failingOf(stdoutOf(l)))) return `${leaves.length} checks, none failing`;
   for (const l of leaves) {
     const out = stdoutOf(l), f = failingOf(out);
     if (f) return `${f.failing} failing${f.of != null ? ` of ${f.of}` : ""}`;
@@ -138,10 +140,19 @@ function toolBody(n, env) {
     } else if (Object.keys(metrics).length) {
       const { best, goals } = bestOf(n, env), dicts = dictsOf(out), me = candidateOf(n);
       // D1064: one row per number, a dictionary's too; "best so far" says whose; no comparison columns when nothing compares
-      const rows = [...Object.entries(metrics).map(([k, v]) => [k, v, v]), ...Object.entries(dicts).map(([k, d]) => [k, d, meanOf(d)])];
+      // D1068: the goals first, in the document's order -- then the rest
+      const order = Object.keys(goals), rank = k => order.includes(k) ? order.indexOf(k) : order.length;
+      const rows = [...Object.entries(metrics).map(([k, v]) => [k, v, v]), ...Object.entries(dicts).map(([k, d]) => [k, d, meanOf(d)])].sort((a, b) => rank(a[0]) - rank(b[0]));
       const compares = rows.some(([k]) => best[k]);
+      const pct = c => Math.abs(c) < 0.0005 ? "=" : `${c > 0 ? "+" : "−"}${Math.abs(c * 100).toFixed(c && Math.abs(c) < 10 ? 1 : 0)}%`;
       const change = (k, m) => { const b = best[k], bm = b && (b.m ?? b.v), dir = goals[k];
         if (b == null || m == null || !dir || !bm) return ["", ""];
+        // D1068: a dictionary key by key -- one mean's percentage hides a key that moved the other way
+        if (b.m != null && dicts[k] && typeof b.v === "object") {
+          const keys = Object.keys(dicts[k]).filter(x => typeof dicts[k][x] === "number" && typeof b.v[x] === "number" && b.v[x]);
+          const mc = (m - bm) / Math.abs(bm);
+          return [keys.map(x => `${x} ${pct((dicts[k][x] - b.v[x]) / Math.abs(b.v[x]))}`).join(" · "), dir * mc > 0 ? "up" : dir * mc < 0 ? "down" : ""];
+        }
         const c = (m - bm) / Math.abs(bm);
         return [Math.abs(c) < 0.0005 ? "=" : `${c > 0 ? "+" : "−"}${Math.abs(c * 100).toFixed(1)}%`, dir * c > 0 ? "up" : dir * c < 0 ? "down" : ""]; };
       top.push(h("div", { class: "alt-table-wrap" }, h("table", { class: "list compact alt-metrics" },
@@ -321,8 +332,15 @@ function chooseBody(n, env) {
   // D1061: the goals first, then the other numbers measured (a dictionary metric too), three at most
   const seen = [...new Set(rows.flatMap(([, m]) => Object.keys(m)))];
   const cols = [...new Set([...goals.map(g => g.metric), ...seen])].slice(0, 3);
+  // D1068: a pick measured in a pass not loaded here is still its table's first row -- its numbers from the decision itself
+  const dec0 = String(said.decision || "").trim();
+  if (dec0 && !rows.some(([c]) => c === dec0)) {
+    const m = {}; for (const [k, v] of Object.entries(said["decision metrics"] || {})) { const at = k.indexOf(".");
+      if (at > 0) (m[k.slice(0, at)] ||= {})[k.slice(at + 1)] = v; else m[k] = v; }
+    rows.push([dec0, m, true]);
+  }
   // D1063: the decision's own name; else the longest name the text holds -- "x#2" is the start of "x#2.2"
-  const names = rows.map(([c]) => c), dec = String(said.decision || "").trim();
+  const names = rows.map(([c]) => c), dec = dec0;
   const chosen = names.find(c => c === dec) || names.filter(c => text.includes(c)).sort((a, b) => b.length - a.length)[0] || "";
   // D1059: a design the select critic rejected stays on the record, marked -- never shown as chosen
   const rejected = new Map();
@@ -343,7 +361,8 @@ function chooseBody(n, env) {
     rows.length ? h("div", { class: "alt-table-wrap" }, h("table", { class: "list compact alt-metrics" },
       h("thead", {}, h("tr", {}, h("th", {}, "design"), cols.map(k => { const g = goals.find(x => x.metric === k), d = g === g0 ? dir : g?.direction; return h("th", { class: "num" }, k, d ? ` ${/max/i.test(d) ? "↑" : "↓"}` : ""); }))),
       h("tbody", {}, rows.map(([c, m]) => h("tr", { class: rejected.has(c) ? "alt-rejected" : c === chosen ? "alt-chosen" : "", title: rejected.has(c) ? `rejected by the critic: ${rejected.get(c)}` : "" },
-        h("td", { title: c }, rejected.has(c) ? [`✗ ${byId(c)}`, h("span", { class: "alt-critic-tag" }, "critic")] : c === chosen ? `★ ${byId(c)}` : byId(c)), cols.map(k => h("td", { class: "num mono" }, cell(m[k])))))))) : "",
+        h("td", { title: c }, rejected.has(c) ? [`✗ ${byId(c)}`, h("span", { class: "alt-critic-tag" }, "critic")] : c === chosen ? `★ ${byId(c)}` : byId(c),
+          rows.find(r => r[0] === c)?.[2] ? h("span", { class: "muted small" }, " · an earlier pass") : ""), cols.map(k => h("td", { class: "num mono" }, cell(m[k])))))))) : "",
     n.kids.length ? h("div", { class: "alt-steps" }, n.kids.map(k => stepRow(k, env))) : "")];
 }
 

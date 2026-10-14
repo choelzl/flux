@@ -1503,6 +1503,8 @@ def _decide(problem: Problem, state: LoopState, pool: list[Scored], stages: list
         decided_by = f"no feasible design yet; the closest, {closest.name}: " + ("; ".join(unmet) or ranked_by)
     out["decision"] = pick.name if pick is not None else None        # D742: the tree's leaf says it
     out["decided by"] = decided_by
+    if pick is not None:                    # D1068: the pick's own numbers, for a reader that has not loaded the pass it was measured in
+        out["decision metrics"] = {k: v for k, v in (pick.metrics or {}).items() if isinstance(v, (int, float))}
     return pick, decided_by, closest, unmet, standing, ranked_by
 
 
