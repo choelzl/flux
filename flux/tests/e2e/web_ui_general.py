@@ -1923,8 +1923,8 @@ objectives: [{metric: timings.fast, goal: 15, direction: minimize},
                     and "agents 20/s" in captions[0] and "Flux's model 5.0/s" in captions[0]
                     and "all 2.5/s" in captions[1] and "agents 2.0/s" in captions[1], captions)
             paths = b.js("return [...document.querySelectorAll('.tchart-svg path.ln')].map(p => p.getAttribute('d'))")
-            r.check("bucket averages have flat steps and include the first interval", len(paths) == 6
-                    and all(p.startswith("M62.0,") and p.count("H") == 4 and p.count("V") == 3 and "L" not in p for p in paths), paths)
+            r.check("D1085: bucket averages are a smooth curve over every interval, the first included", len(paths) == 6
+                    and all(p.startswith("M62.0,") and p.count("C") == 5 and "H" not in p and "V" not in p and "L" not in p for p in paths), paths)
             def hover(fraction):
                 return b.js("""const svg = document.querySelector('.tchart-svg'), box = svg.getBoundingClientRect();
                   svg.dispatchEvent(new PointerEvent('pointermove', {clientX: box.left + (62 + 350 * arguments[0]) / 420 * box.width,
@@ -1934,8 +1934,8 @@ objectives: [{metric: timings.fast, goal: 15, direction: minimize},
             idle = hover(2.1 / 4)
             r.check("hover reads the containing interval, without bridging into idle time", "all 40/s" in active
                     and "all 0.0/s" in idle and " – " in active, [active, idle])
-            r.check("resource rates explain completed turns and cached inputs", "completed turns" in r.text()
-                    and "including cached inputs" in r.text())
+            r.check("D1085: resource rates explain live and completed turns and cached inputs", "as they come" in r.text()
+                    and "when a turn ends" in r.text() and "including cached inputs" in r.text())
             b.js("window.__rateSmall = true; return 1")
             r.button("6 h", ".chips")
             b.wait("document.querySelector('.token-rate-note')?.textContent.includes('2m')", what="two-minute token averages")

@@ -775,7 +775,7 @@ def _last_run(app_dir: Path) -> float:
 
 #: D1069: what a thinned turn keeps -- what usage and Insights count
 _TURN_KEEPS = ("ts", "kind", "agent", "model", "about", "server", "ok", "rc", "seconds", "tokens_in", "tokens_out",
-               "tokens_cached", "tokens_complete", "cost_usd", "priced")
+               "tokens_cached", "tokens_complete", "cost_usd", "priced", "streamed")
 
 
 def _thin_transcript(tr: Path, cutoff: float) -> int:

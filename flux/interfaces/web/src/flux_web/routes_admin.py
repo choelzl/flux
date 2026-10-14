@@ -103,7 +103,7 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
         from . import insights
 
         hours = max(0.25, min(hours, 720))
-        usage_log.fresh(lambda: insights.transcripts(store, runs))    # D1069: the summed minutes, never a transcript
+        usage_log.fresh(lambda: insights.transcripts(store, runs), lambda: insights.journals(store, runs))   # D1069, D1085
         samples = usage_log.token_rate(hours, insights.time.time())
         return {"hours": hours, "bucket_seconds": hours * 3600 / 180, "samples": samples, "catching_up": usage_log.catching_up}
 

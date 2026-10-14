@@ -280,7 +280,7 @@ async function adminResources(body) {
     overTime.replaceChildren(h("div", { class: "card-head" }, h("h2", {}, "Over time"),
         h("div", { class: "chips" }, ranges.map(([hrs, label]) => h("button", { class: `chip${historyHours === hrs ? " on" : ""}`, onclick: () => { historyHours = hrs; drawHistory(); } }, label)))),
       hx.sampling ? "" : h("p", { class: "muted small" }, "Not sampling here: older samples."),
-      tr ? h("p", { class: "muted small token-rate-note" }, `Token rates: ${dur(tr.bucket_seconds)} averages from completed turns, including cached inputs. Interrupted turns may have incomplete usage.`) : "",
+      tr ? h("p", { class: "muted small token-rate-note" }, `Token rates: ${dur(tr.bucket_seconds)} averages, including cached inputs. An agent that reports its tokens as it works counts them as they come (read every 10 s); Flux's model and other agents count when a turn ends, spread over the turn.`) : "",
       h("div", { class: "tcharts" }, ...tokenCharts,
         timeChart(ss, [{ label: "load", get: (s) => s.load1 }], { title: "Load", ref: cpus, refLabel: cpus ? `${cpus} CPUs` : "", fmt: (v) => v.toFixed(1) }),
         timeChart(ss, [{ label: "used", get: (s) => s.mem_total ? s.mem_used / s.mem_total : null }], { title: "Memory", top: 1, fmt: pct }),

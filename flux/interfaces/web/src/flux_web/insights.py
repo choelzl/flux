@@ -16,7 +16,7 @@ from .runs import OK_RC
 
 _ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]|\[[0-9;]*m")
 
-__all__ = ["disk", "failures", "network", "transcripts", "turn_of", "window"]
+__all__ = ["disk", "failures", "journals", "network", "transcripts", "turn_of", "window"]
 
 DAY = 86400.0
 
@@ -79,6 +79,19 @@ def turn_of(t: Any) -> tuple | None:
         return None
     # D1069: a number that is not one (NaN, infinity) would poison every sum it joins -- the turn is skipped
     return got if all(math.isfinite(v) for v in (got[0], got[5], got[6], got[7], got[8])) and got[6] >= 0 and got[7] >= 0 else None
+
+
+def journals(store: Any, runs: Any) -> list[str]:
+    """D1085: each loop's task journal of its latest start -- where its agents report their tokens as they work."""
+    from .workspace import Workspace
+
+    out = set()
+    for u in store.users():
+        for a in Workspace(store.data, u.name).apps():
+            p = runs.events_path(runs.latest(u, a["name"]))
+            if p:
+                out.add(p)
+    return sorted(out)
 
 
 def transcripts(store: Any, runs: Any) -> list[tuple[str, str, str]]:

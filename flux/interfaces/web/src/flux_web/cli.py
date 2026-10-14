@@ -31,10 +31,11 @@ def serve(args) -> int:
     app = create_app(data, sandbox=not args.no_sandbox, secure_cookie=args.secure_cookie, max_running=args.max_running)
     print(f"flux serve: accounts: {', '.join(u.name for u in Store(data).users())}", file=sys.stderr)
     app.state.history.start(app.state.sample)        # D699: a sample of the machine a minute, for the admin
-    from flux_web.insights import transcripts
+    from flux_web.insights import journals, transcripts
 
-    st = app.state                                     # D1069: the transcripts read into the usage log a minute
-    app.state.usage_log.start(lambda: transcripts(st.store, st.runs))
+    st = app.state                                     # D1069: the transcripts read into the usage log a minute;
+    app.state.usage_log.start(lambda: transcripts(st.store, st.runs),   # D1085: agents' tokens as they come
+                              journals=lambda: journals(st.store, st.runs))
     print(f"flux serve: http://{args.host}:{args.port}/ (data {data})", file=sys.stderr, flush=True)
     # a live stream never ends by itself: a stopped server waits 3 s for it, not for every
     # open page to close (D694); the page reconnects to the next server where it left off

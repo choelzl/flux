@@ -18,6 +18,7 @@ from typing import Any
 __all__ = ["UsageLog"]
 
 DAY = 86400
+_REPORTED = __import__("re").compile(r"^\s*([\d,.]+|—) in, ([\d,.]+|—) out")   # an agent row's "tokens (reported)" (D1085)
 MINUTE_DAYS = 2                        # minutes kept this long, then summed into hours
 KEEP_DAYS = 400                        # hours kept this long
 COMPACT_S = 3600
@@ -47,6 +48,8 @@ def _quantile(hist: dict[int, int], f: float) -> float:
 class UsageLog:
     def __init__(self, db: str | Path, clock: Any = None) -> None:
         self.db = str(db)
+        self._journals: dict[str, tuple[int, int]] = {}      # D1085: journal -> (inode, bytes read), this server's
+        self._live_rows: dict[str, dict[Any, tuple[float, float]]] = {}   # journal -> row -> its tokens counted
         self._clock = clock or (lambda: time.time())    # what "now" is (a test's own time)
         self._lock = threading.Lock()
         self._stop = threading.Event()
@@ -108,8 +111,9 @@ class UsageLog:
                     t = turn_of(doc)
                     if t is None:
                         continue
-                    # a turn stamped after now (a clock ahead) is not spread over the minutes before it
-                    self._add(turns, rate if t[0] <= self._clock() else {}, path, user, app, t)
+                    # a turn stamped after now (a clock ahead) is not spread over the minutes before it; D1085: nor
+                    # one whose tokens were counted as they came, from its journal (`live`)
+                    self._add(turns, rate if t[0] <= self._clock() and not doc.get("streamed") else {}, path, user, app, t)
                     newest = max(newest, t[0])
                     n += 1
                     if len(turns) > 5000:                          # a long transcript in batches
@@ -197,6 +201,62 @@ class UsageLog:
                 last = max((x for x in (last, la) if x), default=None)
         return {"total": total, "by": sorted(by, key=lambda b: -b["seconds"]), "first": first, "last": last}
 
+    def live(self, journals: list[str]) -> int:
+        """D1085: the tokens agents report as they work -- the "tokens (reported)" on their journal rows, read
+        as the journals grow -- into the minutes they came in (the rate, not the turns: a turn's transcript line
+        still counts it, its `streamed` keeps it from being spread again). A journal is read from where it was
+        when first seen (its past is the transcripts'); a row whose start was not read here counts from its
+        next report on. The tokens of a turn: what its last report says, less what was counted before."""
+        from .usage import Lines
+
+        n = 0
+        rate: dict = {}
+        with self._lock:
+            for path in sorted(set(journals)):
+                ino, off = self._journals.get(path, (None, None))
+                lines = Lines(path, off or 0)
+                if lines.ino is None:
+                    continue
+                if off is None or lines.ino != ino or lines.size < off:    # first seen, replaced or cut: from its end
+                    self._journals[path] = (lines.ino, lines.size)
+                    self._live_rows[path] = {}
+                    continue
+                rows = self._live_rows.setdefault(path, {})
+                for raw in lines:
+                    if b'"ev": "start"' in raw[:80] or b'"ev":"start"' in raw[:80]:
+                        try:
+                            rows[json.loads(raw)["id"]] = (0.0, 0.0)          # its tokens count from nothing
+                        except (ValueError, KeyError, TypeError):
+                            pass
+                        continue
+                    if b"tokens (reported)" not in raw:
+                        continue
+                    try:
+                        e = json.loads(raw)
+                        said = ((e.get("fields") or {}) if e.get("ev") == "update" else (e.get("output") or {})).get("tokens (reported)")
+                        m = _REPORTED.match(str(said or ""))
+                        if not m:
+                            continue
+                        tin, tout = (float(x.replace(",", "")) if x != "—" else 0.0 for x in m.groups())
+                        t = float(e["t"])
+                    except (ValueError, KeyError, TypeError):
+                        continue
+                    was = rows.get(e.get("id"))
+                    rows[e.get("id")] = (max(tin, was[0] if was else 0.0), max(tout, was[1] if was else 0.0))
+                    if was is None:
+                        continue                                      # first seen mid-turn: from its next report
+                    din, dout = max(0.0, tin - was[0]), max(0.0, tout - was[1])
+                    if din or dout:
+                        x = rate.setdefault((int(t // 60 * 60), 60, path, "agent"), [0.0, 0.0])
+                        x[0] += din
+                        x[1] += dout
+                        n += 1
+                    if e.get("ev") == "end":
+                        rows.pop(e.get("id"), None)
+                self._journals[path] = (lines.ino, lines.offset)
+            self._write({}, rate)
+        return n
+
     def compact(self, now: float | None = None) -> None:
         """Minutes older than two days summed into hours; hours older than a year gone."""
         now = self._clock() if now is None else now
@@ -218,31 +278,42 @@ class UsageLog:
             c.execute("DELETE FROM usage_rate WHERE t < ?", (now - KEEP_DAYS * DAY,))
         self._next_compact = now + COMPACT_S
 
-    def fresh(self, files: Any) -> None:
-        """Before a page reads: on a server the sampler keeps the log (a minute behind at most), and its
+    def fresh(self, files: Any, journals: Any = None) -> None:
+        """Before a page reads: on a server the sampler keeps the log (seconds behind, D1085), and its
         first catch-up after an update may take minutes -- a page never waits on it; without a sampler
         (a test, a one-off), read now."""
         if self._thread is None:
             self.ingest(files())
+            if journals is not None:
+                self.live(journals())
 
     @property
     def catching_up(self) -> bool:
         """True until the sampler's first read of every transcript is done."""
         return self._thread is not None and not self._caught_up.is_set()
 
-    def start(self, files: Any, every_s: float = 60.0) -> None:
-        """Read the transcripts now, then every `every_s` seconds, on a daemon thread."""
+    def start(self, files: Any, every_s: float = 60.0, journals: Any = None, live_s: float = 10.0) -> None:
+        """Read the transcripts now, then every `every_s` seconds, on a daemon thread; D1085: the running
+        agents' reported tokens from their journals every `live_s` seconds between."""
         if self._thread is not None:
             return
 
         def run() -> None:
+            due = 0.0
             while not self._stop.is_set():
-                try:
-                    self.ingest(files())
-                except Exception:  # noqa: BLE001 -- a read missed, the next one comes
-                    pass
-                self._caught_up.set()
-                self._stop.wait(every_s)
+                if time.monotonic() >= due:
+                    try:
+                        self.ingest(files())
+                    except Exception:  # noqa: BLE001 -- a read missed, the next one comes
+                        pass
+                    self._caught_up.set()
+                    due = time.monotonic() + every_s
+                if journals is not None:
+                    try:
+                        self.live(journals())
+                    except Exception:  # noqa: BLE001
+                        pass
+                self._stop.wait(live_s if journals is not None else every_s)
 
         self._thread = threading.Thread(target=run, name="flux-usage", daemon=True)
         self._thread.start()

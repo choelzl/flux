@@ -183,6 +183,28 @@ function paretoChart(designs, xm, ym, stage, objectives, onPick, opts = {}) {
 }
 /** A small time chart (D699): each series a line (the first filled), over the samples' times;
     `top` fixes the scale (a CPU count, 100%), `ref` draws a dashed level. */
+/** D1085: an SVG path through `pts` ([x, y], x rising) as a monotone cubic (Fritsch-Carlson): smooth, and
+    never above the highest or below the lowest of two neighbours -- a rate's curve stays at or over zero. */
+function smoothPath(pts) {
+  const n = pts.length, f = v => v.toFixed(1);
+  if (n < 3) return pts.map(([x, y], j) => `${j ? "L" : "M"}${f(x)},${f(y)}`).join("");
+  const dx = [], m = [], t = new Array(n);
+  for (let i = 0; i < n - 1; i++) { dx.push(pts[i + 1][0] - pts[i][0]); m.push((pts[i + 1][1] - pts[i][1]) / (dx[i] || 1)); }
+  t[0] = m[0]; t[n - 1] = m[n - 2];
+  for (let i = 1; i < n - 1; i++) t[i] = m[i - 1] * m[i] <= 0 ? 0 : (m[i - 1] + m[i]) / 2;
+  for (let i = 0; i < n - 1; i++) {
+    if (m[i] === 0) { t[i] = 0; t[i + 1] = 0; continue; }
+    const a = t[i] / m[i], b = t[i + 1] / m[i], h2 = a * a + b * b;
+    if (h2 > 9) { const k = 3 / Math.sqrt(h2); t[i] = k * a * m[i]; t[i + 1] = k * b * m[i]; }
+  }
+  let d = `M${f(pts[0][0])},${f(pts[0][1])}`;
+  for (let i = 0; i < n - 1; i++) {
+    const [x0, y0] = pts[i], [x1, y1] = pts[i + 1], h = dx[i] / 3;
+    d += `C${f(x0 + h)},${f(y0 + t[i] * h)} ${f(x1 - h)},${f(y1 - t[i + 1] * h)} ${f(x1)},${f(y1)}`;
+  }
+  return d;
+}
+
 function timeChart(samples, series, { title, top = null, ref = null, refLabel = "", intervals = false, fmt = (v) => num4(v) } = {}) {
   const W = 420, H = 130, L = 62, R = 8, T = 10, B = 20;
   const pts = samples.filter(s => series.some(se => se.get(s) != null));
@@ -203,8 +225,11 @@ function timeChart(samples, series, { title, top = null, ref = null, refLabel = 
       ref != null ? [sv("line", { x1: L, x2: W - R, y1: Y(ref), y2: Y(ref), class: "limit" }), sv("text", { x: W - R, y: Y(ref) - 3, class: "tick limit-t", "text-anchor": "end" }, refLabel)] : "",
       series.map((se, i) => {
         return timeSegments(samples, se.get).map(p => {
-          const d = intervals
-            ? p.map((s, j) => `${j ? "V" : `M${X(s.start_t).toFixed(1)},`}${Y(se.get(s)).toFixed(1)}H${X(s.t).toFixed(1)}`).join("")
+          // D1085: a rate over intervals is a smooth line through each interval's middle -- a monotone curve,
+          // which never dips below zero or overshoots a peak -- not a staircase
+          // its ends from the first interval's start to the last's end, level there -- every interval drawn
+          const mids = p.map(s => [X((s.start_t + s.t) / 2), Y(se.get(s))]);
+          const d = intervals ? smoothPath([[X(p[0].start_t), mids[0][1]], ...mids, [X(p[p.length - 1].t), mids[mids.length - 1][1]]])
             : p.map((s, j) => `${j ? "L" : "M"}${X(s.t).toFixed(1)},${Y(se.get(s)).toFixed(1)}`).join("");
           return [i === 0 ? sv("path", { d: `${d}L${X(p[p.length - 1].t).toFixed(1)},${Y(0)}L${X(intervals ? p[0].start_t : p[0].t).toFixed(1)},${Y(0)}Z`, class: "area s0" }) : "",
             sv("path", { d, class: `ln s${i}` })];

@@ -159,7 +159,7 @@ def test_real_timeout_records_tokens_including_updates_during_shutdown(tmp_path,
     total = log.loop(str(path))["total"]
     assert total["tokens_in"] == 168 and total["tokens_out"] == 19 and total["partial"] == 1 and total["counted"] == 1
     rates = log.token_rate(1, end)
-    assert sum(p["in_agent"] for p in rates) * 20 == pytest.approx(168)
-    assert sum(p["out_agent"] for p in rates) * 20 == pytest.approx(19)
+    # D1085: its tool reported its tokens as it went -- counted from its journal as they came, not spread again here
+    assert record["streamed"] is True and sum(p["in_agent"] + p["out_agent"] for p in rates) == 0
     endpoint, = log.endpoints(end - 3600, end)
     assert endpoint["failed"] == 0, "an agent time budget remains neutral for endpoint health"

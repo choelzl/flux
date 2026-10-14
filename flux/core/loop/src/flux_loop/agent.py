@@ -572,7 +572,7 @@ def run_turn(spec: AgentSpec, argv: tuple[str, ...], subs: dict[str, str], *, wo
                       session="resumed" if turn.resumed else "fresh", session_id=turn.session or "",
                       about=turn.about, tool_calls=turn.tools, steps=turn.steps, prompt_chars=len(subs.get("answer", "") if turn.resumed else subs.get("prompt", "")),
                       **({"endpoint_recovery": turn.transport_error} if turn.transport_error else {}),
-                      **_priced(spec, from_output(spec.output, turn.stdout or "").record(finished=turn.ok)))
+                      **_streamed(spec, _priced(spec, from_output(spec.output, turn.stdout or "").record(finished=turn.ok))))
     if turn.transport_error and spec.resume and turn.session:
         from flux_llm import recovery
         from .observe import _phase
@@ -635,6 +635,12 @@ def _recovery_endpoint(spec: AgentSpec) -> tuple[str | None, dict[str, str]]:
         except (ValueError, TypeError, AttributeError):
             pass
     return None, {}
+
+
+def _streamed(spec: AgentSpec, used: dict[str, Any]) -> dict[str, Any]:
+    """D1085: a turn whose tokens its tool reported as it went (they were on its journal row as they came) says
+    so -- the usage log counted them then, in the minutes they came, and does not spread them over the turn again."""
+    return {**used, "streamed": True} if spec.output != "text" and (used.get("tokens_in") or used.get("tokens_out")) else used
 
 
 def _priced(spec: AgentSpec, used: dict[str, Any]) -> dict[str, Any]:
