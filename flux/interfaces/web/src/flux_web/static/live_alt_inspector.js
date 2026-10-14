@@ -186,18 +186,24 @@ function toolBody(n, env) {
    steps without moving your place; scrolled up, new activity waits behind "↓ latest". */
 const CHAT_STEP = 40;
 const chatLimit = new Map(), chatAnchor = new Map();       // per task: how many steps shown, the place to keep
+// D1075: the history a step at a time, the place kept -- on scrolling near the top, on a wheel up at the top (a chat
+// too short to scroll has no scroll), or on the line that says it; a place never restored (the box redrawn
+// elsewhere) does not hold the next one back
+function moreChat(n, env, b) {
+  const was = chatAnchor.get(n.id);
+  if (was && Date.now() - was.at < 2000) return;
+  chatAnchor.set(n.id, { left: b ? b.scrollHeight - b.scrollTop : 0, at: Date.now() });
+  chatLimit.set(n.id, (chatLimit.get(n.id) || CHAT_STEP) + CHAT_STEP);
+  env.redraw();
+}
 function chatBox(n, env, kids, more) {
   // D1035: its handlers find the box from the event -- a redraw may keep the old box and button (a morph)
   const atBottom = box => box.scrollHeight - box.scrollTop - box.clientHeight < 24;
   const box = h("div", { class: "alt-chat cv", "data-k": "chat", tabindex: "0", "aria-label": "Conversation", onscroll: e => {
     const b = e.currentTarget, jump = b.parentElement?.querySelector(".alt-chat-jump");
     if (jump) jump.hidden = atBottom(b);
-    if (more && b.scrollTop < 40 && !chatAnchor.has(n.id)) {           // the history, a step at a time, the place kept
-      chatAnchor.set(n.id, b.scrollHeight - b.scrollTop);
-      chatLimit.set(n.id, (chatLimit.get(n.id) || CHAT_STEP) + CHAT_STEP);
-      env.redraw();
-    }
-  } }, kids);
+    if (more && b.scrollTop < 40) moreChat(n, env, b);
+  }, onwheel: e => { if (more && e.deltaY < 0 && e.currentTarget.scrollTop <= 0) moreChat(n, env, e.currentTarget); } }, kids);
   const jump = h("button", { type: "button", class: "alt-chat-jump", hidden: true,
     onclick: e => { const b = e.currentTarget.parentElement?.querySelector(".alt-chat"); if (b) b.scrollTop = b.scrollHeight; } }, "↓ latest");
   const wrap = h("div", { class: "alt-chat-wrap" }, box, jump);
@@ -206,7 +212,7 @@ function chatBox(n, env, kids, more) {
     const live = wrap.isConnected ? box : document.querySelector(`.alt-detail[data-task="${n.id}"] .alt-chat`);
     if (!live) return;
     const anchor = fetching.has(n.id) ? null : chatAnchor.get(n.id);     // a page on its way: the place is kept for it
-    if (anchor != null) { chatAnchor.delete(n.id); live.scrollTop = live.scrollHeight - anchor; }
+    if (anchor != null) { chatAnchor.delete(n.id); live.scrollTop = live.scrollHeight - anchor.left; }
     else if (wrap.isConnected && !env.place?.blocks?.get("chat")) live.scrollTop = live.scrollHeight;  // a new task opens at its newest end
     const j = live.parentElement?.querySelector(".alt-chat-jump");
     if (j) j.hidden = atBottom(live);
@@ -271,16 +277,35 @@ function agentChat(n, env) {
   const conv = conversation(shown, { key: `task${n.id}`, offset: total - shown.length, live: running(n) });
   conv.querySelector(":scope > p.muted.small")?.remove();                   // the chat says what is above, below
   const prompt = typeof p.prompt === "string" ? p.prompt : "";
-  const top = above > 0 ? h("div", { class: "alt-chat-more" }, `↑ ${above} earlier — scroll up`)
+  const top = above > 0 ? h("button", { type: "button", class: "alt-chat-more link", title: "Show earlier steps",
+      onclick: e => moreChat(n, env, e.currentTarget.closest(".alt-chat")) }, `↑ ${above} earlier — scroll up or click`)
     : [lost > 0 ? h("div", { class: "alt-chat-more" }, lostSaid(n, kept, steps, lost)) : "",
       prompt ? bubble("me", `Prompt · ${prompt.length.toLocaleString()} characters`, h("pre", { class: "val tall", "data-k": "prompt" }, prompt), "input", env) : ""];
   // D1033: one "working" line -- the conversation's own when it is in a stretch of work (D1030), else this one
   const now = running(n) && !conv.querySelector(".cv-work.live") ? h("div", { class: "alt-chat-now" }, h("span", { class: "alt-spin" }), String(f.status || "working") + "…") : "";
   const out = f.stdout ?? f["stdout (live tail)"], err = f.stderr;
+  const stop = running(n) ? "" : stopSaid(n, f, env);
   return [usage(f, [["model", f.agent || p.model]]),
-    h("div", { class: "agent-view" }, chatBox(n, env, [top, all.length ? conv : (running(n) ? "" : h("p", { class: "muted" }, "No conversation recorded.")), now], above > 0)),
+    h("div", { class: "agent-view" }, chatBox(n, env, [top, all.length ? conv : (running(n) ? "" : h("p", { class: "muted" }, "No conversation recorded.")), now,
+      stop ? h("div", { class: "alt-chat-stop", role: "note" }, stop) : ""], above > 0)),
     out ? fold("stdout", "stdout", `${lines(out).length} line${lines(out).length === 1 ? "" : "s"}`, h("pre", { class: "val astream-body", "data-k": "stdout" }, out), env) : "",
     err ? fold("stderr", "stderr", `${lines(err).length} line${lines(err).length === 1 ? "" : "s"}`, h("section", { class: `astream ${n.failed ? "err" : ""}` }, h("pre", { class: "val astream-body", "data-k": "stderr" }, err)), env) : ""];
+}
+/** D1075: why a turn stopped before it ended by itself, as the chat's last word -- a time limit (exit 124, or 143
+    when a wrapper reports the TERM), an API that failed and went silent, a signal -- and what comes of it. */
+function stopSaid(n, f, env) {
+  const exit = Number(f.exit), signal = { 143: "TERM", 137: "KILL", [-15]: "TERM", [-9]: "KILL" }[exit];
+  // the same turn again after it -- a continue runs in a generation of its own, not beside it
+  const next = [...(env.nodes?.values?.() || [])].find(k => k !== n && k.t0 >= (n.t1 ?? n.t0) && k.name === n.name && k.why === n.why);
+  const loopRuns = [...(env.nodes?.values?.() || [])].some(x => x.t1 == null);   // the loop still at work
+  const after = next ? " The next try continues its session, where it stopped." : loopRuns
+    ? " Its session is kept: the next try continues where it stopped."
+    : " Its session was kept for a next try; none followed in this pass (its continues used up, or the pass ended).";
+  if (n.timedOut || f["timed out"]) return `Reached its time limit${f["timed out"] ? ` (${String(f["timed out"]).replace(/^stopped /, "")})` : ""} and was stopped${Number.isFinite(exit) ? ` (exit ${exit})` : ""}.` + after;
+  if (f["endpoint recovery"]) return "Stopped: the model's API failed and then went silent." + after;
+  if (n.interrupted) return "Stopped with the loop.";
+  if (signal) return `Ended by a signal (${signal}, exit ${exit}), not by the agent itself: the loop was stopped, or the machine ended it.`;
+  return "";
 }
 function modelChat(n, env) {
   const f = fieldsOf(n), p = n.params || {};

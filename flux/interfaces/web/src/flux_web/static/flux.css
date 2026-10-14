@@ -776,6 +776,8 @@ pre.author-log { max-height: 260px; overflow: auto; white-space: pre-wrap; }
 .alt-fold { border: 0; padding: 4px; border-radius: 0; background: transparent; color: var(--muted); }
 .alt-task { display: flex; width: 100%; align-items: center; gap: 7px; padding: 4px 8px; border: 0; border-radius: 0; text-align: left; background: transparent; font-size: 13px; }
 .alt-tree-row .alt-task { min-width: 0; }
+/* D1075: the row tints on hover; its buttons not -- the global button:hover grey under it flickered */
+.alt-tree-row .alt-task:hover, .alt-tree-row .alt-fold:hover, .alt-box-tasks .alt-task:hover { background: transparent; }
 .alt-task.sel { background: transparent; }
 /* the selected row deeper and outlined across its whole width, indent included */
 .alt-tree-row:has(.alt-task.sel) { background: color-mix(in srgb, var(--k, var(--accent)) 32%, var(--panel)); box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--k, var(--accent)) 75%, var(--panel)); }
@@ -858,7 +860,9 @@ svg.alt-flow { display: block; width: 100%; height: auto; margin: 0 auto; overfl
 .alt-bubble { align-self: flex-end; max-width: 92%; padding: 6px 10px; border-radius: 10px 10px 2px 10px; background: color-mix(in srgb, var(--accent) 9%, var(--panel)); border: 1px solid color-mix(in srgb, var(--accent) 25%, var(--line)); }
 .alt-bubble > summary { cursor: pointer; } .alt-bubble > summary small { color: var(--muted); }
 .alt-bubble pre { max-height: 40vh; overflow: auto; margin: 6px 0 0; }
-.alt-chat-more { align-self: center; font-size: 12px; color: var(--muted); padding: 2px 8px; } .alt-chat-more.bad { color: var(--bad); }
+.alt-chat-more { align-self: center; font-size: 12px; color: var(--muted); padding: 2px 8px; }
+button.alt-chat-more { border: 0; background: transparent; cursor: pointer; } button.alt-chat-more:hover { color: var(--accent); background: transparent; text-decoration: underline; }
+.alt-chat-stop { align-self: stretch; margin: 6px 0; padding: 8px 12px; border-radius: 8px; font-size: 13px; background: color-mix(in srgb, var(--warn) 12%, var(--panel)); border: 1px solid color-mix(in srgb, var(--warn) 40%, var(--panel)); } .alt-chat-more.bad { color: var(--bad); }
 .alt-chat-now { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--muted); }
 .alt-chat-jump { position: absolute; right: 14px; bottom: 12px; border: 0; border-radius: 14px; padding: 3px 10px; font-size: 12px; background: var(--accent); color: var(--accent-ink, #fff); box-shadow: 0 2px 8px rgba(0,0,0,.18); }
 .alt-usage { margin-bottom: 6px; }
