@@ -128,7 +128,6 @@ def test_a_result_that_reports_only_cost_does_not_lose_it_or_invent_tokens():
 def test_real_timeout_records_tokens_including_updates_during_shutdown(tmp_path, monkeypatch):
     from flux_llm import transcript
     from flux_web import insights
-    from flux_web.usage import usage as web_usage
 
     events = _partial()
     script = tmp_path / "partial_agent.py"
@@ -152,13 +151,13 @@ def test_real_timeout_records_tokens_including_updates_during_shutdown(tmp_path,
     assert record["tokens_in"] == 168 and record["tokens_out"] == 19 and record["tokens_cached"] == 120
     assert record["tokens_complete"] is False
     assert record["cost_usd"] == pytest.approx(0.000206)
-    total = web_usage(str(path))["total"]
-    assert total["tokens_in"] == 168 and total["tokens_out"] == 19 and total["partial"] == 1 and total["counted"] == 1
     from flux_web.usage_log import UsageLog     # D1069: the turns summed into the usage log
 
     end = record["ts"] + 1
     log = UsageLog(tmp_path / "usage.db", clock=lambda: end)
     log.ingest([("bob", "test", str(path))])
+    total = log.loop(str(path))["total"]
+    assert total["tokens_in"] == 168 and total["tokens_out"] == 19 and total["partial"] == 1 and total["counted"] == 1
     rates = log.token_rate(1, end)
     assert sum(p["in_agent"] for p in rates) * 20 == pytest.approx(168)
     assert sum(p["out_agent"] for p in rates) * 20 == pytest.approx(19)

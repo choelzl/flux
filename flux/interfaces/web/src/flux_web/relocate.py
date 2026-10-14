@@ -79,6 +79,17 @@ def _record(db: sqlite3.Connection, old: str, new: str) -> None:
             db.execute(f"UPDATE {table} SET {col} = rename_reference({col}) WHERE old_reference({col})")
             if db.execute(f"SELECT count(*) FROM {table} WHERE old_reference({col})").fetchone()[0]:
                 raise WorkspaceError(f"old loop references remain in {table}.{col}")
+    if "artifacts" in tables:                      # D1072: a design's text, kept once by its hash: renamed, keyed anew
+        import hashlib
+
+        for key, text in db.execute("SELECT key, text FROM artifacts WHERE old_reference(text)").fetchall():
+            renamed = replace(text)
+            fresh = hashlib.sha256(renamed.encode()).hexdigest()
+            db.execute("INSERT OR IGNORE INTO artifacts (key, text) VALUES (?, ?)", (fresh, renamed))
+            db.execute("UPDATE trials SET artifact_key = ? WHERE artifact_key = ?", (fresh, key))
+            db.execute("DELETE FROM artifacts WHERE key = ?", (key,))
+        if db.execute("SELECT count(*) FROM artifacts WHERE old_reference(text)").fetchone()[0]:
+            raise WorkspaceError("old loop references remain in artifacts.text")
     if db.execute("PRAGMA integrity_check").fetchall() != [("ok",)] or db.execute("PRAGMA foreign_key_check").fetchone():
         raise WorkspaceError("renamed record failed its integrity check")
 

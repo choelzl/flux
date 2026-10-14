@@ -49,7 +49,8 @@ TASKS: dict[str, Task] = {t.key: t for t in (
     Task("disk", "Disk alert", "Tell the admins when a disk the server uses has little space left.", 1, True,
          {"min_free_pct": 10}),
     Task("compact", "Compact databases", "Checkpoint, optimise and vacuum the server's database and every "
-         "loop's record.", 168, True, per_loop=True),
+         "loop's record; a record's designs kept once (a running loop's too, a few rows at a time).", 168, True,
+         per_loop=True),
     Task("logs", "Condense run logs", "A loop's log over a size keeps its recent part; the older part is "
          "gzipped beside it.", 24, True, {"max_mb": 50, "keep_mb": 5}, per_loop=True),
     Task("tables", "Prune server tables", "Expired sessions and invitations, old login failures and "
@@ -370,8 +371,26 @@ class Maintenance:
         return (("low: " + "; ".join(low) + ("" if was else " -- admins told")) if low else "every disk has room"), bool(low) != was
 
     def _compact(self, _p: dict[str, Any], loop: tuple[str, str] | None) -> str:
+        from flux_store import CampaignStore
+
         idle, busy = self._loops(loop)
-        before = after = 0
+        before = after = moved = 0
+        # D1072: every record's designs kept once -- a running loop's too, a short transaction at a time
+        for _u, _a, d in idle + [x for x in self.loops() if f"{x[0]}/{x[1]}" in busy]:
+            for db in sorted((d / "out").glob("*.db")) if (d / "out").is_dir() else []:
+                if db.is_symlink() or not db.resolve().is_relative_to(d.resolve()):
+                    continue
+                try:
+                    store = CampaignStore(str(db))
+                except sqlite3.Error:
+                    continue
+                try:
+                    moved += store.share_artifacts()[0]
+                    store._conn.execute("DELETE FROM artifacts WHERE key NOT IN "
+                                        "(SELECT artifact_key FROM trials WHERE artifact_key IS NOT NULL)")
+                    store._conn.commit()
+                finally:
+                    store.close()
         dbs = [] if loop else [Path(self.store.path)]
         for _u, _a, d in idle:
             dbs += sorted((d / "out").glob("*.db")) if (d / "out").is_dir() else []
@@ -386,7 +405,9 @@ class Maintenance:
             finally:
                 con.close()
             after += _size_db(db)
-        return f"{len(dbs)} database(s) compacted, {_mb(before)} to {_mb(after)}" + self._skipped(busy), bool(dbs)
+        kept = f"; {moved} trial(s)' designs now kept once" if moved else ""
+        return (f"{len(dbs)} database(s) compacted, {_mb(before)} to {_mb(after)}" + kept + self._skipped(busy),
+                bool(dbs) or bool(moved))
 
     def _logs(self, p: dict[str, Any], loop: tuple[str, str] | None) -> str:
         idle, busy = self._loops(loop)
@@ -625,21 +646,30 @@ def stale_rows(app_dir: Path) -> dict[Path, list[int]]:
     state = LoopState(request=LoopRequest(db=""), say=lambda _m: None, proposer=None, feedback=None)
     out: dict[Path, list[int]] = {}
     for db in sorted((app_dir / "out").glob("*.db")) if (app_dir / "out").is_dir() else []:
-        con = sqlite3.connect(db, timeout=60)
+        from flux_store import CampaignStore
+
         try:
-            rows = con.execute("SELECT id, stage, candidate_json FROM trials WHERE status = 'ok'").fetchall()
+            CampaignStore(str(db)).close()           # the record's tables as today's store keeps them
+        except sqlite3.Error:
+            continue
+        con = sqlite3.connect(db, timeout=60)
+        try:                                         # D1072: a design's text kept once, beside its rows
+            rows = con.execute("SELECT t.id, t.stage, t.candidate_json, a.text FROM trials t "
+                               "LEFT JOIN artifacts a ON a.key = t.artifact_key WHERE t.status = 'ok'").fetchall()
         except sqlite3.Error:
             rows = []
         finally:
             con.close()
         ids = []
-        for rid, stage, cj in rows:
+        for rid, stage, cj, art in rows:
             if stage not in stages:
                 continue
             try:
                 c = json.loads(cj)
             except ValueError:
                 continue
+            if art is not None:
+                c["artifact"] = art
             cand = Candidate.from_record(c)        # D886: read as the loop reads it, or a good row looks stale
             try:
                 problem.cache_key(cand, stage, state)

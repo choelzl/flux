@@ -11,7 +11,7 @@ import pytest
 
 from flux_web.results import thin
 from flux_web.timeline import kind_of, timeline
-from flux_web.usage import usage
+from flux_web.usage_log import UsageLog
 
 
 def _journal(path, rows):
@@ -165,12 +165,18 @@ def test_usage_adds_the_agents_and_the_models_tokens(tmp_path):
         {"ts": 3, "kind": "model", "model": "qwen", "seconds": 5, "notes": {"input_tokens": 50, "output_tokens": 7}},
         {"ts": 4, "kind": "model", "model": "qwen", "seconds": 5, "tokens_in": 90, "tokens_out": 9, "notes": {"input_tokens": 40}},
     ]) + "\nnot json\n")
-    u = usage(str(p))
+    log = UsageLog(tmp_path / "usage.db")             # D1072: a loop's usage, summed as its transcript grows
+    log.ingest([("u", "a", str(p))])
+    u = log.loop(str(p))
     t = u["total"]
     assert t["turns"] == 4 and t["seconds"] == 50 and t["errors"] == 1 and t["counted"] == 3
     assert t["tokens_in"] == 1140 and t["tokens_out"] == 216 and t["cost_usd"] == 0.25
     assert [b["who"] for b in u["by"]] == ["claude", "opencode", "qwen"] and u["by"][2]["turns"] == 2
-    assert usage(str(tmp_path / "none.jsonl"))["total"]["turns"] == 0
+    assert log.loop(str(tmp_path / "none.jsonl"))["total"]["turns"] == 0
+    with p.open("a") as fh:                            # a turn appended adds that turn
+        fh.write(json.dumps({"ts": 5, "kind": "model", "model": "qwen", "seconds": 1, "tokens_in": 1}) + "\n")
+    log.ingest([("u", "a", str(p))])
+    assert log.loop(str(p))["total"]["turns"] == 5 and log.loop(str(p))["total"]["tokens_in"] == 1141
 
 
 def test_an_agents_own_output_says_what_its_turn_cost():

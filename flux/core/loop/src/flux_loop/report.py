@@ -108,7 +108,7 @@ def load(db: str, campaign: str | None = None, objectives: Objectives | None = N
             if docs:
                 objectives = Objectives.from_doc((docs[-1].get("detail") or {}).get("objectives") or [])
         rows: list[Row] = []
-        for t in store.trials(cid, status="ok", current=True):
+        for t in store.trials(cid, status="ok", current=True, artifacts=False):   # D1072: no design text
             if until is not None and _when(t.created_at) > until:
                 continue
             if t.result is None or not t.stage or t.stage in ("gate", "admit", "prototype"):
@@ -165,7 +165,7 @@ def load(db: str, campaign: str | None = None, objectives: Objectives | None = N
         ledger.sort(key=lambda x: x[0])
         turns = [dict(e.get("detail") or {}) for e in events if e.get("kind") == "decided:agent_turn"]
         library: dict[str, int] = {}
-        for t in store.trials(cid):
+        for t in store.trials(cid, artifacts=False):
             for name in (((t.candidate or {}).get("meta") or {}).get("provenance") or {}).get("library") or ():
                 library[name] = library.get(name, 0) + 1
         return Report(cid, objective_doc, objectives, rows, passes, ledger, notes, turns, library)

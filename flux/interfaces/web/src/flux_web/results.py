@@ -111,6 +111,11 @@ def content_key(c: dict[str, Any]) -> str:
     return hashlib.sha256(str(body).encode()).hexdigest()[:16]
 
 
+def trial_key(t: Any) -> str:
+    """`content_key` of a recorded trial, read with or without its text (D1072)."""
+    return t.artifact_key[:16] if t.artifact_key else content_key(t.candidate or {})
+
+
 def decision_of(db: str, answer_path: Any = None, campaign: str | None = None) -> str | None:
     """The decided design's name (`decision_doc`)."""
     got = decision_doc(db, answer_path, campaign)
@@ -369,7 +374,7 @@ def _designs(db: str, stages: list[dict[str, Any]], decision: str | None, limit:
         for camp in store.list_campaigns():
             if campaign is not None and camp["campaign_id"] != campaign:
                 continue
-            for t in store.trials(camp["campaign_id"], status="ok", current=True):
+            for t in store.trials(camp["campaign_id"], status="ok", current=True, artifacts=False):   # D1072
                 if until is not None and _when(t.created_at) > until:
                     continue
                 if t.result is None or not t.stage or t.stage in _NOT_MEASURED:
@@ -392,7 +397,7 @@ def _designs(db: str, stages: list[dict[str, Any]], decision: str | None, limit:
                             group["metrics"].append(metric)
                 name = str(c.get("name") or t.candidate_key or "?")
                 part = str(c.get("subgoal") or (c.get("knobs") or {}).get("part") or "")
-                ck = content_key(c)                 # D840: a name a later start gave again is another design
+                ck = trial_key(t)                   # D840: a name a later start gave again is another design
                 # D896: which piece of a design of parts it is -- the whole (a composition of named parts,
                 # D511), else its part: named, or (measured alone, recorded without it, D507) its name's head
                 composed = [x for x in ((c.get("meta") or {}).get("composed") or ()) if x != "*"]

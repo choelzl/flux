@@ -63,6 +63,13 @@ class UsageLog:
                 kind TEXT NOT NULL, tin REAL NOT NULL, tout REAL NOT NULL, PRIMARY KEY (t, span, path, kind))""")
             c.execute("""CREATE TABLE IF NOT EXISTS usage_files (path TEXT PRIMARY KEY, ino INTEGER NOT NULL,
                 offset INTEGER NOT NULL, last REAL NOT NULL)""")
+            # D1072: a loop's own sums (its Usage tab), per agent or model -- counted from the start: a log
+            # counted before it is counted again
+            if not c.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'usage_loops'").fetchone():
+                c.execute("""CREATE TABLE usage_loops (path TEXT NOT NULL, kind TEXT NOT NULL, who TEXT NOT NULL,
+                    sums TEXT NOT NULL, first REAL, last REAL, PRIMARY KEY (path, kind, who))""")
+                for table in ("usage_files", "usage_turns", "usage_rate"):
+                    c.execute(f"DELETE FROM {table}")
 
     def _con(self) -> sqlite3.Connection:
         return sqlite3.connect(self.db, timeout=10)
@@ -89,12 +96,16 @@ class UsageLog:
                     with self._con() as c:
                         c.execute("DELETE FROM usage_turns WHERE path = ?", (path,))
                         c.execute("DELETE FROM usage_rate WHERE path = ?", (path,))
-                turns, rate, newest = {}, {}, last
+                        c.execute("DELETE FROM usage_loops WHERE path = ?", (path,))
+                turns, rate, loops, newest = {}, {}, {}, last
                 for raw in lines:
                     try:
-                        t = turn_of(json.loads(raw))
+                        doc = json.loads(raw)
                     except ValueError:
                         continue
+                    if isinstance(doc, dict):
+                        _loop_add(loops, doc)
+                    t = turn_of(doc)
                     if t is None:
                         continue
                     # a turn stamped after now (a clock ahead) is not spread over the minutes before it
@@ -105,6 +116,7 @@ class UsageLog:
                         self._write(turns, rate)
                         turns, rate = {}, {}
                 self._write(turns, rate)
+                self._write_loops(path, loops)
                 with self._con() as c:
                     c.execute("INSERT OR REPLACE INTO usage_files VALUES (?, ?, ?, ?)", (path, lines.ino, lines.offset, newest))
         if self._clock() >= self._next_compact:
@@ -150,6 +162,40 @@ class UsageLog:
             for key, (tin, tout) in rate.items():
                 c.execute("INSERT INTO usage_rate VALUES (?,?,?,?,?,?) ON CONFLICT (t, span, path, kind) DO UPDATE SET "
                           "tin = tin + excluded.tin, tout = tout + excluded.tout", (*key, tin, tout))
+
+    def _write_loops(self, path: str, loops: dict) -> None:
+        if not loops:
+            return
+        from .usage import _empty
+
+        with self._con() as c:
+            for (kind, who), (sums, first, last) in loops.items():
+                got = c.execute("SELECT sums, first, last FROM usage_loops WHERE path = ? AND kind = ? AND who = ?",
+                                (path, kind, who)).fetchone()
+                if got:
+                    was = {**_empty(), **json.loads(got[0])}
+                    sums = {k: was[k] + sums[k] for k in sums}
+                    first = min((x for x in (first, got[1]) if x), default=None)
+                    last = max((x for x in (last, got[2]) if x), default=None)
+                c.execute("INSERT OR REPLACE INTO usage_loops VALUES (?, ?, ?, ?, ?, ?)",
+                          (path, kind, who, json.dumps(sums), first, last))
+
+    def loop(self, path: str | None) -> dict[str, Any]:
+        """A loop's usage as `usage.usage` says it, from the sums (D1072): {total, by, first, last}."""
+        from .usage import _empty
+
+        total, by, first, last = _empty(), [], None, None
+        if path:
+            with self._con() as c:
+                rows = c.execute("SELECT kind, who, sums, first, last FROM usage_loops WHERE path = ?", (path,)).fetchall()
+            for kind, who, sums, f, la in rows:
+                b = {"kind": kind, "who": who, **_empty(), **json.loads(sums)}
+                by.append(b)
+                for k in total:
+                    total[k] += b[k]
+                first = min((x for x in (first, f) if x), default=None)
+                last = max((x for x in (last, la) if x), default=None)
+        return {"total": total, "by": sorted(by, key=lambda b: -b["seconds"]), "first": first, "last": last}
 
     def compact(self, now: float | None = None) -> None:
         """Minutes older than two days summed into hours; hours older than a year gone."""
@@ -277,6 +323,20 @@ class UsageLog:
                     out[i][f"in_{kind}"] += tin * share / size
                     out[i][f"out_{kind}"] += tout * share / size
         return out
+
+
+def _loop_add(loops: dict, doc: dict) -> None:
+    """A transcript line into a loop's sums, as `usage.usage` counts it."""
+    from .usage import _add, _empty, _num
+
+    kind = str(doc.get("kind") or "turn")
+    who = str(doc.get("agent") or doc.get("model") or kind)
+    sums, first, last = loops.get((kind, who)) or (_empty(), None, None)
+    _add(sums, doc)
+    ts = _num(doc.get("ts")) or None
+    if ts:
+        first, last = min(first or ts, ts), max(last or ts, ts)
+    loops[(kind, who)] = (sums, first, last)
 
 
 def _put(c: sqlite3.Connection, key: tuple, r: dict) -> None:

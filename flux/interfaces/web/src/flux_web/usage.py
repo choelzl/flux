@@ -1,17 +1,16 @@
 """What a loop's model and agent turns cost (D694), from its transcript (`turns.jsonl`): turns,
 seconds, tokens in, out and read from a cache, and USD where the agent prices it -- in all and
-per agent or model. Tokens are recorded since D694; older turns count in turns and seconds only."""
+per agent or model. Tokens are recorded since D694; older turns count in turns and seconds only.
+D1072: the usage log sums them as the transcript grows (`UsageLog.loop`); this reads a line."""
 
 from __future__ import annotations
 
-import json
 import os
 from typing import Any
 
-__all__ = ["usage"]
+__all__ = ["Lines"]
 
 _KEYS = ("tokens_in", "tokens_out", "tokens_cached", "cost_usd")
-_CACHE: dict[str, tuple[int, int, dict[str, Any]]] = {}   # path -> (inode, bytes read, the sums so far): D921
 
 
 def _num(v: Any) -> float:
@@ -66,44 +65,3 @@ class Lines:
                 self.offset += len(raw)
                 yield raw[:-1]
         self._fh = None
-
-
-def usage(path: str | None) -> dict[str, Any]:
-    """{total, by: [{who, kind, ...}], first, last} for a transcript; zeros without one. D921: summed
-    as the file grows -- a turn appended adds that turn, the transcript is not read again (another
-    file, or one cut, is read from its start)."""
-    out: dict[str, Any] = {"total": _empty(), "by": [], "first": None, "last": None}
-    if not path:
-        return out
-    try:
-        st = os.stat(path)
-    except OSError:
-        return out
-    got = _CACHE.get(path)
-    if got is None or got[0] != st.st_ino or got[1] > st.st_size:
-        got = (st.st_ino, 0, {"total": _empty(), "by": {}, "first": None, "last": None})
-    ino, read, s = got
-    lines = Lines(path, read)
-    if lines.ino is None:
-        return out
-    if lines.ino != ino:                                       # replaced between the look and the read: from its start
-        ino, s = lines.ino, {"total": _empty(), "by": {}, "first": None, "last": None}
-        lines = Lines(path, 0)
-    for raw in lines:                                          # D1069: a line at a time
-        try:
-            t = json.loads(raw)
-        except ValueError:
-            continue
-        if not isinstance(t, dict):
-            continue
-        kind = str(t.get("kind") or "turn")
-        who = str(t.get("agent") or t.get("model") or kind)
-        _add(s["total"], t)
-        _add(s["by"].setdefault((kind, who), {"kind": kind, "who": who, **_empty()}), t)
-        ts = _num(t.get("ts")) or None
-        if ts:
-            s["first"] = min(s["first"] or ts, ts)
-            s["last"] = max(s["last"] or ts, ts)
-    _CACHE[path] = (lines.ino or ino, lines.offset, s)
-    return {"total": dict(s["total"]), "by": sorted((dict(b) for b in s["by"].values()), key=lambda b: -b["seconds"]),
-            "first": s["first"], "last": s["last"]}

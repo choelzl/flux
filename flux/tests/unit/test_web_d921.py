@@ -16,9 +16,12 @@ def _turn(i, **kw):
     return json.dumps({"ts": 1000 + i, "kind": "agent", "agent": "claude", "seconds": 2, "tokens_in": 10, "tokens_out": 1, "cost_usd": 0.5, **kw}) + "\n"
 
 
-def _fresh(path):
-    us._CACHE.pop(str(path), None)
-    return us.usage(str(path))
+def _fresh(path, db):
+    from flux_web.usage_log import UsageLog
+
+    log = UsageLog(db, clock=lambda: 2000)
+    log.ingest([("a", "b", str(path))])
+    return log.loop(str(path))
 
 
 def test_a_transcript_is_summed_as_it_grows(tmp_path, monkeypatch):
@@ -28,28 +31,31 @@ def test_a_transcript_is_summed_as_it_grows(tmp_path, monkeypatch):
     p.write_text("".join(_turn(i) for i in range(5)))
     log = UsageLog(tmp_path / "usage.db", clock=lambda: 2000)
     counted = lambda: log.usage_by_day(1, 2000)["top"][0]["turns"]   # noqa: E731 -- D1069: the usage log's sums
-    assert us.usage(str(p))["total"]["turns"] == 5 and log.ingest([("a", "b", str(p))]) == 5 and counted() == 5
+    loop = lambda: log.loop(str(p))["total"]                         # noqa: E731 -- D1072: the loop's own sums
+    assert log.ingest([("a", "b", str(p))]) == 5 and counted() == 5 and loop()["turns"] == 5
     read = []
     real = us.Lines
     monkeypatch.setattr(us, "Lines", lambda path, at: read.append(at) or real(path, at))
     with p.open("a") as fh:
         fh.write(_turn(5, kind="turn", model="qwen", error="timed out") + _turn(6)[:20])       # one whole turn, one being written
-    got = us.usage(str(p))
+    assert log.ingest([("a", "b", str(p))]) == 1 and counted() == 6
     assert read and all(at > 0 for at in read), "read from where it was, not from the start"
-    assert got["total"]["turns"] == 6 and got["total"]["errors"] == 1 and log.ingest([("a", "b", str(p))]) == 1 and counted() == 6
-    assert got == _fresh(p), "the same sums as read whole"
+    got = log.loop(str(p))
+    assert got["total"]["turns"] == 6 and got["total"]["errors"] == 1
+    monkeypatch.setattr(us, "Lines", real)
+    assert got == _fresh(p, tmp_path / "whole.db"), "the same sums as read whole"
     with p.open("a") as fh:
         fh.write(_turn(6)[20:])                                   # the rest of the line
-    assert us.usage(str(p))["total"]["turns"] == 7 and log.ingest([("a", "b", str(p))]) == 1 and counted() == 7
+    assert log.ingest([("a", "b", str(p))]) == 1 and counted() == 7 and loop()["turns"] == 7
     # replaced (as pricing does: another file in its place), then cut: counted again from the start, not twice
     tmp = tmp_path / "t.tmp"
     tmp.write_text("".join(_turn(i, cost_usd=2.0) for i in range(7)))
     os.replace(tmp, p)
     log.ingest([("a", "b", str(p))])
-    assert us.usage(str(p))["total"]["cost_usd"] == 14.0 and log.usage_by_day(1, 2000)["top"][0]["cost"] == 14.0 and counted() == 7
+    assert loop()["cost_usd"] == 14.0 and log.usage_by_day(1, 2000)["top"][0]["cost"] == 14.0 and counted() == 7
     p.write_text(_turn(0))
     log.ingest([("a", "b", str(p))])
-    assert us.usage(str(p))["total"]["turns"] == 1 and counted() == 1
+    assert loop()["turns"] == 1 and counted() == 1
 
 
 def test_admin_home_and_agents_draw_without_the_slow_probes(server, monkeypatch):  # noqa: F811

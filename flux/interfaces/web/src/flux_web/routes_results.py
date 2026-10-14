@@ -55,6 +55,7 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
     store, runs = ctx.store, ctx.runs
     user_of, admin_of, reader, fail, loop_of = ctx.user_of, ctx.admin_of, ctx.reader, ctx.fail, ctx.loop_of
     _masks, _stages = ctx.masks, ctx.stages
+    usage_log = ctx.usage_log
 
     @app.get("/api/apps/{name}/workbench")
     def workbench(name: str, owner: str | None = None, user: User = Depends(user_of)) -> list[dict[str, Any]]:
@@ -537,19 +538,18 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
 
     @app.get("/api/apps/{name}/usage")
     def loop_usage(name: str, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, Any]:
-        """What the loop's model and agent turns cost (D694)."""
-        from .usage import usage
-
+        """What the loop's model and agent turns cost (D694); D1072: from the usage log's sums -- a
+        transcript of gigabytes is not read on a look."""
         _w, _whose, _d, run = loop_of(name, user, owner)
-        return usage(runs.turns_path(run))
+        path = runs.turns_path(run)
+        usage_log.fresh(lambda: [(run["user"], run["app"], path)] if run and path else [])
+        return {**usage_log.loop(path), "catching_up": usage_log.catching_up}
 
     def _user_usage(u: User) -> dict[str, Any]:
-        from .usage import usage
-
         total: dict[str, Any] = {"user": u.name, "loops": 0, "turns": 0, "seconds": 0.0, "tokens_in": 0.0, "tokens_out": 0.0,
                                  "tokens_cached": 0.0, "cost_usd": 0.0, "counted": 0, "partial": 0}
         for a in Workspace(store.data, u.name).apps():
-            got = usage(runs.turns_path(runs.latest(u, a["name"])))["total"]
+            got = usage_log.loop(runs.turns_path(runs.latest(u, a["name"])))["total"]
             total["loops"] += 1
             for k in ("turns", "seconds", "tokens_in", "tokens_out", "tokens_cached", "cost_usd", "counted", "partial"):
                 total[k] += got[k]
@@ -615,15 +615,15 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
     def invalidate_design(name: str, body: InvalidateIn, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, Any]:
         """Every row of one design stops counting -- in Results, the report and the search -- kept
         on record with why and by whom; nothing is deleted."""
-        from .results import content_key
+        from .results import trial_key
 
         reason = body.reason.strip()
         if len(reason) < 3:
             raise HTTPException(400, "say why it is invalid")
         record, cid = _record_of(name, user, owner)
         try:
-            seqs = [t.seq for t in record.trials(cid, current=True)
-                    if content_key(t.candidate or {}) == body.key and str((t.candidate or {}).get("name") or t.candidate_key) == body.name]
+            seqs = [t.seq for t in record.trials(cid, current=True, artifacts=False)
+                    if trial_key(t) == body.key and str((t.candidate or {}).get("name") or t.candidate_key) == body.name]
             if not seqs:
                 raise HTTPException(404, "no such design among the results")
             record.invalidate(cid, seqs, reason=reason, by=user.name, names=[body.name])
@@ -651,7 +651,7 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
         """D1043: a result rejected by hand, while the loop runs or at rest: marked with why and by whom,
         shown, never chosen; the measurements named cleared (struck through) or measured again -- by the
         running loop between its passes (R), or at rest by a start of its own; hidden too if asked (at rest)."""
-        from .results import content_key
+        from .results import trial_key
 
         reason = body.reason.strip()
         if len(reason) < 3:
@@ -662,11 +662,11 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
             raise HTTPException(409, "hiding takes a design out of the evidence: stop the loop first, or reject it without hiding")
         record, cid = _record_of(name, user, owner, running=True)
         try:
-            rows = [t for t in record.trials(cid, current=True)
-                    if content_key(t.candidate or {}) == body.key and str((t.candidate or {}).get("name") or t.candidate_key) == body.name]
+            rows = [t for t in record.trials(cid, current=True, artifacts=False)
+                    if trial_key(t) == body.key and str((t.candidate or {}).get("name") or t.candidate_key) == body.name]
             if not rows:
-                rows = [t for camp in record.list_campaigns() for t in record.trials(camp["campaign_id"], current=True)
-                        if content_key(t.candidate or {}) == body.key]
+                rows = [t for camp in record.list_campaigns() for t in record.trials(camp["campaign_id"], current=True, artifacts=False)
+                        if trial_key(t) == body.key]
             if not rows:
                 raise HTTPException(404, "no such design among the results")
             latest: dict[str, dict[str, float]] = {}
@@ -770,7 +770,7 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
         which, of the designs a name was given to (D840)."""
         from flux_store import CampaignStore
 
-        from .results import _when, content_key
+        from .results import _when, trial_key
 
         _w, _whose, _d, run = selected_run(name, user, owner, run_id)
         if campaign is not None:
@@ -784,14 +784,15 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
             for camp in store.list_campaigns():
                 if campaign is not None and camp["campaign_id"] != campaign:
                     continue
-                for t in store.trials(camp["campaign_id"], status="ok"):
+                for t in store.trials(camp["campaign_id"], status="ok", artifacts=False):   # D1072: its text alone
                     if until is not None and _when(t.created_at) > until:
                         continue
                     c = t.candidate or {}
-                    if str(c.get("name")) != design or str(c.get("subgoal") or "") != part or (key and content_key(c) != key):
+                    if str(c.get("name")) != design or str(c.get("subgoal") or "") != part or (key and trial_key(t) != key):
                         continue
-                    if c.get("artifact"):
-                        found["artifact"] = c["artifact"]
+                    text = c.get("artifact") or (store.artifacts([t.artifact_key]).get(t.artifact_key) if t.artifact_key else None)
+                    if text:
+                        found["artifact"] = text
                     if t.result is not None and t.stage not in ("gate", "admit", "prototype"):
                         found["trials"].append({"stage": t.stage, "when": t.created_at,
                                                 "metrics": {m: t.result.value_of(m) for m in t.result.metrics}})

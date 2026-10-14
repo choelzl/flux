@@ -51,12 +51,13 @@ def test_an_old_rows_knobs_are_read_as_the_loop_reads_them(tmp_path):
     assert stale_rows(home) == {}, "fresh rows"
     _flat(db)
     con = sqlite3.connect(db)
-    rows = con.execute("SELECT stage, candidate_json FROM trials WHERE status = 'ok' AND stage = 'screen'").fetchall()
+    rows = con.execute("SELECT t.stage, t.candidate_json, a.text FROM trials t LEFT JOIN artifacts a ON a.key = t.artifact_key "
+                       "WHERE t.status = 'ok' AND t.stage = 'screen'").fetchall()     # D1072: the text kept once
     con.close()
-    assert rows and all("knobs" not in json.loads(cj) and "n" in json.loads(cj) for _s, cj in rows)
+    assert rows and all("knobs" not in json.loads(cj) and "n" in json.loads(cj) for _s, cj, _a in rows)
     state = LoopState(request=LoopRequest(db=""), say=lambda _m: None, proposer=None, feedback=None)
-    for stage, cj in rows:
-        cand = Candidate.from_record(json.loads(cj))
+    for stage, cj, art in rows:
+        cand = Candidate.from_record({**json.loads(cj), "artifact": art or ""})
         assert cand.knobs.get("n") in (1, 2, 3) and fresh(problem, cand, stage, state), cand
     assert stale_rows(home) == {}, "an old row the loop counts is not stale"
 

@@ -9,6 +9,7 @@ disagree with the trials.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import sqlite3
 from dataclasses import dataclass
@@ -57,6 +58,11 @@ CREATE TABLE IF NOT EXISTS campaign_events (
 );
 
 CREATE INDEX IF NOT EXISTS idx_trials_campaign ON trials(campaign_id, seq);
+
+CREATE TABLE IF NOT EXISTS artifacts (
+    key TEXT PRIMARY KEY,
+    text TEXT NOT NULL
+);
 """
 
 # Trial statuses. `running` is the intent record: a `running` row found at load time belongs to
@@ -86,6 +92,7 @@ class Trial:
     cache_hit: bool
     wall_clock_s: float
     created_at: str = ""            # when the row was written, for the loop-level report
+    artifact_key: str | None = None  # D1072: sha256 of the candidate's artifact ("" for none)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -111,6 +118,11 @@ class CampaignStore:
         self._conn: sqlite3.Connection = self.results._conn
         self._conn.execute("PRAGMA journal_mode = WAL")
         self._conn.executescript(_CAMPAIGN_SCHEMA)
+        if not any(r[1] == "artifact_key" for r in self._conn.execute("PRAGMA table_info(trials)").fetchall()):
+            try:                                          # D1072: appended, so no row is rewritten
+                self._conn.execute("ALTER TABLE trials ADD COLUMN artifact_key TEXT")
+            except sqlite3.OperationalError:              # another opener added it first
+                pass
         self._conn.commit()
 
     def close(self) -> None:
@@ -353,17 +365,18 @@ class CampaignStore:
         # D747: the next seq taken in the insert itself -- one statement holds the write lock, so
         # passes at once on their own connections never take the same one (a row was lost)
         col, val = self._filler()
+        body, key = self._share(candidate)
         row = self._conn.execute(
             "INSERT INTO trials (campaign_id, seq, phase, stage, candidate_json, "
-            f"candidate_key, status, strategy_kind, created_at{col}) "
+            f"candidate_key, status, strategy_kind, created_at, artifact_key{col}) "
             "VALUES (?, (SELECT COALESCE(MAX(seq), 0) + 1 FROM trials WHERE campaign_id = ?), "
-            f"?, ?, ?, ?, 'running', ?, ?{val}) RETURNING seq",
+            f"?, ?, ?, ?, 'running', ?, ?, ?{val}) RETURNING seq",
             (
                 # default=str: a non-JSON object in the candidate is recorded as text rather
                 # than failing the whole trial write.
                 campaign_id, campaign_id, phase, stage,
-                json.dumps(candidate, default=str), candidate_key,
-                strategy_kind, _now(),
+                json.dumps(body, default=str), candidate_key,
+                strategy_kind, _now(), key,
             ),
         ).fetchone()
         self._conn.commit()
@@ -418,10 +431,64 @@ class CampaignStore:
             raise
         return result_id
 
+    def _share(self, candidate: dict[str, Any]) -> tuple[dict[str, Any], str]:
+        """D1072: the candidate as its row holds it -- its artifact kept once in `artifacts` (a design
+        measured at every stage, again and again, was a copy per trial: gigabytes of the same text) --
+        and the artifact's key ("" without one). In the caller's transaction."""
+        art = candidate.get("artifact")
+        if not isinstance(art, str) or not art:
+            return candidate, ""
+        key = hashlib.sha256(art.encode()).hexdigest()
+        self._conn.execute("INSERT OR IGNORE INTO artifacts (key, text) VALUES (?, ?)", (key, art))
+        return {k: v for k, v in candidate.items() if k != "artifact"}, key
+
+    def share_artifacts(self, batch: int = 200, budget_s: float | None = None) -> tuple[int, bool]:
+        """D1072: rows written before each artifact was kept once, moved over in short transactions (a
+        running loop writes between them): (rows moved, all done). `budget_s`: stop after so long."""
+        import time
+
+        self._conn.commit()
+        t0, moved, last = time.monotonic(), 0, 0
+        while budget_s is None or time.monotonic() - t0 < budget_s:
+            self._conn.execute("BEGIN IMMEDIATE")
+            try:
+                rows = self._conn.execute("SELECT id, candidate_json FROM trials WHERE id > ? AND artifact_key IS NULL "
+                                          "ORDER BY id LIMIT ?", (last, batch)).fetchall()
+                for rid, cj in rows:
+                    try:
+                        c = json.loads(cj)
+                    except ValueError:
+                        c = None
+                    if not isinstance(c, dict):
+                        self._conn.execute("UPDATE trials SET artifact_key = '' WHERE id = ?", (rid,))
+                        continue
+                    body, key = self._share(c)
+                    self._conn.execute("UPDATE trials SET candidate_json = ?, artifact_key = ? WHERE id = ?",
+                                       (json.dumps(body, default=str) if key else cj, key, rid))
+                self._conn.commit()
+            except BaseException:
+                self._conn.rollback()
+                raise
+            moved += len(rows)
+            if len(rows) < batch:
+                return moved, True
+            last = rows[-1][0]
+        return moved, False
+
+    def artifacts(self, keys: Any) -> dict[str, str]:
+        """D1072: the artifacts' texts by key."""
+        keys, got = list(keys), {}
+        for i in range(0, len(keys), 500):
+            part = keys[i:i + 500]
+            got.update(self._conn.execute(f"SELECT key, text FROM artifacts WHERE key IN ({','.join('?' * len(part))})",
+                                          part).fetchall())
+        return got
+
     def trials(self, campaign_id: str, *, phase: str | None = None,
-               status: str | None = None, current: bool = False) -> list[Trial]:
+               status: str | None = None, current: bool = False, artifacts: bool = True) -> list[Trial]:
         """`current` (D988): only the trials a re-evaluation has not invalidated, nor a hand with a
-        reason (D1001) -- the evidence; without it, every trial, history included."""
+        reason (D1001) -- the evidence; without it, every trial, history included. `artifacts` (D1072):
+        False leaves each candidate's text out (a list, a chart: `artifact_key` says which it is)."""
         clauses, params = ["campaign_id = ?"], [campaign_id]
         hand = self.invalid_seqs(campaign_id) if current else set()
         if current:
@@ -439,11 +506,14 @@ class CampaignStore:
         # of 40k trials took 126k queries)
         rows = self._conn.execute(
             "SELECT t.seq, t.phase, t.stage, t.candidate_json, t.candidate_key, "
-            "t.status, t.result_id, t.error, t.cache_hit, t.wall_clock_s, t.created_at, r.result_json "
-            f"FROM trials t LEFT JOIN results r ON r.id = t.result_id WHERE {' AND '.join('t.' + c for c in clauses)} "
+            "t.status, t.result_id, t.error, t.cache_hit, t.wall_clock_s, t.created_at, r.result_json, t.artifact_key "
+            "FROM trials t LEFT JOIN results r ON r.id = t.result_id "
+            f"WHERE {' AND '.join('t.' + c for c in clauses)} "
             "ORDER BY t.seq",
             params,
         ).fetchall()
+        # D1072: each text read once and shared by its rows -- not a copy per trial in memory
+        texts = self.artifacts({r[12] for r in rows if r[12]}) if artifacts else {}
         out: list[Trial] = []
         for r in rows:
             if hand and r[0] in hand:
@@ -454,11 +524,14 @@ class CampaignStore:
                 # constraint_violated trial is still a real measurement (D264). `ok_trials`
                 # still filters by status for ranking.
                 result = Result.from_dict(json.loads(r[11]))
+            candidate = json.loads(r[3])
+            if r[12] in texts:
+                candidate["artifact"] = texts[r[12]]
             out.append(Trial(
                 seq=r[0], phase=r[1], stage=r[2],
-                candidate=json.loads(r[3]), candidate_key=r[4], status=r[5], result=result,
+                candidate=candidate, candidate_key=r[4], status=r[5], result=result,
                 result_id=r[6], error=r[7], cache_hit=bool(r[8]), wall_clock_s=r[9],
-                created_at=r[10] or "",
+                created_at=r[10] or "", artifact_key=r[12],
             ))
         return out
 

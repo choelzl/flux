@@ -139,7 +139,8 @@ def test_move_rewrites_designs_evaluators_events_and_output_metadata(named_histo
                                       ("%" + old + "#%", "%" + old + "@%")).fetchone()[0] == 0
             candidate, key = db.execute("SELECT candidate_json, candidate_key FROM trials WHERE seq = 2").fetchone()
             assert json.loads(candidate)["name"] == record + "#2" and key == record + "#2@bench"
-            assert json.loads(candidate)["artifact"] == "unchanged source"
+            assert db.execute("SELECT a.text FROM trials t JOIN artifacts a ON a.key = t.artifact_key WHERE t.seq = 2"
+                              ).fetchone()[0] == "unchanged source"       # D1072: the text kept once
             assert db.execute("SELECT evaluator FROM results ORDER BY id DESC LIMIT 1").fetchone()[0] == record + "@bench"
             assert record + "/part#2" in db.execute("SELECT candidate_json FROM trials ORDER BY id DESC LIMIT 1").fetchone()[0]
             conclusion = json.loads(db.execute("SELECT detail_json FROM campaign_events WHERE kind='conclusion' ORDER BY id DESC LIMIT 1").fetchone()[0])
