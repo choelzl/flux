@@ -104,7 +104,8 @@ function labelTables(root) {
 }
 
 async function route() {
-  setNavSeq(navSeq + 1);
+  const seq = navSeq + 1;
+  setNavSeq(seq);
   for (const f of cleanup.splice(0)) f();
   setPageRefresh(null);
   for (const d of document.querySelectorAll("dialog.dlg")) d.dispatchEvent(new Event("cancel"));   // a dialog belongs to its page
@@ -117,6 +118,9 @@ async function route() {
   }
   { const m = hash.match(/^#\/invite\/([A-Za-z0-9_-]+)$/); if (m) { drawNav(); return invitePage(m[1]); } }   // D818: before any login
   if (!me) { try { setMe(await api("/me")); pollLoops(); } catch (_) { return; } }
+  // D1081: a navigation made while this one waited for /me is the page -- this one draws nothing (its page,
+  // started after the wait, would count as the latest and draw over the one gone to: the loops over Results)
+  if (seq !== navSeq) return;
   drawNav();
   try {
     let m;
