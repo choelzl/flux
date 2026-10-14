@@ -736,8 +736,9 @@ def general_flows(r, watch):
                     b.click(f'.alt-flow-box[data-box="{key}"] .alt-box-title')
                     r.check(f"setup box is clickable: {key}", b.js("return document.querySelector('.alt-detail').dataset.task===String(arguments[0]) && document.querySelector('.alt-flow-box[data-box=\"'+arguments[1]+'\"]').getAttribute('aria-pressed')==='true'", task_id, key))
                 b.click('.alt-chip[data-chain="7"]')
-                # D1034: the decision's critique is the Choose box's (its latest task), the box badged; no Critic box
-                for key, task_id in (("design", 22), ("check", 88), ("measure", 89), ("choose", 91)):
+                # D1034: the decision's critique is the Choose box's, the box badged; no Critic box. D1066: the box opens its
+                # own work (the decision), not the critique of it
+                for key, task_id in (("design", 22), ("check", 88), ("measure", 89), ("choose", 90)):
                     b.click(f'.alt-flow-box[data-box="{key}"] .alt-box-title')
                     r.check(f"completed phase box is clickable: {key}", b.js("return document.querySelector('.alt-detail').dataset.task===String(arguments[0]) && document.querySelector('.alt-flow-box[data-box=\"'+arguments[1]+'\"]').getAttribute('aria-pressed')==='true'", task_id, key))
                 r.check("a critique is in the box it judges, badged, with no box of its own",

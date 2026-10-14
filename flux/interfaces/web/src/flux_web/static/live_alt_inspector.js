@@ -36,6 +36,8 @@ export function nameLoop(...names) { loopNames = names.filter(Boolean).map(Strin
 export function nameTests(names) { loopTests = (names || []).map(String); }
 export const notReached = n => n.failed && loopTests.length && (n.kids || []).some(k => k.failed)
   ? loopTests.filter(t => !(n.kids || []).some(k => ranFor(k) === t)) : [];
+/** D1066: a label whose "what" is the loop's own name is its kind alone ("Design", not "Design · demo-x"). */
+const plain = t => { const at = String(t).lastIndexOf(" · "); return at > 0 && loopNames.includes(String(t).slice(at + 3)) ? String(t).slice(0, at) : byId(t); };
 const byId = t => String(t).replace(/([^\s·#]+)(#[^#\s]+)/g, (_, pre, id) => id === "#baseline" ? "baseline" : !loopNames.length || loopNames.includes(pre) ? id : pre + id);
 const fmt = v => Math.abs(v) >= 100 ? String(Math.round(v * 10) / 10) : Math.abs(v) >= 1 ? v.toFixed(2).replace(/\.?0+$/, "") : Number(v.toPrecision(2)).toString();
 
@@ -77,10 +79,11 @@ export function inspectorHead(n, env) {
   for (const b of tools) if (b && b.textContent) { b.title = b.textContent; b.setAttribute("aria-label", b.textContent); b.textContent = b.textContent === "Raw" ? "{ }" : "⤢"; b.classList.add("alt-icon-btn"); }
   const parents = []; for (let p = n.parent; p; p = p.parent) parents.unshift(p);
   return [h("div", { class: "detail-head alt-ihead" }, h("span", { class: "alt-stripe", style: `background:${colorOf(n)}` }),
-      h("h2", { title: taskLabel(n) }, byId(taskLabel(n))), pill(n), h("span", { class: "muted" }, dur(running(n) ? env.now - n.t0 : n.seconds)), h("span", { class: "alt-head-tools" }, tools)),
+      h("h2", { title: taskLabel(n) }, plain(taskLabel(n))), pill(n), h("span", { class: "muted" }, dur(running(n) ? env.now - n.t0 : n.seconds)), h("span", { class: "alt-head-tools" }, tools)),
     parents.length ? h("div", { class: "alt-crumbs" }, parents.flatMap((p, i) => [i ? h("span", { class: "muted" }, "›") : "",
-      h("button", { type: "button", class: "alt-pchip", style: `--k:${colorOf(p)}`, onclick: () => env.pick?.(p.id), title: taskLabel(p) }, byId(taskLabel(p)))])) : "",
-    h("p", { class: "alt-meta muted" }, n.why ? `${byId(n.why)} · ` : "", h("span", { class: "mono" }, n.name))];
+      h("button", { type: "button", class: "alt-pchip", style: `--k:${colorOf(p)}`, onclick: () => env.pick?.(p.id), title: taskLabel(p) }, plain(taskLabel(p)))])) : "",
+    // D1066: the reason and the engine's name by the same rule -- a reason that is the loop's own name says nothing
+    h("p", { class: "alt-meta muted" }, n.why && !loopNames.includes(String(n.why).trim()) ? `${byId(n.why)} · ` : "", h("span", { class: "mono", title: n.name }, byId(n.name)))];
 }
 
 /** The usual time of a task like this one (the same name and purpose's first word), from its earlier runs. */
@@ -358,7 +361,7 @@ function stepsBody(n, env) {
   // D1029: its own box's steps -- a check run inside a design's generation is the Check box's, not listed here
   const kind = phaseKind(n), kids = n.kids.filter(k => phaseKind(k) === kind);
   if (kids.length) return [h("div", { class: "task-inspector" }, h("div", { class: "alt-steps" }, kids.map(k => stepRow(k, env)),
-    notReached(n).map(t => h("div", { class: "alt-step-row note skipped" }, h("span", {}, `○ ${t}`), h("span", { class: "muted small" }, "not run: a check before it failed")))))];
+    notReached(n).map(t => h("div", { class: "alt-step-row note skipped", title: "not run: a check before it failed" }, h("span", {}, `○ ${t} · not run`)))))];   // D1066: as the tree says
   // D1059: no steps of its own -- what it came to (a plan's pick, its menu), its short results said plainly
   const said = Object.entries(n.output || {}).filter(([k, v]) => !k.startsWith("_") && v != null && v !== "" && (typeof v !== "object") && String(v).length <= 160).slice(0, 4);
   return said.length ? [h("div", { class: "task-inspector" }, ...said.map(([k, v]) => h("div", { class: "kv" }, h("div", { class: "k" }, k), h("div", { class: "val" }, String(v)))))] : [];

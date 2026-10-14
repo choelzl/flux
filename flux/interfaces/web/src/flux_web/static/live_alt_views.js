@@ -65,7 +65,8 @@ export function taskLabel(n) {
   if (head === "decide" && !rest) return /^\s*decide\b/i.test(String(n.parent?.name || "")) ? `${kind} · pick` : kind;
   // D1063: which design's -- two critiques of a box told apart
   if (head === "critique") { const of = String(n.why || "").replace(/@\S*$/, "").trim();
-    return `${kind} · critique of ${rest === "decision" ? "the decision" : rest === "measurement" ? "the measurement" : rest || "a design"}${of && !/^round\b/i.test(of) ? ` · ${of}` : ""}`; }
+    // D1066: one short form everywhere -- "Measure · critique · #3"; what it judged is the box it is in
+    return `${kind} · critique${of && !/^round\b/i.test(of) ? ` · ${of}` : rest === "decomposition" ? " · the division" : ""}`; }
   // D1063: a check of a design names it ("Check · scope TSUB · x#3.2") -- two designs' scope checks told apart
   if (head === "test" && rest && /\S#\S/.test(String(n.why || "")) && !rest.includes(String(n.why).trim())) return `${kind} · ${rest} · ${String(n.why).trim()}`;
   if (/^draft\s+\d+$/i.test(rest)) { const d = draftDesign(n); if (d) return `${kind} · ${d}`; }   // D1056: a draft is the design it made

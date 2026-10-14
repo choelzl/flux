@@ -39,7 +39,7 @@ TREE = """
 def test_tasks_are_named_kind_first_then_what():
     got = run(f"""m => {{ {TREE} return [...all, agent, {{name: "gate: tools", kids: []}}, {{name: "knowledge: prepare popcount", kids: []}}, {{name: "critique: decision", kids: []}}, {{name: "knowledge: mentor", kids: []}}, {{name: "knowledge: digest", kids: []}}].map(m.taskLabel); }}""")
     assert got == ["Search · lut-chunk=4", "Design · lut-chunk=4", "Check · lut-chunk=4", "Check · golden", "Measure · screen · lut-chunk=4", "Measure · screen · lut-chunk=4",
-                   "Measure · evaluation", "Agent · claude", "Setup · tools ready", "Setup · inputs", "Choose · critique of the decision",
+                   "Measure · evaluation", "Agent · claude", "Setup · tools ready", "Setup · inputs", "Choose · critique",
                    "Setup · mentor", "Setup · papers"]
 
 
@@ -88,7 +88,7 @@ def test_a_boxs_count_is_how_many_times_its_work_ran_not_how_many_tasks_it_holds
       const s = m.flowBoxes([doc, ...lib].map(node => ({node})), null, false);
       return [Object.fromEntries(b.map(x => [x.key, x.count])), Object.fromEntries(s.map(x => [x.key, x.count])), [dec, pick, crit].map(m.taskLabel)]; }""")
     assert got == [{"design": 1, "check": 1, "measure": 1, "choose": 1}, {"Document": 1, "Library": 1},
-                   ["Choose", "Choose · pick", "Choose · critique of the decision"]]
+                   ["Choose", "Choose · pick", "Choose · critique"]]
 
 
 def test_what_each_box_is_set_to_comes_from_the_document():
