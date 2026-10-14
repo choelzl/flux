@@ -190,7 +190,7 @@ def brief(question: str, loop: Path, out: Path, record: Path | None, *, inline: 
         f"THE LOOP'S FOLDER (read only): {loop}\n{_listing(loop)}",
         f"  The problem document: {loop / doc}" if doc else "  (no problem document)",
         f"  Its log: {loop / 'runs' / 'loop.log'}; its last answer: {loop / 'runs' / 'answer.json'}",
-        ((f"THE RECORD: query it with your `sql` tool -- `.tables`, `.schema trials`, then SELECTs." if inline else
+        (("THE RECORD: query it with your `sql` tool -- `.tables`, `.schema trials`, then SELECTs." if inline else
           f"THE RECORD: a copy at {record}, yours to query -- sqlite3 {record} \".tables\", then SELECTs "
           "(python3's sqlite3 works too).") if record else "THE RECORD: none yet."),
         "WHAT THE RECORD SAYS, IN SHORT:\n" + summary(record),
