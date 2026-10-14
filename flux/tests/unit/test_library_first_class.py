@@ -43,7 +43,7 @@ def test_a_plain_document_reads_the_library_by_default_and_not_with_knowledge_no
     assert [s.key for s in prob.knowledge().sources] == ["library", "papers", "digest"], "D791: digested unsaid"
     prefix = prob.prompt_prefix("core", _state(tmp_path))
     assert "[recurrence.md] A non-restoring digit recurrence" in prefix
-    assert "[cordic.txt]" in prefix.split("the library's papers", 1)[1]     # the one-line index lists every paper
+    assert "[cordic.txt]" in prefix.split("library papers, one line each", 1)[1]     # the one-line index lists every paper
     off = PromptProblem(TaskSpec.from_dict({**DOC, "flow": {**DOC.get("flow", {}), "knowledge": "off"}}))
     assert off.knowledge() is None and "recurrence.md" not in off.prompt_prefix("core", _state(tmp_path))
     from flux_loop import TaskError

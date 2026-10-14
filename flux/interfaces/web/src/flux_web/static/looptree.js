@@ -153,8 +153,8 @@
   }
   /** A leaf's full name: the crafter's (its `boxTitle`, when given), else the tree's own word. */
   function boxName(it, boxTitle) {
-    return it.title === "Divide" ? "Divide into parts" : it.title === "Finalists" ? "Choose the finalists" : it.title === "Compose" ? "Put the parts together"
-      : it.title === "Setup" ? "The pass's own setup" : (boxTitle ? boxTitle(it.box) : null) || it.title;
+    return it.title === "Divide" ? "Divide into parts" : it.title === "Finalists" ? "Choose finalists" : it.title === "Compose" ? "Compose parts"
+      : it.title === "Setup" ? "Pass setup" : (boxTitle ? boxTitle(it.box) : null) || it.title;   // D1092: names, not phrases
   }
   function leavesOf(vs, key) {
     var out = [];

@@ -18,8 +18,9 @@ function usageCard(u) {
       fig("Turns", String(t.turns), t.errors ? `${t.errors} failed` : ""),
       fig("Time", dur(t.seconds) || "0s", t.turns ? `${dur(t.seconds / t.turns)} a turn` : ""),
       fig("Tokens in", t.counted ? fmtTok(t.tokens_in) : "—", t.tokens_cached ? `${fmtTok(t.tokens_cached)} from the cache` : ""),
-      fig("Tokens out", t.counted ? fmtTok(t.tokens_out) : "—", [t.partial ? `${t.partial} turn(s) with incomplete usage` : "",
-        t.counted < t.turns ? `${t.turns - t.counted} turn(s) not counted` : ""].filter(Boolean).join(" · ")),
+      // D1092: said once -- a turn without tokens is also one whose usage is incomplete
+      fig("Tokens out", t.counted ? fmtTok(t.tokens_out) : "—", !t.counted ? (t.turns ? "no turn reported its tokens" : "")
+        : [t.counted < t.turns ? `${t.turns - t.counted} turn(s) without tokens` : "", t.partial ? `${t.partial} partial` : ""].filter(Boolean).join(" · ")),
       fig("Cost", t.cost_usd ? `$${t.cost_usd.toFixed(2)}` : "—", t.cost_usd ? "at the prices set, else the agent's own" : "no prices set (Agents and models)")),
     u.by.length > 1 ? h("table", { class: "list compact" }, h("thead", {}, h("tr", {}, ["Who", "Kind", "Turns", "Time", "Tokens in", "Tokens out", "Cost"].map((x, i) => h("th", { class: i > 1 ? "num" : "" }, x)))),
       h("tbody", {}, u.by.map(b => h("tr", {}, h("td", { class: "strong" }, b.who), h("td", { class: "muted" }, b.kind),
@@ -67,6 +68,8 @@ async function agentsView(ctx) {
         : [...["error", "reply", "prompt", "stderr"].filter(k => full[k]).map(k => h("div", { class: "blk" }, h("h3", {}, k), proseBlock(String(full[k])))),
            ...((full.hops || []).length ? [h("h3", {}, "Tool calls"), ...(full.hops || []).map(x => h("pre", { class: "val" }, x))] : [])]));
   };
+  const ROLES = { generate: "design", critique: "critic" };
+  const roleOf = (t) => { const m = /\/agents\/([^/]+)\//.exec(String(t.workdir || "")); return m ? ROLES[m[1]] || m[1] : t.kind === "model" ? "model" : ""; };
   const tokOf = (t) => { const n = t.notes && typeof t.notes === "object" ? t.notes : {};
     const i = t.tokens_in ?? n.input_tokens, o = t.tokens_out ?? n.output_tokens;
     if (i == null && o == null) return t.tokens_complete === false ? "Unavailable" : "";
@@ -75,9 +78,11 @@ async function agentsView(ctx) {
     card(null, turns.length ? h("div", { class: "rows-scroll agent-turns" }, h("table", { class: "list" }, h("thead", {}, h("tr", {}, h("th", {}, "Who"), h("th", {}, "When"), h("th", {}, "Took"),
         h("th", { class: "num", title: "tokens in → out" }, "Tokens"), h("th", { class: "num", title: "tool calls" }, "Tools"), h("th", {}, ""))),
       h("tbody", {}, turns.slice().reverse().map(t => { const tr = h("tr", { class: "clickable", onclick: () => pick(t, tr) },
-        h("td", {}, h("button", { type: "button", class: "link strong open-turn", onclick: (e) => { e.stopPropagation(); pick(t, tr); } },   // D929: Tab, Enter
-            t.agent || t.model || t.kind),
-          h("div", { class: "muted small" }, [t.about || (t.notes && t.notes.model) || "", t.session === "resumed" ? "resumed" : ""].filter(Boolean).join(" · "))),
+        // D1092: what the turn was for (design, critic, prototype, plan) beside who took it; its version on hover -- one line
+        h("td", { title: [t.about || (t.notes && t.notes.model) || "", t.session === "resumed" ? "resumed its session" : ""].filter(Boolean).join(" · ") || null },
+          roleOf(t) ? h("span", { class: "muted" }, `${roleOf(t)} · `) : "",
+          h("button", { type: "button", class: "link strong open-turn", onclick: (e) => { e.stopPropagation(); pick(t, tr); } },   // D929: Tab, Enter
+            t.agent || t.model || t.kind), t.session === "resumed" ? h("span", { class: "muted small" }, " · resumed") : ""),
         h("td", {}, ago(t.ts)), h("td", { class: "muted" }, dur(t.seconds)),
         h("td", { class: "num mono muted" }, tokOf(t)), h("td", { class: "num mono muted" }, t.tool_calls != null ? String(t.tool_calls) : t.hops ? String(t.hops) : ""),
         h("td", {}, t.error ? h("span", { class: "pill bad" }, "error") : t.ok === false ? h("span", { class: `pill ${t.rc === 124 ? "warn" : "bad"}`, title: t.rc === 124 ? "stopped at its time limit" : null }, t.rc === 124 ? "time limit" : `exit ${t.rc}`) : h("span", { class: "pill ok" }, "ok"))); return tr; }))))

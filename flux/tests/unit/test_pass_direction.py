@@ -113,3 +113,17 @@ def test_a_design_agent_out_of_time_gets_a_final_turn_to_hand_in_its_design(tmp_
     assert any("a final 3 s turn to hand in its design" in m for m in said) and any("handed in" in m for m in said), said
     why = " ".join(r for _n, r in out.refused)
     assert "OUT OF TIME" not in why and not out.stopped.startswith("out of time"), (out.stopped, why)
+
+
+def test_a_design_agent_that_cannot_start_stops_the_pass_instead_of_trying_again(tmp_path):
+    """D1092: its program missing -- exit 2 at once, nothing written -- is not a design that failed: the pass stops,
+    says why, and spends no more attempts on it."""
+    d = {"id": "digits", **json.loads(DIGITS.read_text())}
+    d["flow"] = {**d.get("flow", {}), "generate": {"by": {
+        "command": [sys.executable, str(tmp_path / "missing.py"), "{prompt_file}", "{artifact}"], "output": "opencode", "timeout_s": 30}}}
+    d["budget"] = {"steps": 6, "repair_attempts": 6, "prototype": False}
+    task = TaskSpec.from_dict(d)
+    said: list[str] = []
+    out = run_loop(PromptProblem(task), request_for(task, db=str(tmp_path / "d.db")), proposer=None, log=said.append)
+    assert out.stopped.startswith("the design agent cannot start") and "missing.py" in out.stopped, out.stopped
+    assert sum("cannot start" in m and "pass stops" in m for m in said) == 1, [m for m in said if "cannot start" in m]

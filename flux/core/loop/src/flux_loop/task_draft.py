@@ -94,6 +94,8 @@ class DraftMixin:
         sg = attempt.subgoal
         if state.out_of_time:                     # D1026: the pass gave up; no other turn in it
             return None, state.out_of_time
+        if state.agent_broken:                    # D1092
+            return None, state.agent_broken
         sess = self._part_session(state, sg, "generate", agent.tool)
         workdir = sess.workdir
         name = self._design_name(sg or _leaf(self.task.id), sg, state)
@@ -168,6 +170,11 @@ class DraftMixin:
                                session=resume, message=message)
         self._session_turn(state, sess, turn, "generate", sg, agent.tool, path.is_file(),
                            f"exited {turn.rc}, wrote no {path.name}", message or brief, t0, probe_ctx)
+        broken = _cannot_start(turn, time.monotonic() - t0, path)
+        if broken:                                # D1092: not a design that failed -- a program that never ran
+            state.agent_broken = f"{agent.tool}: {broken}"
+            state.say(f"  {agent.tool} cannot start ({broken}); the pass stops instead of trying again")
+            return None, state.agent_broken
         if sess.timeouts > max(0, int(getattr(state.request, "agent_continues", 3))):
             graced = self._grace(state, sess, agent, path, subs, prompt_file, safe)
             if graced is None:                         # no final turn, or it wrote nothing: what was left is not a design
@@ -429,6 +436,20 @@ class DraftMixin:
         return Candidate(name, path.read_text(),
                          knobs={"task": self.task.id, "part": attempt.subgoal or "",
                                 "generator": "command"}, subgoal=attempt.subgoal), ""
+
+
+_NO_START = re.compile(r"can't open file|No such file or directory|command not found|not found|Permission denied|"
+                       r"cannot execute|Exec format error|ModuleNotFoundError", re.I)
+
+
+def _cannot_start(turn: Any, seconds: float, path: Path) -> str:
+    """D1092: why an agent's turn never began -- exit 2/126/127 within seconds, nothing written, nothing said, its
+    error naming a missing or unrunnable program -- or "" for a turn that ran (and maybe failed as a design)."""
+    if turn.ok or turn.rc not in (1, 2, 126, 127) or seconds > 5 or path.is_file() or (turn.steps or []):
+        return ""
+    err = " ".join(str(turn.stderr or "").split())
+    m = _NO_START.search(err)
+    return err[max(0, m.start() - 120):m.end() + 120].strip() if m else ""
 
 
 def _printed_artifact(text: str) -> str | None:

@@ -381,6 +381,11 @@ def _run_steps(problem: Problem, state: LoopState, searching: "_SearchSession | 
     direction: Improve | None = None    # D999: this pass's one decision, kept for its retries
     try:
         while step < request.steps:
+            if state.agent_broken:                  # D1092: its program does not start -- no attempt burnt on it again
+                state.stopped = f"the design agent cannot start: {state.agent_broken[:300]}"
+                state.say(f"  {state.stopped}; the next pass tries it once more")
+                state.improve.clear()
+                break
             if state.out_of_time:                   # D1026: the design agent ran out of time on every continue
                 state.stopped = "out of time: the design agent ran past its time limit on its turn and every continue"
                 state.say(f"  {state.stopped}; the next pass decides afresh")
@@ -480,7 +485,7 @@ def _run_steps(problem: Problem, state: LoopState, searching: "_SearchSession | 
                 _publish(problem, state, todo, goals, f"after step {state.step}",
                          searching=hunting)
                 _publish_mentor(problem, state)
-        if one and not directed and state.built == built_before and not state.out_of_time:
+        if one and not directed and state.built == built_before and not state.out_of_time and not state.agent_broken:
             # D845: a loop that can draft never rests: it tries again next pass
             state.stopped = f"no new design passed the gate in {step} step(s); the next pass tries again"
             state.say(f"  {state.stopped}")

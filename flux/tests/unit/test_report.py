@@ -76,7 +76,7 @@ def test_the_report_reads_the_vector_from_the_record_and_draws_the_passes(tmp_pa
     out2 = _pass(db, 4, 7)                       # the second pass: a better whole (11 >= the goal)
     assert out2.decision.metrics["value"] == 11.0
     rep = load(db)
-    assert rep.objectives.describe() == "value at least 10 (screen), then least cost"   # from the record, no flag
+    assert rep.objectives.describe() == "value at least 10 (screen), then minimize cost"   # from the record, no flag
     assert len(rep.passes) == 2 and rep.stage == "screen"
     wholes = [r for r in rep.rows if r.whole]
     assert [r.metrics["value"] for r in wholes] == [5.0, 11.0] and all(r.parts == ("a", "b") for r in wholes)
@@ -102,7 +102,7 @@ def test_a_record_without_the_vector_takes_the_flag_or_the_first_metrics(tmp_pat
     con.execute("DELETE FROM campaign_events WHERE kind = 'decided:objectives'")
     con.commit(); con.close()
     rep = load(db)
-    assert rep.objectives.describe() in ("most value, then most cost", "most cost, then most value")
+    assert rep.objectives.describe() in ("maximize value, then maximize cost", "maximize cost, then maximize value")
     assert any("first two metrics measured stand in" in n for n in rep.notes)
     given = Objectives([Objective("cost", "minimize"), Objective("value")])
     rep2 = write(db, str(tmp_path / "r.html"), objectives=given)
@@ -120,7 +120,7 @@ def test_flux_report_writes_the_page(tmp_path, capsys):
     args = argparse.Namespace(db=db, campaign=None, objective=["value:max:10:screen", "cost:min"], out=out)
     assert cmd_report(args) == 0
     said = capsys.readouterr().out
-    assert "objective value at least 10 (screen), then least cost" in said and "wrote" in said
+    assert "objective value at least 10 (screen), then minimize cost" in said and "wrote" in said
     assert "<h1>" in open(out).read()
 
 

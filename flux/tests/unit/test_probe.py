@@ -56,7 +56,7 @@ def test_the_gate_alone_and_each_stage_on_its_own_side_by_side(tmp_path, monkeyp
     shutil.rmtree(meet)                                                          # the later probes run alone
     assert "GATE" not in out and "count: lines=10" in out and "size: bytes=20" in out
     assert "limits at count: lines <= 9 -- FAILS: lines 10 fails lines <= 9 (the cutoff)" in out and code == 1
-    assert "[count probe 1 of 2]" in out and "[size probe 1 of 1]" in out and "least bytes" in out
+    assert "[count probe 1 of 2]" in out and "[size probe 1 of 1]" in out and "minimize bytes" in out
     code, out = probe("measure", str(good), ["count", "size"], ctx_path=ctx, gate_first=True)
     assert "GATE: passed" in out and "size probe budget of this turn is spent" in out and "[count probe 2 of 2]" in out
     assert code == 2

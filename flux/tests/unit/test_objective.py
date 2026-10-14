@@ -24,7 +24,7 @@ def test_a_document_names_the_goal_the_direction_and_the_band():
     assert objs[1].direction == "minimize" and objs[2] == Objective("power_w", unit="W")
     assert Objectives.from_doc([{"metric": "fmax_mhz", "goal": 500}])[0].stage == "deepest"   # a goal: the deepest stage
     assert Objectives.from_doc([{"metric": "latency", "goal": "<= 12"}])[0].direction == "minimize"
-    assert objs.goal is objs[0] and objs.describe() == "fmax_mhz at least 800 (confirm), then least area_um2, then most power_w"
+    assert objs.goal is objs[0] and objs.describe() == "fmax_mhz at least 800 (confirm), then minimize area_um2, then maximize power_w"
     with pytest.raises(ValueError, match="needs a `metric`"):
         Objectives.from_doc([{"direction": "maximize"}])
     with pytest.raises(ValueError, match="direction must be one of"):

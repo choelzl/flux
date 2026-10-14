@@ -122,11 +122,11 @@ The default is adaptive. Without a knob space, a preference is saved as
 `flow.orchestrate.dse`; with settings defined in **Extra**, it selects the search policy.
 The model choice requires a configured model connection. Agents require their command and
 credentials to be configured. Selecting an agent here does not change who writes code:
-**Make a design** controls generation separately. With a parameter space, a generation
+**Design** controls generation separately. With a parameter space, a generation
 command can turn each proposed point into a design; otherwise the settings reach the check
 and measurement commands directly.
 Without a parameter space, a model or agent choice is saved as the orchestrator itself and
-appears in **Pick the next job** when the document is reopened.
+appears in **Orchestrate** when the document is reopened.
 
 ```yaml
 flow:

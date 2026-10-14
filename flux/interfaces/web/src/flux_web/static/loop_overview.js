@@ -123,11 +123,12 @@ function renderOverview(ctx, r, notes, bench, use, prefs, ideas = null) {
   const objs = main.map(metric => ({ ...directions.find(o => o.metric === metric), metric, direction: directionOf(metric, directions) }));
   const stat = (label, value, sub, onclick) => h("div", { class: "stat" + (onclick ? " clickable" : ""), onclick },
     h("small", {}, label), h("div", { class: "big" }, value), sub ? h("div", { class: "muted" }, sub) : "");
+  // D1092: the decision said "#3", as everywhere -- its whole name on hover
   const decisionCard = dec ? card("Decision", [
-      h("div", { class: "decision-head" }, h("span", { class: "mono strong" }, dec.name), dec.verdict === "accepted" ? h("span", { class: "pill ok" }, "meets the limits") : h("span", { class: "pill bad" }, "misses a limit"),
+      h("div", { class: "decision-head" }, h("span", { class: "mono strong", title: dec.name }, String(dec.name).startsWith(`${ctx.name}#`) ? dec.name.slice(ctx.name.length) : dec.name), dec.verdict === "accepted" ? h("span", { class: "pill ok" }, "meets the limits") : h("span", { class: "pill bad" }, "misses a limit"),
         h("span", { class: "muted" }, `measured at ${dec.shown}`)),
       // D815: why this one, as the loop said it -- a limit is a floor to meet, the next objective decides among those that meet it
-      r.decided_by ? h("p", { class: "small decided-by" }, h("span", { class: "muted" }, "Chosen as "), r.decided_by, ".") : "",
+      r.decided_by ? h("p", { class: "small decided-by" }, h("span", { class: "muted" }, "Decided by: "), r.decided_by) : "",   // D1092: says the rule
       h("div", { class: "decision-nums" }, main.map(m => {
         const lim = (r.limits || []).find(l => l.metric === m), ok = dec.meets[m];
         const display = measurementText(dec, m, r.decision_measurements?.[m] ? () => r.decision_measurements[m] : comparison, num4, relativeMeasurement(ctx, m));
@@ -150,7 +151,10 @@ function renderOverview(ctx, r, notes, bench, use, prefs, ideas = null) {
     ...extra.stats,
     state: () => stat("State", st.running ? "running" : st.last_active ? (st.failed ? "failed" : st.stopped ? "stopped" : "idle") : "never run",
         st.running ? ["since ", ago(st.since), st.passes != null ? ` · pass ${st.passes + (st.at_rest ? 0 : 1)}` : ""] : st.last_active ? ["last active ", ago(st.last_active)] : "", () => goTab("Live")),
-    designs: () => stat("Designs measured", String(designs.length), `${r.counts ? r.counts.accepted : 0} accepted · ${r.counts && r.counts.pending ? r.counts.pending + " pending · " : ""}${r.counts ? r.counts.failed : 0} failed`, () => goTab("Results")),
+    // D1092: a loop with no measure stage still chooses -- on its checks; said, not "0 accepted · 0 failed" beside a decision
+    designs: () => stat("Designs measured", String(designs.length), !designs.length && (r.passes || []).some(p => p.conclusion?.decision)
+      ? "no measure stage: chosen on its checks"
+      : `${r.counts ? r.counts.accepted : 0} accepted · ${r.counts && r.counts.pending ? r.counts.pending + " pending · " : ""}${r.counts ? r.counts.failed : 0} failed`, () => goTab("Results")),
     passes: () => stat("Passes on record", String((r.passes || []).length), r.passes && r.passes.length ? ["last ", ago(r.passes[r.passes.length - 1].when)] : "", null),
     usage: () => stat("Models and agents", total ? `${total.turns} turn(s)` : "—", total ? [dur(total.seconds) || "0s",
       total.counted ? ` · ${fmtTok(total.tokens_in)} → ${fmtTok(total.tokens_out)} tokens` : "",

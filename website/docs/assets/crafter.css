@@ -103,6 +103,7 @@
 .fc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(12em, 1fr)); gap: 0 14px; }
 .fc-line { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 0 12px; }
 .fc-line > .fc-field { flex: 0 1 11em; }
+.fc-line > .fc-field:has(> select) { flex: 0 1 auto; }   /* D1092: a choice as wide as its longest option -- never cut */
 .fc-line > .fc-field.fc-narrow { flex: 0 1 7em; }
 .fc-line > .fc-grow, .fc-line > .fc-field.fc-grow { flex: 1 1 12em; }
 .fc-line > .fc-wide { flex: 1 1 100%; }

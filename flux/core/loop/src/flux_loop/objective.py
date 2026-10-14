@@ -200,7 +200,7 @@ class Objective:
                  if named or self.margin else "")
         if self.goal is not None:
             return f"{self.metric} at {'least' if self.direction == 'maximize' else 'most'} {self.goal:g}{where}"
-        return f"{'most' if self.direction == 'maximize' else 'least'} {self.metric}{where}"
+        return f"{'maximize' if self.direction == 'maximize' else 'minimize'} {self.metric}{where}"   # D1092
 
     def shortfall(self, metrics: dict[str, Any] | None, stage: str | None = None,
                   stages: Sequence[str] | None = None) -> float:
@@ -278,13 +278,13 @@ class Objectives(tuple):
         return steps
 
     def describe(self) -> str:
-        """In plain words: "fmax_mhz at least 1000, area_um2 at most 80, then least power_w"."""
+        """In plain words: "fmax_mhz at least 1000, area_um2 at most 80, then minimize power_w"."""
         limits = [o.describe() for o in self if o.goal is not None or o.keep is not None]
         rest = []
         for step in self._steps():
             if isinstance(step, tuple):
                 names = [o.metric for o in step]
-                rest.append("the balance of " + (", ".join(names[:-1]) + " and " + names[-1] if len(names) > 1 else names[0]))
+                rest.append("balance of " + (", ".join(names[:-1]) + " and " + names[-1] if len(names) > 1 else names[0]))
             elif step.keep is None:
                 rest.append(step.describe())
         text = ", ".join(limits)

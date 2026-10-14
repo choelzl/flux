@@ -320,6 +320,7 @@ class LoopState:
     stopped: str = ""                                    # why the step loop stopped
     #: D1026: why the pass gave up -- a design agent ran past its time limit once and every continue
     out_of_time: str = ""
+    agent_broken: str = ""               # D1092: the design agent cannot even start (its program missing): why
     parts: dict[str, PartState] = field(default_factory=dict)   # per-part numbers and counters
     versions: dict[str, str] = field(default_factory=dict)     # the problem's transpiler/judge versions
     trying: tuple[str, str | None] | None = None         # (part, method) under way, for the standings

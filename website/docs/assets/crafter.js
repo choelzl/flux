@@ -97,17 +97,17 @@
   /** Each box of the drawing: a plain line, its choices (the first is the default, never
       written), and each choice's half: rules, model, agent or fixed. */
   var BOXES = {
-    validate: { title: "Check the document", says: "Before anything runs, the document is read for mistakes.",
+    validate: { title: "Validate", says: "Before anything runs, the document is read for mistakes.",
       choices: [{ value: "rules", half: "rules", label: "Built-in checks" },
                 { value: "model", half: "model", label: "Built-in checks, then a model reads it and objects" }]
         .concat(agentChoices("A coding agent reads the document and objects")) },
-    orchestrate: { title: "Pick the next job", says: "Decides what to work on next.",
+    orchestrate: { title: "Orchestrate", says: "Decides what to work on next.",
       choices: [{ value: "default", half: "model", label: "Standard: the model picks the next part, rules pick the kind of work" },
                 { value: "rules", half: "rules", label: "Rules only" },
                 { value: "model", half: "model", label: "A model picks" },
                 { value: "tools", half: "model", label: "A model with tools picks" }]
         .concat(agentChoices("A coding agent picks")) },
-    plan: { title: "Plan the round", says: "Optionally writes a plan for the round before any work starts.",
+    plan: { title: "Plan", says: "Optionally writes a plan for the round before any work starts.",
       choices: [{ value: "off", half: "rules", label: "No plan: step by step" },
                 { value: "model", half: "model", label: "A model writes the plan" }]
         .concat(agentChoices("A coding agent writes the plan")) },
@@ -126,41 +126,41 @@
         }))
         .concat([{ value: "model", half: "model", label: "Model: choose the next experiment" }])
         .concat(agentChoices("A coding agent proposes settings")) },
-    generate: { title: "Make a design", says: "Writes each candidate design.",
+    generate: { title: "Design", says: "Writes each candidate design.",
       choices: [{ value: "model", half: "model", label: "A model writes it" },
                 { value: "command", half: "rules", label: "My script writes it" }]
         .concat(agentChoices("A coding agent writes it")) },
-    test: { title: "Check it works", says: "Runs your checks in order; a design that fails goes back to be repaired. Always yours, never a model's.",
+    test: { title: "Check", says: "Runs your checks in order; a design that fails goes back to be repaired. Always yours, never a model's.",
       fixed: "Configured in Check & Measure: its checks.",
       choices: [{ value: "gate", half: "fixed", label: "Your checks (fixed)" }] },
-    critique: { title: "Second opinion", says: "Optionally, a critic judges the split, each design the checks passed and the final choice: a rejected design fails with its note, a rejected pick is never chosen.",
+    critique: { title: "Critic", says: "Optionally, a critic judges the split, each design the checks passed and the final choice: a rejected design fails with its note, a rejected pick is never chosen.",
       choices: [{ value: "off", half: "off", label: "No critic" },
                 { value: "model", half: "model", label: "A model critic" }]
         .concat(agentChoices("A coding agent critic")) },
     measure: { title: "Measure", says: "Runs your measurements, cheapest first; a design that fails a gate is dropped.",
       fixed: "Configured in Check & Measure: its measurements (each may estimate first).",
       choices: [{ value: "stages", half: "fixed", label: "Your measurements (fixed)" }] },
-    calibrate: { title: "Compare measures", says: "Checks how well the cheap measurement predicts the costly one.",
+    calibrate: { title: "Calibrate", says: "Checks how well the cheap measurement predicts the costly one.",
       choices: [{ value: "on", half: "rules", label: "On" }, { value: "off", half: "off", label: "Off" }] },
-    select: { title: "Choose the best", says: "Picks the winner by your goals.",
+    select: { title: "Choose", says: "Picks the winner by your goals.",
       choices: [{ value: "objectives", half: "rules", label: "By the goals" }]
         .concat(agentChoices("By the goals; a coding agent breaks ties")) },
-    feedback: { title: "Your notes", says: "Notes you type while it runs steer the next round.",
+    feedback: { title: "Notes", says: "Notes you type while it runs steer the next round.",
       choices: [{ value: "human", half: "rules", label: "Take my notes" }, { value: "off", half: "off", label: "No notes" }] },
-    knowledge: { title: "Background reading", says: "What the model reads with every request.",
+    knowledge: { title: "Knowledge", says: "What the model reads with every request.",
       choices: [{ value: "default", half: "rules", label: "The library (on), and the files I list" },
                 { value: "none", half: "off", label: "None: no library" }] },
     // D784, D791: who sums the papers up, once each, in each pass's Setup -- always, while the
     // library is on; not a flow key of its own: an agent is written as flow.knowledge.agent
-    digest: { title: "Digest the papers", says: "Each paper of the library (library/ beside the document, and the shared one) is summed up once; the summaries reach every prompt.",
+    digest: { title: "Digest papers", says: "Each paper of the library (library/ beside the document, and the shared one) is summed up once; the summaries reach every prompt.",
       choices: [{ value: "model", half: "model", label: "The model sums up each paper" }]
         .concat(agentChoices("A coding agent reads each paper (its tables and figures too) and sums it up")) },
     // D796: the record's lessons, written into flow.knowledge as `lessons:` -- not a flow key of its own
-    lessons: { title: "Learn from results", says: "Optionally turns past results into lessons for the next round, read with the library.",
+    lessons: { title: "Lessons", says: "Optionally turns past results into lessons for the next round, read with the library.",
       choices: [{ value: "off", half: "off", label: "No lessons" },
                 { value: "mined", half: "rules", label: "Lessons mined from the results" }]
         .concat(agentChoices("A coding agent writes lessons from the results")) },
-    records: { title: "Keep a record", says: "Every design, measurement and refusal is kept, and read back when you resume.",
+    records: { title: "Record", says: "Every design, measurement and refusal is kept, and read back when you resume.",
       fixed: "Always on: every design, measurement and refusal is kept.",
       choices: [{ value: "on", half: "fixed", label: "On (fixed)" }] },
   };

@@ -93,7 +93,7 @@ class Papers:
     run's store holds one, so a prompt knows what exists beyond the excerpts."""
 
     folders: tuple[str, ...] = ()
-    title: str = "knowledge: the library's papers (one line each)"
+    title: str = "knowledge: library papers, one line each"   # D1092
     key: str = "papers"
     static: bool = True
 

@@ -2089,8 +2089,7 @@ objectives: [{metric: timings.fast, goal: 15, direction: minimize},
               }; return 1;""", name)
             try:
                 r.page(f"#/app/{name}/agents", "document.querySelector('.open-turn')", "partial agent usage")
-                r.check("usage totals identify partial and wholly uncounted turns", "3 turn(s) with incomplete usage" in r.text()
-                        and "1 turn(s) not counted" in r.text())
+                r.check("usage totals identify partial and wholly uncounted turns", "1 turn(s) without tokens · 3 partial" in r.text())   # D1092: said once
                 tokens = b.js("return Object.fromEntries([...document.querySelectorAll('.open-turn')].map(b => [b.textContent, b.closest('tr').cells[3].textContent]))")
                 r.check("partial counts and unavailable usage are distinct", tokens == {"claude": "300 → 30 (partial)",
                         "opencode": "100 → — (partial)", "codex": "Unavailable"}, tokens)

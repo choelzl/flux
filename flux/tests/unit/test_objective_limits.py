@@ -58,7 +58,7 @@ def test_the_balance_is_the_knee_among_the_designs_meeting_every_limit():
             _sc("small", fmax_mhz=300, area_um2=30, power_w=0.5)]
     pick, why = objs.decide(pool)
     assert pick.candidate.name == "knee" and why == "knee of fmax_mhz / area_um2 at power_w <= 1"
-    assert objs.describe() == "power_w at most 1, then the balance of fmax_mhz and area_um2"
+    assert objs.describe() == "power_w at most 1, then balance of fmax_mhz and area_um2"
     with pytest.raises(ValueError, match="balance objective has no goal"):
         Objectives.from_doc([{"metric": "x", "goal": 1, "balance": True}])
 
@@ -102,15 +102,15 @@ def test_keep_is_still_a_limit_resolved_over_the_pool():
             _sc("cheap", speedup=1.2, bytes=100, cost=0), _sc("keeps-more", speedup=1.47, bytes=3000, cost=3)]
     pick, why = objs.decide(pool)                     # 1.0 + 0.9 * 0.5 = 1.45 kept, and within 4096 bytes
     assert pick.candidate.name == "keeps-more" and "speedup >= 1.45 and bytes <= 4096" in why
-    assert objs.describe() == "speedup within 90% of the best's gain over 1, bytes at most 4096, then least cost"
+    assert objs.describe() == "speedup within 90% of the best's gain over 1, bytes at most 4096, then minimize cost"
 
 
 def test_describe_and_the_document_round_trip():
     objs = Objectives.from_doc(DOC)
-    assert objs.describe() == "fmax_mhz at least 1000, area_um2 at most 80, then least power_w"
+    assert objs.describe() == "fmax_mhz at least 1000, area_um2 at most 80, then minimize power_w"
     assert Objectives.from_doc([{"metric": "fmax_mhz", "balance": True},
                                 {"metric": "area_um2", "direction": "minimize", "balance": True}]).describe() \
-        == "the balance of fmax_mhz and area_um2"
+        == "balance of fmax_mhz and area_um2"
     doc = [*DOC, {"metric": "energy_pj", "direction": "minimize", "balance": True}]
     back = Objectives.from_doc([o.to_doc() for o in Objectives.from_doc(doc)])
     assert back == Objectives.from_doc(doc) and back[3].to_doc()["balance"] is True
