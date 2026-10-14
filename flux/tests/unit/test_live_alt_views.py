@@ -148,3 +148,12 @@ def test_a_command_is_named_by_its_check_or_stage_its_program_beside():
                   mk("tool:gen.py", "generate x=1")];
       return xs.map(x => [m.taskLabel(x), m.taskNote(x)]); }""")
     assert got == [["Check · build", "build.sh"], ["Measure · esl · d#43", "sim.py"], ["Check · golden", ""], ["Design · x=1", "gen.py"]]
+
+
+def test_a_box_whose_result_a_critic_rejected_is_partial_not_failed():
+    """D1065: the box did its work -- "!"; the critique is its red ✗."""
+    got = run("""m => { const st = {id: 1, name: "simulation: esl", why: "1 design", parent: null, t0: 0, t1: 1, kids: []};
+      st.kids = [{id: 2, name: "tool:sim.py", why: "stage esl d#3", parent: st, t0: 0, t1: 1, kids: []}];
+      const cr = {id: 3, name: "critique: measurement", why: "d#3@esl", parent: null, t0: 1, t1: 2, failed: true, kids: []};
+      return m.flowBoxes([st, st.kids[0], cr].map(node => ({node})), 2, false).find(b => b.key === "measure").state; }""")
+    assert got == "part"

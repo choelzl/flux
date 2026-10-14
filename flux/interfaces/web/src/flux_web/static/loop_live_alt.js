@@ -6,7 +6,7 @@ import { restoreScroll, scrollState } from "./scroll.js";
 import { campaignForStart, currentTask, notePass, taskScope, taskState as state, taskWindow } from "./live_alt_model.js";
 import { WORK_COLORS as COLORS, AGENT_COLOR, kindOf, workLabel, phaseKind, ownSpans } from "./work_style.js";
 import { boxKind, candidateOf, docNotes, flowBoxes, isDraft, triesOf, passKind, passName, passShort, repaired, taskLabel, taskNote } from "./live_alt_views.js";
-import { passSummary } from "./live_alt_inspector.js";
+import { nameLoop, nameTests, notReached, passSummary } from "./live_alt_inspector.js";
 
 // D977: work is classified as Live's timeline classifies it, so a task sits in the same lane in both
 const workOf = phaseKind;
@@ -131,6 +131,11 @@ export function liveAltTab(ctx) {
       locateTimer = setTimeout(() => { locatedId = null; panel.querySelectorAll(".alt-located").forEach(el => el.classList.remove("alt-located")); }, 1600);
     }
     if (locatedId === selected && Date.now() < locatedUntil) selectedElement(selected)?.classList.add("alt-located");
+    // D1065: following, the task at work is in view -- a long tree scrolled it out of sight
+    if (following && !didReveal && selected != null && mode === "tree") {
+      const el = selectedElement(selected), box = panel.getBoundingClientRect(), at = el?.getBoundingClientRect();
+      if (el && (at.bottom > box.bottom || at.top < box.top)) el.scrollIntoView({ block: "nearest" });
+    }
     if (!didReveal && focused) panel.querySelector(`[data-${focusKey}="${CSS.escape(focused)}"]`)?.focus({ preventScroll: true });
     if (boxView) {
       const scope = taskScope(inspector.model, "all"), rows = scope.rows.filter(r => (scope.membership.get(r.node.id) ?? null) === boxView.p);
@@ -278,7 +283,8 @@ export function liveAltTab(ctx) {
         h("button", { ...taskButton(opens), type: "button", class: `alt-task ${state(n)}${picked ? " sel" : ""}`, "aria-pressed": String(picked), title: n.name + (n.why ? " · " + n.why : "") },
           rejected ? doneMark(true, false) : mark(n, below), h("span", { class: "alt-task-name" }, label, extra, note(n) ? h("span", { class: "muted small" }, ` · ${note(n)}`) : "",
             STAGE.test(String(n.name)) && numbersOf(n) ? h("span", { class: "alt-what" }, ` · ${numbersOf(n)}`) : "",
-            n.failed && phaseKind(n) === "check" && (n.kids || []).length && firstFailing(n) ? h("span", { class: "alt-what" }, ` · ${firstFailing(n)}`) : ""),   // D1063
+            n.failed && phaseKind(n) === "check" && (n.kids || []).length && firstFailing(n) ? h("span", { class: "alt-what" }, ` · ${firstFailing(n)}`) : "",   // D1063
+            notReached(n).length ? h("span", { class: "muted small" }, ` · ${notReached(n).join(", ")} not run`) : ""),   // D1065
           ...pills(n), h("span", { class: "mono muted small" }, dur(secs(n))))));
       if (!collapsed) runs(under, depth + 1);      // D1038: its children grouped as the pass's are
     };
@@ -438,7 +444,8 @@ export function liveAltTab(ctx) {
         : nodes.length > 1 ? nodes.map(n => ({ node: n, parent: null })) : (kids.get(first.id) || []);
       const collapsed = !(tries || steps.length) || isFolded(key, !running, all.some(n => holds(n.id)) && !nodes.some(n => n.id === selected));
       const opens = lone ? (aiOf.get(lone[0].lead.id) || lone[0].lead) : sole || (nodes.length === 1 ? (aiOf.get(first.id) || first) : last);
-      const picked = nodes.length === 1 && (first.id === selected || opens.id === selected);
+      // D1065: its one run's merged command selected is the line too (a running stage's tool)
+      const picked = nodes.length === 1 && (first.id === selected || opens.id === selected || (merged.get(first.id) || []).some(c => c.id === selected));
       const t0 = Math.min(...all.map(n => n.t0)), t1 = Math.max(...all.map(n => n.t1 ?? now));
       // D1055: the newest design's own measurement -- not the evaluation's, which measures the composition again
       const stages = kind === "measure" ? all.filter(n => STAGE.test(String(n.name)) && numbersOf(n)) : [];
@@ -448,7 +455,7 @@ export function liveAltTab(ctx) {
       const planned = kind === "plan" ? String(last.output?.picked ?? last.output?.next ?? "") : "";
       // D1061: a design says the design it made (#12), as the graph does -- what it improved on hover
       const lastTry = kind === "design" ? (tries || lone || draftsIn(last) || []).at(-1) : null, made = lastTry ? madeOf(lastTry) : "";
-      const failing = kind === "check" ? firstFailing(last) : "";          // D1061: what failed in it, as the graph says
+      const failing = kind === "check" ? [firstFailing(last), notReached(last).length ? `${notReached(last).join(", ")} not run` : ""].filter(Boolean).join(" · ") : "";   // D1061; D1065: and what it never reached
       // D1063: a choice says its pick -- or that the critic rejected it
       const decided = kind === "choose" ? all.map(n => n.output?.decision).filter(Boolean).at(-1) : "";
       const picked1 = decided ? (ended(nodes) ? `${short(decided)} rejected` : `★ ${short(decided)}`) : "";
@@ -459,7 +466,9 @@ export function liveAltTab(ctx) {
         h("button", { ...taskButton(opens), type: "button", class: `alt-task ${state(opens)}${picked ? " sel" : ""}`, "aria-pressed": String(picked), title: lone ? opens.name : nodes.map(n => n.name).join(" · ") },
           running ? h("span", { class: "alt-spin", role: "img", "aria-label": "running" })
             : lone && (opens.interrupted || opens.timedOut) ? mark(opens, below)      // its one draft's own end: interrupted, a time limit
-            : doneMark(ended(nodes) || rejected, all.some(n => n.failed || aiOf.get(n.id)?.failed)),     // D1061: its own work's failures; D1063: its folded model turn's too
+            // D1065: a rejected result is "!" -- its critique the ✗; a box of only its critique's failure is ✗
+            : doneMark(ended(nodes.filter(n => !/^\s*critique\s*:/i.test(String(n.name)))) || (rejected && nodes.every(n => /^\s*critique\s*:/i.test(String(n.name)))),
+              all.some(n => n.failed || aiOf.get(n.id)?.failed)),     // D1061: its own work's failures; D1063: its folded model turn's too
           h("span", { class: "alt-task-name" }, h("b", {}, workLabel(kind)), what ? h("span", { class: "alt-what", title: what }, ` ${shortAll(what)}`) : "", nodes.length === 1 && note(first) ? h("span", { class: "alt-what" }, ` · ${note(first)}`) : ""),
           ai ? h("span", { class: "alt-ai-pill" }, "ai") : "", crit ? h("span", { class: "alt-critic-tag" }, "critic") : "",
           tries && tries.length > 1 ? h("span", { class: "alt-again" }, `×${tries.length}`) : "",
@@ -503,7 +512,8 @@ export function liveAltTab(ctx) {
     // D1044: a graph box's list -- its tries, one flat line each, newest first, five at a time, when it ran
     // one task again and again; else each of its runs (a stage, then its evaluation); a single run, its steps
     const boxList = (runsOf, key, kind) => {
-      const own = n => { const full = taskLabel(n), at = full.indexOf(" · "), r = at >= 0 && phaseKind(n) === kind ? full.slice(at + 3) : full;
+      const own = n => { if (/^\s*critique\s*:/i.test(String(n.name))) return said(n, false);   // D1065: "critique · #3 · rejected", as the tree says
+        const full = taskLabel(n), at = full.indexOf(" · "), r = at >= 0 && phaseKind(n) === kind ? full.slice(at + 3) : full;
         const c = candidateOf(n), named = /^\s*test\s*:\s*fast check\b/i.test(String(n.name)) ? `check · ${r}` : r;      // D1054: a design's check, said "check"
         // D1059: which design -- a scope's checks of two designs told apart -- every design said by its id
         return shortAll(kind === "check" && c && !named.includes(c) && !named.includes(short(c)) ? `${named} · ${c}` : named); };
@@ -836,7 +846,10 @@ export function liveAltTab(ctx) {
     history = got;
     notes = {}; problem = null;
     api(`/apps/${enc(ctx.name)}/document${ctx.qs}`).then(d => {
-      problem = d; notes = docNotes(d.raw, d.document); goals = Array.isArray(d.raw?.objectives) ? d.raw.objectives.map(o => typeof o === "string" ? { metric: o } : o).filter(o => o && o.metric)
+      problem = d; notes = docNotes(d.raw, d.document);
+      // D1065: the panels name designs as the lines do
+      nameLoop(ctx.name, d.raw?.id, String(d.raw?.id || "").split("/").pop());
+      nameTests(d.raw?.flow?.test && typeof d.raw.flow.test === "object" && !Array.isArray(d.raw.flow.test) ? Object.keys(d.raw.flow.test).filter(k => k !== "critic") : []); goals = Array.isArray(d.raw?.objectives) ? d.raw.objectives.map(o => typeof o === "string" ? { metric: o } : o).filter(o => o && o.metric)
         .map(o => ({ ...o, direction: o.direction || "maximize" })) : [];   // D1055: "score" is a goal too; D1058: maximized unless said, as the loop does queue();
     }).catch(() => {});
     const startSel = h("select", { "aria-label": "LiveAlt start", onchange: () => { choice = null; startId = startSel.value; pass = startId === "current" ? "current" : "all"; passSel.value = pass; load(valid); } },

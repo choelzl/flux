@@ -28,8 +28,15 @@ export function failingOf(text) {
   const all = [...String(text).matchAll(/(\d+)\s+failing(?:\s+of\s+(\d+))?/g)], m = all.at(-1);
   return m ? { failing: Number(m[1]), of: m[2] != null ? Number(m[2]) : null, index: m.index } : null;
 }
-/** D1061: a design said by its id ("#4") -- the loop's name is the page's already; the whole name on hover. */
-const byId = t => String(t).replace(/[^\s·#]+(#[^#\s]+)/g, "$1");
+/** D1061: a design said by its id ("#4") -- the loop's name is the page's already; the whole name on hover.
+    D1065: by the lines' rule -- only the loop's own name goes; a part's design keeps its part, a baseline is "baseline". */
+let loopNames = [], loopTests = [];
+export function nameLoop(...names) { loopNames = names.filter(Boolean).map(String); }
+/** D1065: the document's checks, in order -- a check stopped at a failure lists those it never reached. */
+export function nameTests(names) { loopTests = (names || []).map(String); }
+export const notReached = n => n.failed && loopTests.length && (n.kids || []).some(k => k.failed)
+  ? loopTests.filter(t => !(n.kids || []).some(k => ranFor(k) === t)) : [];
+const byId = t => String(t).replace(/([^\s·#]+)(#[^#\s]+)/g, (_, pre, id) => id === "#baseline" ? "baseline" : !loopNames.length || loopNames.includes(pre) ? id : pre + id);
 const fmt = v => Math.abs(v) >= 100 ? String(Math.round(v * 10) / 10) : Math.abs(v) >= 1 ? v.toFixed(2).replace(/\.?0+$/, "") : Number(v.toPrecision(2)).toString();
 
 function pill(n) {
@@ -40,7 +47,8 @@ function stepRow(x, env) {
   const s = summaryOf(x);
   return h("button", { type: "button", class: "alt-step-row", style: `--k:${x.failed ? "var(--bad)" : colorOf(x)}`, "data-task": String(x.id), onclick: () => env.pick?.(x.id) },
     running(x) ? h("span", { class: "alt-spin", "aria-hidden": "true" }) : h("span", { class: `alt-task-state ${x.failed ? "failed" : "done"}` }, x.failed ? "✗" : "✓"),
-    h("span", { class: "alt-task-name", title: taskLabel(x) }, byId(taskLabel(x)), s ? h("span", { class: "muted" }, ` — ${s}`) : ""),
+    h("span", { class: "alt-task-name", title: taskLabel(x) }, byId(taskLabel(x)), s ? h("span", { class: "muted" }, ` — ${s}`) : "",
+      /^\s*critique\s*:/i.test(String(x.name)) ? h("span", { class: "muted" }, ` — ${/^(rejected|sent back)/i.test(String(x.output?.verdict ?? "")) ? "rejected" : x.output?.verdict ? "no objection" : ""}`) : ""),   // D1065: its verdict
     h("span", { class: "mono muted small" }, dur(x.seconds ?? (x.t1 ?? Date.now() / 1000) - x.t0)));
 }
 /** One line of what a task gave: a check's failing count, a measurement's numbers, else nothing. */
@@ -72,7 +80,7 @@ export function inspectorHead(n, env) {
       h("h2", { title: taskLabel(n) }, byId(taskLabel(n))), pill(n), h("span", { class: "muted" }, dur(running(n) ? env.now - n.t0 : n.seconds)), h("span", { class: "alt-head-tools" }, tools)),
     parents.length ? h("div", { class: "alt-crumbs" }, parents.flatMap((p, i) => [i ? h("span", { class: "muted" }, "›") : "",
       h("button", { type: "button", class: "alt-pchip", style: `--k:${colorOf(p)}`, onclick: () => env.pick?.(p.id), title: taskLabel(p) }, byId(taskLabel(p)))])) : "",
-    h("p", { class: "alt-meta muted" }, n.why ? `${n.why} · ` : "", h("span", { class: "mono" }, n.name))];
+    h("p", { class: "alt-meta muted" }, n.why ? `${byId(n.why)} · ` : "", h("span", { class: "mono" }, n.name))];
 }
 
 /** The usual time of a task like this one (the same name and purpose's first word), from its earlier runs. */
@@ -132,7 +140,7 @@ function toolBody(n, env) {
         const c = (m - bm) / Math.abs(bm);
         return [Math.abs(c) < 0.0005 ? "=" : `${c > 0 ? "+" : "−"}${Math.abs(c * 100).toFixed(1)}%`, dir * c > 0 ? "up" : dir * c < 0 ? "down" : ""]; };
       top.push(h("div", { class: "alt-table-wrap" }, h("table", { class: "list compact alt-metrics" },
-        h("thead", {}, h("tr", {}, h("th", {}, "metric"), h("th", { class: "num", title: me }, me ? byId(me) : "this design"),
+        h("thead", {}, h("tr", {}, h("th", {}, "metric"), h("th", { class: "num", title: me, style: "text-transform:none" }, me ? byId(me) : "this design"),   // D1065: a design's name as it is
           compares ? [h("th", { class: "num" }, "best so far"), h("th", { class: "num" }, "change")] : "")),
         h("tbody", {}, rows.map(([k, v, m]) => {
           const b = best[k], [said, better] = change(k, m);
@@ -349,7 +357,8 @@ function criticBody(n, env) {
 function stepsBody(n, env) {
   // D1029: its own box's steps -- a check run inside a design's generation is the Check box's, not listed here
   const kind = phaseKind(n), kids = n.kids.filter(k => phaseKind(k) === kind);
-  if (kids.length) return [h("div", { class: "task-inspector" }, h("div", { class: "alt-steps" }, kids.map(k => stepRow(k, env))))];
+  if (kids.length) return [h("div", { class: "task-inspector" }, h("div", { class: "alt-steps" }, kids.map(k => stepRow(k, env)),
+    notReached(n).map(t => h("div", { class: "alt-step-row note skipped" }, h("span", {}, `○ ${t}`), h("span", { class: "muted small" }, "not run: a check before it failed")))))];
   // D1059: no steps of its own -- what it came to (a plan's pick, its menu), its short results said plainly
   const said = Object.entries(n.output || {}).filter(([k, v]) => !k.startsWith("_") && v != null && v !== "" && (typeof v !== "object") && String(v).length <= 160).slice(0, 4);
   return said.length ? [h("div", { class: "task-inspector" }, ...said.map(([k, v]) => h("div", { class: "kv" }, h("div", { class: "k" }, k), h("div", { class: "val" }, String(v)))))] : [];

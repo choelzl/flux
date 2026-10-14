@@ -580,7 +580,7 @@ def general_flows(r, watch):
                 # D978: the pass as a flow in the timeline's words; with All passes, the chain of passes over it
                 b.wait("document.querySelector('.alt-flow-box[data-box=design]')", what="the pass's flow")
                 r.check("graph shows the chain of passes and the selected task's pass as a flow", b.js("return [...document.querySelectorAll('.alt-chip')].map(c=>c.textContent).join(',')==='0,1,2' && document.querySelector('.alt-chip.sel').textContent==='1' && document.querySelectorAll('.alt-flow-box').length===1 && !document.querySelector('.alt-phase, .alt-graph .run-graph') && document.querySelector('.alt-flow-box[data-box=design] .alt-box-title').textContent==='Design' && !!document.querySelector('.alt-flow-box[data-box=design] .alt-done.ok')"))
-                r.check("graph work colours are shared with the tree and the timeline (palette A4)", b.js("return getComputedStyle(document.querySelector('.alt-flow-box[data-box=design] .alt-box')).stroke==='rgb(91, 110, 232)'"))
+                r.check("graph work colours are shared with the tree and the timeline (palette A4)", b.js("return getComputedStyle(document.querySelector('.alt-flow-box[data-box=design] .alt-box')).getPropertyValue('--k').trim().toLowerCase()==='#5b6ee8'"))   # D1065: a selected box's outline is the accent
                 r.check("changing representation keeps pass and pinned task", b.js("return document.querySelector('[aria-label=\"LiveAlt pass\"]').value==='all' && document.querySelector('.alt-detail').dataset.task==='1'"))
                 b.click('.alt-chip[data-chain="2"]')
                 b.wait("document.querySelector('.alt-chip.sel')?.textContent==='2'", what="pass 2's flow")

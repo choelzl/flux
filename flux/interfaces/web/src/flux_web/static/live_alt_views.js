@@ -78,11 +78,11 @@ function draftDesign(n) {
   for (const x of sib.slice(at + 1)) {
     if (/\bdraft\s+\d+\s*$/i.test(String(x.name))) break;
     const m = /^\s*test\s*:\s*(?:fast check|judge)\s+(\S+)/i.exec(String(x.name)) || /\s(\S+#\S+)\s*$/.exec(String(x.why || ""));
-    if (m) return m[1].replace(/^.*?(#[^#\s]+)$/, "$1");
+    if (m) return m[1];                           // D1065: the whole name -- each view says it by its own rule
   }
   // D1059: no check after it (stopped at its time limit) -- the design it was asked for, as its try line says
   const asked = /\S+#\S+/.exec(String(n.params?.["turn why"] || n.why || ""));
-  return asked ? asked[0].replace(/^.*?(#[^#\s]+)$/, "$1") : "";
+  return asked ? asked[0] : "";
 }
 
 /** Which flow a pass draws: the setup (before pass 0 or 1), the baseline (pass 0), or a pass. */
@@ -120,6 +120,10 @@ function runsOf(rows, test) {
 function leaves(n) { return n.kids?.length ? n.kids.flatMap(leaves) : [n]; }
 function boxState(runs) {
   if (!runs.length) return "wait";
+  // D1065: a box whose result a critic rejected did its work -- "!", the critique its red ✗; its own last run decides the rest
+  const critique = n => /^\s*critique\s*:/i.test(String(n.name));
+  const own = runs.filter(n => !critique(n));
+  if (own.length && own.length < runs.length) { const s0 = boxState(own); return s0 === "ok" && runs.some(n => critique(n) && n.failed) ? "part" : s0; }
   const last = runs[runs.length - 1], s = state(last);
   if (s === "running") return "run";
   if (s === "failed" || s === "interrupted") return "bad";

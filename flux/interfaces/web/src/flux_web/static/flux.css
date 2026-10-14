@@ -806,7 +806,7 @@ svg.alt-flow { display: block; width: 100%; height: auto; margin: 0 auto; overfl
 .alt-flow-box { cursor: pointer; }
 .alt-box-tasks { border: 1px solid var(--line); border-radius: 7px; background: var(--panel); padding: 3px 0; overflow: hidden; display: grid; grid-template-columns: minmax(0, 1fr); }
 .alt-box-tasks .alt-tree-row { font-size: 12.5px; }
-.alt-box-sep { height: 0; border-top: 1px solid var(--line); margin: 3px 8px; } .alt-flow-box.sel .alt-box { stroke-width: 2.4; } .alt-flow-box:focus { outline: none; } .alt-flow-box:focus-visible .alt-box { stroke: var(--accent); stroke-width: 3; }
+.alt-box-sep { height: 0; border-top: 1px solid var(--line); margin: 3px 8px; } .alt-flow-box.sel .alt-box { stroke-width: 3; stroke: var(--accent); }   /* D1065: the open box, apart from the one at work */ .alt-flow-box:focus { outline: none; } .alt-flow-box:focus-visible .alt-box { stroke: var(--accent); stroke-width: 3; }
 /* D978: quiet pass bands, numbered; one bar with cuts for steps back to back */
 .alt-band { fill: transparent; } .alt-band.odd { fill: color-mix(in srgb, var(--muted) 10%, transparent); } .alt-band-label { font-size: 9px; }
 .alt-cut { fill: var(--panel); }
@@ -835,6 +835,7 @@ svg.alt-flow { display: block; width: 100%; height: auto; margin: 0 auto; overfl
 .alt-steps { display: grid; gap: 2px; margin: 4px 0 10px; }
 .alt-step-row { display: flex; align-items: center; gap: 7px; width: 100%; padding: 4px 8px; border: 0; border-radius: 4px; text-align: left; font-size: 13px; background: color-mix(in srgb, var(--k) 24%, var(--panel)); }
 .alt-step-row:hover { background: color-mix(in srgb, var(--k) 38%, var(--panel)); }
+.alt-step-row.skipped { opacity: .6; border: 1px dashed var(--line); background: transparent; }
 .alt-step-row.note, .alt-step-row.note:hover { justify-content: space-between; background: color-mix(in srgb, var(--k) 14%, var(--panel)); cursor: default; }
 .alt-step-row .alt-task-name .muted { font-size: 12px; }
 .alt-fold-block { border-top: 1px solid var(--line); padding: 6px 0 2px; } .alt-fold-block > summary { cursor: pointer; display: flex; gap: 8px; align-items: baseline; min-width: 0; font-size: 13px; }
