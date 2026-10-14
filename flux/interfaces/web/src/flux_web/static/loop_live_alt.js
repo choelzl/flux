@@ -276,7 +276,7 @@ export function liveAltTab(ctx) {
     const shortAll = t => typeof t === "string" ? t.replace(/([^\s·#]+)(#[^#\s]+)/g, (_, pre, id) => idOf(pre, id)) : t;   // D1059: every design said by its id
     const fold = (key, collapsed, label) => h("button", { type: "button", class: "alt-fold", "data-fold": String(key), "aria-label": `${collapsed ? "Expand" : "Collapse"} ${label}`,
       "aria-expanded": String(!collapsed), onclick: event => { event.stopPropagation(); toggleFold(key, collapsed); } }, collapsed ? "▸" : "▾");
-    // D1044: a critique that rejected what it judged is a failure of that work: red, the critic pill says who
+    // D1044: a critique that rejected what it judged; D1075: guidance, "!" -- not a failure
     const rejectedBy = n => /^\s*critique\s*:/i.test(String(n.name)) && /^(rejected|sent back|objection)/i.test(String(n.output?.verdict ?? n.fields?.verdict ?? ""));
     // D1068: the boxes' order -- a critic, then the ai
     const pills = n => [/^\s*critique\s*:/i.test(String(n.name)) ? h("span", { class: "alt-critic-tag" }, "critic") : "",
@@ -303,7 +303,7 @@ export function liveAltTab(ctx) {
       out.push(h("div", { class: `alt-tree-row ${box ? "box" : "step"}${secs(n) < .05 && !under.length ? " quiet" : ""}`, style: `--depth:${depth};--k:${COLORS[kind] || (AI.test(String(n.params?.turn || n.name)) ? AGENT_COLOR : COLORS.setup)}` },
         under.length ? fold(n.id, collapsed, typeof label === "string" ? label : n.name) : h("span", { class: "alt-fold-space" }),
         h("button", { ...taskButton(opens), type: "button", class: `alt-task ${state(n)}${picked ? " sel" : ""}`, "aria-pressed": String(picked), title: n.name + (n.why ? " · " + n.why : "") },
-          rejected ? doneMark(true, false) : mark(n, below), h("span", { class: "alt-task-name" }, label, extra, note(n) ? h("span", { class: "muted small" }, ` · ${note(n)}`) : "",
+          rejected ? doneMark(false, true) : mark(n, below), h("span", { class: "alt-task-name" }, label, extra, note(n) ? h("span", { class: "muted small" }, ` · ${note(n)}`) : "",
             STAGE.test(String(n.name)) && numbersOf(n) ? h("span", { class: "alt-what" }, ` · ${numbersOf(n)}`) : "",
             n.failed && phaseKind(n) === "check" && (n.kids || []).length && firstFailing(n) ? h("span", { class: "alt-what" }, ` · ${firstFailing(n)}`) : "",   // D1063
             collapsed && notReached(n).length ? h("span", { class: "muted small" }, ` · ${notReached(n).join(", ")} not run`) : ""),   // D1065; D1066: open, its rows say it

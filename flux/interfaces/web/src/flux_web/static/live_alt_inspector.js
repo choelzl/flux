@@ -347,7 +347,7 @@ function chooseBody(n, env) {
   // D1059: a design the select critic rejected stays on the record, marked -- never shown as chosen
   const rejected = new Map();
   // D1064: the measure critic's too -- a rejected measurement is never chosen either (its why is "x#3@stage")
-  for (const x of env.nodes.values()) if (x.failed && /^\s*critique\s*:\s*(decision|measurement)/i.test(String(x.name)))
+  for (const x of env.nodes.values()) if ((x.failed || x.rejected) && /^\s*critique\s*:\s*(decision|measurement)/i.test(String(x.name)))   // D1075: rejected, no longer "failed"
     rejected.set(String(x.why || "").replace(/@\S*$/, ""), String(fieldsOf(x).verdict || "").replace(/^REJECTED:\s*/i, ""));
   const refused = chosen && rejected.has(chosen);
   // D1055: a goal written as its name alone takes its direction from what the decision said ("the largest score")
