@@ -309,7 +309,7 @@ def _reload(problem: Problem, state: LoopState, parts: list[str] | None = None) 
         state.admitted[key] = cand
         if source:
             state.prototypes[key] = source             # the design behind the RTL (D496: the push for fmax reads it)
-        state.say(f"reload: {key} kept as recorded ({cand.name}); Maintenance > Re-evaluate checks it again")
+        state.say(f"reload: {key} kept as recorded ({cand.name}); Maintenance > \"Invalidate + re-evaluate all\" checks it again")
     for key, entry in best.items():
         if key not in state.admitted:
             state.best[key] = entry
