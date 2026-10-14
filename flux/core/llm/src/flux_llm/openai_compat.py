@@ -533,6 +533,16 @@ class OpenAIChatProposer:
                         message = {**message, "tool_calls": calls, "content": ""}
                 if not calls or last:
                     out["hops"] = "\n".join(h.line() for h in hops) or "(no tool was called)"
+                    said = (message.get("content") or "").strip() or (message.get("reasoning") or message.get("reasoning_content") or "").strip()
+                    if not said and message.get("_finish") == "stop":
+                        # D1086: a round that said nothing at all (a call the server swallowed, or a last round that
+                        # still wanted a tool): once more, no tools, thinking off, asked for the answer from what it has
+                        notes["empty_round"] = int(notes.get("empty_round", 0)) + 1
+                        with phase("llm: the answer, asked again", why="the round came back empty") as inner:
+                            ask = messages + [{"role": "user", "content": "Answer now, in plain text, from what you have "
+                                                                          "found so far; call no tool."}]
+                            message = self._exchange(ask, schema, False, inner, notes=notes)
+                            return self._reply(message, self._answer(message, False, inner, notes), notes, hops)
                     try:
                         return self._reply(message, self._answer(message, think, out, notes), notes, hops)
                     except _RanAway as exc:

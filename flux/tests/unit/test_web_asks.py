@@ -71,6 +71,22 @@ def test_the_models_sql_tool_reads_the_record_and_changes_nothing(tmp_path):
     assert many.count("\n") == 201 and "more than 200 rows" in many
 
 
+def test_a_model_that_cannot_work_with_the_record_tool_answers_without_it(tmp_path):
+    """D1086: an empty reply with the tool offered is no failed Ask -- the question goes again without it."""
+    loop = _loop(tmp_path)
+
+    class NoTools(ScriptedProposer):
+        def propose(self, prompt, *, schema=None, tools=None, budget=None):
+            if tools:
+                raise RuntimeError("empty response from qwen (finish_reason='stop', 167 tokens)")
+            return super().propose(prompt, schema=schema)
+
+    said = []
+    got = consult("why?", loop, tmp_path / "a", author="model", proposer=NoTools(["## From the summary"]), say=said.append)
+    assert got["ok"] and got["answer"].startswith("## From the summary")
+    assert any("asking without it" in s for s in said), said
+
+
 FAKE = r'''#!/usr/bin/env python3
 import os, sys, time
 a = sys.argv[1:]

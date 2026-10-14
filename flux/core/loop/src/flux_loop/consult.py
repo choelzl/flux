@@ -225,8 +225,16 @@ def consult(question: str, loop: Path, out: Path, author: Any = "model", propose
             raise ValueError("no model to answer: give one, or an agent")
         from flux_llm.tools import ToolBudget
 
-        reply = proposer.propose(text, tools=[record_tool(record)] if record else None,
-                                 budget=ToolBudget(hops=12, result_chars=20000))
+        try:
+            reply = proposer.propose(text, tools=[record_tool(record)] if record else None,
+                                     budget=ToolBudget(hops=12, result_chars=20000))
+        except RuntimeError as exc:
+            if not record:
+                raise
+            # D1086: a model that cannot work with the tool (an empty reply) answers as it did before D1074,
+            # from what the brief gives it inline
+            say(f"the model could not answer with the record tool ({str(exc)[:160]}); asking without it")
+            reply = proposer.propose(text)
         answer, ok, by = reply.text.strip(), bool(reply.text.strip()), "the model"
     else:
         from .agent import agent_spec, run_turn

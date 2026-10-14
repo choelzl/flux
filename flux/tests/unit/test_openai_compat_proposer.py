@@ -1046,3 +1046,19 @@ def test_the_user_config_file_sets_the_model_and_the_key_comes_from_its_file(tmp
         assert os.environ.get("PATH") != "/nope", "only FLUX_/OLLAMA_ variables"
         assert openai_compat.remote_api_key() == "sk-test-123"
         assert os.environ["FLUX_REMOTE_API_KEY"] == "sk-test-123", "agents inherit the key from the environment"
+
+
+def test_a_tool_round_that_comes_back_empty_is_asked_for_its_answer(monkeypatch, hosted):
+    """D1086: a round that says nothing at all (the server swallowed a call it could not read) is asked once
+    more, with no tools and thinking off, for the answer from what it has -- not an "empty response" error."""
+    from flux_llm import OpenAIChatProposer, Tool, ToolBudget
+
+    tools = [Tool("sql", "query", {"type": "object"}, lambda a: "a | b\n1 | 2")]
+    calling = {"choices": [{"finish_reason": "tool_calls", "message": {"role": "assistant", "content": "",
+                            "tool_calls": [_tool_call("sql", {"query": "SELECT 1"})]}}], "usage": {}}
+    empty = {"choices": [{"finish_reason": "stop", "message": {"role": "assistant", "content": ""}}],
+             "usage": {"completion_tokens": 167}}
+    sent = _server(monkeypatch, context=None, answers=[calling, empty, _ok("## The answer")])
+    r = OpenAIChatProposer(num_predict=1000, think=True).propose("why?", tools=tools, budget=ToolBudget(hops=4))
+    assert r.text == "## The answer" and r.notes["empty_round"] == 1 and len(r.hops) == 1
+    assert "tools" not in sent[2] and "call no tool" in sent[2]["messages"][-1]["content"]
