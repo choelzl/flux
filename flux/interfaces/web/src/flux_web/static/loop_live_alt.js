@@ -23,6 +23,7 @@ export function liveAltTab(ctx) {
   let panel, split, notice, passSel, controls, valid, loadMessage = "", loadEarlier, followBtn, summary, logLink, locateBtn;
   let visibleRows = [], lastMode = "", reveal = false, locatedId = null, locatedUntil = 0;
   let resizeObserver = null, locateTimer = null, choice = null;
+  let memo = null;                                    // D1089: per render -- the passes, and what each design run's answer is
   const folded = new Set(), opened = new Set(), viewPlaces = new Map(), allTries = new Set();   // D1044: lists showing every try
 let notes = {}, goals = [], chainPass, openBox = null;      // D1038: chainPass undefined until one is clicked -- null is the setup pass
   // D1052: the notes written in a pass with no task to hang on (a scripted search) -- its boxes count them
@@ -95,6 +96,7 @@ let notes = {}, goals = [], chainPass, openBox = null;      // D1038: chainPass 
   let pressing = 0, held = false;          // when the press began; a release outside the window lapses after 2 s
   releaseHook = () => { if (!pressing) return; pressing = 0; if (held) { held = false; setTimeout(render, 0); } };
   function render() {
+    memo = null;                                      // D1089: the passes as this render reads them
     if (!mounted || !valid() || !inspector) return;
     if (pressing && Date.now() - pressing < 2000) { held = true; return; }
     if (startId === "current") inspector.ended(ctx.st.running ? null : ctx.st.last_active || null);
@@ -233,7 +235,16 @@ let notes = {}, goals = [], chainPass, openBox = null;      // D1038: chainPass 
   const getsPast = p => { if (phaseKind(p) !== "design" || p.t1 == null || p.failed || p.timedOut || p.interrupted) return false;
     const last = [...(p.kids || [])].sort((a, b) => a.t0 - b.t0).at(-1);   // and its last step ended well (not one cut off)
     return !last || (last.t1 != null && !last.failed && !last.interrupted && !last.timedOut); };
-  const recovered = n => { for (let p = n.parent; p; p = p.parent) if (getsPast(p)) return true; return false; };
+  // D1089: and a design run that failed (out of time) when a later run of the design in its pass got past it
+  const memoOf = () => memo || (memo = { member: taskScope(inspector.model, "all").membership, later: new Map() });
+  const laterPasses = n => {
+    if (phaseKind(n) !== "design") return false;
+    const m = memoOf();
+    if (!m.later.has(n.id)) m.later.set(n.id, [...(n.parent ? n.parent.kids : inspector.model.roots || [])]
+      .some(k => k !== n && k.t0 > n.t0 && phaseKind(k) === "design" && (m.member.get(k.id) ?? null) === (m.member.get(n.id) ?? null) && getsPast(k)));
+    return m.later.get(n.id);
+  };
+  const recovered = n => { if (laterPasses(n)) return true; for (let p = n.parent; p; p = p.parent) if (getsPast(p) || laterPasses(p)) return true; return false; };
   const hardFail = n => n.failed && !recovered(n);
   const failedUnder = () => { const s = new Set(), soft = new Set(); for (const n of inspector.model.nodes.values()) {
     if (n.failed) for (let p = n.parent; p && !getsPast(p); p = p.parent) s.add(p.id);
@@ -586,6 +597,7 @@ let notes = {}, goals = [], chainPass, openBox = null;      // D1038: chainPass 
         else if (kind === "check") line({ node: n, parent: null }, 0, own(n), false, testDots(n), true);   // its failing test said by the line
         else line({ node: n, parent: null }, 0, own(n), false, "", true);
       }, 0, () => false, true);
+      if (kind === "check" && one.length) skipRows(runsOf[0], 0);   // D1089: the checks it never reached, as the tree says them
     };
     return { line, fold, secs, kids, runs, boxes, boxList, roots: rows.filter(r => r.parent == null || !ids.has(r.parent)) };
   }
@@ -659,7 +671,7 @@ let notes = {}, goals = [], chainPass, openBox = null;      // D1038: chainPass 
       const nodes = rows.filter(r => (membership.get(r.node.id) ?? null) === p).map(r => r.node);
       const top = nodes.filter(n => n.parent == null || (membership.get(n.parent.id) ?? null) !== p);
       const lastBad = p != null && flowBoxes(rows.filter(r => (membership.get(r.node.id) ?? null) === p), p, false, passNotes(p)).filter(b => b.runs.length).at(-1)?.state === "bad";   // D1078
-      const st = nodes.some(n => n.t1 == null) ? "running" : ended(top.length ? top : nodes) || lastBad ? "failed" : nodes.some(n => hardFail(n) || n.timedOut || n.rejected) ? "part" : "done";   // D1031; D1059: "!" as the tree says
+      const st = nodes.some(n => n.t1 == null) ? "running" : ended(top.length ? top : nodes) || lastBad ? "failed" : nodes.some(n => hardFail(n) || n.timedOut && !recovered(n) || n.rejected) ? "part" : "done";   // D1031; D1059: "!" as the tree says
       return h("button", { type: "button", class: `alt-chip ${st}${p === shown ? " sel" : ""}`, "data-chain": String(p ?? "S"), "aria-pressed": String(p === shown),
         title: passName(p), onclick: () => { chainPass = p; showPass(p); } }, passShort(p));
     })) : "";
@@ -671,7 +683,9 @@ let notes = {}, goals = [], chainPass, openBox = null;      // D1038: chainPass 
       const c = COLORS[b.kind] || COLORS.setup, own = inPass.filter(r => b.ids.has(r.node.id));
       // D1056: what its list would hold -- a design's tries, else one run's steps or its runs; one item is no list
       const items = b.kind === "design" ? [] : b.runs;      // D1059: a box's list is its runs -- one run opens itself, its steps in its panel
-      const listed = b.kind === "design" ? triesOf(b.runs) : items.length;
+      // D1089: a check's or a measure's one run lists its steps (its tests, its stages) -- one run is no list otherwise
+      const oneSteps = b.kind !== "design" && b.runs.length === 1 && ["check", "measure"].includes(b.kind) ? (b.runs[0].kids || []).length : 0;
+      const listed = b.kind === "design" ? triesOf(b.runs) : oneSteps > 1 ? oneSteps : items.length;
       // a box at work opens its current task (a running agent first, as Following does); a finished one its
       // latest run -- one its list shows -- or, its list being one item, that item
       // D1066: its own work opens, not the critique of it -- a measurement before its critic's verdict
@@ -697,11 +711,16 @@ let notes = {}, goals = [], chainPass, openBox = null;      // D1038: chainPass 
       // D1034: a critic judged this box's work (the split, a design, the decision) -- no box of its own
       if (b.critic) { kids.push(sv("rect", { x: right - 38, y: y + 6, width: 38, height: 14, rx: 7, fill: COLORS.critic, class: "alt-critic-pill" }), sv("text", { x: right - 19, y: y + 16, class: "alt-pill-text" }, "critic")); right -= 44; }
       if (b.count > 1) { kids.push(sv("rect", { x: right - 22, y: y + 6, width: 22, height: 14, rx: 7, class: "alt-count-pill" }), sv("text", { x: right - 11, y: y + 16, class: "alt-count-text" }, `×${b.count}`)); right -= 28; }
+      // D1089: a check at work says how far it is -- "2 of 5 checks" -- not only how many it has
+      const ofChecks = b.kind === "check" && b.state === "run" && b.steps ? /^(\d+) check/.exec(note) : null;
+      const shownNote = ofChecks ? `${b.steps.filter(v => v === "ok" || v === "bad" || v === "part").length} of ${ofChecks[1]} checks` : note;
       if (note) kids.push(sv("foreignObject", { x: X + 14, y: y + 22, width: BW - 28, height: 16, "pointer-events": "none" },
-        h("div", { class: "alt-box-note" }, note)));
+        h("div", { class: "alt-box-note" }, shownNote)));
       // D1064: a check that stopped at a failure -- the checks it never reached, drawn skipped
       const declared = b.kind === "check" ? Number((/^(\d+) check/.exec(note) || [])[1] || 0) : 0;
       if (b.steps && b.steps.includes("bad") && declared > b.steps.length) b.steps = [...b.steps, ...Array(declared - b.steps.length).fill("skip")];
+      // D1089: a check at work -- the checks still to come drawn waiting (3 of 5: three marks, two to come)
+      else if (b.steps && b.state === "run" && declared > b.steps.length) b.steps = [...b.steps, ...Array(declared - b.steps.length).fill("wait")];
       if (b.steps) { const w = (BW - 24) / b.steps.length; b.steps.forEach((v, k) => kids.push(sv("rect", { x: X + 14 + k * w, y: y + BH - 11, width: w - 3, height: 5, rx: 2,
         class: `alt-step ${v}`, style: `--k:${c}` }))); }
       // D1053: a box at work says so in its corner, as a finished one does -- the selection is not the running mark

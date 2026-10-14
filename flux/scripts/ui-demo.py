@@ -66,6 +66,8 @@ from pathlib import Path
 text = Path(sys.argv[1]).read_text()
 fails = int(text.split("fail=")[1].split()[0]) if "fail=" in text else 0
 name = sys.argv[2] if len(sys.argv) > 2 else "test"
+if len(sys.argv) > 3:                                  # a slow check: its seconds
+    time.sleep(float(sys.argv[3]))
 bad = fails if name in ("ut", "it") else 0
 for i in range(bad):
     print(f"FAIL {name} case {i}")
@@ -140,6 +142,10 @@ CASES: dict[str, tuple[dict, int]] = {
         "objectives": ["score"]}, 2),
     # these keep running: an agent at work, a long measurement
     "running-agent": ({**BASE, "flow": flow(generate=agent("slow", 600)), "objectives": ["score"], "budget": {"passes": 0}}, 0),
+    # D1089: a check of five slow tests, at work most of the time -- the graph's Check box mid-way (3 of 5)
+    "running-check": ({**BASE, "flow": {**flow(generate=agent("good")), "test": {
+        t: f"python3 {{home}}/check.py {{artifact}} {t} 6" for t in ("apply", "build", "lint", "ut", "it")}},
+        "objectives": ["score"], "budget": {"passes": 0}}, 0),
     "running-measure": ({**BASE, "flow": {**flow(generate=agent("good")), "measure": {
         "slow": {"command": "python3 {home}/measure.py {artifact} 45", "metrics": ["score", "sim_us"], "timeout_s": 600}}},
         "objectives": ["score"], "budget": {"passes": 0}}, 0),

@@ -338,6 +338,17 @@ function measured(env) {
     const c = candidateOf(x), m = { ...metricsOf(stdoutOf(x)), ...dictsOf(stdoutOf(x)) };
     if (c && Object.keys(m).length) by.set(c, { ...(by.get(c) || {}), ...m });
   }
+  // D1089: a stage that measured without a tool of its own (the gate's verdict as a number) says it on its row:
+  // "x#1.2: failures=0, cycles=41" -- a design measured in this pass, not "an earlier pass"
+  for (const x of env.nodes.values()) {
+    if (x.t1 == null || x.failed || !/^\s*(simulation|analytical)\s*:/i.test(String(x.name))) continue;
+    for (const line of String(x.output?.measured ?? "").split("\n")) {
+      const at = line.indexOf(": "); if (at < 0) continue;
+      const c = line.slice(0, at).trim(), m = {};
+      for (const [, k, v] of line.slice(at + 2).matchAll(/([A-Za-z_][\w.]*)=(-?[\d.]+(?:e-?\d+)?)(?=,|\s|$)/gi)) m[k] = Number(v);
+      if (c && Object.keys(m).length && !by.has(c)) by.set(c, m);
+    }
+  }
   return by;
 }
 /** D1055: a metric that is a dictionary ("sim_us={"t1": 41, "t2": 79}") -- its numbers by name. */
@@ -364,7 +375,7 @@ function chooseBody(n, env) {
   if (dec0 && !rows.some(([c]) => c === dec0)) {
     const m = {}; for (const [k, v] of Object.entries(said["decision metrics"] || {})) { const at = k.indexOf(".");
       if (at > 0) (m[k.slice(0, at)] ||= {})[k.slice(at + 1)] = v; else m[k] = v; }
-    rows.push([dec0, m, true]);
+    rows.push([dec0, m, Object.keys(m).length > 0]);   // D1089: "an earlier pass" only when its numbers came from one -- a pick never measured is just the pick
   }
   // D1063: the decision's own name; else the longest name the text holds -- "x#2" is the start of "x#2.2"
   const names = rows.map(([c]) => c), dec = dec0;

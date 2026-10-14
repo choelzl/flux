@@ -31,6 +31,8 @@
         // D997: an agent stopped at its time limit (exit 124) is a warning, not a failure
         d.timedOut = !!e.output && (!!e.output["timed out"] || /^\s*agent\s*:/i.test(String(d.name)) && Number(e.output.exit) === 124);   // D1053
         if (d.timedOut) d.failed = false;
+        // D1089: a draft whose final turn (D1088) ended well handed its design in -- not one out of time
+        if (d.timedOut && d.kids.some(function (k) { return /^\s*agent\s*:/i.test(String(k.name)) && k.t1 != null && !k.failed && !(k.output && k.output["timed out"]); })) { d.timedOut = false; d.graced = true; }
         // D1075: a critic's rejection (or a division sent back) is guidance -- "!", not a failed step; a journal before it said "failed"
         d.rejected = /^\s*critique\s*:/i.test(String(d.name)) && !!e.output && (!!e.output.rejected || /^(REJECTED|SENT BACK)/.test(String(e.output.verdict || "")));
         if (d.rejected) d.failed = false;
