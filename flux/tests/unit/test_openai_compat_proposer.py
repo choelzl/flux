@@ -938,8 +938,8 @@ def test_a_parse_failure_on_the_answering_round_ends_the_turn_on_its_checks(monk
 
 
 def test_a_parse_failure_on_the_retry_too_ends_the_turn_not_the_attempt(monkeypatch, hosted):
-    """If the retry without tools gets the same 500, the turn ends with an empty reply and its
-    hops rather than raising (D596)."""
+    """If the retry without tools gets the same 500, the tools are said in words (D1087); when that round
+    fails the same way too, the turn ends with an empty reply and its hops rather than raising (D596)."""
     import urllib.request
 
     from flux_llm import OpenAIChatProposer, Tool
@@ -950,7 +950,8 @@ def test_a_parse_failure_on_the_retry_too_ends_the_turn_not_the_attempt(monkeypa
     replies = iter([("ok", {"choices": [{"finish_reason": "tool_calls", "message": {"role": "assistant", "content": "",
                                          "tool_calls": [_tool_call("check", {"prototype": "p"})]}}], "usage": {}}),
                     ("http", err), ("http", err),                  # the round with tools: the retry pair
-                    ("http", err), ("http", err)])                 # the same round without tools: again
+                    ("http", err), ("http", err),                  # the same round without tools: again
+                    ("http", err), ("http", err), ("http", err), ("http", err)])   # D1087: the tools in words, the same
 
     class _Resp:
         def __init__(self, doc):
@@ -1048,17 +1049,39 @@ def test_the_user_config_file_sets_the_model_and_the_key_comes_from_its_file(tmp
         assert os.environ["FLUX_REMOTE_API_KEY"] == "sk-test-123", "agents inherit the key from the environment"
 
 
-def test_a_tool_round_that_comes_back_empty_is_asked_for_its_answer(monkeypatch, hosted):
-    """D1086: a round that says nothing at all (the server swallowed a call it could not read) is asked once
-    more, with no tools and thinking off, for the answer from what it has -- not an "empty response" error."""
+def test_a_model_the_servers_tool_calling_fails_calls_the_tools_in_words(monkeypatch, hosted):
+    """D1087 (D1086): a round that says nothing at all -- the server swallowed a call it could not read -- turns
+    the turn to the tools said in the prompt: the model's fenced call is read and performed by Flux, the result
+    goes back as a message, and its answer is the reply."""
     from flux_llm import OpenAIChatProposer, Tool, ToolBudget
 
-    tools = [Tool("sql", "query", {"type": "object"}, lambda a: "a | b\n1 | 2")]
+    tools = [Tool("sql", "query", {"type": "object", "properties": {"query": {"type": "string"}}}, lambda a: f"rows for {a['query']}")]
     calling = {"choices": [{"finish_reason": "tool_calls", "message": {"role": "assistant", "content": "",
                             "tool_calls": [_tool_call("sql", {"query": "SELECT 1"})]}}], "usage": {}}
     empty = {"choices": [{"finish_reason": "stop", "message": {"role": "assistant", "content": ""}}],
              "usage": {"completion_tokens": 167}}
-    sent = _server(monkeypatch, context=None, answers=[calling, empty, _ok("## The answer")])
-    r = OpenAIChatProposer(num_predict=1000, think=True).propose("why?", tools=tools, budget=ToolBudget(hops=4))
-    assert r.text == "## The answer" and r.notes["empty_round"] == 1 and len(r.hops) == 1
-    assert "tools" not in sent[2] and "call no tool" in sent[2]["messages"][-1]["content"]
+    block = _ok('Let me look.\n```tool\n{"name": "sql", "arguments": {"query": "SELECT 2"}}\n```')
+    sent = _server(monkeypatch, context=None, answers=[calling, empty, block, _ok("## The answer")])
+    r = OpenAIChatProposer(num_predict=1000, think=True).propose("why?", tools=tools, budget=ToolBudget(hops=6))
+    assert r.text == "## The answer" and "came back empty" in r.notes["tools_prompted"]
+    assert [h.line(40) for h in r.hops][1].startswith('sql({"query": "SELECT 2"})')
+    assert "tools" not in sent[2] and "TOOLS YOU CAN CALL" in sent[2]["messages"][-1]["content"]
+    assert "tools" not in sent[3] and sent[3]["messages"][-1]["content"].startswith('RESULT of sql {"query": "SELECT 2"}:\nrows for SELECT 2')
+
+
+def test_the_tools_in_words_for_every_turn_and_an_empty_last_round(monkeypatch, hosted):
+    """D1087: FLUX_TOOL_CALLS=prompted says the tools in the prompt from the first round; D1086: an answering
+    round that comes back empty is asked once more for its answer."""
+    from flux_llm import OpenAIChatProposer, Tool, ToolBudget
+    from flux_llm.tools import prompted_calls
+
+    assert [c["function"]["name"] for c in prompted_calls('{"name": "sql", "arguments": {"query": "x"}}')] == ["sql"]
+    assert prompted_calls("an answer with {braces} in it") == [] and prompted_calls("```json\n{\"a\": 1}\n```") == []
+    monkeypatch.setenv("FLUX_TOOL_CALLS", "prompted")
+    tools = [Tool("sql", "query", {"type": "object"}, lambda a: "1")]
+    empty = {"choices": [{"finish_reason": "stop", "message": {"role": "assistant", "content": ""}}], "usage": {}}
+    sent = _server(monkeypatch, context=None, answers=[_ok('```tool\n{"name": "sql", "arguments": {}}\n```'), empty, _ok("done")])
+    r = OpenAIChatProposer(num_predict=1000, think=False).propose("go", tools=tools, budget=ToolBudget(hops=1))
+    assert r.text == "done" and r.notes["tools_prompted"] == "FLUX_TOOL_CALLS=prompted" and len(r.hops) == 1
+    assert "tools" not in sent[0] and "TOOLS YOU CAN CALL" in sent[0]["messages"][0]["content"]
+    assert "call no tool" in sent[1]["messages"][-1]["content"] and r.notes["empty_round"] == 1

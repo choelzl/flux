@@ -17,7 +17,7 @@ import time
 from dataclasses import dataclass
 from typing import Any, Callable
 
-__all__ = ["Hop", "Tool", "ToolBudget", "as_openai", "run_call", "text_tool_calls"]
+__all__ = ["Hop", "Tool", "ToolBudget", "as_openai", "prompted_calls", "run_call", "text_tool_calls", "tools_prompt"]
 
 
 @dataclass(frozen=True)
@@ -90,6 +90,44 @@ def text_tool_calls(content: str) -> list[dict[str, Any]]:
         params = {k: v for k, v in _TEXT_PARAM.findall(m.group(2))}
         calls.append({"id": f"text_{i}", "type": "function",
                       "function": {"name": m.group(1), "arguments": json.dumps(params)}})
+    return calls
+
+
+def tools_prompt(tools: list[Tool]) -> str:
+    """D1087: the tools said in words, for a model the server does not pass tools to well (any model can
+    follow this): what each is, its arguments, and how to call one -- a fenced `tool` block of JSON."""
+    lines = ["TOOLS YOU CAN CALL. To call one, reply with nothing but a block like this (one block per call):",
+             "```tool", '{"name": "<tool name>", "arguments": {<its arguments as JSON>}}', "```",
+             "Its result comes back in the next message. When you have what you need, answer in plain text, with no block.", ""]
+    for t in tools:
+        props = (t.parameters or {}).get("properties") or {}
+        args = ", ".join(f'"{k}": {v.get("type", "value")}' + (f" -- {v['description']}" if v.get("description") else "")
+                         for k, v in props.items())
+        lines.append(f"- {t.name}({args}): {t.description}")
+    return "\n".join(lines)
+
+
+_PROMPTED = re.compile(r"```(?:tool|json)?\s*(\{.*?\})\s*```", re.S)
+
+
+def prompted_calls(content: str) -> list[dict[str, Any]]:
+    """D1087: the calls a model wrote as `tools_prompt` asks -- fenced JSON blocks naming a tool and its
+    arguments -- in the server's `tool_calls` shape; a bare JSON object alone on the reply counts too."""
+    found = [m.group(1) for m in _PROMPTED.finditer(content or "")]
+    bare = (content or "").strip()
+    if not found and bare.startswith("{") and bare.endswith("}"):
+        found = [bare]
+    calls = []
+    for i, raw in enumerate(found):
+        try:
+            doc = json.loads(raw)
+        except ValueError:
+            continue
+        if not isinstance(doc, dict) or not isinstance(doc.get("name"), str):
+            continue
+        args = doc.get("arguments", doc.get("parameters", {}))
+        calls.append({"id": f"prompted_{i}", "type": "function",
+                      "function": {"name": doc["name"], "arguments": args if isinstance(args, str) else json.dumps(args)}})
     return calls
 
 

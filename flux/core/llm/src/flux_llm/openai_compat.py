@@ -473,17 +473,33 @@ class OpenAIChatProposer:
         back as a `tool` message, and the last round goes out without tools (and with the
         schema, if any) so the turn ends in an answer. Hops are kept on `reply.hops`. A round
         that runs away is asked again with thinking off."""
-        from .tools import Hop, ToolBudget, run_call, text_tool_calls
+        from .tools import Hop, ToolBudget, prompted_calls, run_call, text_tool_calls, tools_prompt
 
         budget = budget or ToolBudget()
         messages: list[dict] = [{"role": "user", "content": prompt}]
         hops: list[Hop] = []
+        # D1087: the tools said in the prompt and the calls read from the text, Flux's own way -- any model can do
+        # it; taken when the server's tool calling fails the model (an empty round, a call it cannot parse twice)
+        prompted = False
+
+        def to_prompted(why: str) -> None:
+            nonlocal prompted
+            prompted = True
+            notes["tools_prompted"] = why[:200]
+            messages.append({"role": "user", "content": tools_prompt(tools)})
+
+        if os.environ.get("FLUX_TOOL_CALLS", "").strip().lower() == "prompted":   # D1087: chosen for every turn
+            prompted = True
+            notes["tools_prompted"] = "FLUX_TOOL_CALLS=prompted"
+            messages[0] = {"role": "user", "content": f"{prompt}\n\n{tools_prompt(tools)}"}
         from flux_profile import phase
 
         with self._turn("llm: turn with tools", messages, think,
                         tools=", ".join(t.name for t in tools), hops_allowed=budget.hops) as out:
             for round_ in range(budget.hops + 1):
                 last = round_ >= budget.hops
+                if last and prompted:                         # D1087: no tool block in the answer
+                    messages.append({"role": "user", "content": "Answer now, in plain text, from what you have found; call no tool."})
                 if round_ and self._crowded(messages, budget.compact_share):
                     self._compact_rounds(messages, budget, out, notes)
                 # one name for every round, so the timing tab sums a turn into one row
@@ -491,13 +507,13 @@ class OpenAIChatProposer:
                            + (", the answer, no tools" if last else "") + f", {len(messages)} message(s)") as inner:
                     try:
                         message = self._exchange(messages, schema if last else None, think, inner,
-                                                 tools=None if last else tools, hop_share=budget.hop_share,
+                                                 tools=None if last or prompted else tools, hop_share=budget.hop_share,
                                                  notes=notes)
                     except _RanAway as exc:
                         inner["runaway"] = str(exc)[:200]
                         notes["runaway"] = str(exc)[:200]
                         message = self._exchange(messages, schema if last else None, False, inner,
-                                                 tools=None if last else tools, hop_share=budget.hop_share,
+                                                 tools=None if last or prompted else tools, hop_share=budget.hop_share,
                                                  notes=notes)
                     except RuntimeError as exc:
                         if "parse tool call" not in str(exc):
@@ -519,21 +535,30 @@ class OpenAIChatProposer:
                         except RuntimeError as again:
                             if "parse tool call" not in str(again):
                                 raise
-                            # the retry failed the same way (the server parses text calls too):
-                            # end the turn on what it measured (D596)
-                            inner["error"] = f"the server could not read the model's call twice ({str(again)[:120]}); the turn ends"
-                            notes["cut_short"] = str(again)[:200]
-                            out["hops"] = "\n".join(h.line() for h in hops) or "(no tool was called)"
-                            return Reply("", hops=list(hops), notes=notes)
+                            # the retry failed the same way (the server parses text calls too): D1087,
+                            # the tools in words from here on, the calls read by Flux
+                            if prompted:
+                                inner["error"] = f"the server could not read the model's call twice ({str(again)[:120]}); the turn ends"
+                                notes["cut_short"] = str(again)[:200]
+                                out["hops"] = "\n".join(h.line() for h in hops) or "(no tool was called)"
+                                return Reply("", hops=list(hops), notes=notes)
+                            inner["error"] = f"the server could not read the model's call twice ({str(again)[:120]}): the tools in words from here"
+                            to_prompted(f"the server could not parse its calls: {again}")
+                            continue
                 calls = message.get("tool_calls") or []
                 if not calls and not last:
-                    # the call written as text (the template's own syntax) is a call all the same
-                    calls = text_tool_calls(message.get("content") or "")
-                    if calls:
+                    # the call written as text (the template's own syntax, or D1087 the prompted block) is a call all the same
+                    calls = text_tool_calls(message.get("content") or "") or (prompted_calls(message.get("content") or "") if prompted else [])
+                    if calls and not prompted:
                         message = {**message, "tool_calls": calls, "content": ""}
                 if not calls or last:
                     out["hops"] = "\n".join(h.line() for h in hops) or "(no tool was called)"
                     said = (message.get("content") or "").strip() or (message.get("reasoning") or message.get("reasoning_content") or "").strip()
+                    if not said and message.get("_finish") == "stop" and not last and not prompted:
+                        # D1087: the server's tool calling failed this model (it said nothing): the tools in words
+                        out["prompted"] = "the round came back empty: the tools are said in the prompt from here"
+                        to_prompted("a round came back empty")
+                        continue
                     if not said and message.get("_finish") == "stop":
                         # D1086: a round that said nothing at all (a call the server swallowed, or a last round that
                         # still wanted a tool): once more, no tools, thinking off, asked for the answer from what it has
@@ -553,6 +578,16 @@ class OpenAIChatProposer:
                         with phase("llm: the answer, thinking off", why="after a runaway") as inner:
                             message = self._exchange(messages, schema, False, inner, notes=notes)
                             return self._reply(message, self._answer(message, False, inner, notes), notes, hops)
+                if prompted:                                  # D1087: its calls and their results as plain messages
+                    messages.append({"role": "assistant", "content": message.get("content") or ""})
+                    results = []
+                    for call in calls:
+                        hop = run_call(tools, call, max_result_chars=budget.result_chars)
+                        hops.append(hop)
+                        out[f"hop {len(hops)}"] = hop.line(600)
+                        results.append(f"RESULT of {(call.get('function') or {}).get('name')} {(call.get('function') or {}).get('arguments')}:\n{hop.result}")
+                    messages.append({"role": "user", "content": "\n\n".join(results)})
+                    continue
                 messages.append(_assistant_turn(message))
                 for n, call in enumerate(calls):
                     hop = run_call(tools, call, max_result_chars=budget.result_chars)
