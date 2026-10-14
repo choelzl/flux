@@ -22,7 +22,7 @@ def _overlap(tmp_path, n: int, what: str = "stage screen", runs: int = 4) -> int
             with lock:
                 busy[0] += 1
                 most[0] = max(most[0], busy[0])
-            time.sleep(0.15)
+            time.sleep(0.5)           # D1070: long enough that every thread is in, even on a loaded machine
             with lock:
                 busy[0] -= 1
 

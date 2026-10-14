@@ -160,8 +160,16 @@ def test_a_long_running_phase_keeps_one_live_snapshot_not_thousands(tmp_path):
     tok = j.phase_start("agent: opencode", "draft", {})
     for i in range(50):
         j.phase_update(tok, "agent: opencode", {"steps": [{"text": "x" * 3000}] * 40, "i": i})
-    _time.sleep(1.2)
-    live = json.loads((tmp_path / "live.json").read_text())
+    deadline = _time.time() + 10                          # D1070: written about a second later -- later on a loaded machine
+    live = {}
+    while _time.time() < deadline:
+        try:
+            live = json.loads((tmp_path / "live.json").read_text())
+        except (OSError, ValueError):
+            live = {}
+        if live.get("updates", {}).get(str(tok), {}).get("i") == 49:
+            break
+        _time.sleep(0.1)
     assert live["updates"][str(tok)]["i"] == 49, "the latest"
     j.phase_end(tok, "agent: opencode", 1.0, False, {"steps": [{"text": "y" * 4000}] * 60})
     events, _ = read_events(str(tmp_path / "events.jsonl"))

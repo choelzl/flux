@@ -18,7 +18,9 @@ H = {"X-Flux": "1"}
 
 
 @pytest.fixture()
-def server(tmp_path):
+def server(tmp_path, monkeypatch):
+    # D1070: a cache of its own -- the e2e runs side by side start the same user's loop of the same name
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
     store = Store(tmp_path / "data")
     store.add_user("ada", "correct horse battery", "admin")
     store.add_user("bob", "another long secret")

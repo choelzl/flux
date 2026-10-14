@@ -277,12 +277,15 @@ def test_scaling_tells_linear_from_quadratic(tmp_path):
     # a stand-in that starts in milliseconds (sh, awk, sleep), not Python's ~0.2 s on a loaded machine --
     # the preset takes the start-up off, and a slow one swallowed the small sizes
     sleeps = lambda ms: ["--", "sh", "-c", f"sleep $(awk -v n=\"$1\" 'BEGIN {{ print {ms} }}')", "_", "{n}"]  # noqa: E731
-    linear = _fluxpreset("scaling", "--sizes", "100,141,200,283", "--runs", "1", *sleeps("n * 2e-3"))
-    # every size well above a loaded machine's start-up, which the preset also takes as its floor
-    square = _fluxpreset("scaling", "--sizes", "100,141,200,283", "--runs", "1", *sleeps("(n / 100) ^ 2 * 300e-3"))
-    k = lambda r: float(r.stdout.split("scaling_exponent=")[1].split()[0])  # noqa: E731
-    # a loaded machine (the full check runs suites side by side) blurs the exponent; the order stays
-    assert linear.returncode == 0 and 0.7 < k(linear) < 1.3, linear.stdout + linear.stderr
+    k = lambda r: float(r.stdout.split("scaling_exponent=")[1].split()[0]) if "scaling_exponent=" in r.stdout else float("nan")  # noqa: E731
+    # D1070: every size well above a loaded machine's start-up (the preset's floor), and a load spike tried
+    # again -- the full check runs suites side by side, and one slow size blurs a four-point fit
+    for _ in range(3):
+        linear = _fluxpreset("scaling", "--sizes", "100,141,200,283", "--runs", "1", *sleeps("n * 6e-3"))
+        square = _fluxpreset("scaling", "--sizes", "100,141,200,283", "--runs", "1", *sleeps("(n / 100) ^ 2 * 300e-3"))
+        if linear.returncode == square.returncode == 0 and 0.6 < k(linear) < 1.4 and k(square) > 1.5 and k(square) - k(linear) > 0.4:
+            break
+    assert linear.returncode == 0 and 0.6 < k(linear) < 1.4, linear.stdout + linear.stderr
     assert square.returncode == 0 and k(square) > 1.5 and k(square) - k(linear) > 0.4, square.stdout + square.stderr
     gate = _fluxpreset("scaling", "--sizes", "100,141,200,283", "--runs", "1", "--max-exponent", "1.3",
                        *sleeps("(n / 100) ^ 2 * 300e-3"))

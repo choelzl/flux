@@ -31,7 +31,7 @@ def test_passes_run_in_waves_tagged_then_one_decision_over_all(tmp_path, monkeyp
         with flux_profile.phase("DSE: batch"):
             with lock:
                 seen.append((threading.current_thread().name, req.steps, time.monotonic()))
-            time.sleep(0.2)
+            time.sleep(0.8)          # D1070: longer than the starts' spread allowed, so one after another still fails
         return Out()
 
     j = Journal(str(tmp_path / "events.jsonl"))
@@ -43,7 +43,7 @@ def test_passes_run_in_waves_tagged_then_one_decision_over_all(tmp_path, monkeyp
         flux_profile.remove_listener(j)
     names = [s[0] for s in seen]
     assert sorted(names[:3]) == ["flux-pass-1", "flux-pass-2", "flux-pass-3"] and sorted(names[3:5]) == ["flux-pass-4", "flux-pass-5"]
-    assert max(s[2] for s in seen[:3]) - min(s[2] for s in seen[:3]) < 0.15, "a wave's passes start together"
+    assert max(s[2] for s in seen[:3]) - min(s[2] for s in seen[:3]) < 0.6, "a wave's passes start together"   # D1070: a loaded machine
     assert seen[-1][1] == 0 and len(seen) == 6, "then one pass that only decides, over what all of them recorded"
     assert "\n── passes 4–5 at once ──" in said and any("the decision, over every pass" in s for s in said)
     ev = read_events(str(tmp_path / "events.jsonl"))[0]

@@ -80,7 +80,7 @@ def test_a_design_agent_out_of_time_on_every_continue_ends_the_pass_with_its_not
     d["flow"] = {**d.get("flow", {}), "generate": {"by": {
         "command": [sys.executable, str(slow), "first", "{prompt_file}", "{artifact}"],
         "resume": [sys.executable, str(slow), "resume", "{session}", "{answer}", "{artifact}"],
-        "output": "opencode", "timeout_s": 1}}}
+        "output": "opencode", "timeout_s": 3}}}           # D1070: a loaded machine starts Python in over a second
     d["budget"] = {"steps": 9, "repair_attempts": 9, "prototype": False, "agent_continues": 2}
     task = TaskSpec.from_dict(d)
     said: list[str] = []

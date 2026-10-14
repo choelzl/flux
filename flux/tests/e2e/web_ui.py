@@ -164,8 +164,10 @@ class Browser:
         r = self.cmd("WebDriver:TakeScreenshot", {"full": full})
         Path(path).write_bytes(base64.b64decode(r["value"]))
 
-    def wait(self, expr, timeout=20.0, what=""):
-        """Until `expr` (a JS expression) is truthy; its value, or an error saying what was awaited."""
+    def wait(self, expr, timeout=None, what=""):
+        """Until `expr` (a JS expression) is truthy; its value, or an error saying what was awaited.
+        D1070: by default 45 s (FLUX_E2E_WAIT) -- the full check runs seven browsers side by side."""
+        timeout = float(os.environ.get("FLUX_E2E_WAIT", "45")) if timeout is None else timeout
         end = time.time() + timeout
         last = None
         while time.time() < end:
