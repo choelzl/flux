@@ -222,8 +222,13 @@ let notes = {}, goals = [], chainPass, openBox = null;      // D1038: chainPass 
     render(); panel.querySelector(`[data-fold="${CSS.escape(String(key))}"]`)?.focus({ preventScroll: true });
   }
   // D995: a finished task that did not fail itself but holds one that did is marked "!", not ✓
+  // D1082: a failure a design got past -- a try's check that failed before the try that passed: the design
+  // that ended well is ✓, and nothing above it is "!" for it (the try itself is still ✗ in its list)
+  const getsPast = p => phaseKind(p) === "design" && p.t1 != null && !p.failed && !p.timedOut && !p.interrupted;
+  const recovered = n => { for (let p = n.parent; p; p = p.parent) if (getsPast(p)) return true; return false; };
+  const hardFail = n => n.failed && !recovered(n);
   const failedUnder = () => { const s = new Set(), soft = new Set(); for (const n of inspector.model.nodes.values()) {
-    if (n.failed) for (let p = n.parent; p; p = p.parent) s.add(p.id);
+    if (n.failed) for (let p = n.parent; p && !getsPast(p); p = p.parent) s.add(p.id);
     else if (n.rejected) for (let p = n.parent; p; p = p.parent) soft.add(p.id); }   // D1075: a rejection under it, "!"
     s.soft = soft; return s; };
   // D1031: tries and passes are judged by how they ended -- the last one failed is ✗; earlier failed tries
@@ -348,7 +353,7 @@ let notes = {}, goals = [], chainPass, openBox = null;      // D1038: chainPass 
       const opensTries = phaseKind(first) === "design";             // D1045: a step repeated elsewhere is one line, ×N
       out.push(h("div", { class: `alt-tree-row ${box ? "box" : "step"}`, style: `--depth:${depth};--k:${COLORS[phaseKind(first)] || COLORS.setup}` }, opensTries ? fold(key, collapsed, taskLabel(first)) : h("span", { class: "alt-fold-space" }),
         h("button", { type: "button", class: `alt-task ${finished ? "" : "running"}`, onclick: () => toggleFold(key, collapsed) },
-          finished ? doneMark(ended(nodes), nodes.some(n => n.failed || n.rejected || below.has(n.id) || below.soft?.has(n.id))) : h("span", { class: "alt-spin", role: "img", "aria-label": "running" }),
+          finished ? doneMark(ended(nodes), nodes.some(n => hardFail(n) || n.rejected || below.has(n.id) || below.soft?.has(n.id))) : h("span", { class: "alt-spin", role: "img", "aria-label": "running" }),
           h("span", { class: "alt-task-name" }, said(first, box)),
           h("span", { class: "alt-again", title: `${run.length} tries in this pass` }, `×${run.length}`), ai ? h("span", { class: "alt-ai-pill" }, "ai") : "",
           h("span", { class: "mono muted small" }, dur(t1 - t0)))));
@@ -372,7 +377,7 @@ let notes = {}, goals = [], chainPass, openBox = null;      // D1038: chainPass 
       const tries = Array.from({ length: m }, (_, i) => [run[2 * i].node, run[2 * i + 1].node]);
       out.push(h("div", { class: "alt-tree-row", style: `--depth:${depth};--k:${COLORS[phaseKind(first)] || COLORS.setup}` }, fold(key, collapsed, taskLabel(first)),
         h("button", { type: "button", class: `alt-task ${finished ? "" : "running"}`, onclick: () => toggleFold(key, collapsed) },
-          finished ? doneMark(ended(tries.at(-1)), nodes.some(n => n.failed || n.rejected || below.has(n.id) || below.soft?.has(n.id))) : h("span", { class: "alt-spin", role: "img", "aria-label": "running" }),
+          finished ? doneMark(ended(tries.at(-1)), nodes.some(n => hardFail(n) || n.rejected || below.has(n.id) || below.soft?.has(n.id))) : h("span", { class: "alt-spin", role: "img", "aria-label": "running" }),
           h("span", { class: "alt-task-name" }, taskLabel(first), h("span", { class: "muted small" }, ` · ${taskLabel(nodes[1]).replace(/^[^·]*·\s*/, "")}`)),
           h("span", { class: "alt-again", title: `${m} tries in a row` }, `×${m}`),
           h("span", { class: "mono muted small" }, dur(t1 - t0)))));
@@ -387,7 +392,7 @@ let notes = {}, goals = [], chainPass, openBox = null;      // D1038: chainPass 
       const t0 = Math.min(...nodes.map(n => n.t0)), t1 = Math.max(...nodes.map(n => n.t1 ?? now));
       out.push(h("div", { class: `alt-tree-row ${box ? "box" : "step"}`, style: `--depth:${depth};--k:${COLORS[kind] || COLORS.setup}` }, fold(key, collapsed, workLabel(kind)),
         h("button", { type: "button", class: `alt-task ${finished ? "" : "running"}`, onclick: () => toggleFold(key, collapsed) },
-          finished ? doneMark(ended(nodes), nodes.some(n => n.failed || n.rejected || below.has(n.id) || below.soft?.has(n.id))) : h("span", { class: "alt-spin", role: "img", "aria-label": "running" }),
+          finished ? doneMark(ended(nodes), nodes.some(n => hardFail(n) || n.rejected || below.has(n.id) || below.soft?.has(n.id))) : h("span", { class: "alt-spin", role: "img", "aria-label": "running" }),
           h("span", { class: "alt-task-name" }, box ? h("b", {}, workLabel(kind)) : workLabel(kind)), h("span", { class: "mono muted small" }, dur(t1 - t0)))));
       if (!collapsed) runs(run, depth + 1, true);
     };
@@ -506,7 +511,7 @@ let notes = {}, goals = [], chainPass, openBox = null;      // D1038: chainPass 
             : lone && (opens.interrupted || opens.timedOut) ? mark(opens, below)      // its one draft's own end: interrupted, a time limit
             // D1065: a rejected result is "!" -- its critique the ✗; a box of only its critique's failure is ✗
             : doneMark(ended(nodes.filter(n => !/^\s*critique\s*:/i.test(String(n.name)))) || (rejected && nodes.every(n => /^\s*critique\s*:/i.test(String(n.name)))),
-              all.some(n => n.failed || n.rejected || aiOf.get(n.id)?.failed)),     // D1061: its own work's failures; D1063: its folded model turn's too; D1075: a rejection
+              all.some(n => hardFail(n) || n.rejected || aiOf.get(n.id)?.failed)),     // D1061: its own work's failures; D1063: its folded model turn's too; D1075: a rejection
           h("span", { class: "alt-task-name" }, h("b", {}, workLabel(kind)), what ? h("span", { class: "alt-what", title: what }, ` ${shortAll(what)}`) : "", nodes.length === 1 && note(first) ? h("span", { class: "alt-what" }, ` · ${note(first)}`) : ""),
           // D1067: the graph's order -- how many, a critic, the ai
           tries && tries.length > 1 ? h("span", { class: "alt-again" }, `×${tries.length}`) : "",
@@ -596,7 +601,7 @@ let notes = {}, goals = [], chainPass, openBox = null;      // D1038: chainPass 
         const name = passName(g.p);
         out.push(h("div", { class: "alt-tree-row alt-pass-row", style: "--depth:0" }, fold(key, collapsed, name),
           h("button", { type: "button", class: `alt-task alt-pass-heading${passView === g.p ? " sel" : ""}`, "data-pass": String(g.p ?? "setup"), onclick: () => showPass(g.p) },
-            finished ? doneMark(failed, nodes.some(n => n.failed || n.rejected || below.has(n.id) || below.soft?.has(n.id))) : h("span", { class: "alt-spin", role: "img", "aria-label": "running" }),
+            finished ? doneMark(failed, nodes.some(n => hardFail(n) || n.rejected || below.has(n.id) || below.soft?.has(n.id))) : h("span", { class: "alt-spin", role: "img", "aria-label": "running" }),
             h("span", { class: "alt-task-name" }, name), h("span", { class: "mono muted small" }, dur(t1 - t0)))));
         if (collapsed) continue;
         depth = 1;
@@ -646,7 +651,7 @@ let notes = {}, goals = [], chainPass, openBox = null;      // D1038: chainPass 
       const nodes = rows.filter(r => (membership.get(r.node.id) ?? null) === p).map(r => r.node);
       const top = nodes.filter(n => n.parent == null || (membership.get(n.parent.id) ?? null) !== p);
       const lastBad = p != null && flowBoxes(rows.filter(r => (membership.get(r.node.id) ?? null) === p), p, false, passNotes(p)).filter(b => b.runs.length).at(-1)?.state === "bad";   // D1078
-      const st = nodes.some(n => n.t1 == null) ? "running" : ended(top.length ? top : nodes) || lastBad ? "failed" : nodes.some(n => n.failed || n.timedOut || n.rejected) ? "part" : "done";   // D1031; D1059: "!" as the tree says
+      const st = nodes.some(n => n.t1 == null) ? "running" : ended(top.length ? top : nodes) || lastBad ? "failed" : nodes.some(n => hardFail(n) || n.timedOut || n.rejected) ? "part" : "done";   // D1031; D1059: "!" as the tree says
       return h("button", { type: "button", class: `alt-chip ${st}${p === shown ? " sel" : ""}`, "data-chain": String(p ?? "S"), "aria-pressed": String(p === shown),
         title: passName(p), onclick: () => { chainPass = p; showPass(p); } }, passShort(p));
     })) : "";

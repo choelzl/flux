@@ -129,6 +129,7 @@ function boxState(runs) {
   if (s === "running") return "run";
   if (s === "failed" || s === "interrupted") return "bad";
   if (s === "timeout") return "part";                   // D997: a time limit warns
+  if (boxKind(last) === "design") return "ok";          // D1082: its last try passed -- the earlier ones are its tries' own ✗
   // D1061: only what the box shows -- a sweep point's gate is the Check box's failure, not its Search's
   const failedIn = n => (n.kids || []).some(k => boxKind(k) === boxKind(last) && (k.failed || failedIn(k)));
   // D995: a step under it failed; D1031: or an earlier run failed (a refused try before the one that passed)
