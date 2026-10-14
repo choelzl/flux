@@ -12,6 +12,11 @@ import { nameLoop, nameTests, notReached, passSummary } from "./live_alt_inspect
 const workOf = phaseKind;
 const agentActive = n => { for (let p = n; p; p = p.parent) if (/^agent:/i.test(p.name)) return true; return false; };
 
+// D1079: one pair of listeners for the page, the open view's release behind them
+let releaseHook = null;
+window.addEventListener("pointerup", () => releaseHook?.(), true);
+window.addEventListener("pointercancel", () => releaseHook?.(), true);
+
 export function liveAltTab(ctx) {
   let startId = "current", pass = "current", history = null, inspector = null, transport = null;
   let abort = null, timer = null, frame = 0, seq = 0, mounted = false, following = true, limit = 200;
@@ -19,7 +24,7 @@ export function liveAltTab(ctx) {
   let visibleRows = [], lastMode = "", reveal = false, locatedId = null, locatedUntil = 0;
   let resizeObserver = null, locateTimer = null, choice = null;
   const folded = new Set(), opened = new Set(), viewPlaces = new Map(), allTries = new Set();   // D1044: lists showing every try
-  let notes = {}, goals = [], chainPass, openBox = null;      // D1038: chainPass undefined until one is clicked -- null is the setup pass
+let notes = {}, goals = [], chainPass, openBox = null;      // D1038: chainPass undefined until one is clicked -- null is the setup pass
   // D1052: the notes written in a pass with no task to hang on (a scripted search) -- its boxes count them
   const passNotes = p => (inspector.model.notes || []).filter(n => notePass(n, inspector.model.marks) === p);
   let boxView = null, problem = null;
@@ -85,8 +90,13 @@ export function liveAltTab(ctx) {
       detailHost.focus({ preventScroll: true });
     }
   }
+  // D1079: a press in the drawing holds its redraws -- a tree rebuilt between the press and the release
+  // lost the click (the two landed on different elements); the held redraw comes right after the click
+  let pressing = 0, held = false;          // when the press began; a release outside the window lapses after 2 s
+  releaseHook = () => { if (!pressing) return; pressing = 0; if (held) { held = false; setTimeout(render, 0); } };
   function render() {
     if (!mounted || !valid() || !inspector) return;
+    if (pressing && Date.now() - pressing < 2000) { held = true; return; }
     if (startId === "current") inspector.ended(ctx.st.running ? null : ctx.st.last_active || null);
     // Settle a cut-short journal before deriving its current pass and visible status.
     inspector.inspect(inspector.taskId());
@@ -911,7 +921,7 @@ export function liveAltTab(ctx) {
       unfoldTo(inspector.taskId());
       reveal = true; render();
     } }, "Locate");
-    panel = h("div", { class: "alt-visual", tabindex: "0", "aria-label": "LiveAlt task view", onkeydown: event => {
+    panel = h("div", { class: "alt-visual", tabindex: "0", "aria-label": "LiveAlt task view", onpointerdown: e => { if (e.button === 0) pressing = Date.now(); }, onkeydown: event => {
       if (event.altKey || event.ctrlKey || event.metaKey || !["ArrowUp", "ArrowDown"].includes(event.key) || event.target.closest("select, input, textarea, .alt-choice")) return;
       event.preventDefault(); stepBy(event.key === "ArrowUp" ? -1 : 1);
     } });
