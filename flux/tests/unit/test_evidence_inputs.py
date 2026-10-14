@@ -66,10 +66,11 @@ def test_rows_from_before_carry_no_key_and_are_measured_again(tmp_path):
     assert any("measured under other inputs (or before these were recorded)" in m for m in said), said
 
 
-def test_a_checker_whose_helper_changed_rechecks_its_admission(tmp_path):
-    """The review's reproduction (#6): `check.py` imports FAIL from `helper.py`; FAIL turned True after
-    admission, the reload kept the design frozen. Now the judge's fingerprint holds the loop's inputs
-    and params, so a changed helper -- or a changed param -- re-verifies it."""
+def test_a_checker_whose_helper_changed_is_another_judge_and_the_reload_keeps_the_design(tmp_path):
+    """The review's reproduction (#6): `check.py` imports FAIL from `helper.py`. The judge's fingerprint
+    holds the loop's inputs and params, so a changed helper -- or a changed param -- is another judge on
+    the rows written after it; D1080: a start keeps the admitted design as recorded all the same
+    (Maintenance > Re-evaluate checks the record again)."""
     from flux_llm import ScriptedProposer
 
     (tmp_path / "helper.py").write_text("FAIL = False\n")
@@ -87,15 +88,16 @@ def test_a_checker_whose_helper_changed_rechecks_its_admission(tmp_path):
                  proposer=ScriptedProposer([good] * 6), log=said.append)
         return said
 
+    judge = lambda d: PromptProblem(TaskSpec.from_dict(d, base=tmp_path)).versions()["judge"]   # noqa: E731
     run(doc)
-    assert any("kept frozen (its row was made by today's" in m for m in run(doc)), "nothing changed: kept"
+    before = judge(doc)
+    assert any("kept as recorded" in m for m in run(doc)), "nothing changed: kept"
     (tmp_path / "helper.py").write_text("FAIL = True\n")
+    assert judge(doc) != before, "a changed helper is another judge"
     said = run(doc)
-    assert any("re-verif" in m for m in said) and not any("kept frozen (its row was made by today's" in m for m in said), said
+    assert any("kept as recorded" in m for m in said) and not any("re-verif" in m for m in said), said
     (tmp_path / "helper.py").write_text("FAIL = False\n")
-    run(doc)
-    said = run({**doc, "params": {"n": 2}})                  # a gate can read {params}: they are in the judge too
-    assert any("re-verif" in m for m in said), said
+    assert judge({**doc, "params": {"n": 2}}) != before, "a gate can read {params}: they are in the judge too"
 
 
 def test_a_workloads_content_is_in_the_measurement_key(tmp_path):

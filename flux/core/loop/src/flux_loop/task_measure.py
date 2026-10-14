@@ -70,9 +70,9 @@ class MeasureMixin:
 
     def versions(self) -> dict[str, str]:
         """D778: a document's judge, as a version (D510) -- its gate (`flow.test`), the files beside
-        it the gate names (a golden model, a checker), the measuring tools and this Flux. A design
-        admitted under the same judge is kept as it stands at a reload; any of them changed, it is
-        re-verified once and recorded again. A world's own `versions` replaces this one."""
+        it the gate names (a golden model, a checker), the measuring tools and this Flux -- written on
+        each admitted row (a reload keeps the design as recorded, D1080; Re-evaluate checks it again).
+        A world's own `versions` replaces this one."""
         if "_judge" not in self.__dict__:
             import hashlib
 

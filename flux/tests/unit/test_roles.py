@@ -142,7 +142,7 @@ def test_a_given_division_may_carry_a_sub_task(tmp_path):
     out = run_loop(problem, _request(tmp_path, max_depth=2), proposer=Angry(),
                    log=lambda _m: None)
     assert "deep" in out.admitted, "the child's decision became the parent's part"
-    assert child.written == ["front", "back"], "and the child ran its own loop"
+    assert "back" in child.written, "and the child ran its own loop (D1080: its recorded front kept, not built again)"
 
 
 def test_an_empty_given_division_is_the_problems_own_parts():

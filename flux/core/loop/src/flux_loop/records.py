@@ -1,4 +1,4 @@
-"""The record (D412/D415): trials written as they happen; proven parts re-verified and best-so-far attempts resumed on the next pass -- state that is not in the record does not exist."""
+"""The record (D412/D415): trials written as they happen; proven parts kept as recorded (D1080) and best-so-far attempts resumed on the next pass -- state that is not in the record does not exist."""
 
 from __future__ import annotations
 
@@ -189,7 +189,7 @@ def _reload_measured(problem: Problem, state: LoopState) -> None:
 
 
 def _reload(problem: Problem, state: LoopState, parts: list[str] | None = None) -> None:
-    """Proven sub-goals rejoin frozen (re-verified), unproven ones resume from their
+    """Proven sub-goals rejoin frozen (as recorded, D1080), unproven ones resume from their
     best refused attempt -- state that is not in the record does not exist. `parts`
     is what this pass divides into (the decompose node's answer, D431); None reads the
     problem's declared subgoals."""
@@ -298,86 +298,18 @@ def _reload(problem: Problem, state: LoopState, parts: list[str] | None = None) 
             state.part(key).shortlist = shortlist_of(problem, options, stage_used, numbers_of, proven[key])
     today = dict(state.versions or problem.versions() or {})
     state.versions = state.versions or dict(today)        # the rows written below carry it
+    # D1080: an admitted design comes back as the record has it -- no build and judge again at every start
+    # (a Flux update changed the judge, and each start re-ran every part's checks); Maintenance >
+    # Re-evaluate checks the record again when that is wanted
     for key, cand in proven.items():
-        sg = None if key == "*" else key
-        k = int((cand.meta or {}).get("pipeline", 0) or 0)         # its register count stays (D496)
-        can_spell = bool((cand.meta or {}).get("transpiled")) and callable(getattr(problem, "transpile", None))
-        # its prototype (D504): the one the RTL was transpiled from, by digest. A row without a
-        # digest falls back to the part's verified prototype only when there is exactly one.
         want = str((cand.meta or {}).get("prototype_sha") or "")
         source = by_digest.get(key, {}).get(want) if want else None
         if source is None and not want and len(by_digest.get(key, {})) == 1:
             source = next(iter(by_digest[key].values()))
-        # What the row was made by (D510): a row from today's transpiler and judge is trusted
-        # as it stands; a transpiler change re-spells the design from its prototype once; a
-        # judge change re-judges once. No versions declared, or none on the row: re-verify.
-        made_by = dict((cand.meta or {}).get("versions") or {})
-        respell_due = bool(can_spell and source and today.get("transpiler")
-                           and made_by.get("transpiler") != today.get("transpiler"))
-        judge_due = (not today or not made_by or respell_due
-                     or made_by.get("judge") != today.get("judge"))
-        if not judge_due:
-            state.admitted[key] = cand
-            if source:
-                state.prototypes[key] = source
-            state.say(f"reload: {key} kept frozen (its row was made by today's transpiler and judge)")
-            continue
-        with _phase(f"records: re-verify {key}", why=cand.name) as out:
-            out["design"] = f"{cand.name}: {len(cand.artifact or '')} chars of {problem.name} artifact"
-            if can_spell and not source:
-                out["prototype"] = ("the prototype this RTL was made from is not on record as verified"
-                                    + (f" (digest {want})" if want else " (admitted before digests)")
-                                    + "; the record's RTL stands, not re-spelled")
-            # A transpiled design is re-spelled by today's transpiler from its verified
-            # prototype (D495), so a transpiler fix reaches designs admitted before it. The
-            # record's text is the fallback when the re-spelling fails today's judge.
-            respelled = None
-            if respell_due:
-                try:
-                    respelled = problem.transpile(source, sg, state, **({"pipeline": k} if k else {}))
-                except Exception as exc:  # noqa: BLE001
-                    out["respelled"] = f"today's transpiler could not spell the verified prototype ({exc!s:.120}); the record's RTL stands"
-                if respelled is not None and (respelled.artifact or "") != (cand.artifact or ""):
-                    out["respelled"] = (f"by today's transpiler from the verified prototype: "
-                                        f"{(respelled.artifact or '').count(chr(10))} lines (the record's: "
-                                        f"{(cand.artifact or '').count(chr(10))})")
-                    cand = Candidate(respelled.name, respelled.artifact, knobs=dict(cand.knobs or {}),
-                                     meta={**(cand.meta or {}), **(respelled.meta or {})}, subgoal=cand.subgoal)
-                elif respelled is not None:
-                    respelled = None                     # the same text: nothing to say
-            try:
-                built = problem.build(cand, sg, state)
-                v = problem.judge(built, cand, sg, state)
-            except Exception as exc:  # noqa: BLE001
-                out["verdict"] = f"could not be re-verified: {exc!s:.200}"
-                continue
-            out["verdict"] = ("still admitted: " if v.ok else "NO LONGER PASSES: ") + (v.why or "0 over")[:2000]
-        if v.ok:
-            state.admitted[key] = cand
-            if source:
-                state.prototypes[key] = source             # the design behind the RTL (D496: the
-            if today:                                      # push for fmax reads it)
-                # once (D510): the re-verified design goes on record with today's versions, so
-                # the next reload trusts it instead of spelling and judging it again
-                _record_trial(state, cand, sg, v, admitted=True)
-            state.say(f"reload: {key} re-verified, kept frozen"
-                      + (" (re-spelled by today's transpiler)" if respelled is not None else "")
-                      + ("; recorded with today's versions" if today else ""))
-        elif respelled is not None:
-            # today's spelling fails today's judge: the record's RTL, re-verified on its own
-            orig = proven[key]
-            try:
-                v2 = problem.judge(problem.build(orig, sg, state), orig, sg, state)
-            except Exception:  # noqa: BLE001
-                v2 = Verdict(False, float("inf"), "could not be re-verified")
-            if v2.ok:
-                state.admitted[key] = orig
-                state.say(f"reload: {key} re-verified from the record's RTL (today's re-spelling did not pass: {(v.why or '')[:80]})")
-            else:
-                state.say(f"reload: {key} re-verified: no longer passes today's checks ({' '.join((v.why or '').split())[:160]}); drafted again")
-        else:
-            # D853: said, not only in the timing tree -- a changed checker or input refused it
-            state.say(f"reload: {key} re-verified: no longer passes today's checks ({' '.join((v.why or '').split())[:160]}); drafted again")
+        state.admitted[key] = cand
+        if source:
+            state.prototypes[key] = source             # the design behind the RTL (D496: the push for fmax reads it)
+        state.say(f"reload: {key} kept as recorded ({cand.name}); Maintenance > Re-evaluate checks it again")
     for key, entry in best.items():
         if key not in state.admitted:
             state.best[key] = entry

@@ -81,10 +81,8 @@ class MentorRole(_Role):
 
     def versions(self) -> dict[str, str]:
         """The versions of what makes and judges a design (D510): `{"transpiler": ..., "judge":
-        ...}`, written on every admitted row. At a reload a row made by today's transpiler and
-        judge is trusted as it stands; a transpiler change re-spells the design from its
-        prototype once and records the result; a judge change re-judges once. Empty (the
-        default) means every reload re-verifies."""
+        ...}`, written on every admitted row: what made and judged it, for the record and for
+        Maintenance > Re-evaluate. A reload keeps an admitted design as recorded (D1080)."""
         return {}
 
     def from_record(self, doc: dict[str, Any]) -> tuple[Candidate, float | None, str] | None:

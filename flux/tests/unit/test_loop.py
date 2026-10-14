@@ -132,7 +132,7 @@ def test_a_resumed_campaign_reloads_proven_parts_and_best_attempts(tmp_path):
     said = []
     second = run_loop(prob, LoopRequest(db=db, steps=4, repair_attempts=4),
                       proposer=Scripted(), log=said.append)
-    assert any("reload: hi re-verified" in m for m in said)
+    assert any("reload: hi kept as recorded" in m for m in said)          # D1080
     assert any("reload: lo resumes from its best design" in m for m in said)
     assert set(second.admitted) == {"lo", "hi"}
 
@@ -148,8 +148,8 @@ def test_a_resume_regenerates_the_parts_it_is_told_to(tmp_path):
     second = run_loop(prob, LoopRequest(db=db, steps=4, repair_attempts=2, regenerate=("lo",)),
                       proposer=Scripted(), log=said.append)
     assert any("reload: lo is being regenerated; its record is history" in m for m in said)
-    assert any("reload: hi re-verified" in m for m in said)
-    assert not any("reload: lo re-verified" in m for m in said)
+    assert any("reload: hi kept as recorded" in m for m in said)          # D1080
+    assert not any("reload: lo kept as recorded" in m for m in said)
     assert set(second.admitted) == {"lo", "hi"}                      # drafted again, admitted again
     said.clear()
     third = run_loop(prob, LoopRequest(db=db, steps=4, repair_attempts=2, regenerate=("*",)),

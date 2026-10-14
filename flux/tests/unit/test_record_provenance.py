@@ -1,5 +1,5 @@
-"""The record is authoritative (D510): every row says what made it, and a reload trusts a row
-made by today's transpiler and judge instead of redoing the work.
+"""The record is authoritative (D510): every row says what made it; D1080: a reload keeps an
+admitted design as recorded, whatever made it -- no judge, no re-spelling at a start.
 
 The problem is a one-part `Problem` whose artifact is a JSON int; the test changes `versions()`
 to stand for a transpiler or judge change.
@@ -125,7 +125,7 @@ def test_a_prototype_row_carries_the_turns_cost_and_its_trace_directory(tmp_path
     assert row.wall_clock_s == 1.5 and prov["seconds"] == 1.5
 
 
-def test_a_reload_trusts_a_row_made_by_todays_transpiler_and_judge(tmp_path):
+def test_a_reload_keeps_an_admitted_design_whatever_made_it(tmp_path):
     db = str(tmp_path / "r.db")
     rec = Records(db, objective={"n": 1})
     p, st = _state(db, rec, str(tmp_path))
@@ -142,32 +142,15 @@ def test_a_reload_trusts_a_row_made_by_todays_transpiler_and_judge(tmp_path):
     st2.say = said.append
     _reload(p2, st2)
     assert st2.admitted["n"].artifact == "7" and st2.prototypes["n"] == "7"
-    assert Num.judged == 0 and Num.spelled == 0, "trusted as it stands: no judge, no re-spelling"
-    assert any("kept frozen (its row was made by today's transpiler and judge)" in m for m in said)
+    assert Num.judged == 0 and Num.spelled == 0, "kept as it stands: no judge, no re-spelling"
+    assert any("reload: n kept as recorded" in m for m in said)
     rec2.close("paused")
-    # the judge moved: re-judged ONCE, recorded with today's versions, trusted after that
+    # the judge and the transpiler moved: still kept as recorded (Maintenance > Re-evaluate checks again)
     rec3 = Records(db, objective={"n": 1})
-    p3, st3 = _state(db, rec3, str(tmp_path), fp={"transpiler": "t1", "judge": "j2"})
+    p3, st3 = _state(db, rec3, str(tmp_path), fp={"transpiler": "t2", "judge": "j2"})
     _reload(p3, st3)
-    assert Num.judged == 1 and Num.spelled == 0 and st3.admitted["n"].artifact == "7"
+    assert Num.judged == 0 and Num.spelled == 0 and st3.admitted["n"].artifact == "7" and st3.prototypes["n"] == "7"
     rec3.close("paused")
-    assert _rows(db, "admit")[-1].candidate["meta"]["versions"] == {"transpiler": "t1", "judge": "j2"}
-    rec4 = Records(db, objective={"n": 1})
-    p4, st4 = _state(db, rec4, str(tmp_path), fp={"transpiler": "t1", "judge": "j2"})
-    _reload(p4, st4)
-    assert Num.judged == 1, "the re-judged row is trusted now"
-    rec4.close("paused")
-    # the transpiler moved: re-spelled from its prototype ONCE (by digest), judged, recorded
-    rec5 = Records(db, objective={"n": 1})
-    p5, st5 = _state(db, rec5, str(tmp_path), fp={"transpiler": "t2", "judge": "j2"})
-    _reload(p5, st5)
-    assert Num.spelled == 1 and Num.judged == 2
-    rec5.close("paused")
-    rec6 = Records(db, objective={"n": 1})
-    p6, st6 = _state(db, rec6, str(tmp_path), fp={"transpiler": "t2", "judge": "j2"})
-    _reload(p6, st6)
-    assert Num.spelled == 1 and Num.judged == 2, "once"
-    rec6.close("paused")
 
 
 def test_a_row_without_its_prototypes_digest_is_not_matched_by_guessing(tmp_path):
@@ -189,5 +172,5 @@ def test_a_row_without_its_prototypes_digest_is_not_matched_by_guessing(tmp_path
     p2, st2 = _state(db, rec2, str(tmp_path))
     _reload(p2, st2)
     assert st2.admitted["n"].artifact == "7" and "n" not in st2.prototypes
-    assert Num.spelled == 0 and Num.judged == 1, "re-judged (no versions on the row), never re-spelled by a guess"
+    assert Num.spelled == 0 and Num.judged == 0, "kept as recorded (D1080), its prototype never guessed"
     rec2.close("paused")

@@ -109,9 +109,7 @@ def test_a_design_admitted_under_todays_judge_is_not_judged_again(tmp_path):
 
     run()
     second = run()
-    assert any("kept frozen (its row was made by today's" in m for m in second), second
-    assert not any("re-verified" in m for m in second)
+    assert any("reload: * kept as recorded" in m for m in second), second
     (tmp_path / "check.py").write_text((tmp_path / "check.py").read_text() + "# stricter now\n")
-    third = run()
-    assert any("re-verified" in m for m in third), third
-    assert not any("re-verified" in m for m in run()), "once: recorded with today's judge"
+    third = run()                                   # D1080: no checks again at a start -- Re-evaluate does that
+    assert any("reload: * kept as recorded" in m for m in third) and not any("re-verif" in m for m in third), third
