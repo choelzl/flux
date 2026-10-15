@@ -18,9 +18,7 @@ export function createStore(ctx) {
     folded: new Set(), opened: new Set(), allTries: new Set(),
     history: null, problem: null, notes: {}, goals: [], record: [], names: [ctx.name], tests: [],
     loadMessage: "", failure: null, journal: null, selected: null, transport: null, stream: "",
-    // the inspector's panel: one element the page keeps -- Fullscreen moves it, a task is drawn into it wherever it is (D987)
-    detail: Object.assign(document.createElement("div"), { className: "detail alt-detail" }),
-    reveal: false, located: null, drawn: 0, width: 380, earlierReady: false,
+    reveal: false, full: null, located: null, drawn: 0, width: 380, earlierReady: false,
   };
   const subs = new Set();
   let frame = 0, seq = 0, timer = null, abort = null, listeners = {}, locateTimer = null, valid = () => false;
@@ -77,6 +75,8 @@ export function createStore(ctx) {
       if (n) a.select(n.id, true);
     },
     retry() { load(); },
+    // D987: the task's panel fullscreen (its title), or in its card (null)
+    fullscreen(title) { s.full = title; now(); },
     resized(w) { if (Math.abs(w - s.width) > .5) { s.width = w; emit(); } },
   };
 

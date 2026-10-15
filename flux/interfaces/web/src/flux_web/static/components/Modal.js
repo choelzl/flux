@@ -19,6 +19,18 @@ export function openModal(vnode, { cls = "dlg", label = null, labelledby = null,
     close: () => { if (!d.isConnected) return; render(null, d); d.close(); noticesOut(d); d.remove(); } };
 }
 
+/** A modal dialog drawn where it stands in a component's tree (its top layer above the page): open while drawn,
+    closed when it goes; Escape calls `onClose()`. */
+export function Modal({ cls = "dlg", label = null, onClose, children }) {
+  const ref = useRef(null);
+  useLayoutEffect(() => {
+    const d = ref.current;
+    d.showModal();
+    return () => { if (d.open) d.close(); noticesOut(d); };
+  }, []);
+  return html`<dialog class=${cls} aria-label=${label} ref=${ref} onCancel=${e => { e.preventDefault(); onClose(); }}>${children}</dialog>`;
+}
+
 /** A question: its title, its body (a component, or several), its buttons -- [label, value, class]; a
     value that is a function is called with the body's node (what a form in it says). */
 function Question({ title, body, buttons, done }) {

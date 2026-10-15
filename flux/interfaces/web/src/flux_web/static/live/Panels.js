@@ -1,7 +1,7 @@
 // Live (D1095): the inspector's panels this page draws itself -- a box of a pass (its runs, its notes,
-// what it is set to until it runs), a pass at a glance, and where a task's panel (inspector/) is kept.
+// what it is set to until it runs), a pass at a glance.
 
-import { html, useLayoutEffect, useRef } from "../view.js";
+import { html } from "../view.js";
 import { WORK_COLORS as COLORS, workLabel } from "../work_style.js";
 import { passName, taskLabel } from "../live_views.js";
 import { PassSummary } from "./inspector/Inspector.js";
@@ -32,12 +32,3 @@ export function BoxPanel({ v, a, box }) {
 
 /** D982: a pass in the inspector -- its steps, where its time went. */
 export const PassPanel = ({ p, nodes, a, N }) => html`<div class="detail alt-detail alt-pass-detail" data-pass=${String(p ?? "setup")}><${PassSummary} p=${p} nodes=${nodes} a=${a} N=${N} /></div>`;
-
-/** The inspector's own panel (a task's), kept where it is drawn -- not taken back from Fullscreen (D987). */
-export function TaskPanel({ detail }) {
-  const ref = useRef(null);
-  useLayoutEffect(() => {
-    if (detail.parentNode !== ref.current && !detail.closest("dialog.fullscreen-view")) ref.current.replaceChildren(detail);
-  });
-  return html`<span ref=${ref} style="display:contents" />`;
-}

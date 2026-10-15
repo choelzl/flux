@@ -2,20 +2,20 @@
 // a start resumes it from its record. Text goes in as text, never as HTML -- so nothing a run prints can
 // inject script.
 //
-// D889: the pages are modules; state.js holds what they share. D1095: they are Preact components (view.js);
-// the bar is shell/Bar.js, the bell shell/bell.js. Here: the routing.
+// D889: the pages are modules; state.js holds what they share. D1095: they are Preact components (view.js),
+// each route one that reads what it shows; the bar is shell/Bar.js, the bell shell/bell.js. Here: the routing.
 
 import { cleanup, me, navSeq, pageOwner, setMe, setNavSeq, setPageOwner, setPageRefresh } from "./state.js";
-import { api, show } from "./ui.js";
-import { Card, html, node, render } from "./view.js";
+import { api } from "./ui.js";
+import { html, render } from "./view.js";
 import { Logo } from "./components/Icons.js";
 import { Impersonation, Nav, Who, applyTheme, theme } from "./shell/Bar.js";
 import { bellFor, pollLoops } from "./shell/bell.js";
-import { appsPage, newPage } from "./loops.js";
-import { loopPage } from "./loop_page.js";
-import { configurePage } from "./configure.js";
-import { adminPage } from "./admin.js";
-import { accountPage, invitePage, loginPage } from "./account.js";
+import { LoopsRoute, NewRoute } from "./loops.js";
+import { LoopRoute } from "./loop_page.js";
+import { ConfigureRoute } from "./configure.js";
+import { AdminRoute } from "./admin.js";
+import { AccountRoute, InviteRoute, LoginRoute } from "./account.js";
 
 // ================================================================ routing
 // ---- D754: on a phone nothing scrolls sideways -- a list's rows stack, each value under its column's name
@@ -37,6 +37,36 @@ function labelTables(root) {
   }).observe(document.body, { childList: true, subtree: true });
 }
 
+const main = document.getElementById("main");
+let host = null;
+/** The page: drawn anew at each navigation into a host of its own that replaces whatever #main held -- the one left
+    unmounted with all it read and polls. */
+function draw(page) {
+  if (host) render(null, host);
+  host = document.createElement("div");
+  host.style.display = "contents";
+  main.replaceChildren(host);
+  render(page, host);
+  window.scrollTo(0, 0);
+}
+
+/** Where an address leads (logged in): its page. */
+function pageOf(hash) {
+  let m;
+  setPageOwner(null);
+  // D713: a loop's address is its tab and what is under it: /live/log, /files/workbench, /settings/problem/edit
+  if ((m = hash.match(/^#\/app\/([^/]+)((?:\/[a-z0-9-]+)*)$/))) return html`<${LoopRoute} name=${decodeURIComponent(m[1])} owner=${null} path=${m[2].slice(1)} />`;
+  if ((m = hash.match(/^#\/u\/([^/]+)\/app\/([^/]+)((?:\/[a-z0-9-]+)*)$/))) {
+    setPageOwner(decodeURIComponent(m[1]));
+    return html`<${LoopRoute} name=${decodeURIComponent(m[2])} owner=${pageOwner} path=${m[3].slice(1)} />`;
+  }
+  if (hash === "#/new") return html`<${NewRoute} />`;
+  if ((m = hash.match(/^#\/configure(?:\/([a-z]+))?$/))) return html`<${ConfigureRoute} mode=${m[1]} />`;
+  if ((m = hash.match(/^#\/admin(?:\/([a-z]+))?$/)) && me.role === "admin") return html`<${AdminRoute} sub=${m[1] || ""} />`;
+  if (hash === "#/account") return html`<${AccountRoute} />`;
+  return html`<${LoopsRoute} />`;
+}
+
 async function route() {
   const seq = navSeq + 1;
   setNavSeq(seq);
@@ -45,29 +75,18 @@ async function route() {
   for (const d of document.querySelectorAll("dialog.dlg")) d.dispatchEvent(new Event("cancel"));   // a dialog belongs to its page
   const hash = location.hash || "#/";
   if (hash === "#/login") {
-    drawNav(); loginPage();
+    drawNav(); draw(html`<${LoginRoute} />`);
     const view = await api("/impersonation").catch(() => null);
     if (location.hash === hash) drawImpersonation(view);
     return;
   }
-  { const m = hash.match(/^#\/invite\/([A-Za-z0-9_-]+)$/); if (m) { drawNav(); return invitePage(m[1]); } }   // D818: before any login
+  { const m = hash.match(/^#\/invite\/([A-Za-z0-9_-]+)$/); if (m) { drawNav(); return draw(html`<${InviteRoute} token=${m[1]} />`); } }   // D818: before any login
   if (!me) { try { setMe(await api("/me")); pollLoops(); } catch (_) { return; } }
   // D1081: a navigation made while this one waited for /me is the page -- this one draws nothing (its page,
-  // started after the wait, would count as the latest and draw over the one gone to: the loops over Results)
+  // drawn after the wait, would count as the latest and draw over the one gone to: the loops over Results)
   if (seq !== navSeq) return;
   drawNav();
-  try {
-    let m;
-    setPageOwner(null);
-    // D713: a loop's address is its tab and what is under it: /live/log, /files/workbench, /settings/problem/edit
-    if ((m = hash.match(/^#\/app\/([^/]+)((?:\/[a-z0-9-]+)*)$/))) return await loopPage(decodeURIComponent(m[1]), null, m[2].slice(1));
-    if ((m = hash.match(/^#\/u\/([^/]+)\/app\/([^/]+)((?:\/[a-z0-9-]+)*)$/))) { setPageOwner(decodeURIComponent(m[1])); return await loopPage(decodeURIComponent(m[2]), pageOwner, m[3].slice(1)); }
-    if (hash === "#/new") return await newPage();
-    if ((m = hash.match(/^#\/configure(?:\/([a-z]+))?$/))) return await configurePage(null, null, m[1]);
-    if ((m = hash.match(/^#\/admin(?:\/([a-z]+))?$/)) && me.role === "admin") return await adminPage(m[1] || "");
-    if (hash === "#/account") return await accountPage();
-    return await appsPage();
-  } catch (x) { if (x.message !== "log in") show(node(html`<${Card}><p class="err">${x.message}</p><//>`)); }
+  draw(pageOf(hash));
 }
 applyTheme(theme());
 render(html`<${Logo} size=${24} /><span>flux</span>`, document.querySelector(".brand"));    // D696: the mark

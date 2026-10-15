@@ -4,7 +4,7 @@ export let me = null;
 export let cleanup = [];
 export let pageRefresh = null;                  // a page's own redraw, when a loop changes state (D688)
 export let pageOwner = null;                    // D701: whose loop the page shows (null: this user's)
-export let navSeq = 0;                          // D719: each navigation's number (pageShow, in ui.js)
+export let navSeq = 0;                          // D719: each navigation's number (app.js: the page drawn keyed by it)
 export let crafterCatalog = null;               // the configurator's tools, fetched once (D686)
 // a login's generation: a 401 to a call sent before the latest login says nothing about this session
 export let sessionGen = 0;

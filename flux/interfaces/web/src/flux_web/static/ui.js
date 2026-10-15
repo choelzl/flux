@@ -3,14 +3,13 @@
 // shown only while it is the latest; the notices (notices.js), the dialogs (components/Modal.js) and the words for
 // numbers and times (format.js) re-exported for the pages that read them here.
 
-import { me, navSeq, pageOwner, sessionGen, setMe, setPageOwner } from "./state.js";
+import { me, pageOwner, sessionGen, setMe, setPageOwner } from "./state.js";
 import { bytes, dur, fmtTok, money, plural, when } from "./format.js";
 import { html } from "./view.js";
 import { offline, toast } from "./notices.js";
 import { confirmDialog, dialog } from "./components/Modal.js";
 
 
-const main = document.getElementById("main");
 
 function owned(path) {
   if (!pageOwner || !/^\/apps\/[^/?]+/.test(path) || /[?&]owner=/.test(path)) return path;
@@ -139,16 +138,6 @@ function loopStream(base, qs) {
   };
 }
 const enc = encodeURIComponent;
-function show(...nodes) { main.replaceChildren(...nodes); window.scrollTo(0, 0); }
-/** D719: each navigation's number; a page shows itself only while it is the latest -- a slow page
-    (waiting on the server) must not draw over the one the user went to since. A page function's
-    first line shadows `show` with its own: `const show = pageShow();`. */
-function pageShow() {
-  const mine = navSeq;
-  const f = (...nodes) => { if (mine === navSeq) show(...nodes); };
-  f.stale = () => mine !== navSeq;                 // left already: no timers, no refresh hook
-  return f;
-}
 function appHref(user, app) {
   return user && me && user !== me.name ? `#/u/${enc(user)}/app/${enc(app)}` : `#/app/${enc(app)}`;
 }
@@ -171,4 +160,4 @@ async function createFromText(name, filename, text) {
 // D754: a phone's width -- the tables stack their rows (app.js), the log wraps (live/Log.js)
 const NARROW = window.matchMedia ? window.matchMedia("(max-width: 640px)") : { matches: false };
 
-export { NARROW, money, plural, api, apiUpload, appHref, request, bytes, confirmDialog, createFromText, dialog, dur, enc, fmtTok, loopStream, offline, owned, pageShow, show, toast, when, withOwner };
+export { NARROW, money, plural, api, apiUpload, appHref, request, bytes, confirmDialog, createFromText, dialog, dur, enc, fmtTok, loopStream, offline, owned, toast, when, withOwner };

@@ -81,19 +81,7 @@ export function mount(host, vnode) {
   return host;
 }
 
-/** A tab's component shown as the page's body: drawn into a host of its own, kept on `body` under `name`, so
-    drawing it again (a refresh, a choice) changes only what differs -- and whatever else stands in the body
-    beside it (a card prepended) stays; another tab drawn over it unmounts it (`mount`). */
-export function showIn(body, name, vnode) {
-  const hosts = body.__hosts || (body.__hosts = {});
-  const host = hosts[name] || (hosts[name] = Object.assign(document.createElement("div"), { className: `${name}-tab` }));
-  host.style.display = "contents";
-  mount(host, vnode);
-  if (host.parentNode !== body) body.replaceChildren(host);
-  return host;
-}
-
-/** A component in a node of its own, for what places nodes (a page's body, the crafter): unmounted with the route. */
+/** A component in a node of its own, for what places nodes (the crafter): unmounted with the route. */
 export function node(vnode) {
   const host = document.createElement("div");
   host.style.display = "contents";

@@ -1116,7 +1116,7 @@ objectives: [{metric: timings.fast, goal: 15, direction: minimize},
                     "return document.querySelector('.dictionary-expand').getAttribute('aria-pressed') === 'false'"
                     " && !document.querySelector('table.designs th.hidden-measurement') && ![...document.querySelectorAll('th.measurement-head')].some(th => th.dataset.label === 'timings.fast')"))
                 b.click(".show-hidden-columns")
-                r.page("#/", "document.querySelector('#main')", "home before dictionary reload")
+                r.page("#/", "document.querySelector('#main table.list, #main .empty')", "home before dictionary reload")
                 r.preferences(name)
                 b.js("localStorage.clear(); window.__dictionaryReload = true; location.reload(); return 1")
                 b.wait("!window.__dictionaryReload && document.querySelector('#who')", what="dictionary preference reload")

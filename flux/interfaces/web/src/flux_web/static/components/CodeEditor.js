@@ -21,7 +21,7 @@ export function CodeEditor({ text, lang, readonly = false, placeholder = null, o
     resize.observe(ta.current);
     return () => { resize.disconnect(); clearTimeout(t.current); };
   }, []);
-  useEffect(() => { onEditor?.({ textarea: ta.current }); return () => onEditor?.(null); }, [text, lang, readonly]);
+  useLayoutEffect(() => { onEditor?.({ textarea: ta.current }); return () => onEditor?.(null); }, [text, lang, readonly]);   // before a click can read it
   const typed = () => { clearTimeout(t.current); t.current = setTimeout(() => setShown(ta.current.value), ta.current.value.length > 60000 ? 250 : 40); };
   const key = e => {                                                   // Tab indents, as an editor does
     if (e.key !== "Tab" || e.shiftKey || readonly) return;

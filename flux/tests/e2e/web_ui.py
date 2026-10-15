@@ -978,7 +978,7 @@ def flows(r: Run) -> None:
             r.page("#/app/sw/results", "document.querySelector('table.designs')", "hidden measurement")
             r.check("hiding a metric removes its header and cells, preserving every design", b.js("return document.querySelectorAll('table.designs tbody tr').length === 7 && document.querySelectorAll('table.designs th.measurement-head').length === 5 && !document.querySelector('th[data-label=area_um2]') && [...document.querySelectorAll('table.designs tbody tr')].every(tr => tr.cells.length === 8) && !document.querySelector('.hide-design') && document.querySelector('.show-hidden-columns').textContent === 'Hidden 1'"))
             r.check("hiding the sorted measurement restores the default design order", b.js("return !document.querySelector('table.designs th[aria-sort=ascending], table.designs th[aria-sort=descending]') && document.querySelector('table.designs tbody tr').innerText.includes('w-good')"))
-            r.page("#/", "document.querySelector('#main')", "loops before restoring columns")
+            r.page("#/", "document.querySelector('#main table.list, #main .empty')", "loops before restoring columns")
             r.page("#/app/sw/results", "document.querySelector('table.designs')", "remembered measurement visibility")
             r.check("hidden measurements remain hidden after reopening Results", b.js("return document.querySelectorAll('table.designs tbody tr').length === 7 && document.querySelectorAll('table.designs th.measurement-head').length === 5 && !document.querySelector('th[data-label=area_um2]') && !document.querySelector('.show-hidden-columns').hidden"))
             separate = b.ajs("const done = arguments[arguments.length - 1]; import('/static/result_table.js').then(({resultPreferences}) => done([{name: 'other'}, {name: 'sw', owner: 'another-user'}].map(ctx => (resultPreferences(ctx).read().hiddenMetrics || []).includes('area_um2')))).catch(e => done(String(e))); ")
@@ -1060,7 +1060,7 @@ def flows(r: Run) -> None:
             b.click("table.designs .open-design")
             b.wait("document.querySelector('.detail-head h2')", what="the original design opened")
             r.check("opening a short ID still requests and displays the original design", b.js("return new URL(window.__labelRequest, location.origin).searchParams.get('design') === 'sw-a-very-long-application-name#42' && document.querySelector('.detail-head h2').textContent === 'sw-a-very-long-application-name#42'"))
-            r.page("#/", "document.querySelector('#main')", "home before part labels")
+            r.page("#/", "document.querySelector('#main table.list, #main .empty')", "home before part labels")
             b.js("window.__labelFixture = arguments[0]; return 1", fixture)
             r.page("#/app/sw/results", "document.querySelector('table.designs')", "short labels with parts")
             r.check("mixed designs show part#ID without brackets or repeated part subtitles", b.js("return [...document.querySelectorAll('table.designs .table-design-name')].map(s => s.textContent).join() === 'whole#42,whole#43,decoder#44,decoder#45,encoder#46,encoder#47,whole#baseline' && !document.querySelector('table.designs .table-part')"))
@@ -1740,7 +1740,7 @@ def flows(r: Run) -> None:
         said = b.js("return document.querySelector('.alt-summary').textContent")
         r.check("a killed run's work is said stopped, not running (D928)", "running" not in said and any(w in said for w in ("interrupted", "failed")), said)
         r.clean("a killed run")
-        r.page("#/", "document.querySelector('#main')", "the loops")
+        r.page("#/", "document.querySelector('#main table.list, #main .empty')", "the loops")
         r.api("/apps/slow", "DELETE")                               # not left for the steps after
     r.step("a killed run", killed_run)
 
@@ -1844,7 +1844,7 @@ def flows(r: Run) -> None:
                 " w.fetch = (u, o) => String(u).startsWith('/api/apps/sw/results') ? said(body)"
                 " : String(u).startsWith('/api/apps/sw/design?') ? said('{\"artifact\": null}') : real(u, o); return 1")
         payload = json.dumps(GRAPHS_RESULTS)
-        r.page("#/", "document.querySelector('#main')", "the loops")
+        r.page("#/", "document.querySelector('#main table.list, #main .empty')", "the loops")
         r.preferences(reset=True)
         b.js(stub, False, payload)
         b.go(f"{r.url}/#/app/sw/results/graphs")
@@ -1960,7 +1960,7 @@ def flows(r: Run) -> None:
         r.check("graph controls change axes, stages, selected measurements and scope", b.js(preferences) == expected)
         b.click(".pareto-focus")
         r.check("Focus stays enabled while an empty front uses the full range", b.js("return document.querySelector('.pareto-focus').getAttribute('aria-pressed') === 'true' && document.querySelector('.pareto-focus-said').textContent.includes('no feasible front')"))
-        r.page("#/", "document.querySelector('#main')", "home before a browser reload")
+        r.page("#/", "document.querySelector('#main table.list, #main .empty')", "home before a browser reload")
         r.preferences()
         b.js("localStorage.clear(); window.__preferencesReload = 1; location.reload(); return 1")
         b.wait("!window.__preferencesReload && document.querySelector('#who') && document.querySelector('#main table.list, #main .empty')", what="reloaded browser document")   # home drawn: its first render cannot land after the next page
@@ -1976,7 +1976,7 @@ def flows(r: Run) -> None:
         b.click(".show-hidden-columns")
         r.preferences()
         r.check("the Hidden toggle preserves ignored columns and the saved graph preferences", b.js("const p = window.__savedResults; return p.hiddenMetrics.join() === 'area_um2' && p.showHiddenMetrics && p.graphs.x === 'area_um2' && p.graphs.metrics.join() === 'fmax_mhz'"))
-        r.page("#/", "document.querySelector('#main')", "home before reloading the Hidden toggle")
+        r.page("#/", "document.querySelector('#main table.list, #main .empty')", "home before reloading the Hidden toggle")
         r.preferences()
         b.js("localStorage.clear(); window.__preferencesReload = 1; location.reload(); return 1")
         b.wait("!window.__preferencesReload && document.querySelector('#who') && document.querySelector('#main')", what="reloaded Hidden preference")
@@ -1985,11 +1985,11 @@ def flows(r: Run) -> None:
         r.page("#/app/sw/results", "document.querySelector('table.designs')", "remembered Hidden toggle")
         r.preferences()
         r.check("the Hidden toggle survives a reload without forgetting ignored metrics", b.js("return document.querySelector('.show-hidden-columns').getAttribute('aria-pressed') === 'true' && document.querySelectorAll('table.designs th.measurement-head').length === 2 && document.querySelector('th[data-label=area_um2]').classList.contains('hidden-measurement') && window.__savedResults.hiddenMetrics.includes('area_um2')"))
-        r.page("#/", "document.querySelector('#main')", "home before an empty graph selection")
+        r.page("#/", "document.querySelector('#main table.list, #main .empty')", "home before an empty graph selection")
         r.preferences(patch={"graphs": {"metrics": []}})
         r.page("#/app/sw/results/graphs", "document.querySelector('#main svg.chart.pareto')", "no selected measurements")
         r.check("an intentionally empty graph selection remains empty", b.js(f"const c = {card}; return !c.querySelector('figure') && !c.querySelector('.chips button.on') && c.textContent.includes('Pick a metric to chart')", "Improvement by design"))
-        r.page("#/", "document.querySelector('#main')", "home before obsolete preferences")
+        r.page("#/", "document.querySelector('#main table.list, #main .empty')", "home before obsolete preferences")
         r.preferences(reset=True)
         r.preferences(patch={"graphs": {"x": "removed", "y": "removed", "paretoStage": "removed", "timeStage": "removed", "metrics": ["removed"], "scope": "removed"}})
         r.page("#/app/sw/results/graphs", "document.querySelector('#main svg.chart.pareto')", "obsolete graph settings")
@@ -2022,7 +2022,7 @@ def flows(r: Run) -> None:
         r.login("bob")                                  # D1011: its own share, not an earlier step's
         assert r.api("/apps/sw/shares", "PUT", {"user": "cy", "perm": "watch"})["status"] == 200
         r.login("cy")
-        r.page("#/", "document.querySelector('#main')", "cy's loops")
+        r.page("#/", "document.querySelector('#main table.list, #main .empty')", "cy's loops")
         b.wait("document.querySelector('#main').innerText.includes('Shared with me')", what="the shared list")
         r.check("cy sees the loop shared with them", "bob" in r.text() and "watching" in r.text())
         r.page("#/u/bob/app/sw", "document.querySelector('.page-head')", "the shared loop")
@@ -2202,7 +2202,7 @@ def flows(r: Run) -> None:
         """D809: a loop's decision is its record's latest pass's (no need for the run to end), and the
         best are ranked by the objectives' own rule; the Overview shows both."""
         r.login("bob")
-        r.page("#/", "document.querySelector('#main')", "the loops")
+        r.page("#/", "document.querySelector('#main table.list, #main .empty')", "the loops")
         ds, loop = [], None
         for app in ("fromex", "sw"):                               # the loop with the most designs measured
             for _ in range(60):

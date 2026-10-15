@@ -3,8 +3,8 @@
 // uploads in uploads.js.
 
 import { can, setPageRefresh } from "./state.js";
-import { api, confirmDialog, enc, pageShow, toast } from "./ui.js";
-import { Card, html, node, useEffect } from "./view.js";
+import { api, confirmDialog, enc, toast } from "./ui.js";
+import { Card, html, useEffect } from "./view.js";
 import { Loaded, useLoad } from "./components/Load.js";
 import { flushResultPreferences } from "./result_table.js";
 import { LoopsPage } from "./loops/Page.js";
@@ -25,21 +25,15 @@ async function restartLoop(name, now = false, owner) {
   return true;
 }
 
-/** The Loops page: one's loops, those shared with one, one's groups' -- read again when a loop changes state (D688). */
-function Loops() {
-  const read = useLoad(() => Promise.all([api("/apps"), api("/shared").catch(() => []), api("/group-loops")]), "loops");
+/** The Loops page: one's loops, those shared with one, one's groups' -- read again when a loop changes state (D688);
+    a result preference still being written first. */
+function LoopsRoute() {
+  const read = useLoad(async () => { await flushResultPreferences(); return Promise.all([api("/apps"), api("/shared").catch(() => []), api("/group-loops")]); }, "loops");
   useEffect(() => { setPageRefresh(async () => read.reload()); }, []);
   return html`<${Loaded} read=${read}>${([loops, shared, group]) => html`<${LoopsPage} loops=${loops} shared=${shared} group=${group} />`}<//>`;
 }
-async function appsPage() {
-  const show = pageShow();
-  await flushResultPreferences();
-  show(node(html`<${Loops} />`));
-}
 
-async function newPage() {
-  const show = pageShow();
-  show(node(can("create_loops") ? html`<${NewPage} />` : html`<${Card} title="New loop">Your account cannot create, upload or clone loops.<//>`));
-}
+/** A problem document written here. */
+const NewRoute = () => can("create_loops") ? html`<${NewPage} />` : html`<${Card} title="New loop">Your account cannot create, upload or clone loops.<//>`;
 
-export { appsPage, newPage, restartLoop, stopLoop };
+export { LoopsRoute, NewRoute, restartLoop, stopLoop };

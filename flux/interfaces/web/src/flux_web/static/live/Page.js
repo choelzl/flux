@@ -1,7 +1,7 @@
 // Live (D1095): the page -- the toolbar (Follow, Earlier passes, the start and the pass), the list (Tree,
 // Graph or Timeline) and the inspector beside it. Both read the store; a change in it redraws them.
 
-import { html, render, useEffect, useLayoutEffect, useRef, useState } from "../view.js";
+import { html, useEffect, useLayoutEffect, useRef, useState } from "../view.js";
 import { appHref, when } from "../ui.js";
 import { StreamPill } from "../components/StatePill.js";
 import { scrollState, restoreScroll } from "../scroll.js";
@@ -13,7 +13,8 @@ import { lines } from "./rows.js";
 import { Lines } from "./Lines.js";
 import { Graph } from "./Graph.js";
 import { Timeline } from "./Timeline.js";
-import { BoxPanel, PassPanel, TaskPanel } from "./Panels.js";
+import { BoxPanel, PassPanel } from "./Panels.js";
+import { FullscreenView, Modal } from "../components/Modal.js";
 import { Inspector } from "./inspector/Inspector.js";
 import { Log } from "./Log.js";
 
@@ -66,7 +67,8 @@ export function Page({ store, ctx }) {
   return store.s.journal ? html`<${Body} store=${store} ctx=${ctx} />` : html`<section class="card"><${Empty} text="Loading…" /></section>`;
 }
 function Body({ store, ctx }) {
-  const { s, a } = store, panel = useRef(null), host = useRef(null), places = useRef({ mode: "", saved: new Map() });
+  const { s, a } = store, panel = useRef(null), host = useRef(null), places = useRef({ mode: "", saved: new Map() }), detailRef = useRef(null);
+  useEffect(() => () => { s.full = null; }, []);                    // Fullscreen goes with the page
   const mode = ctx.curSub() || "tree";
   if (mode !== "graph" && s.boxView) s.boxView = null;
   const v = store.view();
@@ -77,15 +79,12 @@ function Body({ store, ctx }) {
   if (switched && places.current.mode && panel.current) places.current.saved.set(places.current.mode, scrollState(panel.current));
   // the lines first: a try's number and how it ended are learned drawing them, and the inspector says them (D1084)
   const treeLines = mode === "tree" && v.rows.length ? lines(v.rows, v).tree() : null;
-  // the inspector's panel -- drawn into the element the page keeps, wherever it is (in Fullscreen too, D987)
+  // the inspector's panel: in its card, or alone in Fullscreen (D987) -- drawn again with the page wherever it is
   const sel = v.model.nodes.get(v.selected) || null;
-  useLayoutEffect(() => {
-    const d = s.detail;
-    if (sel) { d.dataset.task = String(sel.id); d.dataset.view = `${sel.id}:inspector`; } else { delete d.dataset.task; delete d.dataset.view; }
-    d.dataset.drawn = String(s.drawn);
-    render(html`<${Inspector} n=${sel} env=${{ now: Date.now() / 1000, nodes: v.model.nodes, goals: s.goals, record: s.record, N: v.N, tests: s.tests, redraw: store.emit, ...store.sources }}
-      a=${a} panel=${() => s.detail} />`, d);
-  });
+  const detail = html`<div class="detail alt-detail" ref=${detailRef} data-task=${sel ? String(sel.id) : null} data-view=${sel ? `${sel.id}:inspector` : null} data-drawn=${String(s.drawn)}>
+    <${Inspector} n=${sel} env=${{ now: Date.now() / 1000, nodes: v.model.nodes, goals: s.goals, record: s.record, N: v.N, tests: s.tests, redraw: store.emit, ...store.sources }}
+      a=${a} panel=${() => detailRef.current} /></div>`;
+  const full = s.full != null && !s.boxView && s.passView === NO_PASS;
   useLayoutEffect(() => {
     const el = panel.current;
     if (!el) return;
@@ -147,6 +146,7 @@ function Body({ store, ctx }) {
         <div class="alt-inspector-host" tabindex="-1" ref=${host}>
           ${s.boxView && v.box ? html`<${BoxPanel} v=${v} a=${a} box=${v.box} />`
             : s.passView !== NO_PASS ? html`<${PassPanel} p=${s.passView} nodes=${v.passNodes} a=${a} N=${v.N} />`
-            : html`<${TaskPanel} detail=${s.detail} />`}</div></section>
+            : full ? html`<div class="empty"><p>Shown fullscreen.</p></div>` : detail}</div></section>
+      ${full ? html`<${Modal} cls="dlg fullscreen-view" label=${s.full} onClose=${() => a.fullscreen(null)}><${FullscreenView} title=${s.full} content=${detail} close=${() => a.fullscreen(null)} /><//>` : ""}
     </div></div>`;
 }

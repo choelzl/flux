@@ -4,7 +4,7 @@
 
 import { html, useLayoutEffect } from "../../view.js";
 import { dur } from "../../format.js";
-import { fullscreen, showRaw } from "../../viewer.js";
+import { showRaw } from "../../viewer.js";
 import { restoreScroll, scrollState } from "../../scroll.js";
 import { WORK_COLORS as COLORS, ownSpans, phaseKind, workLabel } from "../../work_style.js";
 import { passName } from "../../live_views.js";
@@ -23,7 +23,7 @@ function runner(n) {
 
 /** The head (P1): the task as the tree names it, its kind's stripe, state, time, Raw and Fullscreen; the
     parents as chips that open them (D1067: a crumb that says something); the purpose and who did it. */
-function Head({ n, env, a, panel }) {
+function Head({ n, env, a }) {
   const N = env.N, title = plain(taskLabel(n), N), parents = [];
   for (let p = n.parent; p; p = p.parent) { const l = plain(taskLabel(p), N); if (l !== title && l.includes(" · ") && !/·\s*evaluation$/i.test(l)) parents.unshift(p); }
   // D1066: a reason that is the loop's own name says nothing; D1094: nor one that is only the engine's source name
@@ -32,7 +32,7 @@ function Head({ n, env, a, panel }) {
   return html`<div class="detail-head alt-ihead"><span class="alt-stripe" style=${`background:${colorOf(n)}`} />
       <h2 title=${taskLabel(n)}>${title}</h2><${Pill} n=${n} /><span class="muted">${dur(running(n) ? env.now - n.t0 : n.seconds)}</span>
       <span class="alt-head-tools"><button type="button" class="small raw-view alt-icon-btn" title="Raw" aria-label="Raw" onClick=${raw}>{ }</button>
-        <button type="button" class="small fullscreen-button alt-icon-btn" title="Fullscreen" aria-label="Fullscreen" onClick=${() => fullscreen(panel(), n.name)}>⤢</button></span></div>
+        <button type="button" class="small fullscreen-button alt-icon-btn" title="Fullscreen" aria-label="Fullscreen" onClick=${() => a.fullscreen(n.name)}>⤢</button></span></div>
     ${parents.length ? html`<div class="alt-crumbs">${parents.map((p, i) => [i ? html`<span class="muted">›</span>` : "",
       html`<button type="button" class="alt-pchip" style=${`--k:${colorOf(p)}`} title=${taskLabel(p)} onClick=${() => a.select(p.id)}>${plain(taskLabel(p), N)}</button>`])}</div>` : ""}
     <p class="alt-meta muted">${[why, runner(n)].filter(Boolean).flatMap((x, i) => [i ? " · " : "", x])}</p>`;
@@ -60,14 +60,14 @@ function Task({ n, env, a, panel }) {
     if (mem.panel) restoreScroll(el, mem.panel, { follow: running(n) && mem.panel.scrollable }); else el.scrollTop = el.scrollLeft = 0;
     return () => { mem.panel = scrollState(el); };
   }, []);
-  return html`<${Head} n=${n} env=${env} a=${a} panel=${panel} />
+  return html`<${Head} n=${n} env=${env} a=${a} />
     <${Body} n=${n} env=${env} a=${a} mem=${mem} />
     <${NotesFold} n=${n} mem=${mem} />
     ${!isAgent(n) && (has(f) || has(o) || has(n.params)) ? html`<${Fold} k="fields" title="Every field" mem=${mem}>
       <${Block} title="Input" obj=${n.params} mem=${mem} /><${Block} title="Fields" obj=${f} mem=${mem} /><${Block} title="Output" obj=${o} mem=${mem} /><//>` : ""}`;
 }
 
-/** The inspector's panel: its element the page keeps (Fullscreen moves it, D987), a task drawn into it. */
+/** The inspector's panel: a task drawn in it; `panel()` its element (in its card, or in Fullscreen, D987). */
 export function Inspector({ n, env, a, panel }) {
   return n ? html`<${Task} key=${n.id} n=${n} env=${env} a=${a} panel=${panel} />` : html`<div class="empty"><p>Select a task.</p></div>`;
 }

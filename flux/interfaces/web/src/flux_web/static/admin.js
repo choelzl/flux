@@ -2,8 +2,8 @@
 // read as they are drawn).
 
 import { setPageRefresh } from "./state.js";
-import { api, pageShow } from "./ui.js";
-import { Skeleton, html, node, useEffect, useState } from "./view.js";
+import { api } from "./ui.js";
+import { html, useEffect, useState } from "./view.js";
 import { Loaded, useLoad } from "./components/Load.js";
 import { Crumbs } from "./components/Crumbs.js";
 import { PageHead } from "./components/PageHead.js";
@@ -71,13 +71,12 @@ const TAB = {
       ? html`<${Read} key="audit" k="audit" load=${() => api("/audit")}>${audit => html`<${Audit} audit=${audit} />`}<//>` : html`<${Insights} part=${k} />`}<//>`,
 };
 
-function adminPage(sub = "") {
-  const show = pageShow();
+function AdminRoute({ sub = "" }) {
   // D814: Models and variables are the agents' tab; D816: the audit is Insights', the documents are the Loops'
   const tab = sub === "models" ? "agents" : sub === "audit" ? "insights" : ADMIN_TABS[sub] ? sub : "";
-  show(node(html`<${Crumbs} parts=${[["Admin", "#/admin"], tab ? [ADMIN_TABS[tab], null] : null]} /><${PageHead} title="Admin" />
+  return html`<${Crumbs} parts=${[["Admin", "#/admin"], tab ? [ADMIN_TABS[tab], null] : null]} /><${PageHead} title="Admin" />
     <div class="tabs admin-tabs" role="tablist">${Object.entries(ADMIN_TABS).map(([k, label]) => html`<a role="tab" class=${k === tab ? "on" : ""} href=${`#/admin${k ? "/" + k : ""}`}>${label}</a>`)}</div>
-    <div>${TAB[tab](sub === "audit" ? "audit" : null)}</div>`));
+    <div>${TAB[tab](sub === "audit" ? "audit" : null)}</div>`;
 }
 
-export { adminPage };
+export { AdminRoute };

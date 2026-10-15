@@ -32,3 +32,10 @@ export function Loaded({ read, wait = null, failed = "It could not be read", car
   const said = html`<div class="empty"><p>${`${failed}: ${read.got.error}`}</p><${Act} cls="small" onClick=${read.reload}>Retry<//></div>`;
   return card ? html`<${Card}>${said}<//>` : said;
 }
+
+/** A page's read (a route): a card of skeleton lines meanwhile, a failure said as the page. */
+export function PageRead({ load, k = "", children }) {
+  const read = useLoad(load, k);
+  if (!read.got) return html`<${Card}><${Skeleton} lines=${7} /><//>`;
+  return read.got.error ? html`<${Card}><p class="err">${read.got.error}</p><//>` : children(read.got.d);
+}
