@@ -1,8 +1,8 @@
-// LiveAlt (D1095): how a task, a try, a pass ended -- the rules every view judges by (the tree's lines,
+// Live (D1095): how a task, a try, a pass ended -- the rules every view judges by (the tree's lines,
 // the graph's boxes, the chain's chips), in one place. Plain functions of the task model, no page.
 
 import { phaseKind } from "../work_style.js";
-import { candidateOf, flowBoxes, taskLabel } from "../live_alt_views.js";
+import { candidateOf, flowBoxes, taskLabel } from "../live_views.js";
 
 export const CRIT = /^\s*critique\s*:/i;
 export const STAGE = /^\s*(simulation|analytical)\s*:/i;

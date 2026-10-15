@@ -5,7 +5,7 @@
 // across the ways and a detour to another page until the loop is made or the draft discarded.
 
 import { Card, Empty, Skeleton, html, node, useEffect, useMemo, useRef, useState } from "../view.js";
-import { api, appHref, confirmDialog, createFromText, enc, h, toast, when } from "../ui.js";
+import { api, appHref, confirmDialog, createFromText, enc, toast, when } from "../ui.js";
 import { plural } from "../format.js";
 import { crafterCatalog, me, setCrafterCatalog } from "../state.js";
 import { diffCounts, lineDiff } from "../diff.js";
@@ -58,9 +58,9 @@ async function crafterReady() {
 /** Save's folded Changes (D941) and the save (D693): what it changes, line by line, before it writes. */
 const changesOf = (name, kept) => async yaml => {
   const p = await api(`/apps/${enc(name)}/document/preview`, { method: "POST", body: { text: yaml, kept } });
-  if (p.before === p.after) return h("p", { class: "muted" }, "No change: the document already says this.");
+  if (p.before === p.after) return node(html`<p class="muted">No change: the document already says this.</p>`);
   const ops = lineDiff(p.before, p.after), n = diffCounts(ops);
-  return h("div", {}, html`<p class="muted small">${`${plural(n.added, "line")} added, ${n.removed} removed.`}</p><${Diff} ops=${ops} />`);
+  return node(html`<p class="muted small">${`${plural(n.added, "line")} added, ${n.removed} removed.`}</p><${Diff} ops=${ops} />`);
 };
 
 /** The configurator on an existing loop: its document read back into the form, saved with its diff. */

@@ -1,21 +1,8 @@
-// Flux web (D700, D702, D786, D1095): files to a loop -- sent in batches (a big file in parts, the document first when
-// the loop is created), an upload's progress with Cancel, and what a drop holds (a folder walked, its own name taken
+// Flux web (D700, D786, D1095): files to a loop -- sent in batches (a big file in parts, the document first when
+// the loop is created; its progress: components/Modal.js), and what a drop holds (a folder walked, its own name taken
 // off when it is the only thing dropped).
 
-import { api, bytes, enc, h, offline, owned, toasts } from "./ui.js";
-
-/** An upload's progress (D702): a dialog Escape does not close -- a Cancel stops the upload
-    between batches and parts, and says what was already written. */
-export function progressDialog(title, said) {
-  const ctl = new AbortController();
-  const bar = h("progress", { max: 1, value: 0, class: "upload-bar" }), line = h("span", { class: "muted small" });
-  const cancel = h("button", { type: "button", onclick: () => { ctl.abort(); cancel.disabled = true; cancel.textContent = "Stopping…"; } }, "Cancel");
-  const d = h("dialog", { class: "dlg" }, h("h2", {}, title), h("p", {}, said), bar, line, h("div", { class: "dlg-actions" }, cancel));
-  d.addEventListener("cancel", (e) => e.preventDefault());            // Escape: the upload goes on, the dialog stays
-  document.body.append(d); d.showModal();
-  return { signal: ctl.signal, set: (a, b) => { bar.value = b ? a / b : 1; line.textContent = ` ${bytes(a)} of ${bytes(b)}`; },
-    close: () => { d.close(); if (toasts.parentNode === d) document.body.append(toasts); d.remove(); } };
-}
+import { api, enc, offline, owned } from "./ui.js";
 
 /** Files to a loop (D700): in batches of at most 300 files and 40 MB, a file over 40 MB in
     parts of 32 MB, the document first when the loop is created. `entries`: [{file, path}];

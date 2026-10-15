@@ -281,7 +281,8 @@ def test_scaling_tells_linear_from_quadratic(tmp_path):
     # D1070: every size well above a loaded machine's start-up (the preset's floor), and a load spike tried
     # again -- the full check runs suites side by side, and one slow size blurs a four-point fit
     for _ in range(3):
-        linear = _fluxpreset("scaling", "--sizes", "100,141,200,283", "--runs", "1", *sleeps("n * 6e-3"))
+        # 1.5-4.2 s: a second of start-up noise on a loaded machine bends the fit little
+        linear = _fluxpreset("scaling", "--sizes", "100,141,200,283", "--runs", "1", *sleeps("n * 15e-3"))
         square = _fluxpreset("scaling", "--sizes", "100,141,200,283", "--runs", "1", *sleeps("(n / 100) ^ 2 * 300e-3"))
         if linear.returncode == square.returncode == 0 and 0.6 < k(linear) < 1.4 and k(square) > 1.5 and k(square) - k(linear) > 0.4:
             break

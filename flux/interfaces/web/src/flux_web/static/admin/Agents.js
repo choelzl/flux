@@ -74,7 +74,7 @@ function AgentPanel({ a, version, askOff }) {
   if (saved.current == null) saved.current = JSON.stringify(body());
   const put = async () => { const b = JSON.stringify(body()); if (b === saved.current) return false; await api(`/admin/agents/${a.id}`, { method: "PUT", body: body() }); saved.current = b; return true; };
   const rest = useAutosave(put);                                                   // D833
-  const named = useAutosave(async () => { if (await put()) route(); }, { typing: false, mark: rest.markNode });     // a new name or program: the page again
+  const named = useAutosave(async () => { if (await put()) route(); }, { typing: false, markOf: rest });     // a new name or program: the page again
   const set = k => bound(v[k], x => setV(o => ({ ...o, [k]: x })));
   const failed = a.users.filter(u => u.state === "failed").map(u => u.user), changed = a.users.filter(u => u.state === "changed since its test").map(u => u.user);
   const c = a.connection || { mechanism: "none", said: "" }, st = a.server_test || { state: "untested" }, ver = VERIFIED[st.state] || VERIFIED.untested;

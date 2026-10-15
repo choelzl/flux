@@ -1,6 +1,6 @@
 // Syntax highlighting for the web page (D691): a small rule-based tokenizer per language that
-// builds text nodes and spans -- never HTML -- so a file's text cannot inject anything.
-// `highlight(text, lang)` -> DocumentFragment; `langOf(path)` -> a language or "".
+// gives tokens a component draws as text and spans -- never HTML -- so a file's text cannot inject anything.
+// `tokens(text, lang)` -> [class, text]; `langOf(path)` -> a language or "".
 
 const KW = {
   python: "False None True and as assert async await break class continue def del elif else except finally for from global if import in is lambda nonlocal not or pass raise return try while with yield match case",
@@ -56,8 +56,8 @@ export function guessLang(text) {
 
 export const MAX_CHARS = 400000;
 
-/** D1095: the text as tokens -- [class, text] each, class "" for plain text -- for a highlighted view drawn as
-    nodes (highlight) or as components (components/Markdown.js Code). */
+/** D1095: the text as tokens -- [class, text] each, class "" for plain text -- drawn as spans by the components
+    (components/Markdown.js Code and Prose, components/CodeEditor.js). */
 export function tokens(text, lang) {
   const rules = RULES[lang], out = [];
   text = String(text ?? "");
@@ -81,86 +81,4 @@ export function tokens(text, lang) {
   }
   flush();
   return out;
-}
-
-export function highlight(text, lang) {
-  const frag = document.createDocumentFragment();
-  for (const [cls, t] of tokens(text, lang)) {
-    if (!cls) { frag.append(t); continue; }
-    const span = document.createElement("span");
-    span.className = "tk-" + cls;
-    span.textContent = t;
-    frag.append(span);
-  }
-  return frag;
-}
-
-/** A <pre> with the text highlighted (read-only views). */
-export function codeBlock(text, lang, cls = "val tall code") {
-  const pre = document.createElement("pre");
-  pre.className = cls + " hl";
-  pre.append(highlight(text, lang || guessLang(text)));
-  return pre;
-}
-
-/** An editor: a textarea over a highlighted layer that follows it. Returns {el, textarea}. */
-export function codeEditor(text, lang, { readonly = false } = {}) {
-  const wrap = document.createElement("div");
-  wrap.className = "editor";
-  const layer = document.createElement("pre");
-  layer.className = "editor-layer hl";
-  layer.setAttribute("aria-hidden", "true");
-  const ta = document.createElement("textarea");
-  ta.className = "editor-input";
-  ta.wrap = "off";
-  ta.spellcheck = false;
-  ta.value = text;
-  if (readonly) ta.readOnly = true;
-  let t = null;
-  const paint = () => { layer.replaceChildren(highlight(ta.value + (ta.value.endsWith("\n") ? " " : ""), lang)); sync(); };
-  const sync = () => {
-    if (!ta.clientWidth || !ta.clientHeight) return;
-    // Match the viewport inside the textarea's scrollbars; a larger layer clamps early at the bottom.
-    layer.style.width = `${ta.clientWidth}px`;
-    layer.style.height = `${ta.clientHeight}px`;
-    layer.scrollTop = ta.scrollTop; layer.scrollLeft = ta.scrollLeft;
-  };
-  let attached = false;
-  const resize = new ResizeObserver(() => {
-    if (ta.isConnected) { attached = true; sync(); }
-    else if (attached) resize.disconnect();               // discarded editors should stop observing
-  });
-  resize.observe(ta);
-  ta.addEventListener("input", () => { clearTimeout(t); t = setTimeout(paint, ta.value.length > 60000 ? 250 : 40); });
-  ta.addEventListener("scroll", sync);
-  ta.addEventListener("keydown", (e) => {                     // Tab indents, as an editor does
-    if (e.key === "Tab" && !e.shiftKey && !readonly) {
-      e.preventDefault();
-      const s = ta.selectionStart, en = ta.selectionEnd;
-      ta.setRangeText("  ", s, en, "end");
-      ta.dispatchEvent(new Event("input"));
-    }
-  });
-  wrap.append(layer, ta);
-  paint();
-  return { el: wrap, textarea: ta };
-}
-
-/** Prose with fenced code blocks (a prompt, a reply): the prose as text, each ```lang block
-    highlighted. */
-export function proseBlock(text, cls = "val tall") {
-  const pre = document.createElement("pre");
-  pre.className = cls + " hl";
-  const parts = String(text ?? "").split(/(```[\w+-]*\n[\s\S]*?```)/g);
-  for (const part of parts) {
-    const m = /^```([\w+-]*)\n([\s\S]*?)```$/.exec(part);
-    if (!m) { pre.append(part); continue; }
-    const tag = (m[1] || "").toLowerCase();
-    const lang = { systemverilog: "sv", verilog: "sv", py: "python", python: "python", yaml: "yaml", yml: "yaml", json: "json",
-                   c: "c", cpp: "c", "c++": "c", vhdl: "vhdl", bash: "sh", sh: "sh" }[tag] || guessLang(m[2]);
-    const fence = document.createElement("span"); fence.className = "tk-punc"; fence.textContent = "```" + m[1] + "\n";
-    const end = document.createElement("span"); end.className = "tk-punc"; end.textContent = "```";
-    pre.append(fence, highlight(m[2], lang), end);
-  }
-  return pre;
 }

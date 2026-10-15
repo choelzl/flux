@@ -1,4 +1,4 @@
-// LiveAlt (D1095): the task model it reads -- the journal's events and the live state, applied as looptree.js
+// Live (D1095): the task model it reads -- the journal's events and the live state, applied as looptree.js
 // builds them (D752), from the loop's one stream (D917) or a past start's retained journal.
 
 const WINDOW = 30;                 // D759: a day-long start opens on its last passes; "Earlier passes" loads the rest

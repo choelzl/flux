@@ -1,10 +1,10 @@
 // Flux web, Agents tab (D1095): the turns -- one a line, and one in detail.
 
-import { proseBlock } from "../highlight.js";
-import { dur, fmtTok, h, money } from "../ui.js";
+import { dur, fmtTok, money } from "../ui.js";
 import { Conversation } from "../components/Conversation.js";
-import { fullscreen, viewerTools } from "../viewer.js";
-import { Ago, Dom, html, useMemo, useRef } from "../view.js";
+import { Prose } from "../components/Markdown.js";
+import { ViewerTools, showRaw } from "../viewer.js";
+import { Ago, html, useRef } from "../view.js";
 
 const ROLES = { generate: "design", critique: "critic" };
 /** D1092: what the turn was for (design, critic, prototype, plan); D1094: a role or nothing -- "model" is its kind. */
@@ -52,14 +52,12 @@ function factsOf(full) {
 const MAIN = new Set(["model", "exit", "tokens in", "tokens out", "token usage", "tool calls", "cost"]);
 const Fact = ({ k, v }) => html`<div class=${"fact" + (k === "exit" && v !== 0 && v !== "0" ? (Number(v) === 124 ? " warn" : " bad") : "")}>
   <small>${k}</small><span class=${k === "folder" ? "mono small" : "mono"}>${String(v)}</span></div>`;
-const Prose = ({ text }) => html`<${Dom} node=${useMemo(() => proseBlock(String(text)), [text])} />`;
 
 /** One turn's detail: its head, the prompt and the viewer's tools, its facts, its conversation (or its text). */
 export function TurnDetail({ full, k }) {
   const box = useRef(null);
   const facts = factsOf(full), more = facts.filter(([f]) => !MAIN.has(f));
   const talk = Array.isArray(full.steps) && full.steps.length ? html`<${Conversation} steps=${full.steps} k=${`turn${k}`} />` : null;
-  const tools = useMemo(() => viewerTools(() => box.current, { title: "Agent turn", rawText: JSON.stringify(full, null, 2) }), [full]);
   // its conversation (or, a turn without one, its text), one flat list
   const tail = (talk ? [
     full.error && html`<div class="blk"><h3>error</h3><${Prose} text=${full.error} /></div>`,
@@ -70,12 +68,12 @@ export function TurnDetail({ full, k }) {
     ...["error", "reply", "prompt", "stderr"].filter(f => full[f]).map(f => html`<div class="blk"><h3>${f}</h3><${Prose} text=${full[f]} /></div>`),
     ...((full.hops || []).length ? [html`<h3>Tool calls</h3>`, ...full.hops.map(x => html`<pre class="val">${x}</pre>`)] : []),
   ]).filter(Boolean);
-  const prompt = () => fullscreen(h("pre", { class: "raw-content" }, String(full.prompt)), "Agent prompt");
+  const prompt = () => showRaw(full.prompt, "Agent prompt");
   return html`<div class="detail" ref=${box}>
     <div class="detail-head"><h2>${full.agent || full.model || full.kind}</h2><span class="muted"><${Ago} t=${full.ts} /> · ${dur(full.seconds)}</span></div>
     <div class="actions">
       ${full.prompt ? html`<button type="button" class="small agent-prompt-button" onClick=${prompt}>Prompt</button>` : ""}
-      <${Dom} node=${tools} /></div>
+      <${ViewerTools} box=${box} title="Agent turn" rawText=${JSON.stringify(full, null, 2)} /></div>
     <div class="facts">${facts.filter(([f]) => MAIN.has(f)).map(([f, v]) => html`<${Fact} k=${f} v=${v} />`)}</div>
     ${more.length ? html`<details class="facts-more"><summary>More: ${more.map(([f]) => f).join(", ")}</summary>
       <div class="facts">${more.map(([f, v]) => html`<${Fact} k=${f} v=${v} />`)}</div></details>` : ""}

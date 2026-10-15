@@ -7,7 +7,8 @@ import { api, confirmDialog, dialog, enc, request, toast } from "../ui.js";
 import { bytes, plural } from "../format.js";
 import { html } from "../view.js";
 import { langOf } from "../highlight.js";
-import { progressDialog, sendFiles } from "../uploads.js";
+import { sendFiles } from "../uploads.js";
+import { progressDialog } from "../components/Modal.js";
 import { CodeEditor } from "../components/CodeEditor.js";
 
 /** `yamlOf()` the document as it stands; `namedOf()` the files the configurator's commands name (D912); `onDraw(missing)`. */

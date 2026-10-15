@@ -1,12 +1,25 @@
 // Flux web (D1095): an answer's Markdown (D705), built as components -- never HTML: headings, lists, tables,
-// code blocks, quotes, paragraphs with **bold**, *italics* and `code`. And a code block, highlighted.
+// code blocks, quotes, paragraphs with **bold**, *italics* and `code`. A code block, highlighted; prose with fenced
+// code in it.
 
 import { html } from "../view.js";
 import { guessLang, tokens } from "../highlight.js";
 
 /** A <pre> with the text highlighted (read-only views): its tokens as spans. */
 export function Code({ text, lang, cls = "val tall code", k }) {
-  return html`<pre class=${cls + " hl"} data-k=${k || null}>${tokens(text, lang || guessLang(text)).map(([c, t]) => c ? html`<span class=${"tk-" + c}>${t}</span>` : t)}</pre>`;
+  return html`<pre class=${cls + " hl"} data-k=${k || null}>${spans(text, lang || guessLang(text))}</pre>`;
+}
+
+const FENCE = { systemverilog: "sv", verilog: "sv", py: "python", python: "python", yaml: "yaml", yml: "yaml", json: "json",
+  c: "c", cpp: "c", "c++": "c", vhdl: "vhdl", bash: "sh", sh: "sh" };
+const spans = (text, lang) => tokens(text, lang).map(([c, t]) => c ? html`<span class=${"tk-" + c}>${t}</span>` : t);
+
+/** Prose with fenced code blocks (a prompt, a reply): the prose as text, each ```lang block highlighted. */
+export function Prose({ text, cls = "val tall" }) {
+  return html`<pre class=${cls + " hl"}>${String(text ?? "").split(/(```[\w+-]*\n[\s\S]*?```)/g).map(part => {
+    const m = /^```([\w+-]*)\n([\s\S]*?)```$/.exec(part);
+    return !m ? part : [html`<span class="tk-punc">${"```" + m[1] + "\n"}</span>`, spans(m[2], FENCE[(m[1] || "").toLowerCase()] || guessLang(m[2])), html`<span class="tk-punc">${"```"}</span>`];
+  })}</pre>`;
 }
 
 const Inline = ({ t }) => {

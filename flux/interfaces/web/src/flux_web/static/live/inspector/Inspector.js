@@ -1,14 +1,13 @@
-// LiveAlt's inspector (D982, D1095): a task as the list names it -- its head (state, time, Raw, Fullscreen,
+// Live's inspector (D982, D1095): a task as the list names it -- its head (state, time, Raw, Fullscreen,
 // its parents as chips, why it ran and who did it), what it gave by its kind, the quiet steps it took, every
 // field folded -- and a pass at a glance (P11).
 
 import { html, useLayoutEffect } from "../../view.js";
 import { dur } from "../../format.js";
-import { h } from "../../ui.js";
-import { fullscreen } from "../../viewer.js";
+import { fullscreen, showRaw } from "../../viewer.js";
 import { restoreScroll, scrollState } from "../../scroll.js";
 import { WORK_COLORS as COLORS, ownSpans, phaseKind, workLabel } from "../../work_style.js";
-import { passName } from "../../live_alt_views.js";
+import { passName } from "../../live_views.js";
 import { Block, Fold, Pill, StepRow, memoryOf } from "./bits.js";
 import { AgentChat, ModelChat } from "./Chat.js";
 import { ChooseBody, CriticBody, NotesFold, SearchBody, StepsBody, ToolBody } from "./Bodies.js";
@@ -29,7 +28,7 @@ function Head({ n, env, a, panel }) {
   for (let p = n.parent; p; p = p.parent) { const l = plain(taskLabel(p), N); if (l !== title && l.includes(" · ") && !/·\s*evaluation$/i.test(l)) parents.unshift(p); }
   // D1066: a reason that is the loop's own name says nothing; D1094: nor one that is only the engine's source name
   const why = n.why && !N.loopNamed(String(n.why).trim()) && !/^\s*(agent|tool|model|llm)\s*:\s*\S+\s*$/i.test(String(n.why)) ? N.shortAll(String(n.why)) : "";
-  const raw = () => fullscreen(h("pre", { class: "raw-content" }, JSON.stringify({ name: n.name, input: n.params, fields: n.fields, output: n.output }, null, 2)), `${n.name} · raw`);
+  const raw = () => showRaw(JSON.stringify({ name: n.name, input: n.params, fields: n.fields, output: n.output }, null, 2), `${n.name} · raw`);
   return html`<div class="detail-head alt-ihead"><span class="alt-stripe" style=${`background:${colorOf(n)}`} />
       <h2 title=${taskLabel(n)}>${title}</h2><${Pill} n=${n} /><span class="muted">${dur(running(n) ? env.now - n.t0 : n.seconds)}</span>
       <span class="alt-head-tools"><button type="button" class="small raw-view alt-icon-btn" title="Raw" aria-label="Raw" onClick=${raw}>{ }</button>

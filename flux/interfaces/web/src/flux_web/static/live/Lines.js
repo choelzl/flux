@@ -1,8 +1,8 @@
-// LiveAlt (D1095): the lines rows.js works out, drawn -- the tree, and a graph box's list.
+// Live (D1095): the lines rows.js works out, drawn -- the tree, and a graph box's list.
 
 import { html } from "../view.js";
 import { WORK_COLORS as COLORS } from "../work_style.js";
-import { taskState as state } from "../live_alt_model.js";
+import { taskState as state } from "../live_model.js";
 
 const Segment = ({ s }) => typeof s === "string" ? s
   : s.b != null ? html`<b>${s.b}</b>`

@@ -6,11 +6,12 @@ import { Ago, Card, Empty, Skeleton, html, useEffect, useRef, useState } from ".
 import { api, dialog, enc, request, toast } from "../ui.js";
 import { bytes, plural } from "../format.js";
 import { langOf } from "../highlight.js";
-import { progressDialog, sendFiles } from "../uploads.js";
+import { sendFiles } from "../uploads.js";
+import { progressDialog } from "../components/Modal.js";
 import { DropZone } from "../components/DropZone.js";
 import { Act } from "../components/Act.js";
 import { CodeEditor } from "../components/CodeEditor.js";
-import { ViewerTools } from "../components/ViewerTools.js";
+import { ViewerTools } from "../viewer.js";
 import { ActionsMenu, FileList, MetaLine, PathCrumbs, baseOf, joinP, parentOf } from "./parts.js";
 
 // D908: an open Actions menu closes on a click elsewhere or Escape

@@ -1,50 +1,17 @@
-// Flux web's building blocks (D889: split out of app.js): h(), the server calls, notices and
-// dialogs, a page's parts and the formatting every page shares.
+// Flux web's building blocks (D889: split out of app.js; D1095: the pages are Preact components, view.js): the
+// server calls (a loop's owner named, the session's end and the server's absence said), a loop's one stream, a page
+// shown only while it is the latest; the notices (notices.js), the dialogs (components/Modal.js) and the words for
+// numbers and times (format.js) re-exported for the pages that read them here.
 
 import { me, navSeq, pageOwner, sessionGen, setMe, setPageOwner } from "./state.js";
 import { bytes, dur, fmtTok, money, plural, when } from "./format.js";
-import { render } from "./view.js";
+import { html } from "./view.js";
+import { offline, toast } from "./notices.js";
+import { confirmDialog, dialog } from "./components/Modal.js";
 
 
 const main = document.getElementById("main");
 
-// ================================================================ building blocks
-/** D1035: an element's handlers from `h` live in a table on it behind one listener a type, so a redraw
-    applied as a morph (`morph`) can hand a kept element the new render's handlers. */
-function on(el, type, fn) {
-  const table = el.__on || (el.__on = {});
-  if (!(type in table)) el.addEventListener(type, e => el.__on?.[type]?.call(el, e));
-  table[type] = fn;
-}
-const isVnode = (x) => typeof x === "object" && x !== null && "type" in x && "props" in x && !(x instanceof Node);
-/** D1095: a component in a page built with h() -- mounted in a span not laid out; the span remembers it, so a
-    redraw (morph) draws the new one into the span it keeps, or into the copy it inserts. */
-function mountHere(vnode) {
-  const span = document.createElement("span");
-  span.style.display = "contents";
-  render(vnode, span);
-  return span;
-}
-function h(tag, attrs = {}, ...kids) {
-  const el = document.createElement(tag);
-  for (const [k, v] of Object.entries(attrs || {})) {
-    if (v === null || v === undefined || v === false) continue;
-    if (k.startsWith("on")) on(el, k.slice(2), v);
-    else if (k === "class") el.className = v;
-    else if (k === "value") el.value = v;
-    else if (k === "checked") el.checked = !!v;
-    else el.setAttribute(k, v === true ? "" : v);
-  }
-  for (const kid of kids.flat(Infinity)) {
-    if (kid === null || kid === undefined || kid === false || kid === "") continue;
-    // D1095: a component (a Preact vnode) is mounted in place -- the wrapper not laid out
-    el.append(kid instanceof Node ? kid : isVnode(kid) ? mountHere(kid) : document.createTextNode(String(kid)));
-  }
-  return el;
-}
-
-// D701: on a loop shared with this user (or an admin's look at another's), every call about it
-// names its owner -- the server checks what this user may do with it
 function owned(path) {
   if (!pageOwner || !/^\/apps\/[^/?]+/.test(path) || /[?&]owner=/.test(path)) return path;
   return path + (path.includes("?") ? "&" : "?") + "owner=" + encodeURIComponent(pageOwner);
@@ -112,10 +79,6 @@ async function api(path, opts = {}) {
   return (r.headers.get("content-type") || "").includes("json") ? r.json() : r.text();
 }
 
-// ---- the server out of reach (D694): a banner while it is, gone at the next answer
-const offlineBar = h("div", { class: "offline", role: "alert", hidden: true }, "The server cannot be reached: retrying…");
-document.body.append(offlineBar);
-function offline(on) { if (offlineBar.hidden === on) offlineBar.hidden = !on; }
 
 /** D917: a loop's journal, live state and log over ONE server-sent stream (/stream): three per Live
     page took half of the six connections a browser keeps to a server on HTTP/1, and a second Live
@@ -175,12 +138,6 @@ function loopStream(base, qs) {
     close() { closed = true; document.removeEventListener("visibilitychange", sync); sync(); },
   };
 }
-function streamPill() {
-  // D856: said only while the page is not connected -- a green "live" beside an idle loop read as running
-  const el = h("span", { class: "pill stream warn", title: "The page's connection to the loop" }, "connecting…");
-  return { el, set: (st) => { el.hidden = st === "live"; el.textContent = "reconnecting…"; } };
-}
-
 const enc = encodeURIComponent;
 function show(...nodes) { main.replaceChildren(...nodes); window.scrollTo(0, 0); }
 /** D719: each navigation's number; a page shows itself only while it is the latest -- a slow page
@@ -192,153 +149,18 @@ function pageShow() {
   f.stale = () => mine !== navSeq;                 // left already: no timers, no refresh hook
   return f;
 }
-/** Where this page is (D702): [label, href] from Loops down; the last is the page itself. */
-function crumbs(...parts) {
-  return h("nav", { class: "crumbs-bar", "aria-label": "Where you are" }, parts.filter(Boolean).map(([label, href], i, all) =>
-    [i ? h("span", { class: "sep", "aria-hidden": "true" }, "›") : "", i < all.length - 1 && href ? h("a", { href }, label) : h("span", { "aria-current": i === all.length - 1 ? "page" : null }, label)]));
-}
-function head(title, sub, ...actions) {
-  return h("div", { class: "page-head" }, h("div", {}, h("h1", {}, title), sub ? h("p", { class: "sub" }, sub) : ""),
-    actions.length ? h("div", { class: "actions" }, actions) : "");
-}
-/** A placeholder while a page loads (D702): grey lines of the shape to come, not a word. */
-function skeleton(lines = 5) {
-  return h("div", { class: "skeleton", "aria-busy": "true", "aria-label": "Loading" },
-    Array.from({ length: lines }, (_, i) => h("div", { class: "sk-line", style: `width:${[92, 76, 84, 60, 70, 88, 54][i % 7]}%` })));
-}
-function card(title, kids, { actions, cls } = {}) {
-  return h("section", { class: "card " + (cls || "") },
-    title || actions ? h("div", { class: "card-head" }, title ? h("h2", {}, title) : "", actions ? h("div", { class: "actions" }, actions) : "") : "",
-    kids);
-}
-function empty(text, ...more) { return h("div", { class: "empty" }, h("p", {}, text), more); }
 function appHref(user, app) {
   return user && me && user !== me.name ? `#/u/${enc(user)}/app/${enc(app)}` : `#/app/${enc(app)}`;
 }
-/** A button whose async action disables it while it runs, and says a failure as a notice. */
-/** D833: a field that saves as it changes -- a moment after typing stops, or on leaving it.
-    D939: no "saved" said in words -- a green check at the end of the field just saved, fading out;
-    saving a small spinner in the mark; a refusal the server's words in red in the mark, kept. The
-    mark (aria-live) says "saved" or the error to a screen reader; its `data-state` (saving, saved,
-    error) is what a test waits for. `run()` saves; saves never overlap. */
-function saveMark() { return h("span", { class: "save-mark small", role: "status", "aria-live": "polite" }); }
-/** D939: the check, over the field's right end (a text field), in a text area's corner, beside a box,
-    a number or a menu, on the top right corner of a field too narrow to hold it beside its text;
-    fixed over the page (a dialog's own layer when in one), it moves nothing. */
-function savedCheck(el) {
-  if (!el || !el.isConnected || !el.getBoundingClientRect().width) return;
-  const host = el.closest("dialog[open]") || document.body;
-  const beside = el.tagName === "SELECT" || ["checkbox", "radio", "number"].includes(el.type);
-  const c = h("span", { class: "save-check", "aria-hidden": "true" });
-  const place = () => {
-    const r = el.getBoundingClientRect(), s = 16;
-    const corner = !beside && el.tagName !== "TEXTAREA" && r.width < 120;
-    c.style.left = `${beside ? r.right + 4 : corner ? r.right - s + 6 : r.right - s - 6}px`;
-    c.style.top = `${el.tagName === "TEXTAREA" ? r.bottom - s - 6 : corner ? r.top - 7 : r.top + (r.height - s) / 2}px`;
-  };
-  place(); host.append(c);
-  addEventListener("scroll", place, true);
-  setTimeout(() => { removeEventListener("scroll", place, true); c.remove(); }, 1600);
-}
-/** The mark says it saved (or "cleared"), and the field `el` shows the check (D939). */
-function markSaved(mark, el, said = "saved") {
-  clearTimeout(mark.clear);
-  mark.className = "save-mark small ok"; mark.dataset.state = "saved";
-  mark.replaceChildren(h("span", { class: "sr-only" }, said));
-  mark.clear = setTimeout(() => { if (mark.dataset.state === "saved") mark.replaceChildren(); }, 1500);   // said again next time
-  savedCheck(el);
-}
-function autosave(fields, run, mark, { delay = 900, typing = true } = {}) {
-  const all = [].concat(fields);
-  let t = null, chain = Promise.resolve(), last = null;
-  const go = (el) => {
-    clearTimeout(t);
-    const field = el instanceof Element ? el : last || all.find(f => f === document.activeElement) || null;
-    chain = chain.then(async () => {
-      clearTimeout(mark.clear);
-      mark.className = "save-mark small saving"; mark.dataset.state = "saving";
-      mark.replaceChildren(h("span", { class: "spin", "aria-hidden": "true" }));
-      try {
-        await run();
-        markSaved(mark, field);
-      } catch (x) {
-        mark.className = "save-mark small bad"; mark.dataset.state = "error";
-        mark.textContent = x.message === "log in" ? "" : x.message;               // a refusal stays said
-      }
-    });
-    return chain;
-  };
-  for (const el of all) {
-    if (typing) el.addEventListener("input", () => { last = el; clearTimeout(t); t = setTimeout(() => go(el), delay); });
-    el.addEventListener("change", () => { last = el; go(el); });
-  }
-  return go;
-}
-function act(label, fn, { cls = "", title } = {}) {
-  const b = h("button", { class: cls, title, type: "button" }, label);
-  // D1095: through on() -- a redraw (morph) that adds the button anew carries its handler; the button is the one pressed
-  on(b, "click", async function () {
-    const me = this;
-    me.disabled = true; me.classList.add("busy");
-    try { await fn(me); } catch (x) { if (x.message !== "log in") toast(x.message, "bad"); }
-    finally { me.disabled = false; me.classList.remove("busy"); }
-  });
-  return b;
-}
-
-// ---- notices and dialogs (no alert, confirm or prompt)
-const toasts = h("div", { class: "toasts", role: "status", "aria-live": "polite" });
-document.body.append(toasts);
-function toast(text, kind = "info", { timeout = 5000, href } = {}) {
-  // D700: a dialog is in the top layer: a notice shown under it was never seen
-  const host = [...document.querySelectorAll("dialog.dlg[open]")].pop() || document.body;
-  if (toasts.parentNode !== host) host.append(toasts);
-  const t = h("div", { class: `toast ${kind}` }, href ? h("a", { href }, text) : text,
-    h("button", { class: "x", "aria-label": "dismiss", onclick: () => t.remove() }, "×"));
-  toasts.append(t);
-  if (timeout) setTimeout(() => t.remove(), timeout);
-}
-// D700: a failure nobody caught is said, not lost in the console
-window.addEventListener("unhandledrejection", (e) => {
-  const m = e.reason && e.reason.message ? e.reason.message : String(e.reason || "");
-  if (m && m !== "log in") toast(m, "bad", { timeout: 8000 });
-});
-window.addEventListener("error", (e) => { if (e.message) toast(`The page failed: ${e.message}`, "bad", { timeout: 8000 }); });
-
-/** A dialog (no alert, confirm or prompt): `body` a node or a component (drawn into a node of its own, unmounted
-    when it closes); `buttons` [label, value, class] -- a value that is a function is called with the body's node
-    (what a form in it says), Escape is null. */
-function dialog(title, body, buttons) {
-  return new Promise((resolve) => {
-    const d = h("dialog", { class: "dlg" });
-    const content = isVnode(body) || Array.isArray(body) ? h("div", { class: "dlg-body" }) : body;   // several elements: an array
-    if (content !== body) render(body, content);
-    const done = (v) => {
-      d.close(); if (toasts.parentNode === d) document.body.append(toasts);
-      if (content !== body) render(null, content);
-      d.remove(); resolve(v);
-    };
-    d.append(h("h2", {}, title), content, h("div", { class: "dlg-actions" }, buttons.map(([label, value, cls]) =>
-      h("button", { class: cls || "", type: "button", onclick: () => done(typeof value === "function" ? value(content) : value) }, label))));
-    d.addEventListener("cancel", (e) => { e.preventDefault(); done(null); });
-    document.body.append(d); d.showModal();
-    const f = d.querySelector("input, textarea"); (f || d.querySelector("button.primary, button.danger") || d).focus();
-  });
-}
-function confirmDialog(title, text, { ok = "OK", danger = false } = {}) {
-  return dialog(title, h("p", {}, text), [["Cancel", false], [ok, true, danger ? "danger solid" : "primary"]]);
-}
-
-/** A new loop from a document's text (D906): a name already taken is never replaced -- the user
-    opens that loop or chooses another name. True when made (or found made by this same request). */
+/** A problem document written as text, a loop made of it (D906): a name taken is said -- open that one, or choose another. */
 async function createFromText(name, filename, text) {
   try {
     await api("/apps/from-text", { method: "POST", body: { name, filename, text } });
     return true;
   } catch (x) {
     if (x.status !== 409) throw x;
-    const go = await dialog(`${name} exists`, h("p", {}, `A loop named ${name} already exists. Creating does not replace it: `
-      + "open it (and change it there, with a diff before saving), or choose another name."),
+    const go = await dialog(`${name} exists`, html`<p>${`A loop named ${name} already exists. Creating does not replace it: `
+      + "open it (and change it there, with a diff before saving), or choose another name."}</p>`,
       [["Choose another name", false, "primary"], ["Open it", true]]);
     if (go) location.hash = `#/app/${enc(name)}`;
     return false;
@@ -346,7 +168,7 @@ async function createFromText(name, filename, text) {
 }
 
 
-// D754: a phone's width -- the tables stack their rows (app.js), the log wraps (live.js)
+// D754: a phone's width -- the tables stack their rows (app.js), the log wraps (live/Log.js)
 const NARROW = window.matchMedia ? window.matchMedia("(max-width: 640px)") : { matches: false };
 
-export { NARROW, act, money, plural, api, apiUpload, appHref, request, autosave, bytes, card, confirmDialog, createFromText, crumbs, dialog, dur, empty, enc, fmtTok, h, head, loopStream, offline, owned, pageShow, saveMark, show, skeleton, streamPill, toast, toasts, when, withOwner };
+export { NARROW, money, plural, api, apiUpload, appHref, request, bytes, confirmDialog, createFromText, dialog, dur, enc, fmtTok, loopStream, offline, owned, pageShow, show, toast, when, withOwner };

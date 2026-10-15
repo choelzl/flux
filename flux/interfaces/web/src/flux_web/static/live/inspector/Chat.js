@@ -1,4 +1,4 @@
-// LiveAlt's inspector (D984, D1095): an agent's turn, or a model's call, as a chat that keeps up -- the
+// Live's inspector (D984, D1095): an agent's turn, or a model's call, as a chat that keeps up -- the
 // prompt and what was fed back on the right, its words on the left, its thinking and commands as quiet
 // rows; it opens at the newest end and follows it while one is there; scrolling up shows the history in
 // steps without moving one's place; scrolled up, new activity waits behind "↓ latest".

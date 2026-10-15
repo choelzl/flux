@@ -1,12 +1,12 @@
-// LiveAlt (D1095): the Timeline -- as Live's (D977): a task's own time (its children's taken out) in its
+// Live (D1095): the Timeline (D977): a task's own time (its children's taken out) in its
 // kind's lane, a quiet band per pass (D978), the agents' activity over the work; work side by side offered
 // to choose from.
 
 import { html } from "../view.js";
 import { dur } from "../format.js";
 import { WORK_COLORS as COLORS, AGENT_COLOR, ownSpans, phaseKind, workLabel } from "../work_style.js";
-import { taskState as state } from "../live_alt_model.js";
-import { passShort, taskLabel } from "../live_alt_views.js";
+import { taskState as state } from "../live_model.js";
+import { passShort, taskLabel } from "../live_views.js";
 
 const agentActive = n => { for (let p = n; p; p = p.parent) if (/^agent:/i.test(p.name)) return true; return false; };
 

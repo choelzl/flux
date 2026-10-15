@@ -8,7 +8,7 @@ import { api, apiUpload, dialog, enc, owned, toast } from "../ui.js";
 import { plural } from "../format.js";
 import { me } from "../state.js";
 import { diffCounts, lineDiff } from "../diff.js";
-import { progressDialog } from "../uploads.js";
+import { progressDialog } from "../components/Modal.js";
 import { Act } from "../components/Act.js";
 import { AgentPick } from "../components/AgentPick.js";
 import { AttachBox } from "../components/AttachBox.js";

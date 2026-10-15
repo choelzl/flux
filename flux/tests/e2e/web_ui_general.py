@@ -425,7 +425,7 @@ def general_flows(r, watch):
 
     r.step("author progress", author_progress)
 
-    def live_alt():
+    def live_page():
         with loop(r, "ui-live-alt") as name:
             now = b.js("return Date.now()/1000")
             def task(id, t, name, parent=None, **params):
@@ -501,7 +501,7 @@ def general_flows(r, watch):
                 b.js("const s=document.querySelector('[aria-label=\"'+arguments[0]+'\"]');s.value=arguments[1];s.dispatchEvent(new Event('change'));return 1", label, value)
 
             try:
-                r.page(f"#/app/{name}/live", "document.querySelector('.alt-detail')?.textContent.includes('FULL live prompt')", "LiveAlt current activity")
+                r.page(f"#/app/{name}/live", "document.querySelector('.alt-detail')?.textContent.includes('FULL live prompt')", "Live current activity")
                 r.check("D1002: a long task name truncates in the tree; the tree never scrolls sideways", b.js(
                     "const n=document.querySelector('.alt-tree .alt-task-name'), x=document.createTextNode('x'.repeat(400)); n.append(x);"   # D1095: beside the page's own text, then gone
                     " const v=document.querySelector('.alt-visual'), ok=v.scrollWidth<=v.clientWidth+1 && n.scrollWidth>n.clientWidth; x.remove(); return ok"))
@@ -516,7 +516,7 @@ def general_flows(r, watch):
                 b.js("window.__altStreams.at(-1).emit('events',{ev:'update',id:4,fields:{status:'still thinking'}});return 1")
                 import time as _t
                 _t.sleep(1.5)                                   # a redraw or two while it is in Fullscreen
-                r.check("D987: an agent stays in Fullscreen across LiveAlt's redraws (it was left blank)", b.js("return !!document.querySelector('dialog.fullscreen-view .alt-chat') && !document.querySelector('.alt-inspector-host .alt-detail[data-task]')"))
+                r.check("D987: an agent stays in Fullscreen across Live's redraws (it was left blank)", b.js("return !!document.querySelector('dialog.fullscreen-view .alt-chat') && !document.querySelector('.alt-inspector-host .alt-detail[data-task]')"))
                 b.js("[...document.querySelectorAll('dialog.fullscreen-view button')].find(x=>x.textContent==='Close').click();return 1")
                 # D1036: the whole conversation -- the steps before the live window come from the turn's file, scrolling up
                 filed = r.data / "users" / "bob" / "apps" / name / ".flux-steps" / "t.jsonl"
@@ -542,14 +542,14 @@ def general_flows(r, watch):
                 b.wait("document.querySelector('.alt-detail .facts')?.textContent.includes('working')", what="agent status update")
                 r.check("expanded prompt remains expanded across live updates", b.js("return document.querySelector('.alt-detail .inspector-input').open"))
                 b.js("document.querySelectorAll('.alt-detail .cv-work').forEach(w => w.open=true); document.querySelector('.alt-detail .cv-think').open=true;return 1")
-                b.wait("document.querySelector('.alt-detail .cv-thought')?.clientHeight>0", what="expanded LiveAlt thinking")
+                b.wait("document.querySelector('.alt-detail .cv-thought')?.clientHeight>0", what="expanded Live thinking")
                 positions = b.js("""const d=document.querySelector('.alt-detail'), p=d.querySelector('[data-k=prompt]'), t=d.querySelector('.cv-thought');
                   p.scrollTop=125;t.scrollTop=175;window.__altPrompt=p;
                   return [p.scrollTop,t.scrollTop];""")
-                r.check("LiveAlt prompt and thinking have independent scrolling", positions == [125, 175], str(positions))
+                r.check("Live prompt and thinking have independent scrolling", positions == [125, 175], str(positions))
                 drawn = b.js("return document.querySelector('.alt-detail').dataset.drawn")
                 b.js("window.__altStreams.at(-1).emit('events',{ev:'update',id:3,fields:{status:'unrelated update'}});return 1")
-                b.wait(f"document.querySelector('.alt-detail').dataset.drawn !== '{drawn}'", what="LiveAlt inspector redraw")
+                b.wait(f"document.querySelector('.alt-detail').dataset.drawn !== '{drawn}'", what="Live inspector redraw")
                 # D1035: a redraw of the same task is a morph -- the prompt's node is kept, not rebuilt
                 r.check("a redraw keeps the inspector's nodes", b.js("return window.__altPrompt===document.querySelector('.alt-detail [data-k=prompt]')"))
                 r.check("unrelated task updates preserve prompt and thinking scroll", b.js("return [document.querySelector('.alt-detail [data-k=prompt]').scrollTop,document.querySelector('.alt-detail .cv-thought').scrollTop]") == positions)
@@ -568,7 +568,7 @@ def general_flows(r, watch):
                 b.click('.alt-tree [data-fold="pass:1"]')
                 # D1034: a task whose one child is its command is one line, the program its note
                 r.check("a task and its one command are one line in the tree", b.js("const t=document.querySelector('.alt-tree [data-task=\"1\"]');return !!t && t.textContent.includes('python3') && !document.querySelector('.alt-tree [data-task=\"2\"]') && !document.querySelector('.alt-tree [data-fold=\"1\"]')"))
-                r.check("LiveAlt removes task filters and duplicate follow text", b.js("return !document.querySelector('.alt-task-tools, .alt-status, [aria-label=\"Find LiveAlt tasks\"], [aria-label=\"LiveAlt task status\"]') && document.querySelector('.alt-controls button').textContent==='Following'"))
+                r.check("Live removes task filters and duplicate follow text", b.js("return !document.querySelector('.alt-task-tools, .alt-status, [aria-label=\"Find Live tasks\"], [aria-label=\"Live task status\"]') && document.querySelector('.alt-controls button').textContent==='Following'"))
                 r.check("task inspection gets most of the desktop width", b.js("return document.querySelector('.alt-inspector-card').clientWidth > document.querySelector('.alt-visual-card').clientWidth * 1.7"))
                 b.click('.alt-tree .alt-pass-heading[data-pass="1"]')
                 r.check("D982: a pass's row shows the pass in the inspector: its steps and where its time went", b.js("const d=document.querySelector('.alt-pass-detail');return !!d && d.querySelector('h2').textContent==='Pass 1' && !!d.querySelector('.alt-bar.tall') && [...d.querySelectorAll('.alt-step-row .alt-task-name')].some(n=>n.textContent.startsWith('Design · first'))"))
@@ -659,7 +659,7 @@ def general_flows(r, watch):
                 r.button("Timeline", ".subrow .subtabs")
                 b.wait("document.querySelector('.alt-timeline')", what="alternate timeline")
                 r.check("the timeline takes the full width, the inspector under it (D976)", b.js("const v=document.querySelector('.alt-visual-card').getBoundingClientRect(), i=document.querySelector('.alt-inspector-card').getBoundingClientRect();return v.width>900 && i.top>=v.bottom"))
-                r.check("LiveAlt timeline groups work and uses the existing work colours with an agent overlay", b.js("const svg=document.querySelector('.alt-timeline');return [...svg.querySelectorAll('text')].some(n=>n.textContent==='Design') && svg.querySelector('[data-task=\"10\"] .bar').getAttribute('fill')==='#3faa78' && svg.querySelector('[data-task=\"4\"] .bar').getAttribute('fill')==='#5b6ee8' && svg.querySelector('.agent-time').getAttribute('fill')==='#d45eae' && !svg.querySelector('.pass-line') && [...svg.querySelectorAll('.alt-band-label')].map(t=>t.textContent).join(',')==='0,1,2'"))
+                r.check("Live timeline groups work and uses the existing work colours with an agent overlay", b.js("const svg=document.querySelector('.alt-timeline');return [...svg.querySelectorAll('text')].some(n=>n.textContent==='Design') && svg.querySelector('[data-task=\"10\"] .bar').getAttribute('fill')==='#3faa78' && svg.querySelector('[data-task=\"4\"] .bar').getAttribute('fill')==='#5b6ee8' && svg.querySelector('.agent-time').getAttribute('fill')==='#d45eae' && !svg.querySelector('.pass-line') && [...svg.querySelectorAll('.alt-band-label')].map(t=>t.textContent).join(',')==='0,1,2'"))
                 r.check("timeline has one lane per category like Live", b.js("return document.querySelector('.alt-timeline [data-task=\"3\"] .bar').getAttribute('y')===document.querySelector('.alt-timeline [data-task=\"4\"] .bar').getAttribute('y') && !document.querySelector('.alt-bar-label') && document.querySelector('.alt-timeline').getBoundingClientRect().height<120"))
                 if os.environ.get("FLUX_E2E_SHOTS"):
                     b.shot(Path(os.environ["FLUX_E2E_SHOTS"]) / "live-alt-timeline.png")
@@ -771,7 +771,7 @@ def general_flows(r, watch):
                 b.wait("document.querySelector('.alt-detail')?.textContent.includes('Retained answer')", what="return to complete retained start")
                 b.cmd("WebDriver:SetWindowRect", {"width": 390, "height": 900})
                 b.wait("document.querySelector('.alt-timeline').getBoundingClientRect().width<=document.querySelector('.alt-visual').clientWidth+1", what="historical timeline resized for phone")
-                r.check("LiveAlt controls and inspector fit a phone", b.js("return document.documentElement.scrollWidth<=innerWidth+1"))
+                r.check("Live controls and inspector fit a phone", b.js("return document.documentElement.scrollWidth<=innerWidth+1"))
                 r.button("Tree", ".subrow .subtabs")
                 b.click('.alt-tree [data-task="22"]')
                 r.check("phone task selection brings the inspector into view", b.js("const d=document.querySelector('.alt-inspector-card').getBoundingClientRect();return d.top>=-1 && d.top<innerHeight-150 && (d.bottom<=innerHeight+1 || d.top<100) && document.activeElement.matches('.alt-inspector-host') && document.querySelector('.alt-detail').dataset.task==='22'"))
@@ -782,15 +782,15 @@ def general_flows(r, watch):
                 b.js("window.__altDeferred=true;return 1")
                 choose("Live start", "21")
                 b.wait("typeof window.__altRelease==='function'", what="pending historical journal")
-                r.page("#/account", "document.querySelector('#main h1')?.textContent==='Account'", "leave LiveAlt")
+                r.page("#/account", "document.querySelector('#main h1')?.textContent==='Account'", "leave Live")
                 b.ajs("const done=arguments[arguments.length-1];window.__altRelease();requestAnimationFrame(()=>requestAnimationFrame(()=>done(true)))")
                 r.check("late historical output cannot alter another page", b.js("return document.querySelector('#main h1').textContent==='Account' && !document.querySelector('.live-alt')"))
-                r.clean("LiveAlt")
+                r.clean("Live")
             finally:
                 b.cmd("WebDriver:SetWindowRect", {"width": 1280, "height": 900})
                 b.js("window.fetch=window.__altFetch;window.EventSource=window.__altES;return 1")
 
-    r.step("live alt", live_alt)
+    r.step("live page", live_page)
 
     def main_measurements():
         from flux_web.results import measurement_summary
@@ -1203,7 +1203,10 @@ objectives: [{metric: timings.fast, goal: 15, direction: minimize},
                 b.wait("document.querySelector('.drawer.open #ask-q') && getComputedStyle(document.querySelector('.drawer')).transform === 'none'", what="reopened chat")
                 r.check("closing Ask preserves the follow-up and its draft", b.js("return document.querySelector('#ask-q').value === 'Explain the numbers' && document.querySelector('.ask-compose-head').textContent.includes('Reply to:')"))
                 b.click(".ask-send")
-                b.wait("window.__askPosted.length === 1 && document.querySelectorAll('.ask-turn').length === 3", what="follow-up response")
+                b.wait("window.__askPosted.length === 1 && document.querySelectorAll('.ask-turn').length === 3", what="follow-up response",
+                       said="JSON.stringify({posted: window.__askPosted.length, turns: document.querySelectorAll('.ask-turn').length, q: document.querySelector('#ask-q')?.value,"
+                            " send: [document.querySelector('.ask-send')?.disabled, document.querySelector('.ask-send')?.textContent], who: document.querySelector('#ask-who')?.value,"
+                            " toasts: [...document.querySelectorAll('.toast')].map(t => t.textContent)})")
                 r.check("Reply sends its parent and keeps turns together in order", b.js("const posted = window.__askPosted[0], turns = [...document.querySelector('.selected-thread').querySelectorAll('.ask-user p')]; return posted.parent_id === arguments[0] && posted.question === 'Explain the numbers' && turns[0].textContent === 'Why is this design best?' && turns[1].textContent === posted.question && !document.querySelector('#ask-q').value", root))
                 b.click(f'[data-ask-toggle="{root}"]')
                 r.check("collapsing a conversation shows only its initial prompt", b.js("const c = document.querySelector('.selected-thread'), visible = [...c.querySelectorAll('.ask-message')].filter(el => el.getClientRects().length); return visible.length === 1 && visible[0].querySelector('p').textContent === 'Why is this design best?' && c.querySelector('.ask-collapse').getAttribute('aria-expanded') === 'false' && !c.querySelector('.ask-turn .ask-reply').getClientRects().length && !!c.querySelector('.ask-reply-top').getClientRects().length"))

@@ -1,17 +1,17 @@
 // Flux web: pages as Preact components (D1095) -- written with htm's tagged templates, no build step.
 // Preact and htm are vendored (static/vendor), their imports made relative.
-// A page moves over one tab at a time; until all have, a component sits inside a page still built
-// with h(), and a node h() builds (a conversation, a highlighted block) sits inside a component (`Dom`).
+// Every page is a component; a node made elsewhere (a view moved fullscreen, what the crafter draws) sits
+// inside one through `Dom`, and a component goes where a node is wanted through `node`.
 
 import { html, render } from "./vendor/htm-preact.module.js";
-import { cloneElement, options } from "./vendor/preact.module.js";
+import { options } from "./vendor/preact.module.js";
 import { useEffect, useLayoutEffect, useRef, useState } from "./vendor/hooks.module.js";
 import { cleanup } from "./state.js";
 import { agoText, when } from "./format.js";
 
-export { cloneElement, html, render };
+export { html, render };
 
-// A state changed is drawn at once, as the pages built with h() always were: what a click changed is there when
+// A state changed is drawn at once: what a click changed is there when
 // the click's handler returns (a keyboard's next key, a test's next look) -- not a microtask later. Not while
 // Preact runs the effects of a draw: an effect that sets a state would draw again inside that run, and the draw
 // runs the same effects a second time (a file read twice) -- then a microtask later.
@@ -26,7 +26,8 @@ options.requestAnimationFrame = flush => afterNextFrame(() => { effects++; try {
 options.debounceRendering = draw => effects ? Promise.resolve().then(draw) : draw();
 export { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "./vendor/hooks.module.js";
 
-/** A node (or nodes) built with h(), inside a component: placed as it is, the wrapper not laid out.
+/** A node (or nodes) made elsewhere (an editor, a view moved fullscreen), inside a component: placed as it is, the
+    wrapper not laid out.
     Never a DOM node as a component's child itself -- Preact draws it once and throws on the redraw. */
 export function Dom({ node }) {
   const ref = useRef(null);
@@ -41,8 +42,8 @@ export function Card({ title, actions, cls = "", children, ...rest }) {
     ${children}</section>`;
 }
 
-// One clock for every "5 min ago" on the page: a minute's tick redraws those still on it. A page built with
-// h() never unmounts what it redraws over, so one that has left the page is dropped at the tick, not kept.
+// One clock for every "5 min ago" on the page: a minute's tick redraws those still on it; one that has left the
+// page without being unmounted (a node replaced under it) is dropped at the tick, not kept.
 const ticking = new Set();
 setInterval(() => { for (const s of ticking) { if (s.ref.current?.isConnected) s.tick(); else ticking.delete(s); } }, 30000);
 /** When, in words ("5 min ago", the date on hover), kept current while it is on the page. */
@@ -92,17 +93,9 @@ export function showIn(body, name, vnode) {
   return host;
 }
 
-/** A component in a node of its own, for a page built with h() to place: unmounted with the route. */
+/** A component in a node of its own, for what places nodes (a page's body, the crafter): unmounted with the route. */
 export function node(vnode) {
   const host = document.createElement("div");
   host.style.display = "contents";
   return mount(host, vnode);
-}
-
-/** A component drawn once into a node of its own, kept apart from any page (the bar's mark; a chart a page
-    built with h() places): the node itself, no wrapper; still live (a time chart's pointer follows it). */
-export function drawn(vnode) {
-  const box = document.createElement("div");
-  render(vnode, box);
-  return box.firstElementChild || box;
 }

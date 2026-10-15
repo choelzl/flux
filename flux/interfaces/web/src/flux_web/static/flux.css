@@ -765,7 +765,7 @@ svg.alt-flow { display: block; width: 100%; height: auto; margin: 0 auto; overfl
 /* D978: quiet pass bands, numbered; one bar with cuts for steps back to back */
 .alt-band { fill: transparent; } .alt-band.odd { fill: color-mix(in srgb, var(--muted) 10%, transparent); } .alt-band-label { font-size: 9px; }
 .alt-cut { fill: var(--panel); }
-/* D982: LiveAlt's inspector -- the head in the left side's words, what a task gave first */
+/* D982: Live's inspector -- the head in the left side's words, what a task gave first */
 .alt-ihead { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 8px; }
 .alt-ihead h2 { font-family: var(--sans); font-size: 15px; margin: 0; }
 .alt-stripe { width: 4px; height: 18px; border-radius: 2px; flex-shrink: 0; }

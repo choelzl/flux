@@ -61,6 +61,14 @@ def free_port() -> int:
         return s.getsockname()[1]
 
 
+# The two charts drawn into a node of their own, for a test that reads one: `bestChart(rows, obj, passes, opts)`,
+# `paretoChart(designs, xm, ym, stage, objectives, onPick, opts)`, `designPoints`.
+CHARTS = ("Promise.all(['view', 'chartdata', 'charts/BestChart', 'charts/ParetoChart'].map(m => import('/static/' + m + '.js'))).then(([V, D, B, P]) => {"
+          " const draw = (C, p) => { const box = document.createElement('div'); V.render(V.html`<${C} ...${p} />`, box); return box.firstElementChild; };"
+          " return {designPoints: D.designPoints, bestChart: (rows, obj, passes, o = {}) => draw(B.BestChart, {rows, obj, passes, ...o}),"
+          " paretoChart: (designs, xm, ym, stage, objectives, onPick, o = {}) => draw(P.ParetoChart, {designs, xm, ym, stage, objectives, onPick, ...o})}; })")
+
+
 class Browser:
     """Just enough Marionette: navigate, run a script and get its value, click, type, attach a
     file, take a screenshot."""
@@ -82,9 +90,11 @@ class Browser:
         else:
             raise RuntimeError("Firefox's Marionette never answered")
         self.buf, self.mid = b"", 0
+        self.sock.settimeout(300)         # a Firefox starting among others under load is slow to greet and open a session
         self._recv()
         self.cmd("WebDriver:NewSession", {"capabilities": {}})
         self.cmd("WebDriver:SetWindowRect", {"width": 1280, "height": 900})
+        self.sock.settimeout(120)        # one command: a navigation under load may take a while
 
     def _recv(self):
         while b":" not in self.buf:
@@ -122,7 +132,7 @@ class Browser:
         return list(r["value"].values())[0]
 
     def click(self, css):
-        # A live page redraws (LiveAlt each second while running): the element found can be
+        # A live page redraws (Live each second while running): the element found can be
         # replaced before the click lands; find it again (D976).
         for attempt in range(5):
             try:
@@ -164,9 +174,10 @@ class Browser:
         r = self.cmd("WebDriver:TakeScreenshot", {"full": full})
         Path(path).write_bytes(base64.b64decode(r["value"]))
 
-    def wait(self, expr, timeout=None, what=""):
-        """Until `expr` (a JS expression) is truthy; its value, or an error saying what was awaited.
-        D1070: by default 45 s (FLUX_E2E_WAIT) -- the full check runs seven browsers side by side."""
+    def wait(self, expr, timeout=None, what="", said=None):
+        """Until `expr` (a JS expression) is truthy; its value, or an error saying what was awaited --
+        and, given `said` (a JS expression), what the page showed instead. D1070: by default 45 s
+        (FLUX_E2E_WAIT) -- the full check runs seven browsers side by side."""
         timeout = float(os.environ.get("FLUX_E2E_WAIT", "45")) if timeout is None else timeout
         end = time.time() + timeout
         last = None
@@ -178,7 +189,13 @@ class Browser:
             if last:
                 return last
             time.sleep(0.25)
-        raise AssertionError(f"waited {timeout:.0f}s for {what or expr}")
+        shown = ""
+        if said:
+            try:
+                shown = f" -- the page: {self.js(f'return ({said});')}"
+            except RuntimeError as x:
+                shown = f" -- the page could not be read: {x}"
+        raise AssertionError(f"waited {timeout:.0f}s for {what or expr}{shown}")
 
     def quit(self):
         try:
@@ -1840,11 +1857,11 @@ def flows(r: Run) -> None:
         r.check("baseline has a shared graph legend", b.js("return (document.querySelector('#main .graphs-ctl [data-baseline]') || {}).textContent === 'Baseline (pass 0)'"))
         r.check("baseline lines are faint and have no inline labels", b.js("return !document.querySelector('#main .baseline-label') && [...document.querySelectorAll('#main svg.pareto .baseline-ref, #main svg.best-chart .baseline-ref')].every(p => Number(getComputedStyle(p).strokeOpacity) === 0.4)"))
         alone = b.ajs("const done = arguments[arguments.length - 1], fixture = arguments[0];"
-                      " import('/static/charts.js').then(C => { const d = fixture.designs.filter(d => d.baseline), metric = {metric: 'area_um2', direction: 'minimize'};"
+                      " " + CHARTS + ".then(C => { const d = fixture.designs.filter(d => d.baseline), metric = {metric: 'area_um2', direction: 'minimize'};"
                       " const best = C.bestChart(C.designPoints(d, metric), metric, []), pareto = C.paretoChart(d, 'area_um2', 'fmax_mhz', '', fixture.objective_list);"
                       " done([best, pareto].map(el => [el.querySelectorAll('.baseline-ref').length, el.querySelectorAll('svg.best-chart .pt, svg.pareto .pt').length, /NaN|Infinity/.test(el.innerHTML)])); }).catch(e => done(String(e)));", GRAPHS_RESULTS)
         r.check("baseline-only graphs draw finite reference lines without search points", alone == [[2, 0, False], [3, 0, False]], str(alone))
-        focused = b.ajs("""const done = arguments[arguments.length - 1]; import('/static/charts.js').then(C => {
+        focused = b.ajs("""const done = arguments[arguments.length - 1]; """ + CHARTS + """.then(C => {
           const d = (name, x, y, extra = {}) => ({name, group: 'whole', eligible: true, verdict: 'accepted', shown: 'confirm',
             numbers: {x, y}, stages: {confirm: {x, y}}, first: '2026-10-01T00:00:00Z', ...extra});
           const rows = [d('a', 10, 20), d('b', 20, 10), d('bad', 1e6, 1e6), d('failed', 0, 0, {eligible: false}),

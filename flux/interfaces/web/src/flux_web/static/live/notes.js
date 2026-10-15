@@ -1,4 +1,4 @@
-// LiveAlt (D1095): the quiet steps a pass wrote as notes (a scope list, a scripted search), said in words,
+// Live (D1095): the quiet steps a pass wrote as notes (a scope list, a scripted search), said in words,
 // and a document's setting as the person wrote it. Plain functions.
 
 /** D1066: which scope a pass took, from its design's own record of it. */

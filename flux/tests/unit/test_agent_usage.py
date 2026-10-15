@@ -144,7 +144,8 @@ def test_real_timeout_records_tokens_including_updates_during_shutdown(tmp_path,
     monkeypatch.setenv("FLUX_PARTIALTEST_PRICE_IN", "1")
     monkeypatch.setenv("FLUX_PARTIALTEST_PRICE_OUT", "2")
     monkeypatch.setattr("flux_loop.agent._about", lambda *_: "test")
-    spec = AgentSpec("partialtest", (sys.executable, str(script)), None, "claude", timeout_s=0.2)
+    # the agent's events printed and its SIGTERM handler set before it times out -- a loaded machine starts Python slowly
+    spec = AgentSpec("partialtest", (sys.executable, str(script)), None, "claude", timeout_s=5)
     turn = run_turn(spec, spec.argv, {"prompt": "p"}, workdir=tmp_path)
     assert turn.rc == 124 and not turn.ok
     record = json.loads(path.read_text())

@@ -146,7 +146,7 @@ network helpers, stale containers for the same loop and refusal to kill attached
 selectors, baseline pass 0, command/stdin/stdout/stderr and prompt/conversation inspectors,
 keyboard selection, pinned tasks across updates and view changes, returning to current activity,
 older-start replay, missing data, retry, stream cleanup, narrow screens and navigation races.
-`test_live_alt_model.py` checks sparse and parallel pass membership, root/child attribution,
+`test_live_model.py` checks sparse and parallel pass membership, root/child attribution,
 current-task selection, setup, empty scopes and campaign selection across resumed starts.
 Agent/tool unit tests check recorded commands and stdin delivery without duplicating large prompts.
 

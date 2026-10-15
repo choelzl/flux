@@ -13,7 +13,7 @@ import pytest
 from test_web_admin import H, _client, _loop, _running, server  # noqa: F401 -- shared fixture
 
 
-def _wait(check, timeout=10):
+def _wait(check, timeout=60):              # a loaded machine starts and stops a process slowly; only a stuck one waits it out
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         if check():

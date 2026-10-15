@@ -3,7 +3,7 @@
 
 import { Card, html, useRef } from "../view.js";
 import { Act } from "./Act.js";
-import { ViewerTools } from "./ViewerTools.js";
+import { ViewerTools } from "../viewer.js";
 
 /** `said` the line; `refresh()`; `raw` the answer (shown as JSON, `rawTitle` its title); `cls` the content's class. */
 export function RefreshCard({ title, said, refresh, raw, rawTitle = title, cls, children }) {

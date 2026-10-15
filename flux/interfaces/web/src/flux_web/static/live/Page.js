@@ -1,12 +1,13 @@
-// LiveAlt (D1095): the page -- the toolbar (Follow, Earlier passes, the start and the pass), the list (Tree,
+// Live (D1095): the page -- the toolbar (Follow, Earlier passes, the start and the pass), the list (Tree,
 // Graph or Timeline) and the inspector beside it. Both read the store; a change in it redraws them.
 
-import { Dom, html, render, useEffect, useLayoutEffect, useMemo, useRef, useState } from "../view.js";
-import { appHref, streamPill, when } from "../ui.js";
+import { html, render, useEffect, useLayoutEffect, useRef, useState } from "../view.js";
+import { appHref, when } from "../ui.js";
+import { StreamPill } from "../components/StatePill.js";
 import { scrollState, restoreScroll } from "../scroll.js";
 import { phaseKind } from "../work_style.js";
-import { taskState as state } from "../live_alt_model.js";
-import { passName } from "../live_alt_views.js";
+import { taskState as state } from "../live_model.js";
+import { passName } from "../live_views.js";
 import { NO_PASS } from "./store.js";
 import { lines } from "./rows.js";
 import { Lines } from "./Lines.js";
@@ -66,7 +67,6 @@ export function Page({ store, ctx }) {
 }
 function Body({ store, ctx }) {
   const { s, a } = store, panel = useRef(null), host = useRef(null), places = useRef({ mode: "", saved: new Map() });
-  const pill = useMemo(() => streamPill(), []);
   const mode = ctx.curSub() || "tree";
   if (mode !== "graph" && s.boxView) s.boxView = null;
   const v = store.view();
@@ -118,8 +118,6 @@ function Body({ store, ctx }) {
       if (narrowScreen()) { host.current?.closest(".alt-inspector-card")?.scrollIntoView({ block: "start" }); host.current?.focus({ preventScroll: true }); }
     }
   });
-  // the stream's word on its connection, once it has said one ("off": a past start reads no stream)
-  useEffect(() => { if (s.stream === "off") pill.el.hidden = true; else if (s.stream) pill.set(s.stream); }, [s.stream]);
   useEffect(() => {
     const ro = new ResizeObserver(entries => { const w = entries[0]?.contentRect.width; if (w != null) a.resized(w); });
     if (panel.current) ro.observe(panel.current);
@@ -136,7 +134,7 @@ function Body({ store, ctx }) {
   const more = mode === "tree" && v.scopeRows.length > v.rows.length;
   const logHref = `${appHref(ctx.owner, ctx.name)}/live/log`;
   return html`<div class="live-alt" data-drawn=${s.drawn}>
-    <div class="alt-notice"><${Dom} node=${pill.el} />
+    <div class="alt-notice"><${StreamPill} state=${s.stream} />
       ${s.failure ? html`<p class="callout warn">${s.failure}</p><button class="small" type="button" onClick=${a.retry}>Retry</button>` : ""}</div>
     <div class=${`alt-split${mode === "timeline" && s.pass === "all" ? " wide" : ""}`}>
       <section class="card alt-visual-card"><div class="alt-list-head"><${Summary} v=${v} s=${s} /></div>

@@ -6,7 +6,7 @@ import { Ago, Skeleton, html, useEffect, useRef, useState } from "../view.js";
 import { api, dialog, enc, toast } from "../ui.js";
 import { Act } from "../components/Act.js";
 import { Code } from "../components/Markdown.js";
-import { ViewerTools } from "../components/ViewerTools.js";
+import { ViewerTools } from "../viewer.js";
 import { VerdictPill, byCritic } from "./columns.js";
 
 /** The reject form (D1043): why, each measurement measured again or cleared, hidden too (at rest) -- read from

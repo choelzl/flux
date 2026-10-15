@@ -2,7 +2,7 @@
 // how often, what it last did, Run now; its settings and a run on one loop in Edit, saved as they change.
 
 import { Ago, Card, html, useState } from "../view.js";
-import { api, dialog, h, toast, when } from "../ui.js";
+import { api, dialog, toast, when } from "../ui.js";
 import { Act } from "../components/Act.js";
 import { bound, useAutosave } from "../components/Autosave.js";
 

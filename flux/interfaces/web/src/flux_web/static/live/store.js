@@ -1,11 +1,11 @@
-// LiveAlt (D1095): the page's state and what one does with it -- the start and pass in view, what is
+// Live (D1095): the page's state and what one does with it -- the start and pass in view, what is
 // selected, followed, folded, opened -- and the task journal it reads (the live stream, or a past start's
 // retained one). The toolbar and the page are its two views: a change redraws both, once a frame.
 
-import { api, enc, h, loopStream, request } from "../ui.js";
+import { api, enc, loopStream, request } from "../ui.js";
 import { journal } from "./journal.js";
-import { campaignForStart, currentTask, notePass, taskScope, taskWindow } from "../live_alt_model.js";
-import { docNotes, flowBoxes } from "../live_alt_views.js";
+import { campaignForStart, currentTask, notePass, taskScope, taskWindow } from "../live_model.js";
+import { docNotes, flowBoxes } from "../live_views.js";
 import { judge, namer } from "./rules.js";
 import { noteShort, scopeOf } from "./notes.js";
 
@@ -19,7 +19,7 @@ export function createStore(ctx) {
     history: null, problem: null, notes: {}, goals: [], record: [], names: [ctx.name], tests: [],
     loadMessage: "", failure: null, journal: null, selected: null, transport: null, stream: "",
     // the inspector's panel: one element the page keeps -- Fullscreen moves it, a task is drawn into it wherever it is (D987)
-    detail: h("div", { class: "detail alt-detail" }),
+    detail: Object.assign(document.createElement("div"), { className: "detail alt-detail" }),
     reveal: false, located: null, drawn: 0, width: 380, earlierReady: false,
   };
   const subs = new Set();

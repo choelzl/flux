@@ -1,4 +1,4 @@
-"""D977: LiveAlt's timeline classifies and cuts work as Live's does -- the JS kind rule equals
+"""D977: Live's timeline classifies and cuts work as the server does -- the JS kind rule equals
 `flux_web.timeline.kind_of`, and a task's own time leaves its children's out."""
 
 import base64
@@ -32,7 +32,7 @@ def run(js):
     return json.loads(r.stdout)
 
 
-def test_the_kind_of_work_is_the_same_in_live_and_livealt():
+def test_the_kind_of_work_is_the_same_in_the_page_and_the_server():
     got = run(f"m => {json.dumps(PHASES)}.map(([n, w]) => m.kindOf(n, w))")
     assert got == [kind_of(n, w) for n, w in PHASES]
 

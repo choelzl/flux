@@ -1,9 +1,9 @@
-// LiveAlt (D1095): the inspector's panels this page draws itself -- a box of a pass (its runs, its notes,
+// Live (D1095): the inspector's panels this page draws itself -- a box of a pass (its runs, its notes,
 // what it is set to until it runs), a pass at a glance, and where a task's panel (inspector/) is kept.
 
 import { html, useLayoutEffect, useRef } from "../view.js";
 import { WORK_COLORS as COLORS, workLabel } from "../work_style.js";
-import { passName, taskLabel } from "../live_alt_views.js";
+import { passName, taskLabel } from "../live_views.js";
 import { PassSummary } from "./inspector/Inspector.js";
 import { asYaml, noteName, noteSaid } from "./notes.js";
 

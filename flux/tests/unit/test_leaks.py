@@ -147,8 +147,8 @@ def test_a_client_is_found_attached_by_its_command_line():
 def test_a_login_that_ignores_asking_is_ended(tmp_path):
     from flux_web.logins import Logins
 
-    p = subprocess.Popen(["sh", "-c", "trap '' INT TERM; sleep 300"], start_new_session=True)
-    time.sleep(0.3)
+    p = subprocess.Popen(["sh", "-c", "trap '' INT TERM; echo ready; sleep 300"], start_new_session=True, stdout=subprocess.PIPE, text=True)
+    assert p.stdout.readline().strip() == "ready"           # its trap set -- not a fixed wait a loaded machine outruns
     sess = types.SimpleNamespace(proc=p)
     t0 = time.monotonic()
     Logins._kill(sess)

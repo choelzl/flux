@@ -1,4 +1,4 @@
-"""LiveAlt scopes sparse/parallel passes and resumed starts without mixing their tasks."""
+"""Live scopes sparse/parallel passes and resumed starts without mixing their tasks."""
 
 import base64
 import json
@@ -13,7 +13,7 @@ pytestmark = pytest.mark.skipif(shutil.which("node") is None, reason="node is no
 
 
 def evaluate(events, expression):
-    uri = "data:text/javascript;base64," + base64.b64encode((STATIC / "live_alt_model.js").read_bytes()).decode()
+    uri = "data:text/javascript;base64," + base64.b64encode((STATIC / "live_model.js").read_bytes()).decode()
     script = """const LT = require(process.argv[1]);
 const events = JSON.parse(require('fs').readFileSync(0, 'utf8')), model=LT.model();
 for (const event of events) LT.apply(model, event);

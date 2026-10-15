@@ -1,4 +1,4 @@
-// LiveAlt (D1095): the tree's lines as data -- what each line says and does, drawn by Tree.js for the tree
+// Live (D1095): the tree's lines as data -- what each line says and does, drawn by Tree.js for the tree
 // and for a graph box's list alike. One line per box of a pass's work, its tries or steps under it, the
 // rules of what folds, merges and repeats as the tree has always drawn them (D980, D1012, D1016, D1038,
 // D1044, D1045, D1050, D1054, D1059, D1061...). No page: the lines are plain objects.
@@ -12,9 +12,9 @@
 
 import { dur } from "../format.js";
 import { WORK_COLORS as COLORS, AGENT_COLOR, kindOf, workLabel, phaseKind } from "../work_style.js";
-import { boxKind, candidateOf, flowBoxes, isDraft, ownView, passName, taskLabel, taskNote } from "../live_alt_views.js";
+import { boxKind, candidateOf, flowBoxes, isDraft, ownView, passName, taskLabel, taskNote } from "../live_views.js";
 import { notReached as unreached } from "./inspector/parts.js";
-import { taskState as state } from "../live_alt_model.js";
+import { taskState as state } from "../live_model.js";
 import { AI, STAGE, checkWord, ended, firstFailing, isCritique, madeOf, numbersOf, rejectedBy, rest, soleOf } from "./rules.js";
 
 const TRIES = 5;

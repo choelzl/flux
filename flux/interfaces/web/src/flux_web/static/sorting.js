@@ -1,5 +1,4 @@
-// Flux web (D859, D926, D1095): how a table's rows are ordered -- the same for a table built with h() (ui.js
-// `sortableTable`) and one drawn by a component (components/SortableTable.js). Plain functions, no page.
+// Flux web (D859, D926, D1095): how a table's rows are ordered (components/SortableTable.js) -- plain functions, no page.
 // Names natural and case-insensitive (item2 before Item10), numbers as numbers, a list key one value after the
 // other (what a cell shows, in its order); ties keep the rows' own order; a missing value (null, "") last either
 // way. A table's choice is kept per table in this browser (for the page's life when it keeps nothing).

@@ -7,7 +7,7 @@ import { api, enc, toast } from "../ui.js";
 import { measurementComparison } from "../measurementdata.js";
 import { defaultMainMeasurements, designLabels, mainMeasurements, measurementText, measurementUnitsFor, relativeMeasurement } from "../result_table.js";
 import { Act } from "../components/Act.js";
-import { ViewerTools } from "../components/ViewerTools.js";
+import { ViewerTools } from "../viewer.js";
 import { useColumns, useValuesMode } from "./columns.js";
 import { ResultsTable, keyOf } from "./Table.js";
 import { DesignDetail } from "./Detail.js";

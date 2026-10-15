@@ -1,8 +1,9 @@
 // Overview layouts belong to the account, across loops and browsers (D692; D1095: the editor is
 // overview/LayoutEditor.js).
 import { cleanup, me, navSeq } from "./state.js";
-import { api, h, toast, toasts } from "./ui.js";
-import { html, render } from "./view.js";
+import { api, toast } from "./ui.js";
+import { html } from "./view.js";
+import { openModal } from "./components/Modal.js";
 
 const loadOverviewLayout = () => api("/preferences/overview");
 
@@ -13,11 +14,10 @@ async function editOverviewLayout() {
   const [prefs, { LayoutEditor }, { overviewMockData }] = await Promise.all([loadOverviewLayout(), import("./overview/LayoutEditor.js"), import("./overview_mock.js")]);
   if (me !== account || navSeq !== page) return false;
   return new Promise(resolve => {
-    const d = h("dialog", { class: "dlg overview-layout-dialog", "aria-labelledby": "overview-layout-title" });
-    let saving = false;
+    let saving = false, m = null;
     const finish = saved => {
-      if (!d.isConnected) return;
-      render(null, d); d.close(); if (toasts.parentNode === d) document.body.append(toasts); d.remove();
+      if (!m) return;
+      m.close(); m = null;
       const at = cleanup.indexOf(cancel); if (at >= 0) cleanup.splice(at, 1);
       resolve(saved);
     };
@@ -25,14 +25,12 @@ async function editOverviewLayout() {
     const save = async layout => {
       saving = true;
       try { await api("/preferences/overview", { method: "PUT", body: layout }); } finally { saving = false; }
-      if (d.isConnected) { finish(true); toast("Overview layout saved for your account", "ok"); }
+      if (m) { finish(true); toast("Overview layout saved for your account", "ok"); }
     };
     cleanup.push(cancel);
-    d.addEventListener("cancel", e => { e.preventDefault(); if (!saving) cancel(); });
-    document.body.append(d);
-    render(html`<${LayoutEditor} prefs=${prefs} example=${overviewMockData()} save=${save} cancel=${cancel} />`, d);
-    d.showModal();
-    d.querySelector(".overview-layout-editor select")?.focus();
+    m = openModal(html`<${LayoutEditor} prefs=${prefs} example=${overviewMockData()} save=${save} cancel=${cancel} />`,
+      { cls: "dlg overview-layout-dialog", labelledby: "overview-layout-title", onCancel: () => { if (!saving) cancel(); } });
+    m.el.querySelector(".overview-layout-editor select")?.focus();
   });
 }
 

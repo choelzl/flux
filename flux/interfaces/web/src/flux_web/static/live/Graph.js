@@ -1,11 +1,11 @@
-// LiveAlt (D1095): the Graph -- the chain of passes, and the pass shown as its flow of boxes (D978), a box
+// Live (D1095): the Graph -- the chain of passes, and the pass shown as its flow of boxes (D978), a box
 // opening on its list (D1044) -- in the timeline's words and colours.
 
 import { html } from "../view.js";
 import { plural } from "../format.js";
 import { WORK_COLORS as COLORS } from "../work_style.js";
-import { currentTask, taskState as state } from "../live_alt_model.js";
-import { flowBoxes, isDraft, passName, passShort, repaired, triesOf } from "../live_alt_views.js";
+import { currentTask, taskState as state } from "../live_model.js";
+import { flowBoxes, isDraft, passName, passShort, repaired, triesOf } from "../live_views.js";
 import { CRIT, soleOf } from "./rules.js";
 import { lines } from "./rows.js";
 import { Lines } from "./Lines.js";

@@ -1,4 +1,4 @@
-// LiveAlt's inspector (D982, D1095): what a task gave, by its kind -- a command (P2-P6), a search (P8), a
+// Live's inspector (D982, D1095): what a task gave, by its kind -- a command (P2-P6), a search (P8), a
 // choice (P9), a critic (P10), any other task's steps -- and the quiet steps it took (D1047).
 
 import { html } from "../../view.js";

@@ -1,5 +1,4 @@
-// Flux web: numbers and times said in words (D1095) -- plain functions, no page: the pages built with
-// h() and the components (view.js) say them alike.
+// Flux web: numbers and times said in words (D1095) -- plain functions, no page: every component says them alike.
 
 /** When, as this browser writes a date and time. */
 export const when = (t) => t ? new Date(t * 1000).toLocaleString() : "";

@@ -10,7 +10,7 @@ import { checkedCard, resultsView } from "./loop_results.js";
 import { agentsView } from "./loop_agents.js";
 import { filesTab } from "./loop_files.js";
 import { settingsView } from "./loop_settings.js";
-import { liveTab } from "./loop_live_alt.js";
+import { liveTab } from "./loop_live.js";
 import { html, mount, node } from "./view.js";
 import { Talk } from "./loop/Talk.js";
 import { Drawer } from "./loop/Drawer.js";

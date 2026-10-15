@@ -1,4 +1,4 @@
-// LiveAlt's inspector (D1095): its building blocks -- the state pill, a step's row, a fold that stays as the
+// Live's inspector (D1095): its building blocks -- the state pill, a step's row, a fold that stays as the
 // person left it, a block of fields, a text that keeps its place (and follows its end while it grows).
 
 import { html, useLayoutEffect, useRef } from "../../view.js";

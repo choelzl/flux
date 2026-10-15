@@ -6,7 +6,7 @@
 import { Card, html, useEffect, useLayoutEffect, useMemo, useRef, useState } from "../view.js";
 import { NARROW, enc, request } from "../ui.js";
 import { isProblem, latestStart, lineClass, logAt, logLines, matcher } from "../logmodel.js";
-import { ViewerTools } from "../components/ViewerTools.js";
+import { ViewerTools } from "../viewer.js";
 
 const WRAPPED = 3000, TAIL = 2 << 20;
 const storedTimes = () => { try { return localStorage.getItem("flux-log-times") !== "off"; } catch (_) { return true; } };

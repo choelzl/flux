@@ -5,7 +5,8 @@
 import { Card, html, useRef, useState } from "../view.js";
 import { api, createFromText, enc, toast } from "../ui.js";
 import { plural } from "../format.js";
-import { progressDialog, sendFiles } from "../uploads.js";
+import { sendFiles } from "../uploads.js";
+import { progressDialog } from "../components/Modal.js";
 import { Act } from "../components/Act.js";
 import { CodeEditor } from "../components/CodeEditor.js";
 import { DropZone } from "../components/DropZone.js";
@@ -63,11 +64,10 @@ export function NewPage() {
     if (!await createFromText(name.value, file, ed.current.textarea.value)) { name.focus(); return; }
     toast(`${name.value} created`, "ok"); location.hash = `#/app/${enc(name.value)}`;
   };
-  const onEditor = e => { ed.current = e; if (e) e.textarea.placeholder = "id: my_problem\nstatement: >-\n  What the design must do.\n..."; };
   return html`<${PageHead} title="Write a problem document" sub="Paste or write the YAML; upload its other files afterwards on the application's page.">
       <a class="btn" href="#/configure">Use the configurator instead</a><//>
     <${Card}><div ref=${box}><div class="row"><label class="stack">Application<input class="new-name" placeholder="application name" required /></label>
       <label class="stack">File<input class="new-file" value="problem.yaml" size="28" /></label></div>
-      <${CodeEditor} text="" lang="yaml" onEditor=${onEditor} />
+      <${CodeEditor} text="" lang="yaml" placeholder=${"id: my_problem\nstatement: >-\n  What the design must do.\n..."} onEditor=${e => { ed.current = e; }} />
       <div class="form-actions"><${Act} cls="primary" onClick=${create}>Create<//></div></div><//>`;
 }

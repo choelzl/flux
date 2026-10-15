@@ -14,3 +14,8 @@ export function StatePill({ st }) {
 export const LastSaid = ({ st }) => st.running
   ? html`running since <${Ago} t=${st.since} />${st.baseline ? " · baseline pass 0" : st.passes != null ? ` · pass ${st.passes + (st.at_rest ? 0 : 1)}` : ""}`
   : st.last_active ? html`last active <${Ago} t=${st.last_active} />` : "never run";
+
+/** D856: the page's connection to a loop, said only while it is not connected -- a green "live" beside an idle loop
+    read as running; `state` "" (connecting), "live", "reconnecting" or "off" (a past start reads no stream). */
+export const StreamPill = ({ state }) => html`<span class="pill stream warn" title="The page's connection to the loop" hidden=${state === "live" || state === "off"}>
+  ${state ? "reconnecting…" : "connecting…"}</span>`;
