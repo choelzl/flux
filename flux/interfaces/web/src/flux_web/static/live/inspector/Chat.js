@@ -3,7 +3,7 @@
 // rows; it opens at the newest end and follows it while one is there; scrolling up shows the history in
 // steps without moving one's place; scrolled up, new activity waits behind "↓ latest".
 
-import { html, useLayoutEffect, useRef } from "../../view.js";
+import { Glyph, html, useLayoutEffect, useRef } from "../../view.js";
 import { Conversation, liveWork } from "../../components/Conversation.js";
 import { Markdown } from "../../components/Markdown.js";
 import { Fold, Pre } from "./bits.js";
@@ -124,7 +124,7 @@ export function AgentChat({ n, env, mem }) {
           prompt ? html`<${Bubble} side="me" label=${`Prompt · ${prompt.length.toLocaleString()} characters`} k="input" mem=${mem}><${Pre} k="prompt" cls="val tall" text=${prompt} mem=${mem} follow=${false} /><//>` : ""]}
       ${all.length ? html`<${Conversation} steps=${shown} k=${`task${n.id}`} offset=${total - shown.length} live=${running(n)} quiet />`
         : running(n) ? "" : html`<p class="muted">No conversation recorded.</p>`}
-      ${running(n) && !liveWork(shown, true) ? html`<div class="alt-chat-now"><span class="alt-spin" />${String(f.status || "working") + "…"}</div>` : ""}
+      ${running(n) && !liveWork(shown, true) ? html`<div class="alt-chat-now"><${Glyph} tone="run" />${String(f.status || "working") + "…"}</div>` : ""}
       ${stop ? html`<div class="alt-chat-stop" role="note">${stop}</div>` : ""}<//></div>
     <${Output} n=${n} f=${f} mem=${mem} />`;
 }
@@ -141,5 +141,5 @@ export function ModelChat({ n, env, mem }) {
       ${thinking ? html`<details class="cv-step cv-think"><summary><span class="cv-kind">Thinking</span><span class="cv-sum muted">${thinking.slice(0, 140)}</span></summary><pre class="cv-body cv-thought">${thinking}</pre></details>` : ""}
       ${reply ? html`<div class="cv-text alt-reply">${shown !== reply ? html`<pre class="mono">${shown}</pre>` : html`<${Markdown} text=${reply.trim()} />`}</div>` : ""}
       ${f.error ? html`<div class="alt-chat-more bad">${String(f.error)}</div>` : ""}
-      ${running(n) ? html`<div class="alt-chat-now"><span class="alt-spin" />answering…</div>` : ""}<//>`;
+      ${running(n) ? html`<div class="alt-chat-now"><${Glyph} tone="run" />answering…</div>` : ""}<//>`;
 }

@@ -1678,7 +1678,7 @@ def flows(r: Run) -> None:
         t0 = time.time()
         r.check("the slow loop started", r.api("/apps/slow/start", "POST", {"passes": 1})["status"] == 200)
         r.page("#/app/slow/live", "document.querySelector('.alt-visual')", "Live of the running loop")
-        b.wait("document.querySelector('.alt-tree .alt-spin')", timeout=90, what="a task running")
+        b.wait("document.querySelector('.alt-tree .g.spin')", timeout=90, what="a task running")
         r.check("a task at work is said running", True)
         st = Store(r.data)
         run = max((x for x in st.runs(st.user(name="bob"), "slow") if x.get("pid")), key=lambda x: x["started"])
@@ -1738,7 +1738,7 @@ def flows(r: Run) -> None:
                 break
             time.sleep(0.5)
         b.js("if (window.__e2e) window.__e2e.bad = window.__e2e.bad.filter(t => !t.includes('slow')); return 1")
-        b.wait("!document.querySelector('.page-head .pill.t-run') && !document.querySelector('.alt-tree .alt-spin')", timeout=40, what="the run seen over, nothing running")
+        b.wait("!document.querySelector('.page-head .pill.t-run') && !document.querySelector('.alt-tree .g.spin')", timeout=40, what="the run seen over, nothing running")
         said = b.js("return document.querySelector('.alt-summary').textContent")
         r.check("a killed run's work is said stopped, not running (D928)", "running" not in said and any(w in said for w in ("interrupted", "failed")), said)
         r.clean("a killed run")

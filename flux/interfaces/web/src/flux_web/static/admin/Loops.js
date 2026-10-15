@@ -2,14 +2,14 @@
 // starts paused or resumed, every loop stopped or restarted after its pass, a notification to the users), every
 // loop's list, and the documents of an earlier form migrated.
 
-import { Card, html, useState } from "../view.js";
+import { Card, html, Notice, useState } from "../view.js";
 import { api, appHref, confirmDialog, dialog, toast } from "../ui.js";
 import { plural } from "../format.js";
 import { route } from "../app.js";
 import { Act } from "../components/Act.js";
 import { LoopsBrowser } from "../loops/Table.js";
 import { Select } from "../components/Select.js";
-import { Pill } from "../components/Tone.js";
+import { Pill, Said } from "../components/Tone.js";
 
 /** A notification to every user, or to those ticked: `v` {text, kind, all, to}. */
 const NotifyForm = ({ users, v, set }) => html`<div class="stack"><textarea rows="3" placeholder="The message" class="full" value=${v.text} onInput=${e => set({ text: e.currentTarget.value })} />
@@ -78,10 +78,10 @@ function OldDocuments({ r }) {
     ${r.loops.map(l => html`<div key=${`${l.user}/${l.app}`} class="mig-loop"><div class="mig-head"><strong>${`${l.user} / `}<a href=${appHref(l.user, l.app)}>${l.app}</a></strong>${l.running ? html`<${Pill} tone="run">running<//>` : ""}
         <span class="grow" />${l.documents.some(d => d.status === "would migrate") ? (l.running ? html`<span class="muted small">stop it to migrate: its document is in use</span>`
           : html`<${Act} cls="small primary" title="Write the documents that load; keep each original" onClick=${() => run({ user: l.user, app: l.app }, `${l.user}/${l.app}`)}>Migrate<//>`)
-          : html`<span class="small bad">${l.documents.some(d => d.status === "needs a hand") ? "not by itself: a part needs rewriting by hand (below)" : "not by itself: its result would not load (below)"}</span>
+          : html`<${Said} tone="bad" cls="small">${l.documents.some(d => d.status === "needs a hand") ? "not by itself: a part needs rewriting by hand (below)" : "not by itself: its result would not load (below)"}<//>
             <a class="btn small" href=${`${appHref(l.user, l.app)}/settings/problem`}>Edit its document</a>`}</div>
       ${l.documents.filter(d => d.status !== "current").map(d => html`<div key=${d.file} class="mig-doc"><div><span class="mono">${d.file}</span>${d.to !== d.file ? html`<span class="mono muted">${` → ${d.to}`}</span>` : ""} <${Pill} tone=${PILL[d.status] || "none"}>${d.status}<//></div>
-        ${d.why ? html`<p class="small bad">${d.why}</p>` : ""}${d.manual.length ? html`<ul class="small bad">${d.manual.map(m => html`<li>${m}</li>`)}</ul>` : ""}
+        ${d.why || d.manual.length ? html`<${Notice} tone="bad" what=${d.why || "By hand"}>${d.manual.length ? html`<ul class="small">${d.manual.map(m => html`<li>${m}</li>`)}</ul>` : ""}<//>` : ""}
         ${d.said.length ? html`<details><summary class="small">${plural(d.said.length, "change")}</summary><ul class="small mono">${d.said.map(x => html`<li>${x}</li>`)}</ul>${d.text ? html`<pre class="log small">${d.text}</pre>` : ""}</details>` : ""}</div>`)}</div>`)}<//>`;
 }
 

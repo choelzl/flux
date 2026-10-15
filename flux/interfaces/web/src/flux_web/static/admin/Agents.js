@@ -13,7 +13,7 @@ import { EnvEditor } from "../components/Env.js";
 import { SettingsForm } from "../settings/SettingsForm.js";
 import { Select } from "../components/Select.js";
 import { remember } from "../stored.js";
-import { Pill } from "../components/Tone.js";
+import { Pill, Said } from "../components/Tone.js";
 
 /** D924: how an agent connects, and whether that was verified -- the words the Account and the authoring picker say. */
 export const MECHANISM = { key: "API key", provider: "provider configuration", login: "interactive login", endpoint: "endpoint without a key", none: "not detected" };
@@ -90,13 +90,13 @@ function AgentPanel({ a, version, askOff }) {
       <span class="muted">in a document: <code>${a.id}</code>${a.builtin ? "" : html` <${Act} cls="small" onClick=${() => rename(a)}>Rename<//>`}</span>
       <span class="mono muted">${a.found ? html`${a.found}<span class="agent-version">${version ? " · " + version : ""}</span>`
         : a.builtin ? `${a.bin || a.id} is not on the runs' PATH: not offered to users` : `${a.bin ? a.bin + " is not there or not runnable" : "no program yet"}: not offered to users`}</span>
-      ${failed.length ? html`<span class="bad">${`test failed for ${failed.join(", ")}`}</span>` : ""}${changed.length ? html`<span class="warn">${`changed since the test for ${changed.join(", ")}`}</span>` : ""}
+      ${failed.length ? html`<${Said} tone="bad">${`test failed for ${failed.join(", ")}`}<//>` : ""}${changed.length ? html`<${Said} tone="warn">${`changed since the test for ${changed.join(", ")}`}<//>` : ""}
       ${rest.mark}</div>
     <dl class="agent-states"><dt>Connection</dt><dd><span class=${`pill ${c.mechanism === "none" ? "" : "ok"}`}>${c.mechanism === "none" ? "each user's own" : MECHANISM[c.mechanism] || c.mechanism}</span>
         <span class="muted small">${c.mechanism === "none" ? "no key or provider for every user: each logs in or sets a key on their Account" : c.said}</span></dd>
       ${c.mechanism === "none" || !a.found ? "" : html`<dt>Verification</dt><dd class="agent-server-test"><${Pill} tone=${ver[0]}>${ver[1]}<//>
         <span class="muted small">${!st.shared ? "each user's own login: each tests it on their Account" : st.state === "ready" ? `for everyone without settings of their own · ${when(st.when)}` : "a passed Test counts for everyone without settings of their own"}</span>
-        ${st.state === "failed" && st.said ? html`<span class="bad small">${st.said}</span>` : ""}
+        ${st.state === "failed" && st.said ? html`<${Said} tone="bad" cls="small">${st.said}<//>` : ""}
         <${Act} cls="small" title="Ask it one short question with the server's configuration -- no one's own settings" onClick=${() => test(a)}>Test connection<//></dd>`}
       ${(a.conflicts || []).length || (a.unused || []).length ? html`<dt>Said</dt><dd><ul class="small hint-line agent-notes">${[...(a.conflicts || []), ...(a.unused || [])].map(x => html`<li>${x}</li>`)}</ul></dd>` : ""}</dl>
     <div class="grid-2 set-fields" ...${named.box}><label class="stack">${a.builtin ? "Program (a path, or a name on PATH)" : "Program (a path)"}${field("bin", a.builtin ? a.id : "/path/to/its/program")}</label>

@@ -3,7 +3,7 @@
 // older ones folded unless chosen), an answer's thinking and commands, Reply, a new chat; while the loop runs, a
 // note to it (the agent's open question answered there).
 
-import { Ago, Card, Empty, Skeleton, html, useLayoutEffect, useRef, useState } from "../view.js";
+import { Ago, Card, Empty, Glyph, html, Skeleton, useLayoutEffect, useRef, useState } from "../view.js";
 import { api, dialog, loopApi, toast } from "../ui.js";
 import { dur, plural } from "../format.js";
 import { me } from "../state.js";
@@ -35,7 +35,7 @@ function AgentTurn({ url }) {
     ${steps.length ? html`<div class="ask-conversation"><${Conversation} steps=${steps} k=${url} offset=${total - steps.length} live=${!!got.running} /></div>`
       : think ? html`<details class="cv-step cv-think" open><summary>Thinking</summary><pre class="cv-body cv-thought">${think}</pre></details>`
       : html`<p class="muted">${got.error || (got.running ? "Nothing recorded yet." : "No thinking or commands were recorded for this answer.")}</p>`}
-    ${got.running && !liveWork(steps, got.running) ? html`<div class="alt-chat-now"><span class="alt-spin" />${`${got.status || "working"}…`}</div>` : ""}
+    ${got.running && !liveWork(steps, got.running) ? html`<div class="alt-chat-now"><${Glyph} tone="run" />${`${got.status || "working"}…`}</div>` : ""}
     ${got.stderr ? html`<details class="ask-output"><summary>stderr</summary><pre class="log small">${got.stderr}</pre></details>` : ""}</div>`;
 }
 

@@ -9,7 +9,7 @@ import { restoreScroll, scrollState } from "../scroll.js";
 import { Act } from "../components/Act.js";
 import { MECHANISM, VERIFIED } from "../admin/Agents.js";
 import { usePoll } from "../components/Load.js";
-import { Pill } from "../components/Tone.js";
+import { Pill, Said } from "../components/Tone.js";
 
 const FIELD_WORD = { endpoint: "endpoint", key: "key", auth: "token", token: "login token", model: "model" };
 /** Links as links, the rest as text. */
@@ -64,7 +64,7 @@ function AgentLogin({ a, test, login }) {
       <dt>Connection</dt><dd><span class=${`pill ${c.mechanism === "none" ? "" : "ok"}`}>${MECHANISM[c.mechanism] || c.mechanism}</span><span class="muted small">${c.said}</span>
         ${Object.keys(a.fields || {}).length ? html`<span class="muted small agent-sources">${Object.entries(a.fields).map(([f, x]) => `${FIELD_WORD[f] || f}: ${x.source}`).join(" · ")}</span>` : ""}</dd>
       <dt>Verification</dt><dd><${Pill} tone=${ver[0]} title=${v.when ? `tested ${when(v.when)}` : ""}>${ver[1]}<//>
-        ${v.state === "ready" && v.when ? html`<span class="muted small">${when(v.when)}</span>` : ""}${v.state === "failed" && v.said ? html`<span class="bad small">${v.said}</span>` : ""}
+        ${v.state === "ready" && v.when ? html`<span class="muted small">${when(v.when)}</span>` : ""}${v.state === "failed" && v.said ? html`<${Said} tone="bad" cls="small">${v.said}<//>` : ""}
         ${v.state === "changed" ? html`<span class="muted small">its endpoint, model or credential is not what was tested</span>` : ""}</dd></dl>
     ${(a.conflicts || []).length || (a.unused || []).length ? html`<ul class="small hint-line agent-notes">${[...(a.conflicts || []), ...(a.unused || [])].map(x => html`<li>${x}</li>`)}</ul>` : ""}
     <div class="actions">${a.testing ? html`<span class="muted small">testing…</span>` : html`<${Act} cls="primary small" title="Ask it one short question, as your loops run it" onClick=${() => test(a)}>Test connection<//>`}</div>

@@ -5,7 +5,7 @@
 //
 // A line: { type: "row", key, depth, cls, k (its colour), fold: {key, collapsed, label} | null,
 //   act: {task} (opens a task) | {toggle} (opens or folds) | {pass} | {box: {p, key}}, picked, title,
-//   mark: "spin" | {cls, glyph, title}, name: [segment], pills: [{cls, text, title}], time }
+//   mark: "spin" | {tone, title}, name: [segment], pills: [{cls, text, title}], time }
 // a segment: a string, {b: text}, {cls, text, title}, or {dots: [cls]}.
 // Other lines: {type: "more", key, depth, text} (more tries), {type: "skip", key, depth, text} (not run),
 // {type: "wait", key, depth, k, title} (a box still to come).
@@ -19,12 +19,11 @@ import { AI, STAGE, checkWord, ended, firstFailing, isCritique, madeOf, numbersO
 
 const TRIES = 5;
 const STRETCH = ["search", "design", "check", "measure"];
-const doneMark = (failed, partial) => ({ cls: failed ? "failed" : partial ? "partial" : "done", glyph: failed ? "✗" : partial ? "!" : "✓",
-  title: partial && !failed ? "a step under it failed" : null });
+const doneMark = (failed, partial) => ({ tone: failed ? "bad" : partial ? "warn" : "ok", title: partial && !failed ? "a step under it failed" : null });
 const markOf = (n, J) => n.t1 == null ? "spin"
-  : n.interrupted ? { cls: state(n), glyph: "—" }
-  : n.timedOut ? { cls: "partial", glyph: "!", title: "stopped at its time limit" }
-  : n.rejected ? { cls: "partial", glyph: "!", title: "rejected: the critic's word is guidance, not a failure" }
+  : n.interrupted ? { tone: "warn", title: "interrupted" }
+  : n.timedOut ? { tone: "warn", title: "stopped at its time limit" }
+  : n.rejected ? { tone: "warn", title: "rejected: the critic's word is guidance, not a failure" }
   : doneMark(n.failed, J.marked(n.id));
 
 /** The lines of `rows` (tasks with their parent's id when it is among them). `v`: what the view knows --

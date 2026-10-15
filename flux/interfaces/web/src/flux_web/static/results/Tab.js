@@ -14,6 +14,7 @@ import { DesignDetail } from "./Detail.js";
 import { Graphs } from "./Graphs.js";
 import { compare } from "./Compare.js";
 import { useLoop } from "../loop/context.js";
+import { Pill } from "../components/Tone.js";
 
 const fmt = v => v == null ? "" : v !== 0 && Math.abs(v) < 0.01 ? Number(v).toExponential(2)
   : Math.abs(v) >= 1000 || Number.isInteger(v) ? String(Math.round(v * 100) / 100) : String(Number(Number(v).toPrecision(4)));
@@ -30,7 +31,7 @@ export function Checked({ r }) {
     <thead><tr><th>Design</th><th>Checks</th><th>Why</th><th>When</th></tr></thead>
     <tbody>${rows.map(u => html`<tr key=${u.name} class=${u.verdict === "failed" ? "failed" : ""}>
       <td class="mono" title=${u.name}>${u.name === chosen ? "★ " : ""}${own(ctx, u.name)}</td>
-      <td>${u.verdict === "failed" ? html`<span class="bad">✗ failed</span>` : u.verdict === "rejected" ? html`<span class="muted">⊘ rejected</span>` : html`<span class="ok">✓ passed</span>`}${u.name === chosen ? " · chosen" : ""}</td>
+      <td><${Pill} tone=${u.verdict === "failed" ? "bad" : u.verdict === "rejected" ? "warn" : "ok"}>${u.verdict === "failed" ? "failed" : u.verdict === "rejected" ? "rejected" : "passed"}<//>${u.name === chosen ? " · chosen" : ""}</td>
       <td class="small">${(u.why || "").split("\n")[0] || "—"}</td><td class="muted small">${u.when ? html`<${Ago} t=${Date.parse(u.when) / 1000} />` : ""}</td></tr>`)}</tbody></table></div><//>`;
 }
 

@@ -2,7 +2,7 @@
 // text, its thinking and each tool call (input and output) folded, opened on a click and kept open across
 // redraws (D1030: the work between two answers one dashed line, opened to its steps; the answers in view).
 
-import { cx, html } from "../view.js";
+import { cx, Glyph, html } from "../view.js";
 import { Markdown } from "./Markdown.js";
 
 const convOpen = new Set();          // which steps a person opened, by key: kept across redraws and tasks
@@ -54,7 +54,7 @@ export function Conversation({ steps, k = "", offset = 0, live = false, scroll =
     // open while a step in it is open: a live tail rolls its first steps away, and with them the line's own key
     const open = convOpen.has(id) || work.some((_x, n) => convOpen.has(`${k}:${offset + first + n}`));
     items.push(html`<details key=${id} class=${cx("cv-work", now && "live", failed && "bad")} open=${open} onToggle=${remember(id)}>
-      <summary title="Its thinking and commands: click to open"><span class="cv-work-said">${now ? html`<span class="alt-spin" aria-hidden="true" />` : ""}${now ? `working · ${said}` : said}</span></summary>
+      <summary title="Its thinking and commands: click to open"><span class="cv-work-said">${now ? html`<${Glyph} tone="run" />` : ""}${now ? `working · ${said}` : said}</span></summary>
       <div class="cv-work-steps">${work.map((x, n) => html`<${Step} key=${`${k}:${offset + first + n}`} st=${x} id=${`${k}:${offset + first + n}`} live=${live && first + n === steps.length - 1} />`)}</div></details>`);
     i = j;
   }

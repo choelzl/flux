@@ -6,6 +6,9 @@
 import { Glyph, Notice, cx, html } from "../view.js";
 import { Act } from "./Act.js";
 
+/** A state said inside a sentence or a row: its glyph and its words, in its tone. */
+export const Said = ({ tone = "none", cls = "", children, ...rest }) => html`<span ...${rest} class=${cx("said", `t-${tone}`, cls)}><${Glyph} tone=${tone} />${children}</span>`;
+
 /** A read that failed: what could not be read (bad -- nothing to show; `stale` warn -- what came before stays), why,
     and Retry at the end. */
 export const Failed = ({ what, why, retry, stale = false, cls = "" }) => html`<${Notice} tone=${stale ? "warn" : "bad"} cls=${cx("failed", cls)} what=${what} why=${why}

@@ -1,7 +1,7 @@
 // Live's inspector (D1095): its building blocks -- the state pill, a step's row, a fold that stays as the
 // person left it, a block of fields, a text that keeps its place (and follows its end while it grows).
 
-import { html, useLayoutEffect, useRef, useState } from "../../view.js";
+import { Glyph, html, useLayoutEffect, useRef, useState } from "../../view.js";
 import { bytes, dur } from "../../format.js";
 import { restoreScroll, scrollState } from "../../scroll.js";
 import { colorOf, running, stateOf, summaryOf, taskLabel, tidyCommand } from "./parts.js";
@@ -22,7 +22,7 @@ export const TaskPill = ({ n }) => { const [tone, text] = stateOf(n); return htm
 export function StepRow({ x, a, N }) {
   const s = summaryOf(x), crit = /^\s*critique\s*:/i.test(String(x.name));
   return html`<button type="button" class="alt-step-row" style=${`--k:${x.failed ? "var(--bad)" : colorOf(x)}`} data-task=${String(x.id)} onClick=${() => a.select(x.id)}>
-    ${running(x) ? html`<span class="alt-spin" aria-hidden="true" />` : html`<span class=${`alt-task-state ${x.failed ? "failed" : x.rejected ? "partial" : "done"}`}>${x.failed ? "✗" : x.rejected ? "!" : "✓"}</span>`}
+    <span class="alt-task-state"><${Glyph} tone=${running(x) ? "run" : x.failed ? "bad" : x.rejected ? "warn" : "ok"} /></span>
     <span class="alt-task-name" title=${taskLabel(x)}>${N.shortAll(taskLabel(x))}${s ? html`<span class="muted">${` — ${s}`}</span>` : ""}
       ${crit ? html`<span class="muted">${` — ${/^(rejected|sent back)/i.test(String(x.output?.verdict ?? "")) ? "rejected" : x.output?.verdict ? "no objection" : ""}`}</span>` : ""}</span>
     <span class="mono muted small">${dur(x.seconds ?? (x.t1 ?? Date.now() / 1000) - x.t0)}</span></button>`;

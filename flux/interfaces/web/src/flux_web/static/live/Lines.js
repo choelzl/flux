@@ -1,6 +1,6 @@
 // Live (D1095): the lines rows.js works out, drawn -- the tree, and a graph box's list.
 
-import { html } from "../view.js";
+import { Glyph, html } from "../view.js";
 import { WORK_COLORS as COLORS } from "./work_style.js";
 import { taskState as state } from "./model.js";
 
@@ -9,8 +9,8 @@ const Segment = ({ s }) => typeof s === "string" ? s
   : s.dots ? html`<span class="alt-dots">${s.dots.map(c => html`<i class=${c} />`)}</span>`
   : html`<span class=${s.cls} title=${s.title || null}>${s.text}</span>`;
 
-const Mark = ({ m }) => m === "spin" ? html`<span class="alt-spin" role="img" aria-label="running" />`
-  : html`<span class=${`alt-task-state ${m.cls}`} aria-hidden="true" title=${m.title || null}>${m.glyph}</span>`;
+const Mark = ({ m }) => m === "spin" ? html`<span class="alt-task-state" role="img" aria-label="running"><${Glyph} tone="run" /></span>`
+  : html`<span class="alt-task-state" title=${m.title || null}><${Glyph} tone=${m.tone} /></span>`;
 
 /** What a line's button does, as its attributes: open a task (D980), open or fold, show a pass, a box. */
 function actOf(l, a) {

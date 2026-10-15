@@ -3,7 +3,7 @@
 // wrap, problems only, times, a filter (text or /regex/), Raw, Fullscreen, Download. Only the lines in view are
 // drawn: a row has one height, so the scroll says which; wrapped, the last 3000.
 
-import { Card, cx, html, useEffect, useLayoutEffect, useMemo, useRef, useState } from "../view.js";
+import { Card, cx, html, Notice, useEffect, useLayoutEffect, useMemo, useRef, useState } from "../view.js";
 import { NARROW, enc, loopApi } from "../ui.js";
 import { isProblem, latestStart, lineClass, logAt, logLines, matcher } from "./logmodel.js";
 import { ViewerFrame, ViewerTools, useViewer } from "../viewer.js";
@@ -78,7 +78,7 @@ export function Log({ store }) {
       ${L.past ? "" : html`<a class="btn small" href=${`${ctx.base}/log/raw${ctx.qs}`}>Download</a>`}
       ${L.skipped ? html`<span class="log-earlier small">${`${(L.skipped.bytes / 1048576).toFixed(1)} MiB of earlier lines not loaded · `}<button type="button" class="small" onClick=${L.loadAll}>Load all</button></span>` : ""}
       ${!L.past && L.stream && L.stream !== "live" ? html`<${Pill} tone="run" small cls="stream" title="The page's connection to the loop">reconnecting<//>` : ""}</div>
-    ${L.cut ? html`<p class="muted">Preview: first 1 MiB. Raw opens the complete output.</p>` : ""}${L.failed ? html`<p class="bad">${`This start's log is unavailable: ${L.failed}`}</p>` : ""}
+    ${L.cut ? html`<p class="muted">Preview: first 1 MiB. Raw opens the complete output.</p>` : ""}${L.failed ? html`<${Notice} tone="bad" what="This start's log could not be read" why=${L.failed} />` : ""}
     <div class=${cx("logview virt", o.wrap && "wrap")} ref=${box} onScroll=${onScroll}>
       ${o.wrap ? "" : html`<div class="spacer" style=${`height:${shown.length * r}px`} />`}
       <div class="win" style=${o.wrap ? "" : `transform:translateY(${first * r}px)`}>

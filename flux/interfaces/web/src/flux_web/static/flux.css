@@ -96,6 +96,7 @@ main { max-width: 1320px; margin: 0 auto; padding: 22px 24px 80px; }
 .notice.t-none { color: var(--ink); }
 .notice.quiet { color: var(--muted); background: transparent; border-style: dashed; border-color: var(--line); }
 .hint { margin: 0; color: var(--muted); font-size: 12.5px; }
+.said { display: inline-flex; align-items: baseline; gap: 4px; color: var(--t); } .said > .g { align-self: center; }
 .stack > .notice { margin: 0; }
 .callout { padding: 10px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--soft); }
 .scroll-x { overflow-x: auto; }
@@ -466,8 +467,9 @@ dialog.dlg:has(.compare) { width: min(980px, calc(100vw - 32px)); }
 .compare td.meets { color: var(--ok); }
 .compare td.misses { color: var(--bad); }
 .compare h3 { font-size: 14px; margin: 6px 0; }
-.offline { position: fixed; top: 0; left: 0; right: 0; z-index: 50; text-align: center; padding: 6px 12px; font-size: 13.5px;
-  background: var(--warn); color: #1c1e22; box-shadow: var(--shadow); }
+.offline.notice { position: fixed; top: 8px; left: 50%; transform: translateX(-50%); z-index: 50; margin: 0; width: max-content; max-width: calc(100vw - 32px);
+  align-items: center; background: color-mix(in srgb, var(--bad) 8%, var(--panel)); box-shadow: 0 6px 22px rgba(0, 0, 0, .14); }
+.offline > .g { margin-top: 0; }
 .offline[hidden] { display: none; }
 
 /* D695: the admin's resources */
@@ -747,11 +749,7 @@ pre.author-log { max-height: 260px; overflow: auto; white-space: pre-wrap; }
 .alt-task.sel { background: transparent; }
 /* the selected row deeper and outlined across its whole width, indent included */
 .alt-tree-row:has(.alt-task.sel) { background: color-mix(in srgb, var(--k, var(--accent)) 32%, var(--panel)); box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--k, var(--accent)) 75%, var(--panel)); }
-.alt-task-state { color: var(--ok); width: 11px; text-align: center; flex-shrink: 0; }
-.alt-task-state.failed { color: var(--bad); }
-.alt-task-state.partial { color: var(--warn); font-weight: 700; }    /* D995: a step under it failed */
-.alt-spin { width: 11px; height: 11px; border-radius: 50%; border: 2px solid color-mix(in srgb, var(--run) 25%, transparent); border-top-color: var(--run); flex-shrink: 0; box-sizing: border-box; }
-@media (prefers-reduced-motion: no-preference) { .alt-spin { animation: alt-spin .9s linear infinite; } @keyframes alt-spin { to { transform: rotate(360deg); } } }
+.alt-task-state { display: inline-grid; place-items: center; width: 12px; flex-shrink: 0; }    /* D1102: the tone's glyph */
 /* D978: the pass as a flow, the chain of passes */
 .alt-chain { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 2px 0 12px; }
 .alt-chip { position: relative; min-width: 30px; padding: 2px 8px; border-radius: 12px; font: 12px var(--mono, monospace); }
@@ -834,9 +832,6 @@ button.alt-chat-more { border: 0; background: transparent; cursor: pointer; } bu
 .alt-chat-jump { position: absolute; right: 14px; bottom: 12px; border: 0; border-radius: 14px; padding: 3px 10px; font-size: 12px; background: var(--accent); color: var(--accent-ink, #fff); box-shadow: 0 2px 8px rgba(0,0,0,.18); }
 .alt-usage { margin-bottom: 6px; }
 .alt-tried { margin: 2px 0 10px; } .alt-tried b { font-size: 16px; margin-right: 8px; } .alt-pass-heading.sel .alt-task-name { text-decoration: underline; }
-.alt-task.failed .alt-task-state { color: var(--bad); }
-.alt-task.interrupted .alt-task-state, .alt-task.timeout .alt-task-state { color: var(--warn); }
-.alt-task.running .alt-task-state { color: var(--run); }
 .alt-task-name { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .alt-task-name small { display: block; font-weight: normal; }
 .alt-task > .mono { flex-shrink: 0; }
@@ -1328,7 +1323,7 @@ td.cleared s { color: var(--muted); }
 .alt-tree-row.step:hover { background: color-mix(in srgb, var(--k, transparent) 9%, var(--panel)); }
 .alt-tree-row.box { margin-top: 3px; box-shadow: inset 3px 0 0 var(--k); }
 .alt-tree-row.box .alt-task-name b { font-weight: 600; }
-.alt-tree-row.wait { opacity: .5; } .alt-task-state.wait { color: var(--muted); }
+.alt-tree-row.wait { opacity: .5; }
 .alt-what { color: var(--muted); font-size: 12px; }
 .alt-ai-pill { flex: none; font-size: 10px; font-weight: 700; letter-spacing: .05em; border-radius: 8px; padding: 0 6px; line-height: 16px; color: #d45eae; background: color-mix(in srgb, #d45eae 14%, var(--panel)); }
 .alt-critic-tag { flex: none; font-size: 10px; font-weight: 600; border-radius: 8px; padding: 0 6px; line-height: 16px; color: color-mix(in srgb, #97b84a 70%, var(--ink)); background: color-mix(in srgb, #97b84a 20%, var(--panel)); }

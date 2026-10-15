@@ -34,7 +34,8 @@ export function Toasts({ at = null }) {
 /** The banner while the server is out of reach (D694). */
 export function Offline() {
   useChanges(said);
-  return html`<div class="offline" role="alert" hidden=${!out}>The server cannot be reached: retrying…</div>`;
+  return html`<div class="offline notice t-bad" role="alert" hidden=${!out}><${Glyph} tone="bad" /><span class="notice-text"><b>The server cannot be reached</b>
+    <span class="why">retrying</span></span><${Glyph} tone="run" /></div>`;
 }
 
 /** A notice: `kind` info, ok, warn or bad; `timeout` 0 keeps it until dismissed; `href` makes it a link. */
