@@ -503,8 +503,8 @@ def general_flows(r, watch):
             try:
                 r.page(f"#/app/{name}/live-alt", "document.querySelector('.alt-detail')?.textContent.includes('FULL live prompt')", "LiveAlt current activity")
                 r.check("D1002: a long task name truncates in the tree; the tree never scrolls sideways", b.js(
-                    "const n=document.querySelector('.alt-tree .alt-task-name'); n.textContent='x'.repeat(400);"
-                    " const v=document.querySelector('.alt-visual'); return v.scrollWidth<=v.clientWidth+1 && n.scrollWidth>n.clientWidth"))
+                    "const n=document.querySelector('.alt-tree .alt-task-name'), x=document.createTextNode('x'.repeat(400)); n.append(x);"   # D1095: beside the page's own text, then gone
+                    " const v=document.querySelector('.alt-visual'), ok=v.scrollWidth<=v.clientWidth+1 && n.scrollWidth>n.clientWidth; x.remove(); return ok"))
                 r.check("LiveAlt has exactly Tree, Graph and Timeline representations", b.js("return [...document.querySelectorAll('.subrow .subtabs button')].map(b=>b.textContent).join(',')==='Tree,Graph,Timeline'"))
                 r.check("current pass selects the agent and exposes prompt plus conversation together", b.js("const d=document.querySelector('.alt-detail');return d.dataset.task==='4' && d.textContent.includes('Considering a faster design') && !d.querySelector('.dtabs') && document.querySelectorAll('.alt-tree [data-task]').length===2"))
                 r.check("D982: the inspector heads a task as the tree names it, its parents as chips", b.js("const d=document.querySelector('.alt-detail');return d.querySelector('.alt-ihead h2').textContent==='Agent · claude' && [...d.querySelectorAll('.alt-pchip')].map(c=>c.textContent).join(',')==='Design · current' && d.querySelector('.alt-meta').textContent.includes('agent claude')"))
@@ -555,8 +555,9 @@ def general_flows(r, watch):
                 r.check("unrelated task updates preserve prompt and thinking scroll", b.js("return [document.querySelector('.alt-detail [data-k=prompt]').scrollTop,document.querySelector('.alt-detail .cv-thought').scrollTop]") == positions)
                 b.click('.alt-tree [data-fold="box:3"]')
                 r.check("tree branches collapse without changing inspected task", b.js("return !document.querySelector('.alt-tree [data-task=\"5\"]') && document.querySelector('.alt-detail').dataset.task==='4' && document.querySelector('.alt-tree [data-fold=\"box:3\"]').getAttribute('aria-expanded')==='false'"))
-                b.js("window.__altFold=document.activeElement;window.__altStreams.at(-1).emit('events',{ev:'update',id:3,fields:{status:'still working'}});return 1")
-                b.wait("window.__altFold!==document.querySelector('.alt-tree [data-fold=\"box:3\"]')", what="folded tree redraw")
+                # D1095: a redraw keeps the page's nodes -- waited for by the page's own count of its draws
+                b.js("window.__altDrawn=document.querySelector('.live-alt').dataset.drawn;window.__altStreams.at(-1).emit('events',{ev:'update',id:3,fields:{status:'still working'}});return 1")
+                b.wait("document.querySelector('.live-alt').dataset.drawn!==window.__altDrawn", what="folded tree redraw")
                 r.check("folded branches retain keyboard focus across updates", b.js("return document.activeElement.dataset.fold==='box:3' && document.activeElement.getAttribute('aria-expanded')==='false' && !document.querySelector('.alt-tree [data-task=\"5\"]')"))
                 r.button("Locate", ".alt-detail-actions")
                 r.check("Locate reveals the selected task inside a folded branch", b.js("return !!document.querySelector('.alt-tree [data-task=\"4\"].sel')"))
@@ -599,8 +600,8 @@ def general_flows(r, watch):
                     && d.querySelector('[data-k=configuration]').textContent.includes('sweep')
                     && document.querySelector('[aria-label="LiveAlt pass"]').value==='2'
                     && document.querySelector('.alt-flow-box[data-box=search]').getAttribute('aria-pressed')==='true';"""))
-                b.js("window.__altBoxDetail=document.querySelector('.alt-box-detail');window.__altStreams.at(-1).emit('events',{ev:'update',id:3,fields:{status:'working'}});return 1")
-                b.wait("window.__altBoxDetail!==document.querySelector('.alt-box-detail')", what="phase detail redraw")
+                b.js("window.__altDrawn=document.querySelector('.live-alt').dataset.drawn;window.__altStreams.at(-1).emit('events',{ev:'update',id:3,fields:{status:'working'}});return 1")
+                b.wait("document.querySelector('.live-alt').dataset.drawn!==window.__altDrawn", what="phase detail redraw")
                 r.check("live updates keep the selected empty phase instead of the previous task", b.js("return document.querySelector('.alt-box-detail').dataset.box==='search' && !document.querySelector('.alt-detail[data-task]')"))
                 r.button("Locate", ".alt-detail-actions")
                 r.check("Locate reveals the selected empty phase", b.js("return document.activeElement.matches('.alt-flow-box[data-box=search].alt-located')"))
@@ -671,8 +672,8 @@ def general_flows(r, watch):
                 r.check("tasks side by side are offered without changing selection", b.js("return document.querySelector('.alt-detail').dataset.task==='10' && [...document.querySelectorAll('.alt-choice [data-choice]')].map(n=>n.dataset.choice).join(',')==='2,6'"))
                 if os.environ.get("FLUX_E2E_SHOTS"):
                     b.shot(Path(os.environ["FLUX_E2E_SHOTS"]) / "live-alt-overlap.png")
-                b.js("window.__altOldChoice=document.activeElement;window.__altStreams.at(-1).emit('events',{ev:'update',id:3,fields:{status:'unrelated chooser update'}});return 1")
-                b.wait("window.__altOldChoice!==document.querySelector('.alt-choice [data-choice=\"2\"]')", what="chooser update")
+                b.js("window.__altDrawn=document.querySelector('.live-alt').dataset.drawn;window.__altStreams.at(-1).emit('events',{ev:'update',id:3,fields:{status:'unrelated chooser update'}});return 1")
+                b.wait("document.querySelector('.live-alt').dataset.drawn!==window.__altDrawn", what="chooser update")
                 r.check("overlap choices keep keyboard focus during live updates", b.js("return document.activeElement.dataset.choice==='2'"))
                 b.js("document.activeElement.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));return 1")
                 r.check("Escape dismisses overlap choices without switching task", b.js("return !document.querySelector('.alt-choice') && document.querySelector('.alt-detail').dataset.task==='10'"))

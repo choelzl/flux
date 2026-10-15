@@ -348,10 +348,12 @@ function autosave(fields, run, mark, { delay = 900, typing = true } = {}) {
 }
 function act(label, fn, { cls = "", title } = {}) {
   const b = h("button", { class: cls, title, type: "button" }, label);
-  b.addEventListener("click", async () => {
-    b.disabled = true; b.classList.add("busy");
-    try { await fn(b); } catch (x) { if (x.message !== "log in") toast(x.message, "bad"); }
-    finally { b.disabled = false; b.classList.remove("busy"); }
+  // D1095: through on() -- a redraw (morph) that adds the button anew carries its handler; the button is the one pressed
+  on(b, "click", async function () {
+    const me = this;
+    me.disabled = true; me.classList.add("busy");
+    try { await fn(me); } catch (x) { if (x.message !== "log in") toast(x.message, "bad"); }
+    finally { me.disabled = false; me.classList.remove("busy"); }
   });
   return b;
 }
