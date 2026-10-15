@@ -5,7 +5,7 @@
 
 import { Empty, html } from "../view.js";
 import { plural } from "../format.js";
-import { baselinePoints, designPoints, directionOf, frontier, inScope, verdictOf } from "../chartdata.js";
+import { baselinePoints, designPoints, directionOf, frontier, inScope, verdictOf } from "./data.js";
 import { Legend, Mark, Ring, num4, pointTitle, stylesOf } from "./marks.js";
 
 const W = 560, H = 300, L = 62, R = 14, T = 14, B = 34;

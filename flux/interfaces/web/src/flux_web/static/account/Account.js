@@ -7,7 +7,7 @@ import { api, toast } from "../ui.js";
 import { dur, fmtTok, plural } from "../format.js";
 import { me } from "../state.js";
 import { route } from "../app.js";
-import { editOverviewLayout } from "../overview_layout.js";
+import { editOverviewLayout } from "../overview/layout.js";
 import { Act } from "../components/Act.js";
 import { EnvEditor, EnvTable } from "../components/Env.js";
 import { PageHead } from "../components/PageHead.js";

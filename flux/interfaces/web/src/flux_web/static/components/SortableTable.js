@@ -5,6 +5,7 @@
 
 import { html, useState } from "../view.js";
 import { readSort, saveSort, sortRows } from "../sorting.js";
+import { Select } from "./Select.js";
 
 /** `cols`: {label, key(row)?, asc?, num?, title?, id?}; `row(r)` its <tr>; `keyOf(r)` its key; `memo` where the
     choice is kept; `first` the column sorted until one is chosen; `foot` a <tfoot> kept under the rows whatever
@@ -18,8 +19,8 @@ export function SortableTable({ memo, cols, rows, row, keyOf, first = 0, cls = "
         <button type="button" class=${`th-sort${i === s.col ? " on" : ""}`} onClick=${() => pick(i, i === s.col ? !s.desc : !c.asc)}>${c.label}<span class="th-arrow" aria-hidden="true">${i === s.col ? (s.desc ? "▾" : "▴") : ""}</span></button></th>`;
   const table = html`<table class=${`${cls} sortable`}><thead><tr>${cols.map(head)}</tr></thead>
     <tbody>${sorted.map(r => { const tr = row(r); if (tr && keyOf) tr.key = keyOf(r); return tr; })}</tbody>${foot}</table>`;
-  return html`<div class="sort-strip"><label class="sort">Sort by <select aria-label="Sort by" value=${String(s.col)}
-        onChange=${e => { const i = Number(e.currentTarget.value); pick(i, !cols[i].asc); }}>${cols.map((c, i) => c.key ? html`<option value=${String(i)}>${c.label}</option>` : null)}</select></label>
+  return html`<div class="sort-strip"><label class="sort">Sort by <${Select} aria-label="Sort by" value=${s.col} onChange=${v => { const i = Number(v); pick(i, !cols[i].asc); }}
+        options=${cols.map((c, i) => [i, c.label, c.key]).filter(x => x[2]).map(([i, label]) => [i, label])} /></label>
       <button type="button" class="small sort-dir" title="Turn the order round" onClick=${() => pick(s.col, !s.desc)}>${s.desc ? "▾ Descending" : "▴ Ascending"}</button></div>
     ${scroll ? html`<div class="scroll-x">${table}</div>` : table}`;
 }

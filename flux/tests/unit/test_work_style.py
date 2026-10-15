@@ -25,7 +25,7 @@ PHASES = [("agent: claude", ""), ("llm: propose", ""), ("model call", ""), ("too
 
 
 def run(js):
-    uri = "data:text/javascript;base64," + base64.b64encode((STATIC / "work_style.js").read_bytes()).decode()
+    uri = "data:text/javascript;base64," + base64.b64encode((STATIC / "live/work_style.js").read_bytes()).decode()
     script = f"import({json.dumps(uri)}).then(m => process.stdout.write(JSON.stringify(({js})(m))));"
     r = subprocess.run(["node", "-e", script], capture_output=True, text=True, timeout=30)
     assert r.returncode == 0, r.stderr

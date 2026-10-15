@@ -11,6 +11,7 @@ import { Act } from "../components/Act.js";
 import { bound, useAutosave } from "../components/Autosave.js";
 import { EnvEditor } from "../components/Env.js";
 import { SettingsForm } from "../settings/SettingsForm.js";
+import { Select } from "../components/Select.js";
 
 /** D924: how an agent connects, and whether that was verified -- the words the Account and the authoring picker say. */
 export const MECHANISM = { key: "API key", provider: "provider configuration", login: "interactive login", endpoint: "endpoint without a key", none: "not detected" };
@@ -118,7 +119,7 @@ function AddAgent({ kinds }) {
   };
   return html`<fieldset class="set-group"><legend>Add an agent</legend><p class="muted small">Another build of a kind under its own name (<code>generate: nga</code>).</p>
     <div class="grid-2"><label class="stack">Name (lower case)<input id="ag-new-name" placeholder="nga" class="mono" autocomplete="off" ...${field("name")} /></label>
-      <label class="stack">Kind<select id="ag-new-kind" aria-label="Its kind" ...${field("kind")}>${kinds.map(k => html`<option value=${k.id}>${k.label}</option>`)}</select></label>
+      <label class="stack">Kind<${Select} id="ag-new-kind" aria-label="Its kind" options=${kinds.map(k => [k.id, k.label])} value=${v.kind} onChange=${kind => setV(o => ({ ...o, kind }))} /></label>
       <label class="stack">Name shown<input id="ag-new-label" placeholder="NGA (our OpenCode)" autocomplete="off" ...${field("label")} /></label>
       <label class="stack">Program (a path)<input id="ag-new-bin" placeholder="/opt/nga/bin/nga" class="mono" autocomplete="off" ...${field("bin")} /></label></div>
     <div class="form-actions"><${Act} cls="primary" onClick=${add}>Add<//></div></fieldset>`;

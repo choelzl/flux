@@ -5,7 +5,7 @@
 
 import { Empty, html } from "../view.js";
 import { plural } from "../format.js";
-import { baselinePoints, bestSeries, inScope } from "../chartdata.js";
+import { baselinePoints, bestSeries, inScope } from "./data.js";
 import { Legend, Mark, Ring, niceTicks, num4, pointTitle, stylesOf, timeEnds } from "./marks.js";
 
 const W = 560, H = 190, L = 58, R = 12, T = 14, B = 26;

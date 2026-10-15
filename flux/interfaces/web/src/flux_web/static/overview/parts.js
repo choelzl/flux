@@ -2,7 +2,7 @@
 // card), a main measurement as a cell (the decision, the closest), a small table.
 
 import { html } from "../view.js";
-import { measurementText, relativeMeasurement } from "../result_table.js";
+import { measurementText, relativeMeasurement } from "../results/preferences.js";
 import { num4 } from "../charts/marks.js";
 
 export { Stat } from "../components/Stat.js";

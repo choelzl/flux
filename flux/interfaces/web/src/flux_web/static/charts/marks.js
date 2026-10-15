@@ -2,7 +2,7 @@
 // the decision's ring, the legend, the numbers on an axis.
 
 import { html } from "../view.js";
-import { groupList, groupStyles } from "../chartdata.js";
+import { groupList, groupStyles } from "./data.js";
 
 export const num4 = v => v == null ? "" : Math.abs(v) >= 1000 ? String(Math.round(v)) : Math.abs(v) < 0.01 && v !== 0 ? v.toExponential(2) : String(Number(v.toPrecision(4)));
 /** D915: the charts' group colours -- `opts.styles` (groupStyles of the results' groups, built once by the page)

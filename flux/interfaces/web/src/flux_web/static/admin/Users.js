@@ -11,6 +11,7 @@ import { route } from "../app.js";
 import { Act } from "../components/Act.js";
 import { bound, useAutosave } from "../components/Autosave.js";
 import { SortableTable } from "../components/SortableTable.js";
+import { Select } from "../components/Select.js";
 
 /** D818: a one-time link to choose a password -- an invitation, or a reset; copied, or selected to copy. */
 function LinkBox({ name, url, kind }) {
@@ -26,8 +27,8 @@ function LinkBox({ name, url, kind }) {
 const linkDialog = (name, token, kind) => dialog(kind === "invite" ? `Invite ${name}` : `${name}: a password reset link`,
   html`<${LinkBox} name=${name} url=${`${location.origin}${location.pathname}#/invite/${token}`} kind=${kind} />`, [["Done", true, "primary"]]);
 
-const GroupSelect = ({ groups, value, label, onChange = null }) => html`<select aria-label=${label} onChange=${onChange}>${groups.map(g =>
-  html`<option value=${g.id} selected=${String(g.id) === String(value)}>${g.name + (g.admin ? " (server admin)" : "")}</option>`)}</select>`;
+const GroupSelect = ({ groups, value, label, onChange = null }) => html`<${Select} aria-label=${label} value=${value} onChange=${onChange}
+  options=${groups.map(g => [g.id, g.name + (g.admin ? " (server admin)" : "")])} />`;
 
 /** A user's permissions, in a dialog: theirs to have (a server admin's group has them all). */
 function Permissions({ u, catalog, v, set }) {
@@ -68,16 +69,17 @@ function AddUser({ groups }) {
   };
   return html`<div class="row add-user"><input placeholder="name" autocomplete="off" data-lpignore="true" ...${bound(name, setName)} />
     <input type="password" autocomplete="new-password" placeholder="password (empty: send an invitation link)" style="min-width:280px" ...${bound(pw, setPw)} />
-    <${GroupSelect} groups=${groups} value=${group} label="Group of the new user" onChange=${e => setGroup(e.currentTarget.value)} />
+    <${GroupSelect} groups=${groups} value=${group} label="Group of the new user" onChange=${setGroup} />
     <${Act} cls="primary" onClick=${add}>Add user<//></div>`;
 }
 
 export function Users({ users, use, res, catalog }) {
   const useOf = n => use.find(u => u.user === n) || {};
   const def = res ? res.max_running : 4, limits = Object.assign({}, res && res.limits);     // D926: rows sort by saved group and running limit
-  const setGroup = async (u, e) => {
-    try { await api(`/users/${enc(u.name)}`, { method: "PATCH", body: { group_id: +e.currentTarget.value } }); route(); }
-    catch (x) { e.currentTarget.value = u.group_id; toast(x.message, "bad"); }
+  const setGroup = async (u, to) => {                // a refusal: the page drawn again as the server has it
+    try { await api(`/users/${enc(u.name)}`, { method: "PATCH", body: { group_id: +to } }); }
+    catch (x) { toast(x.message, "bad"); }
+    route();
   };
   const viewAs = async u => { await api(`/users/${enc(u.name)}/impersonate`, { method: "POST" }); location.hash = "#/"; location.reload(); };
   const able = async u => {
@@ -96,7 +98,7 @@ export function Users({ users, use, res, catalog }) {
     { label: "" }];
   const row = u => { const x = useOf(u.name); return html`<tr data-user=${u.name}>
     <td class="strong">${u.name}${u.pending ? html`<span class="pill live small" title="Invited: their password is not set yet">invited</span>` : ""}</td>
-    <td>${u.name === me.name ? html`<span class="pill">${u.group}</span>` : html`<${GroupSelect} groups=${catalog.groups} value=${u.group_id} label=${`${u.name}'s group`} onChange=${e => setGroup(u, e)} />`}
+    <td>${u.name === me.name ? html`<span class="pill">${u.group}</span>` : html`<${GroupSelect} groups=${catalog.groups} value=${u.group_id} label=${`${u.name}'s group`} onChange=${to => setGroup(u, to)} />`}
       ${u.disabled ? html`<span class="pill bad">disabled</span>` : ""}</td>
     <td><${Act} cls="small" title=${`Select ${u.name}'s permissions`} aria-label=${`Select ${u.name}'s permissions`} onClick=${() => editPermissions(u, catalog)}>Select<//></td>
     <${Limit} u=${u} limits=${limits} def=${def} />

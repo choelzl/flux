@@ -8,10 +8,11 @@ import { plural } from "../format.js";
 import { route } from "../app.js";
 import { Act } from "../components/Act.js";
 import { LoopsBrowser } from "../loops/Table.js";
+import { Select } from "../components/Select.js";
 
 /** A notification to every user, or to those ticked: `v` {text, kind, all, to}. */
 const NotifyForm = ({ users, v, set }) => html`<div class="stack"><textarea rows="3" placeholder="The message" style="width:100%" value=${v.text} onInput=${e => set({ text: e.currentTarget.value })} />
-    <div class="row"><select value=${v.kind} onChange=${e => set({ kind: e.currentTarget.value })}>${["info", "warn", "bad"].map(k => html`<option value=${k}>${k === "info" ? "information" : k === "warn" ? "warning" : "alert"}</option>`)}</select>
+    <div class="row"><${Select} value=${v.kind} onChange=${kind => set({ kind })} options=${[["info", "information"], ["warn", "warning"], ["bad", "alert"]]} />
       <label class="check"><input type="checkbox" class="notify-all" checked=${v.all} onChange=${e => set({ all: e.currentTarget.checked })} />everyone</label></div>
     <div class="notify-who" hidden=${v.all}>${users.map(u => html`<label class="check"><input type="checkbox" value=${u} checked=${v.to.includes(u)}
       onChange=${e => set({ to: e.currentTarget.checked ? [...v.to, u] : v.to.filter(x => x !== u) })} />${u}</label>`)}</div></div>`;

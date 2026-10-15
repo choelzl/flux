@@ -6,7 +6,7 @@ import { Empty, html, useState } from "../view.js";
 import { enc } from "../ui.js";
 import { can, me, pageRefresh } from "../state.js";
 import { num4 } from "../charts/marks.js";
-import { mainMeasurements, measurementText, relativeMeasurement } from "../result_table.js";
+import { mainMeasurements, measurementText, relativeMeasurement } from "../results/preferences.js";
 import { startLoop, stopLoop, restartLoop } from "../loops.js";
 import { Act } from "../components/Act.js";
 import { LastSaid, StatePill } from "../components/StatePill.js";

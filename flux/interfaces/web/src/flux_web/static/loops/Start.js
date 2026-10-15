@@ -5,6 +5,7 @@
 import { html, useEffect, useState } from "../view.js";
 import { api, dialog, enc, toast, when, withOwner } from "../ui.js";
 import { pageOwner } from "../state.js";
+import { Select } from "../components/Select.js";
 
 /** The form: `v` {document, passes, forever, screen, checking, failing} (the dialog's), `set` changing it. */
 function StartForm({ name, pre, v, set }) {
@@ -26,8 +27,8 @@ function StartForm({ name, pre, v, set }) {
     else check(pre.changed ? "The inputs changed since the last start: checking them in the sandbox…" : "Checking the inputs in the sandbox…");
   }, []);
   return html`<p class="muted">Resumes from its record.</p>
-    ${docs.length > 1 ? html`<label class="stack">${`Which problem (${docs.length} in this loop)`}<select class="start-doc" value=${v.document} onChange=${e => { const doc = e.currentTarget.value; set({ document: doc }); check(`Checking ${doc} in the sandbox…`, doc); }}>
-      ${docs.map(d => html`<option value=${d.path}>${`${d.path} — record ${d.record}`}</option>`)}</select></label>` : ""}
+    ${docs.length > 1 ? html`<label class="stack">${`Which problem (${docs.length} in this loop)`}<${Select} class="start-doc" value=${v.document} onChange=${doc => { set({ document: doc }); check(`Checking ${doc} in the sandbox…`, doc); }}
+      options=${docs.map(d => [d.path, `${d.path} — record ${d.record}`])} /></label>` : ""}
     <div class="preflight">${said ? html`<div class=${`callout ${said.ok === true ? "good" : said.ok === false ? "bad" : ""}`}><strong>${said.text}</strong>
       ${said.output ? html`<details><summary>Check output</summary><pre class="log small">${said.output}</pre></details>` : ""}</div>` : ""}</div>
     <div class="row"><label class="stack">Passes<input type="number" class="start-passes" min="1" value=${v.passes} style="width:90px" disabled=${v.forever} onInput=${e => set({ passes: e.currentTarget.value })} /></label>

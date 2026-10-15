@@ -1,9 +1,9 @@
 // Overview layouts belong to the account, across loops and browsers (D692; D1095: the editor is
 // overview/LayoutEditor.js).
-import { cleanup, me, navSeq } from "./state.js";
-import { api, toast } from "./ui.js";
-import { html } from "./view.js";
-import { openModal } from "./components/Modal.js";
+import { cleanup, me, navSeq } from "../state.js";
+import { api, toast } from "../ui.js";
+import { html } from "../view.js";
+import { openModal } from "../components/Modal.js";
 
 const loadOverviewLayout = () => api("/preferences/overview");
 
@@ -11,7 +11,7 @@ const loadOverviewLayout = () => api("/preferences/overview");
 async function editOverviewLayout() {
   if (me?.impersonator) return false;
   const account = me, page = navSeq;
-  const [prefs, { LayoutEditor }, { overviewMockData }] = await Promise.all([loadOverviewLayout(), import("./overview/LayoutEditor.js"), import("./overview_mock.js")]);
+  const [prefs, { LayoutEditor }, { overviewMockData }] = await Promise.all([loadOverviewLayout(), import("./LayoutEditor.js"), import("./mock.js")]);
   if (me !== account || navSeq !== page) return false;
   return new Promise(resolve => {
     let saving = false, m = null;

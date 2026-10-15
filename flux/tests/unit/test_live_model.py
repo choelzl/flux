@@ -19,7 +19,7 @@ const events = JSON.parse(require('fs').readFileSync(0, 'utf8')), model=LT.model
 for (const event of events) LT.apply(model, event);
   process.stdout.write(JSON.stringify(EXPRESSION));
 });""".replace("EXPRESSION", expression)
-    result = subprocess.run(["node", "-e", script, uri("live/events.js"), uri("live_model.js")],
+    result = subprocess.run(["node", "-e", script, uri("live/events.js"), uri("live/model.js")],
                             input=json.dumps(events), capture_output=True, text=True, timeout=30)
     assert result.returncode == 0, result.stderr
     return json.loads(result.stdout)

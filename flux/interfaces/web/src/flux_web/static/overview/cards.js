@@ -1,12 +1,12 @@
 // Flux web, overview (D692, D1095): every card the Overview can show -- the small ones on top (`stats`) and the
 // large ones in its two columns (`cards`), each a function of what the page fetched, null when it has nothing
-// to say; the account's layout picks and orders them (overview_layout.js).
+// to say; the account's layout picks and orders them (overview/layout.js).
 
 import { Ago, Card, Empty, html } from "../view.js";
 import { api, enc, toast } from "../ui.js";
 import { dur, fmtTok, plural } from "../format.js";
-import { designLabels, measurementText, relativeMeasurement, resultPreferences } from "../result_table.js";
-import { designPoints, groupList } from "../chartdata.js";
+import { designLabels, measurementText, relativeMeasurement, resultPreferences } from "../results/preferences.js";
+import { designPoints, groupList } from "../charts/data.js";
 import { num4 } from "../charts/marks.js";
 import { BestChart } from "../charts/BestChart.js";
 import { ParetoChart } from "../charts/ParetoChart.js";

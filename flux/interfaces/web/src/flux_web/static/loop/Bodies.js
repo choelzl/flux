@@ -8,7 +8,7 @@ import { me } from "../state.js";
 import { Loaded, useLoad } from "../components/Load.js";
 import { NoResults, Reading } from "./Cards.js";
 import { AuthorBox } from "./Authoring.js";
-import { loadOverviewLayout } from "../overview_layout.js";
+import { loadOverviewLayout } from "../overview/layout.js";
 import { Overview } from "../overview/Overview.js";
 import { Checked, ResultsTab } from "../results/Tab.js";
 import { Ideas } from "../results/Ideas.js";

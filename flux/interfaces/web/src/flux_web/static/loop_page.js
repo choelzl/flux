@@ -3,7 +3,7 @@
 
 import { api, enc } from "./ui.js";
 import { html } from "./view.js";
-import { flushResultPreferences } from "./result_table.js";
+import { flushResultPreferences } from "./results/preferences.js";
 import { PageRead } from "./components/Load.js";
 import { LoopPage } from "./loop/LoopPage.js";
 

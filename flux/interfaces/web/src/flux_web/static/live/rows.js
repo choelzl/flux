@@ -11,10 +11,10 @@
 // {type: "wait", key, depth, k, title} (a box still to come).
 
 import { dur } from "../format.js";
-import { WORK_COLORS as COLORS, AGENT_COLOR, kindOf, workLabel, phaseKind } from "../work_style.js";
-import { boxKind, candidateOf, flowBoxes, isDraft, ownView, passName, taskLabel, taskNote } from "../live_views.js";
+import { WORK_COLORS as COLORS, AGENT_COLOR, kindOf, workLabel, phaseKind } from "./work_style.js";
+import { boxKind, candidateOf, flowBoxes, isDraft, ownView, passName, taskLabel, taskNote } from "./views.js";
 import { notReached as unreached } from "./inspector/parts.js";
-import { taskState as state } from "../live_model.js";
+import { taskState as state } from "./model.js";
 import { AI, STAGE, checkWord, ended, firstFailing, isCritique, madeOf, numbersOf, rejectedBy, rest, soleOf } from "./rules.js";
 
 const TRIES = 5;

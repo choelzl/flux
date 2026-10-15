@@ -1,5 +1,5 @@
 // References use the complete results set, independently of table filtering/paging.
-import { directionOf, verdictOf } from "./chartdata.js";
+import { directionOf, verdictOf } from "../charts/data.js";
 
 export function measurementComparison(designs, objectives = []) {
   const buckets = new Map(), key = (d, stage, metric) => JSON.stringify([d.group || "", stage, metric]);

@@ -3,9 +3,9 @@
 
 import { html } from "../view.js";
 import { plural } from "../format.js";
-import { WORK_COLORS as COLORS } from "../work_style.js";
-import { currentTask, taskState as state } from "../live_model.js";
-import { flowBoxes, isDraft, passName, passShort, repaired, triesOf } from "../live_views.js";
+import { WORK_COLORS as COLORS } from "./work_style.js";
+import { currentTask, taskState as state } from "./model.js";
+import { flowBoxes, isDraft, passName, passShort, repaired, triesOf } from "./views.js";
 import { CRIT, soleOf } from "./rules.js";
 import { lines } from "./rows.js";
 import { Lines } from "./Lines.js";

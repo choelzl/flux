@@ -20,7 +20,7 @@ const a = src.indexOf('export function measurementLabels'), b = src.indexOf('exp
 eval(src.slice(a, b).replace('export function', 'function'));
 const [metrics, groups] = JSON.parse(process.argv[2]);
 process.stdout.write(JSON.stringify(Object.fromEntries(measurementLabels(metrics, groups))));"""
-    r = subprocess.run(["node", "-e", script, str(STATIC / "result_table.js"), json.dumps([metrics, groups])],
+    r = subprocess.run(["node", "-e", script, str(STATIC / "results/preferences.js"), json.dumps([metrics, groups])],
                        capture_output=True, text=True, timeout=30)
     assert r.returncode == 0, r.stderr
     return json.loads(r.stdout)

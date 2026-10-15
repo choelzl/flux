@@ -3,13 +3,13 @@
 // chosen (a dictionary as its aggregate or a chart per test, D1014); the choices kept in the loop's preferences.
 
 import { Card, Empty, html, useState } from "../view.js";
-import { defaultMainMeasurements, mainMeasurements, resultPreferences } from "../result_table.js";
-import { designPoints, directionOf, groupList, groupStyles, scopesOf } from "../chartdata.js";
+import { defaultMainMeasurements, mainMeasurements, resultPreferences } from "./preferences.js";
+import { designPoints, directionOf, groupList, groupStyles, scopesOf } from "../charts/data.js";
 import { Legend } from "../charts/marks.js";
 import { BestChart } from "../charts/BestChart.js";
 import { ParetoChart } from "../charts/ParetoChart.js";
+import { Select } from "../components/Select.js";
 
-const Select = ({ opts, value, onChange }) => html`<select onChange=${e => onChange(e.currentTarget.value)}>${opts.map(([v, l]) => html`<option value=${v} selected=${v === value}>${l}</option>`)}</select>`;
 
 export function Graphs({ ctx, r, directions, onPick, detail }) {
   const prefs = resultPreferences(ctx), groups = groupList(r.designs), styles = groupStyles(groups);   // D915: one colour map, built once
@@ -48,7 +48,7 @@ export function Graphs({ ctx, r, directions, onPick, detail }) {
     <div class="grid-2 charts">
       <${Card} title="Pareto front"><div><div class="chart-ctl">
           <label>x ${metricSelect(g.x, v => set({ x: v }))}</label><label>y ${metricSelect(g.y, v => set({ y: v }))}</label>
-          <label>stage <${Select} opts=${stageOpts} value=${g.paretoStage} onChange=${v => set({ paretoStage: v })} /></label>
+          <label>stage <${Select} options=${stageOpts} value=${g.paretoStage} onChange=${v => set({ paretoStage: v })} /></label>
           <button type="button" class=${`small chip pareto-focus${g.paretoFocus ? " on" : ""}`} aria-pressed=${String(g.paretoFocus)} disabled=${nums.length < 2}
             title=${g.paretoFocus ? "Show the full measurement range" : "Fit axes to the feasible Pareto front; distant points may be outside the view"}
             onClick=${() => set({ paretoFocus: !g.paretoFocus })}>Focus</button></div>
@@ -65,7 +65,7 @@ export function Graphs({ ctx, r, directions, onPick, detail }) {
             return html`${chip}<span class="seg dict-view" data-dict=${k}>${(ms.includes(k) ? [["agg", metricGroups[k]?.aggregate || "aggregate"], ["each", "per test"]] : [["each", "per test"]]).map(([v, label]) =>
               html`<button type="button" class=${(v === "each") === each ? "on" : ""} onClick=${() => set({ perTest: v === "each" ? [...perTest, k] : g.perTest.filter(x => x !== k) })}>${label}</button>`)}</span>`;
           })}</div>
-          <label title="deepest stage: each design's deepest, or the stage its objective names">stage <${Select} opts=${stageOpts} value=${g.timeStage} onChange=${v => set({ timeStage: v })} /></label></div>
+          <label title="deepest stage: each design's deepest, or the stage its objective names">stage <${Select} options=${stageOpts} value=${g.timeStage} onChange=${v => set({ timeStage: v })} /></label></div>
         ${charted.size ? html`<div class="chart-grid">${folded(nums).filter(([, ms]) => ms.some(m => charted.has(m))).map(([k, ms]) => {
             const tests = ms.filter(m => m !== k), each = tests.length && (perTest.has(k) || !ms.includes(k));
             // per test: one chart per test at the charts' own size, under the dictionary's name

@@ -4,7 +4,7 @@
 
 import { Ago, Card, Empty, html } from "../view.js";
 import { plural } from "../format.js";
-import { dictionaryClasses, designLabels, measurementLabels, measurementText } from "../result_table.js";
+import { dictionaryClasses, designLabels, measurementLabels, measurementText } from "../results/preferences.js";
 import { num4 } from "../charts/marks.js";
 import { GroupRow, MeasurementHeader, VerdictBadge, useColumns, useValuesMode } from "../results/columns.js";
 import { MainNumbers } from "./parts.js";

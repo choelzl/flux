@@ -13,6 +13,7 @@ import { Act } from "../components/Act.js";
 import { CodeEditor } from "../components/CodeEditor.js";
 import { ViewerFrame, ViewerTools, useViewer } from "../viewer.js";
 import { ActionsMenu, FileList, MetaLine, PathCrumbs, baseOf, joinP, parentOf } from "./parts.js";
+import { useLoad } from "../components/Load.js";
 
 
 /** A name or a folder asked for, the path it makes shown as it is typed; Enter asks. */
@@ -114,30 +115,19 @@ function useFiles(ctx, refreshList = async () => {}) {
     (D907: a bounded preview said, never saved back), a binary file to download -- or why it could not be read. */
 function Viewer({ ctx, f, showIgnored }) {
   const { name, q, mine } = ctx, { sel } = f, view = useViewer();
-  const [got, setGot] = useState(null), [it, setIt] = useState(null);
   const fileUrl = (path, dl) => `/api/apps/${enc(name)}/file?path=${enc(path)}${dl ? "&download=1" : ""}${q}`;
-  useEffect(() => {
-    if (!sel) return;
-    let live = true;
-    setGot(null);
+  // what is selected: a folder's entries, a text, a binary file -- D907: the answer's status first, an error (a file
+  // gone since the list, a session ended) said with the file's name and a retry, never shown as a binary or edited
+  const content = useLoad(async () => {
+    if (!sel) return null;
     const { path, dir } = sel;
-    const failed = x => { if (live && x.message !== "log in") setGot({ error: x.message }); };
-    if (dir) api(`/apps/${enc(name)}/files?path=${enc(path)}${showIgnored ? "&ignored=true" : ""}${q}`).then(list => live && setGot({ list }), failed);
-    // D907: the answer's status first -- an error (a file gone since the list, a session ended) is said with the
-    // file's name and a retry, never shown as a binary file or put in the editor
-    else request(`/apps/${enc(name)}/file?path=${enc(path)}${q}`).then(async r => {
-      if (!(r.headers.get("content-type") || "").startsWith("text/")) { if (live) setGot({ binary: true }); return; }
-      const text = await r.text();
-      if (live) setGot({ text, cut: !!r.headers.get("x-flux-truncated"), size: +r.headers.get("x-flux-size"), rev: r.headers.get("x-flux-revision") || "" });
-    }, failed);
-    return () => { live = false; };
-  }, [sel?.path, sel?.dir, sel?.n]);
-  useEffect(() => {
-    if (!sel) return;
-    let live = true;
-    api(f.itemUrl(sel.path)).then(x => live && setIt(x), () => live && setIt(null));
-    return () => { live = false; };
-  }, [sel?.path, sel?.n, sel?.meta]);
+    if (dir) return { list: await api(`/apps/${enc(name)}/files?path=${enc(path)}${showIgnored ? "&ignored=true" : ""}${q}`) };
+    const r = await request(`/apps/${enc(name)}/file?path=${enc(path)}${q}`);
+    if (!(r.headers.get("content-type") || "").startsWith("text/")) return { binary: true };
+    return { text: await r.text(), cut: !!r.headers.get("x-flux-truncated"), size: +r.headers.get("x-flux-size"), rev: r.headers.get("x-flux-revision") || "" };
+  }, sel ? `${sel.path}\n${sel.dir}\n${sel.n}` : "");
+  const got = !content.got ? null : content.got.error != null ? { error: content.got.error } : content.got.d;
+  const it = useLoad(() => sel ? api(f.itemUrl(sel.path)).catch(() => null) : null, sel ? `${sel.path}\n${sel.n}\n${sel.meta}` : "").got?.d || null;   // what the item is
   if (!sel) return html`<div class="viewer"><${Empty} text="Select a file." /></div>`;
   const { path, dir } = sel, here = it && it.path === path ? it : null;
   const download = html`<a class="btn small" href=${fileUrl(path, true)}>Download</a>`;

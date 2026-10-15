@@ -2,6 +2,7 @@
 // narrowed by both and by a word in the details; the hosts a loop's sandbox refused are here too.
 
 import { Ago, Card, Empty, html, useState } from "../view.js";
+import { Select } from "../components/Select.js";
 
 const NOONE = "\u0000";                                   // an entry without a user (the server's own)
 // D724: the kinds in groups; a kind not listed is Other
@@ -31,8 +32,7 @@ export function Audit({ audit }) {
   return html`<${Card} title="Audit trail"><div class="toolbar">
       <select aria-label="What" onChange=${e => setWhat(e.currentTarget.value)}><option value="">${`Every kind (${audit.length})`}</option>
         ${groups.map(([g, ks]) => html`<option value=${g} title=${ks.map(([k, c]) => `${k} (${c})`).join(", ")}>${`${g} (${ks.reduce((t, [, c]) => t + c, 0)})`}</option>`)}</select>
-      <select aria-label="Who" onChange=${e => setWho(e.currentTarget.value)}><option value="">${`Everyone (${audit.length})`}</option>
-        ${tally(x => x.user || NOONE).map(([v, n]) => html`<option value=${v}>${`${v === NOONE ? "no user" : v} (${n})`}</option>`)}</select>
+      <${Select} aria-label="Who" value=${who} onChange=${setWho} none=${`Everyone (${audit.length})`} options=${tally(x => x.user || NOONE).map(([v, n]) => [v, `${v === NOONE ? "no user" : v} (${n})`])} />
       <input placeholder="search the details" class="filter" value=${find} onInput=${e => setFind(e.currentTarget.value)} />
       <span class="muted">${got.length === audit.length ? `${audit.length} entries` : `${got.length} of ${audit.length} entries`}</span></div>
     <table class="list"><thead><tr><th>When</th><th>Who</th><th>What</th><th>Detail</th></tr></thead>

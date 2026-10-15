@@ -1,5 +1,5 @@
 // Shared presentation for the Results table and the Overview's best designs.
-import { api, enc, toast } from "./ui.js";
+import { api, enc, toast } from "../ui.js";
 
 export const measurementUnits = { fmax_mhz: "MHz", area_um2: "µm²", power_w: "W", time_ms: "ms", cell_count: "cells" };
 

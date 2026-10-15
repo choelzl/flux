@@ -4,8 +4,8 @@
 
 import { Ago, Card, Empty, html, useMemo, useRef, useState } from "../view.js";
 import { api, enc, toast } from "../ui.js";
-import { measurementComparison } from "../measurementdata.js";
-import { defaultMainMeasurements, designLabels, mainMeasurements, measurementText, measurementUnitsFor, relativeMeasurement } from "../result_table.js";
+import { measurementComparison } from "./measurements.js";
+import { defaultMainMeasurements, designLabels, mainMeasurements, measurementText, measurementUnitsFor, relativeMeasurement } from "./preferences.js";
 import { Act } from "../components/Act.js";
 import { ViewerFrame, ViewerTools, useViewer } from "../viewer.js";
 import { useColumns, useValuesMode } from "./columns.js";

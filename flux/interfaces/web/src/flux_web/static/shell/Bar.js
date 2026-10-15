@@ -1,12 +1,11 @@
 // Flux web (D691, D696, D702, D856, D1095): the bar over every page -- the mark, where one can go, the bell and its
 // list, the theme, one's name and Log out (on a phone one menu), and while an admin views as a user, a banner.
 
-import { html, useEffect, useState } from "../view.js";
+import { Ago, html, useChanges, useEffect, useState } from "../view.js";
 import { api, toast } from "../ui.js";
 import { me, setMe } from "../state.js";
-import { Ago } from "../view.js";
 import { Bell as BellIcon } from "../components/Icons.js";
-import { bellState, clearBell, seenAll, subscribe } from "./bell.js";
+import { bellChanges, bellState, clearBell, seenAll } from "./bell.js";
 
 /** Where one can go; the tab of the page one is on, marked. */
 export function Nav({ here }) {
@@ -18,7 +17,7 @@ export function Nav({ here }) {
 
 function Bell() {
   const [, redraw] = useState(0), [open, setOpen] = useState(false);
-  useEffect(() => subscribe(() => redraw(n => n + 1)), []);
+  useChanges(bellChanges);
   useEffect(() => { const close = () => setOpen(false); document.addEventListener("click", close); return () => document.removeEventListener("click", close); }, []);
   const b = bellState(), canAsk = "Notification" in window && Notification.permission === "default";
   return html`<div class="bell-wrap"><button class="bell" title="Notifications" aria-label="Notifications" onClick=${e => { e.stopPropagation(); setOpen(!open); seenAll(); }}>

@@ -167,7 +167,7 @@ def general_flows(r, watch):
                     r.check(f"{card}: main-card preview has real content", b.js("const c=document.querySelector('dialog .overview-layout-preview .grid-2.ov [data-overview-card='+arguments[0]+']'); return !!c?.querySelector(arguments[1]) && c.textContent.includes(arguments[2])", card, selector, text))
                 r.check("recent search designs exclude the baseline and show the newest first", b.js("const p=document.querySelector('dialog .overview-layout-preview'); const s=document.querySelector('[data-layout-list=\"0\"] li select'); s.value='recent_designs'; s.dispatchEvent(new Event('change')); const rows=document.querySelectorAll('dialog [data-overview-card=recent_designs] tbody tr'); return rows.length===3 && rows[0].textContent.includes('#3') && ![...rows].some(r=>r.textContent.includes('#0'))"))
                 b.js("const s=document.querySelector('[data-layout-list=\"0\"] li select'); s.value='decision'; s.dispatchEvent(new Event('change')); return 1")
-                sparse = b.ajs("""const done=arguments[arguments.length-1]; Promise.all([import('/static/view.js'),import('/static/overview/Overview.js'),import('/static/overview_mock.js')]).then(([V,{Overview},{overviewMockData}])=>{
+                sparse = b.ajs("""const done=arguments[arguments.length-1]; Promise.all([import('/static/view.js'),import('/static/overview/Overview.js'),import('/static/overview/mock.js')]).then(([V,{Overview},{overviewMockData}])=>{
                   const sample=overviewMockData(), body=document.createElement('div');
                   const renderOverview=(ctx,r,notes,bench,use,prefs)=>V.render(V.html`<${Overview} ctx=${ctx} r=${r} notes=${notes} bench=${bench} use=${use} prefs=${prefs} />`,body);
                   const ctx={name:'sample',owner:'__mock__',qs:'',mine:false,st:{running:false},tab:'Overview',goTab:()=>{},drawBody:()=>{},
@@ -221,7 +221,7 @@ def general_flows(r, watch):
                 action("Move Decision up")
                 action("Remove Latest notes")
                 action("Remove Agents' workbench")
-                b.js("const s=document.querySelector('[data-layout-list=\"0\"] > .overview-layout-row select'); s.value='usage'; return 1")
+                b.js("const s=document.querySelector('[data-layout-list=\"0\"] > .overview-layout-row select'); s.value='usage'; s.dispatchEvent(new Event('change')); return 1")
                 action("Add card to column 1")
                 r.check("the preview reflects moved and hidden larger cards", b.js("return [...document.querySelectorAll('dialog .overview-layout-preview .grid-2.ov > .col')].map(col=>[...col.children].map(el=>el.dataset.overviewCard).join()).join('|')==='usage|decision,best,last_pass'"))
                 expected = {"stats": ["tokens_out", "state", "designs"], "columns": [["usage"], ["decision", "best", "last_pass"]]}
@@ -1341,7 +1341,7 @@ objectives: [{metric: timings.fast, goal: 15, direction: minimize},
 
             def open_clone(owner=""):
                 r.page("#/configure/clone", "document.querySelector('#clone-from')", "clone picker")
-                b.js("document.querySelector('#clone-from').value = JSON.stringify([arguments[0], arguments[1]]); return 1", owner, source)
+                b.js("const s = document.querySelector('#clone-from'); s.value = JSON.stringify([arguments[0], arguments[1]]); s.dispatchEvent(new Event('change', {bubbles: true})); return 1", owner, source)
                 r.button("Clone…")
                 b.wait("document.querySelector('dialog[open] #clone-to')", what="clone dialog")
 

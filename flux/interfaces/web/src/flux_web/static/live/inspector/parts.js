@@ -1,8 +1,8 @@
 // Live's inspector (D982, D1095): what a task is and what it gave -- plain functions of a task and the
 // task model, no page.
 
-import { AGENT_COLOR, WORK_COLORS as COLORS, phaseKind } from "../../work_style.js";
-import { candidateOf, ranFor, taskLabel } from "../../live_views.js";
+import { AGENT_COLOR, WORK_COLORS as COLORS, phaseKind } from "../work_style.js";
+import { candidateOf, ranFor, taskLabel } from "../views.js";
 
 export const turnOf = n => String(n.params?.turn || n.name);          // D1050: a wrapper's taken-in turn
 export const isAgent = n => /^\s*agent\s*:/i.test(turnOf(n));

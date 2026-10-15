@@ -8,6 +8,7 @@ import { api, enc, toast, when } from "../ui.js";
 import { restoreScroll, scrollState } from "../scroll.js";
 import { Act } from "../components/Act.js";
 import { MECHANISM, VERIFIED } from "../admin/Agents.js";
+import { usePoll } from "../components/Load.js";
 
 const FIELD_WORD = { endpoint: "endpoint", key: "key", auth: "token", token: "login token", model: "model" };
 /** Links as links, the rest as text. */
@@ -24,21 +25,17 @@ function Terminal({ session, onEnded }) {
   const [st, setSt] = useState(null), [text, setText] = useState(""), [line, setLine] = useState("");
   const out = useRef(null), offset = useRef(0), again = useRef(() => {});
   useEffect(() => { offset.current = 0; setText(""); }, [session]);
-  useEffect(() => {
-    let timer = null, live = true;
-    const poll = async () => {
-      clearTimeout(timer);
-      let got;
-      try { got = await api(`/logins/session?since=${offset.current}`); } catch (_) { return; }
-      if (!live) return;
-      if (got.text) { offset.current = got.offset; setText(t => (t + got.text).slice(-60000)); }
-      setSt(got);
-      if (got.running) timer = setTimeout(poll, 700); else setTimeout(onEnded, 500);
-    };
-    again.current = (ms = 150) => setTimeout(poll, ms);
-    poll();
-    return () => { live = false; clearTimeout(timer); };
+  const poll = usePoll(async live => {
+    let got;
+    try { got = await api(`/logins/session?since=${offset.current}`); } catch (_) { return null; }
+    if (!live()) return null;
+    if (got.text) { offset.current = got.offset; setText(t => (t + got.text).slice(-60000)); }
+    setSt(got);
+    if (got.running) return 700;
+    setTimeout(onEnded, 500);
+    return null;
   }, [session]);
+  again.current = (ms = 150) => poll.soon(ms);
   // the output follows its end while one reads at its end
   const place = useRef(null);
   if (out.current) place.current = scrollState(out.current);

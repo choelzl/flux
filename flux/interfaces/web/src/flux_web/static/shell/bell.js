@@ -4,10 +4,10 @@
 
 import { api, appHref, toast } from "../ui.js";
 import { me, pageRefresh } from "../state.js";
+import { changes } from "../view.js";
 
 const bell = { list: [], seen: new Map(), unread: 0, primed: false, user: null };
-const subs = new Set();
-const emit = () => { for (const f of subs) f(); };
+const rung = changes(), emit = rung.emit;
 const key = () => `flux-notes:${bell.user}`;
 const keep = () => { try { localStorage.setItem(key(), JSON.stringify(bell.list)); } catch (_) { /* per viewer */ } };
 
@@ -63,6 +63,7 @@ export async function pollLoops() {
 setInterval(pollLoops, 10000);
 
 export const bellState = () => bell;
-export const subscribe = f => { subs.add(f); return () => subs.delete(f); };
+/** What the bell holds changed: for `useChanges`. */
+export const bellChanges = rung;
 export const seenAll = () => { bell.unread = 0; emit(); };
 export const clearBell = () => { bell.list = []; bell.unread = 0; try { localStorage.removeItem(key()); } catch (_) { /* per viewer */ } emit(); };

@@ -31,7 +31,7 @@ _NOT_MEASURED = ("gate", "admit", "prototype", "build", "fast-check")     # D109
 
 
 def measurement_summary(result: dict[str, Any], decision: dict[str, Any]) -> dict[str, Any]:
-    """Compact decision values and the same scoped references as measurementdata.js.
+    """Compact decision values and the same scoped references as static/results/measurements.js.
 
     Display choices are saved separately; every metric is available without fetching full results
     for every loop in a list. Baselines win over P90 performance of accepted designs.

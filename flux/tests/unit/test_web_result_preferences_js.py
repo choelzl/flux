@@ -6,12 +6,12 @@ from pathlib import Path
 
 import pytest
 
-SOURCE = Path(__file__).parents[2] / "interfaces/web/src/flux_web/static/result_table.js"
+SOURCE = Path(__file__).parents[2] / "interfaces/web/src/flux_web/static/results/preferences.js"
 pytestmark = pytest.mark.skipif(shutil.which("node") is None, reason="node is not on PATH")
 
 
 def test_queued_saves_snapshot_choices_keep_owner_and_recover_from_errors(tmp_path):
-    (tmp_path / "results.mjs").write_text(SOURCE.read_text().replace('"./ui.js"', '"./ui.mjs"'))
+    (tmp_path / "results.mjs").write_text(SOURCE.read_text().replace('"../ui.js"', '"./ui.mjs"'))
     (tmp_path / "ui.mjs").write_text("""
 export const enc = encodeURIComponent;
 export const h = () => { throw Error('DOM not expected'); };

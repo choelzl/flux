@@ -6,7 +6,7 @@ import { can, setPageRefresh } from "./state.js";
 import { api, confirmDialog, enc, toast } from "./ui.js";
 import { Card, html, useEffect } from "./view.js";
 import { Loaded, useLoad } from "./components/Load.js";
-import { flushResultPreferences } from "./result_table.js";
+import { flushResultPreferences } from "./results/preferences.js";
 import { LoopsPage } from "./loops/Page.js";
 import { NewPage } from "./loops/Create.js";
 export { startLoop } from "./loops/Start.js";

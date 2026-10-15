@@ -2,8 +2,8 @@
 // what it is set to until it runs), a pass at a glance.
 
 import { html } from "../view.js";
-import { WORK_COLORS as COLORS, workLabel } from "../work_style.js";
-import { passName, taskLabel } from "../live_views.js";
+import { WORK_COLORS as COLORS, workLabel } from "./work_style.js";
+import { passName, taskLabel } from "./views.js";
 import { PassSummary } from "./inspector/Inspector.js";
 import { asYaml, noteName, noteSaid } from "./notes.js";
 

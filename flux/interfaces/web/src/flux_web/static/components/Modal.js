@@ -3,7 +3,7 @@
 // action opens (`openModal`: a question with its buttons, an upload's progress, a raw text, the layout editor) are
 // one stack, drawn by `Dialogs` (the app draws it).
 
-import { html, useLayoutEffect, useRef, useState } from "../view.js";
+import { changes, html, useChanges, useLayoutEffect, useRef, useState } from "../view.js";
 import { Toasts, useLayer } from "../notices.js";
 import { bytes } from "../format.js";
 
@@ -23,12 +23,10 @@ export function Modal({ cls = "dlg", label = null, labelledby = null, onClose = 
 
 // ---- the dialogs an action opens: a stack, the latest on top
 let stack = [], seq = 0;
-const subs = new Set();
-const emit = () => { for (const f of subs) f(); };
+const opened = changes(), emit = opened.emit;
 /** The stack, drawn. */
 export function Dialogs() {
-  const [, redraw] = useState(0);
-  useLayoutEffect(() => { const f = () => redraw(n => n + 1); subs.add(f); return () => subs.delete(f); }, []);
+  useChanges(opened);
   return stack.map(e => html`<${Modal} key=${e.id} cls=${e.cls} label=${e.label} labelledby=${e.labelledby} onClose=${e.onCancel} at=${e.opened}>${e.vnode}<//>`);
 }
 

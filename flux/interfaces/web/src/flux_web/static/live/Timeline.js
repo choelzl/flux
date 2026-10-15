@@ -4,9 +4,9 @@
 
 import { html } from "../view.js";
 import { dur } from "../format.js";
-import { WORK_COLORS as COLORS, AGENT_COLOR, ownSpans, phaseKind, workLabel } from "../work_style.js";
-import { taskState as state } from "../live_model.js";
-import { passShort, taskLabel } from "../live_views.js";
+import { WORK_COLORS as COLORS, AGENT_COLOR, ownSpans, phaseKind, workLabel } from "./work_style.js";
+import { taskState as state } from "./model.js";
+import { passShort, taskLabel } from "./views.js";
 
 const agentActive = n => { for (let p = n; p; p = p.parent) if (/^agent:/i.test(p.name)) return true; return false; };
 

@@ -4,7 +4,7 @@
 import { html } from "../view.js";
 import { api, dialog, enc } from "../ui.js";
 import { plural } from "../format.js";
-import { directionOf } from "../chartdata.js";
+import { directionOf } from "../charts/data.js";
 import { lineDiff } from "../diff.js";
 import { Diff } from "../components/Diff.js";
 import { VerdictPill } from "./columns.js";

@@ -5,7 +5,7 @@
 
 import { Card, html, useEffect, useLayoutEffect, useMemo, useRef, useState } from "../view.js";
 import { NARROW, enc, request } from "../ui.js";
-import { isProblem, latestStart, lineClass, logAt, logLines, matcher } from "../logmodel.js";
+import { isProblem, latestStart, lineClass, logAt, logLines, matcher } from "./logmodel.js";
 import { ViewerFrame, ViewerTools, useViewer } from "../viewer.js";
 
 const WRAPPED = 3000, TAIL = 2 << 20;

@@ -1,13 +1,13 @@
 // Live (D1095): the page -- the toolbar (Follow, Earlier passes, the start and the pass), the list (Tree,
 // Graph or Timeline) and the inspector beside it. Both read the store; a change in it redraws them.
 
-import { html, useEffect, useLayoutEffect, useRef, useState } from "../view.js";
+import { html, useChanges, useEffect, useLayoutEffect, useRef } from "../view.js";
 import { appHref, when } from "../ui.js";
 import { StreamPill } from "../components/StatePill.js";
 import { scrollState, restoreScroll } from "../scroll.js";
-import { phaseKind } from "../work_style.js";
-import { taskState as state } from "../live_model.js";
-import { passName } from "../live_views.js";
+import { phaseKind } from "./work_style.js";
+import { taskState as state } from "./model.js";
+import { passName } from "./views.js";
 import { NO_PASS } from "./store.js";
 import { lines } from "./rows.js";
 import { Lines } from "./Lines.js";
@@ -17,18 +17,14 @@ import { BoxPanel, PassPanel } from "./Panels.js";
 import { ViewerFrame } from "../viewer.js";
 import { Inspector } from "./inspector/Inspector.js";
 import { Log } from "./Log.js";
+import { Select } from "../components/Select.js";
 
-/** Redrawn with the store. */
-function useStore(store) {
-  const [, set] = useState(0);
-  useEffect(() => store.subscribe(() => set(n => n + 1)), [store]);
-}
 const Empty = ({ text }) => html`<div class="empty"><p>${text}</p></div>`;
 const narrowScreen = () => window.matchMedia("(max-width: 960px)").matches;
 
 /** The toolbar under the tabs (D975): Follow, Earlier passes, the start and the pass. */
 export function Controls({ store, ctx }) {
-  useStore(store);
+  useChanges(store);
   const { s, a } = store, scope = s.scopeRows && s.journal ? s.lastScope : null;
   if (!s.history) return null;
   const passes = scope?.passes || [], current = scope?.current || [];
@@ -37,14 +33,12 @@ export function Controls({ store, ctx }) {
       title=${s.following ? "Pause automatic task selection" : "Follow the latest task in the current pass"} onClick=${a.follow}>${s.following ? "Following" : "Follow"}</button>
     <button type="button" class="small" hidden=${!(s.journal?.model.before || s.journal?.model.cut) || s.startId !== "current"} title="Load every pass of this start" onClick=${a.earlier}>Earlier passes</button>
     <div class="alt-selectors">
-      <label>Start <select aria-label="Live start" value=${s.startId} onChange=${e => a.setStart(e.currentTarget.value)}>
-        <option value="current">Current start</option>
-        ${s.history.starts.filter(x => !x.running).map(x => html`<option value=${String(x.id)}>${`${when(x.started)} · ${x.rc == null ? "ended" : "exit " + x.rc}`}</option>`)}</select></label>
-      <label>Pass <select aria-label="Live pass" value=${s.pass} onChange=${e => a.setPass(e.currentTarget.value)}>
-        ${s.startId === "current" ? html`<option value="current">${`Current${current.length ? " · " + current.join(", ") : ""}`}</option>` : ""}
-        <option value="all">All passes</option>
-        ${passes.map(n => html`<option value=${String(n)}>${passName(n)}</option>`)}
-        ${!["current", "all"].includes(s.pass) && !passes.includes(Number(s.pass)) ? html`<option value=${s.pass}>${`Pass ${s.pass} · unavailable`}</option>` : ""}</select></label>
+      <label>Start <${Select} aria-label="Live start" value=${s.startId} onChange=${a.setStart}
+        options=${[["current", "Current start"], ...s.history.starts.filter(x => !x.running).map(x => [x.id, `${when(x.started)} · ${x.rc == null ? "ended" : "exit " + x.rc}`])]} /></label>
+      <label>Pass <${Select} aria-label="Live pass" value=${s.pass} onChange=${a.setPass} options=${[
+        ...(s.startId === "current" ? [["current", `Current${current.length ? " · " + current.join(", ") : ""}`]] : []), ["all", "All passes"],
+        ...passes.map(n => [n, passName(n)]),
+        ...(!["current", "all"].includes(s.pass) && !passes.includes(Number(s.pass)) ? [[s.pass, `Pass ${s.pass} · unavailable`]] : [])]} /></label>
     </div></div>`;
 }
 
@@ -62,7 +56,7 @@ function Summary({ v, s }) {
 
 /** The page once its journal is open (a model to read). */
 export function Page({ store, ctx }) {
-  useStore(store);
+  useChanges(store);
   if (ctx.curSub() === "log") return html`<div class="live-alt" data-drawn=${store.s.drawn}><${Log} store=${store} ctx=${ctx} /></div>`;
   return store.s.journal ? html`<${Body} store=${store} ctx=${ctx} />` : html`<section class="card"><${Empty} text="Loading…" /></section>`;
 }

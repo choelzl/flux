@@ -63,7 +63,7 @@ def free_port() -> int:
 
 # The two charts drawn into a node of their own, for a test that reads one: `bestChart(rows, obj, passes, opts)`,
 # `paretoChart(designs, xm, ym, stage, objectives, onPick, opts)`, `designPoints`.
-CHARTS = ("Promise.all(['view', 'chartdata', 'charts/BestChart', 'charts/ParetoChart'].map(m => import('/static/' + m + '.js'))).then(([V, D, B, P]) => {"
+CHARTS = ("Promise.all(['view', 'charts/data', 'charts/BestChart', 'charts/ParetoChart'].map(m => import('/static/' + m + '.js'))).then(([V, D, B, P]) => {"
           " const draw = (C, p) => { const box = document.createElement('div'); V.render(V.html`<${C} ...${p} />`, box); return box.firstElementChild; };"
           " return {designPoints: D.designPoints, bestChart: (rows, obj, passes, o = {}) => draw(B.BestChart, {rows, obj, passes, ...o}),"
           " paretoChart: (designs, xm, ym, stage, objectives, onPick, o = {}) => draw(P.ParetoChart, {designs, xm, ym, stage, objectives, onPick, ...o})}; })")
@@ -429,7 +429,7 @@ class Run:
     def preferences(self, name="sw", patch=None, reset=False):
         """Wait for UI saves and read/write the project's durable preferences."""
         saved = self.b.ajs("""const [name, patch, reset, done] = arguments;
-          import('/static/result_table.js').then(async module => {
+          import('/static/results/preferences.js').then(async module => {
             await module.flushResultPreferences();
             const response = await fetch('/api/apps/' + encodeURIComponent(name) + '/preferences', {
               method: reset ? 'DELETE' : patch === null ? 'GET' : 'PATCH',
@@ -981,7 +981,7 @@ def flows(r: Run) -> None:
             r.page("#/", "document.querySelector('#main table.list, #main .empty')", "loops before restoring columns")
             r.page("#/app/sw/results", "document.querySelector('table.designs')", "remembered measurement visibility")
             r.check("hidden measurements remain hidden after reopening Results", b.js("return document.querySelectorAll('table.designs tbody tr').length === 7 && document.querySelectorAll('table.designs th.measurement-head').length === 5 && !document.querySelector('th[data-label=area_um2]') && !document.querySelector('.show-hidden-columns').hidden"))
-            separate = b.ajs("const done = arguments[arguments.length - 1]; import('/static/result_table.js').then(({resultPreferences}) => done([{name: 'other'}, {name: 'sw', owner: 'another-user'}].map(ctx => (resultPreferences(ctx).read().hiddenMetrics || []).includes('area_um2')))).catch(e => done(String(e))); ")
+            separate = b.ajs("const done = arguments[arguments.length - 1]; import('/static/results/preferences.js').then(({resultPreferences}) => done([{name: 'other'}, {name: 'sw', owner: 'another-user'}].map(ctx => (resultPreferences(ctx).read().hiddenMetrics || []).includes('area_um2')))).catch(e => done(String(e))); ")
             r.check("measurement visibility is isolated by loop and owner", separate == [False, False], str(separate))
             r.page("#/app/sw/settings", "document.querySelector('.measurement-options')", "restore a measurement")
             r.check("hidden measurements can be restored individually", b.js("const box = document.querySelector('.measurement-options input[data-metric=area_um2]'), wasHidden = !box.checked; box.click(); return wasHidden"))
@@ -1068,7 +1068,7 @@ def flows(r: Run) -> None:
             r.page("#/app/sw", "document.querySelector('.best-n')", "short Decision table labels")
             r.check("Decision and Results share the same complete design labels", b.js("return [...document.querySelectorAll('.best-n .table-design-name')].every(s => /^(whole|decoder|encoder)#/.test(s.textContent) && !s.textContent.includes('[') && s.scrollWidth <= s.clientWidth + 1 && s.title.includes('#'))"))
             b.shot(r.shots / "short-design-labels.png", full=True)
-            got = b.ajs("""const done = arguments[arguments.length - 1]; import('/static/result_table.js').then(({designLabels}) => {
+            got = b.ajs("""const done = arguments[arguments.length - 1]; import('/static/results/preferences.js').then(({designLabels}) => {
                 const labels = ds => [...designLabels(ds, 'app').values()];
                 done([labels([{name:'app#9', group:'app'}, {name:'app#baseline', group:'whole'}]),
                   labels([{name:'part#2', part:'part', group:'part'}]),
@@ -2552,7 +2552,7 @@ def flows(r: Run) -> None:
         r.page("#/app/sw", "document.querySelector('.page-head')", "sw")
         r.check("a loop's page offers no clone", not b.js("return [...document.querySelectorAll('.page-head button')].some(x => x.textContent.trim() === 'Clone…')"))
         r.page("#/configure/clone", "document.querySelector('#clone-from')", "New loop › Clone a loop")
-        b.js("const s = document.querySelector('#clone-from'); s.value = JSON.stringify(['', 'sw']); return 1")
+        b.js("const s = document.querySelector('#clone-from'); s.value = JSON.stringify(['', 'sw']); s.dispatchEvent(new Event('change', {bubbles: true})); return 1")
         r.button("Clone…", "#main")
         b.wait("document.querySelector('#clone-to')", timeout=10, what="the clone dialog")
         b.js("const i = document.querySelector('#clone-to'); i.value = 'sw-copy'; i.dispatchEvent(new Event('input', {bubbles: true})); return 1")

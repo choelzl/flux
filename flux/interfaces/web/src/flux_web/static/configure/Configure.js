@@ -15,6 +15,7 @@ import { UploadForm } from "../loops/Create.js";
 import { filesStore } from "./files.js";
 import { FilesPanel } from "./FilesPanel.js";
 import { CloneForm, DirectEdit, NewByAgent, ReviseByAgent, confirmDiff } from "./Views.js";
+import { Select } from "../components/Select.js";
 
 export const MODES = { configurator: "Configurator", upload: "Create or upload", edit: "Direct edit", agent: "Agent", clone: "Clone a loop" };
 export const modesOf = name => name ? ["configurator", "edit", "agent"] : ["upload", "configurator", "agent", "clone"];
@@ -115,7 +116,7 @@ function CrafterOf({ name, owner }) {
 function CrafterNew({ draft, onDraft }) {
   const host = useRef(null), crafter = useRef(null), adv = useRef(null), [problem, setProblem] = useState(false);
   const store = useMemo(() => filesStore(null, () => host.current?.querySelector(".fc-yaml code")?.textContent || "",
-    { staged: draft.staged, namedOf: () => window.FluxCrafter.namedFiles(draft.state), onDraw: () => { crafter.current?.refresh(); onDraft(); } }), [draft]);
+    { staged: draft.staged, namedOf: () => draft.state ? window.FluxCrafter.namedFiles(draft.state) : [], onDraw: () => { crafter.current?.refresh(); onDraft(); } }), [draft]);
   useEffect(() => {
     let live = true;
     (async () => {
@@ -167,8 +168,7 @@ function DraftLine({ draft, discard }) {
 /** The ways' tabs (`small`: as sub-tabs) and, on a phone, one compact menu (D913). */
 export const ModeTabs = ({ name, mode, pick, small = false }) => html`<div class=${(small ? "subtabs" : "tabs") + " config-modes"} role="tablist">
     ${modesOf(name).map(k => html`<button role="tab" type="button" class=${k === mode ? "on" : ""} aria-selected=${k === mode ? "true" : "false"} onClick=${() => pick(k)}>${MODES[k]}</button>`)}</div>
-  <select class="mode-menu" aria-label=${name ? "How to change it" : "How to make it"} onChange=${e => pick(e.currentTarget.value)}>
-    ${modesOf(name).map(k => html`<option value=${k} selected=${k === mode}>${MODES[k]}</option>`)}</select>`;
+  <${Select} class="mode-menu" aria-label=${name ? "How to change it" : "How to make it"} value=${mode} onChange=${pick} options=${modesOf(name).map(k => [k, MODES[k]])} />`;
 
 /** The way chosen, its view; `tabs` false when the tabs stand elsewhere (a loop's Settings › Problem). */
 export function Configure({ name, owner, mode, pick, tabs = true }) {

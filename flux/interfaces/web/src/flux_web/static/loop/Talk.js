@@ -3,7 +3,7 @@
 // older ones folded unless chosen), an answer's thinking and commands, Reply, a new chat; while the loop runs, a
 // note to it (the agent's open question answered there).
 
-import { Ago, Card, Empty, Skeleton, html, useEffect, useLayoutEffect, useRef, useState } from "../view.js";
+import { Ago, Card, Empty, Skeleton, html, useLayoutEffect, useRef, useState } from "../view.js";
 import { api, dialog, enc, toast } from "../ui.js";
 import { dur, plural } from "../format.js";
 import { me } from "../state.js";
@@ -13,22 +13,19 @@ import { Act } from "../components/Act.js";
 import { Bin } from "../components/Bin.js";
 import { Markdown } from "../components/Markdown.js";
 import { Conversation, liveWork } from "../components/Conversation.js";
+import { usePoll } from "../components/Load.js";
 
 /** D993: the answering agent's thinking, commands and replies, as Live shows an agent; followed while it answers. */
 function AgentTurn({ url }) {
   const [got, setGot] = useState(null), box = useRef(null);
-  useEffect(() => {
-    let timer = null, live = true;
-    const draw = async () => {
-      const g = await api(url).catch(x => ({ error: x.message }));
-      if (!live) return;
-      setGot(g);
-      if (g.running) timer = setTimeout(draw, 2000);
-      else requestAnimationFrame(() => { if (box.current) box.current.parentElement.scrollTop = box.current.parentElement.scrollHeight; });
-    };
-    draw();
-    return () => { live = false; clearTimeout(timer); };
-  }, []);
+  usePoll(async live => {
+    const g = await api(url).catch(x => ({ error: x.message }));
+    if (!live()) return null;
+    setGot(g);
+    if (g.running) return 2000;
+    requestAnimationFrame(() => { if (box.current) box.current.parentElement.scrollTop = box.current.parentElement.scrollHeight; });
+    return null;
+  });
   if (!got) return html`<${Skeleton} lines=${3} />`;
   const steps = Array.isArray(got.steps) ? got.steps : [], total = Number(got["steps total"] || steps.length), think = got["thinking (live tail)"] || "";
   const stats = [got.agent, got["tokens (reported)"], got.elapsed, got["tool calls"] ? `${String(got["tool calls"]).split("\n").length}+ tool calls` : ""].filter(Boolean);
@@ -70,23 +67,18 @@ function Thread({ turns, folded, t, open }) {
 export function Talk({ name, qs, mine, canAsk, steer, steerOpen, open: shown = true }) {
   const [list, setList] = useState(null), [offline, setOffline] = useState(false), [reply, setReply] = useState(null), [sending, setSending] = useState(false);
   const [folds, setFolds] = useState({ collapsed: new Set(), expanded: new Set() }), [who, setWho] = useState(""), [replyAuthor, setReplyAuthor] = useState(null);
-  const history = useRef(null), q = useRef(null), open = useRef(new Map()).current, timer = useRef(null), alive = useRef(true);
+  const history = useRef(null), q = useRef(null), open = useRef(new Map()).current;
   const [draft, setDraft] = useState("");                     // what is being written, kept while the drawer is closed
-  const read = async () => {
-    clearTimeout(timer.current);
+  // read while the drawer is open, again while an answer runs; closed, what was read stays for its next opening
+  const poll = usePoll(async live => {
+    if (!shown) return null;
     let got;
     // D1009: the server away (a restart) -- what is shown kept, said, tried again; never an empty list
-    try { got = await api(`/apps/${enc(name)}/asks${qs}`); } catch (_) { if (alive.current) { setOffline(true); timer.current = setTimeout(read, 3000); } return; }
-    if (!alive.current) return;
+    try { got = await api(`/apps/${enc(name)}/asks${qs}`); } catch (_) { if (live()) setOffline(true); return 3000; }
+    if (!live()) return null;
     setOffline(false); setList(got);
-    if (got.some(a => a.running)) timer.current = setTimeout(read, 3000);
-  };
-  // read while the drawer is open; closed, what was read stays for its next opening
-  useEffect(() => {
-    alive.current = shown;
-    if (shown) read();
-    return () => { alive.current = false; clearTimeout(timer.current); };
-  }, [shown]);
+    return got.some(a => a.running) ? 3000 : null;
+  }, [shown]), read = poll.now;
   // the scroll and the activity logs as they were, a running log followed at its end
   const place = useRef(null);
   if (history.current) place.current = { at: scrollState(history.current), logs: new Map([...history.current.querySelectorAll("[data-ask-log]")].map(el => [el.dataset.askLog, scrollState(el)])) };

@@ -5,6 +5,7 @@
 import { Card, html, useEffect, useState } from "../view.js";
 import { api } from "../ui.js";
 import { bound, useAutosave } from "../components/Autosave.js";
+import { Select } from "../components/Select.js";
 
 const lines = a => (a || []).join("\n");
 const list = text => text.split(/[\n,]/).map(x => x.trim()).filter(Boolean);
@@ -35,9 +36,8 @@ export function Sandbox({ r }) {
   const adds = r.login_path.filter(d => !r.path.includes(d));
   return html`<div ...${box}>${r.sandboxed ? "" : html`<p class="callout bad">This server runs without the sandbox (--no-sandbox): none of this applies.</p>`}
     <${Card} title="Network"><p class="muted">What the containers may reach. A loop's Settings may add hosts.</p>
-      <label class="stack">Mode<select id="sb-net" onChange=${e => set({ network: e.currentTarget.value })}>
-        <option value="open" selected=${v.network !== "allowlist"}>open: the containers reach any host</option>
-        <option value="allowlist" selected=${v.network === "allowlist"}>allowlist: only the hosts below</option></select></label>
+      <label class="stack">Mode<${Select} id="sb-net" value=${v.network === "allowlist" ? "allowlist" : "open"} onChange=${network => set({ network })}
+        options=${[["open", "open: the containers reach any host"], ["allowlist", "allowlist: only the hosts below"]]} /></label>
       <div class="sb-allow" hidden=${v.network !== "allowlist"}><label class="stack">Allowed: one per line, a host (and its subdomains), *.domain, an IP or a CIDR
           ${text("sb-allow", "allow", 5, "localai.example.org\n*.anthropic.com\n10.0.0.0/8\n192.168.1.20")}</label>
         <label class="check">${box2("sb-ep", "endpoints")}also the model endpoints set under Models (their hosts)</label></div><//>

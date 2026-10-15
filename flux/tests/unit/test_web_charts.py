@@ -1,4 +1,4 @@
-"""D914: what the results charts compute (chartdata.js), under node -- the points carry each design's
+"""D914: what the results charts compute (charts/data.js), under node -- the points carry each design's
 eligibility, the best so far and the Pareto front count only eligible designs of one scope, and the
 front is exact and O(n log n) on a loop's 20,000 designs."""
 
@@ -12,15 +12,15 @@ from pathlib import Path
 import pytest
 
 HERE = Path(__file__).parent
-CHARTDATA = HERE.parents[1] / "interfaces/web/src/flux_web/static/chartdata.js"
-MEASUREMENTDATA = CHARTDATA.with_name("measurementdata.js")
+STATIC = HERE.parents[1] / "interfaces/web/src/flux_web/static"
+CHARTDATA, MEASUREMENTDATA = STATIC / "charts/data.js", STATIC / "results/measurements.js"
 pytestmark = pytest.mark.skipif(shutil.which("node") is None, reason="node is not on PATH")
 
 
 def run(tmp_path: Path, body: str) -> dict:
-    """`body` runs with chartdata.js's exports as `C`, and prints its answer as JSON."""
+    """`body` runs with charts/data.js's exports as `C`, and prints its answer as JSON."""
     shutil.copy(CHARTDATA, tmp_path / "chartdata.mjs")
-    (tmp_path / "measurementdata.mjs").write_text(MEASUREMENTDATA.read_text().replace('"./chartdata.js"', '"./chartdata.mjs"'))
+    (tmp_path / "measurementdata.mjs").write_text(MEASUREMENTDATA.read_text().replace('"../charts/data.js"', '"./chartdata.mjs"'))
     (tmp_path / "t.mjs").write_text("import * as C from './chartdata.mjs';\nimport * as M from './measurementdata.mjs';\n" + body)
     r = subprocess.run(["node", str(tmp_path / "t.mjs")], capture_output=True, text=True, timeout=120)
     assert r.returncode == 0, r.stderr

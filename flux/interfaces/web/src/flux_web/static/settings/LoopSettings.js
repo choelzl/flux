@@ -7,11 +7,12 @@ import { api, confirmDialog, dialog, enc, toast } from "../ui.js";
 import { me } from "../state.js";
 import { route } from "../app.js";
 import { PermissionChoice, hasPermissions } from "../components/PermissionChoice.js";
-import { defaultMainMeasurements } from "../result_table.js";
+import { defaultMainMeasurements } from "../results/preferences.js";
 import { Act } from "../components/Act.js";
 import { EnvEditor, EnvTable } from "../components/Env.js";
 import { MeasurementOptions } from "../results/columns.js";
 import { Advanced } from "./Advanced.js";
+import { Select } from "../components/Select.js";
 
 const Measurements = ({ ctx, results }) => html`<${Card} title="Measurements" cls="measurement-preferences">
   <p class="muted">Visible controls table columns. Main selects metrics for loop lists, decision summaries and default charts. % formats summaries as percent change from the matching baseline, otherwise P90 performance of accepted designs. Tables have their own Absolute/Relative toggle. Saved with this project and shared across browsers; calculations still use every metric. Only owners, editors and admins can save changes.</p>
@@ -33,17 +34,17 @@ const CAN = { watch: "Can watch", edit: "Can edit" };
 function Sharing({ name, qs, sh }) {
   const [who, setWho] = useState(""), [perm, setPerm] = useState("watch");
   const set = async (user, perm) => { await api(`/apps/${enc(name)}/shares${qs}`, { method: "PUT", body: { user, perm } }); toast(perm ? `Shared with ${user}: ${perm}` : `No longer shared with ${user}`, "ok"); route(); };
-  const access = (cur, attrs) => html`<select ...${attrs}>${Object.entries(CAN).map(([p, label]) => html`<option value=${p} selected=${cur === p}>${label}</option>`)}</select>`;
+  const access = (cur, attrs) => html`<${Select} ...${attrs} options=${Object.entries(CAN)} value=${cur} />`;
   const rows = sh.shares.map(x => html`<div class="share-who"><span class="share-av" aria-hidden="true">${x.user.slice(0, 1).toUpperCase()}</span><span class="strong">${x.user}</span></div>
-    ${sh.can_share ? access(x.perm, { "aria-label": `What ${x.user} may do`, onChange: e => set(x.user, e.currentTarget.value) }) : html`<span class="pill">${CAN[x.perm] || x.perm}</span>`}
+    ${sh.can_share ? access(x.perm, { "aria-label": `What ${x.user} may do`, onChange: p => set(x.user, p) }) : html`<span class="pill">${CAN[x.perm] || x.perm}</span>`}
     ${sh.can_share ? html`<button type="button" class="small" onClick=${() => set(x.user, null)}>Remove</button>` : html`<span />`}`);
   const none = html`<p class="muted share-none">${sh.can_share ? "Not shared." : "Shared with nobody else."}</p>`;
   if (!sh.can_share) return html`<${Card} title="Sharing" cls="loop-sharing">${sh.shares.length ? html`<div class="share-grid">${rows}</div>` : none}<//>`;
   const free = sh.users.filter(u => !sh.shares.some(x => x.user === u));
   return html`<${Card} title="Sharing" cls="loop-sharing">${sh.shares.length ? "" : none}
     <div class="share-grid">${rows}<div class="share-add-sep" />
-      <select id="share-user" aria-label="Share with" disabled=${!free.length} value=${who} onChange=${e => setWho(e.currentTarget.value)}><option value="">${free.length ? "Choose a user…" : "No other user"}</option>${free.map(u => html`<option value=${u}>${u}</option>`)}</select>
-      ${access(perm, { id: "share-perm", "aria-label": "What they may do", disabled: !free.length, onChange: e => setPerm(e.currentTarget.value) })}
+      <${Select} id="share-user" aria-label="Share with" disabled=${!free.length} value=${who} onChange=${setWho} none=${free.length ? "Choose a user…" : "No other user"} options=${free} />
+      ${access(perm, { id: "share-perm", "aria-label": "What they may do", disabled: !free.length, onChange: setPerm })}
       <${Act} cls="primary small" disabled=${!free.length} onClick=${async () => { if (!who) { toast("Choose a user.", "warn"); return; } await set(who, perm); }}>Share<//></div>
     <p class="muted small share-note"><strong>Watch</strong>: view only. <strong>Edit</strong>: change it; also start/stop when allowed to run (uses the owner's keys).</p><//>`;
 }
@@ -64,7 +65,7 @@ function Ownership({ ctx, plan }) {
     const current = me.role === "admin" ? await api(`/apps/${enc(name)}/ownership${qs}`) : plan;
     const keep = hasPermissions(current.permissions);
     const got = await dialog(`Transfer ${name}`, ({ v, set }) => html`<div class="stack">
-      <label class="stack">New owner<select id="loop-transfer-user" aria-label="New owner" value=${v.user} onChange=${e => set({ user: e.currentTarget.value })}><option value="">Choose a user…</option>${current.users.map(u => html`<option value=${u}>${u}</option>`)}</select></label>
+      <label class="stack">New owner<${Select} id="loop-transfer-user" aria-label="New owner" value=${v.user} onChange=${user => set({ user })} none="Choose a user…" options=${current.users} /></label>
       <label class="stack">Loop name for the new owner<input id="loop-transfer-to" value=${v.to} maxlength="60" autocomplete="off" required onInput=${e => set({ to: e.currentTarget.value })} /></label>
       <p>Files, results, full run history, caches and loop variables (including secrets) move to the new owner. Your account's model keys and agent logins stay with your account.</p>
       <p>${keep ? "Sharing and other admin settings are cleared. Choose below whether to keep the mount, sandbox and network overrides. The recipient uses their own account settings; the former owner loses access unless it is shared back. Admins retain access."

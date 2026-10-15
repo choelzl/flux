@@ -1,9 +1,9 @@
 // Flux web, results (D1095): the measurement columns a table shows -- which are hidden, a dictionary folded to
 // its aggregate or unrolled to its tests (D1008, D1014), values absolute or relative -- kept in the loop's
-// shared preferences (result_table.js), and the table's headers and badges.
+// shared preferences (preferences.js), and the table's headers and badges.
 
 import { html, useState } from "../view.js";
-import { mainMeasurements, relativeMeasurement, resultPreferences } from "../result_table.js";
+import { mainMeasurements, relativeMeasurement, resultPreferences } from "./preferences.js";
 
 /** The columns of `metrics` and their controls: `visible()` in the order shown (a dictionary's aggregate first,
     then its tests), `hidden(m)`, `controls` (Hidden N, Tests ▸), `toggle(m, on)` (the picker's). */

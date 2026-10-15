@@ -2,9 +2,9 @@
 // stopped, what an agent asks, then the large cards in two columns, as the account's layout orders them.
 
 import { html } from "../view.js";
-import { defaultMainMeasurements, mainMeasurements, measurementUnitsFor } from "../result_table.js";
-import { measurementComparison } from "../measurementdata.js";
-import { directionOf } from "../chartdata.js";
+import { defaultMainMeasurements, mainMeasurements, measurementUnitsFor } from "../results/preferences.js";
+import { measurementComparison } from "../results/measurements.js";
+import { directionOf } from "../charts/data.js";
 import { overviewCards } from "./cards.js";
 
 export function Overview({ ctx, r, notes, bench, use, prefs, ideas = null }) {

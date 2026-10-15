@@ -25,6 +25,18 @@ options.requestAnimationFrame = flush => afterNextFrame(() => { effects++; try {
 options.debounceRendering = draw => effects ? Promise.resolve().then(draw) : draw();
 export { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "./vendor/hooks.module.js";
 
+/** Something that changes and says so (a store's list, the notices, the bell): `subscribe(f)` (returns its own
+    undoing), `emit()` telling each. */
+export function changes() {
+  const subs = new Set();
+  return { subscribe: f => { subs.add(f); return () => subs.delete(f); }, emit: () => { for (const f of [...subs]) f(); } };
+}
+/** The component drawn again each time `source` (anything with `subscribe`) says it changed. */
+export function useChanges(source) {
+  const [, redraw] = useState(0);
+  useLayoutEffect(() => source.subscribe(() => redraw(n => n + 1)), [source]);
+}
+
 /** A card: its head when it has a title or actions, then what it holds. */
 export function Card({ title, actions, cls = "", children, ...rest }) {
   return html`<section ...${rest} class=${"card " + cls}>

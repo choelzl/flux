@@ -3,7 +3,7 @@
 // design. The decision (★) and the newest first, unless a column is chosen.
 
 import { html, useLayoutEffect, useRef, useState } from "../view.js";
-import { dictionaryClasses, measurementLabels, measurementText } from "../result_table.js";
+import { dictionaryClasses, measurementLabels, measurementText } from "./preferences.js";
 import { GroupRow, MeasurementHeader, VerdictBadge } from "./columns.js";
 
 const PAGE = 200;

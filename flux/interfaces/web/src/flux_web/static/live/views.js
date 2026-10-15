@@ -1,7 +1,7 @@
 // D978: what Live's three views say about the tasks -- a task's name in the timeline's words,
 // the flow a pass went through, and what each box is set to (from the document as written).
 import { kindOf, phaseKind, workLabel } from "./work_style.js";
-import { taskState as state } from "./live_model.js";
+import { taskState as state } from "./model.js";
 
 const SETUP_SAYS = { "gate: tools": "tools ready", "gate: the problem": "problem answerable", "propose: decompose": "parts" };
 const turnOf = n => String(n.params?.turn || n.name);          // D1050: a wrapper's taken-in turn

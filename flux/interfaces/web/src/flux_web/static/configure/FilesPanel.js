@@ -2,13 +2,13 @@
 // itself when there are files, or the document names one it lacks; each opened to edit, removable; a new one written
 // here; files dropped (into a folder, when one is named).
 
-import { html, useEffect, useRef, useState } from "../view.js";
+import { html, useChanges, useEffect, useRef } from "../view.js";
 import { bytes, plural } from "../format.js";
 import { DropZone } from "../components/DropZone.js";
 
 export function FilesPanel({ store }) {
-  const [, redraw] = useState(0), into = useRef(null), fold = useRef(null);
-  useEffect(() => store.subscribe(() => redraw(n => n + 1)), [store]);
+  const into = useRef(null), fold = useRef(null);
+  useChanges(store);
   const { files, missing } = store.s;
   useEffect(() => { if ((files.length || missing.length) && fold.current) fold.current.open = true; }, [files.length, missing.length]);
   return html`<details class="card files-card files-fold" ref=${fold}><summary><strong>Files that go with it</strong>

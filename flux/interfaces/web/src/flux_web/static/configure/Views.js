@@ -6,6 +6,7 @@
 import { Card, Empty, Skeleton, html, useEffect, useMemo, useRef, useState } from "../view.js";
 import { api, apiUpload, dialog, enc, owned, toast } from "../ui.js";
 import { plural } from "../format.js";
+import { useLoad, usePoll } from "../components/Load.js";
 import { me } from "../state.js";
 import { diffCounts, lineDiff } from "../diff.js";
 import { progressDialog } from "../components/Modal.js";
@@ -18,6 +19,7 @@ import { PermissionChoice, hasPermissions } from "../components/PermissionChoice
 import { AuthoringCard } from "../loop/Authoring.js";
 import { filesStore } from "./files.js";
 import { FilesPanel } from "./FilesPanel.js";
+import { Select } from "../components/Select.js";
 
 /** The changes of a save, shown before it writes (D693): true to write. D757: a document that does not load is said
     before it is written, not after a start fails. */
@@ -82,14 +84,14 @@ export async function cloneDialog(name, owner) {
 }
 
 export function CloneForm() {
-  const [loops, setLoops] = useState(null), pick = useRef(null);
-  useEffect(() => { api("/loops").then(setLoops); }, []);
+  const loops = useLoad(() => api("/loops"), "loops").got?.d, [picked, setPicked] = useState(null);
   if (!loops) return html`<${Card}><${Skeleton} lines=${4} /><//>`;
   if (!loops.length) return html`<${Card}><${Empty} text="No loop to clone yet." /><//>`;
-  const key = l => { const o = l.owner && l.owner !== me.name ? l.owner : ""; return [o, l.name || l.app]; };
+  const key = l => JSON.stringify([l.owner && l.owner !== me.name ? l.owner : "", l.name || l.app]), chosen = picked ?? key(loops[0]);
   return html`<${Card}><p class="muted">A new loop from one you have: its problem, not its runs.</p>
-    <label class="stack">Clone<select id="clone-from" aria-label="The loop to clone" ref=${pick}>${loops.map(l => { const [o, n] = key(l); return html`<option value=${JSON.stringify([o, n])}>${`${o ? o + " / " : ""}${n}`}</option>`; })}</select></label>
-    <div class="form-actions"><${Act} cls="primary" onClick=${() => { const [o, n] = JSON.parse(pick.current.value); return cloneDialog(n, o || null); }}>Clone…<//></div><//>`;
+    <label class="stack">Clone<${Select} id="clone-from" aria-label="The loop to clone" value=${chosen} onChange=${setPicked}
+      options=${loops.map(l => { const [o, n] = JSON.parse(key(l)); return [key(l), `${o ? o + " / " : ""}${n}`]; })} /></label>
+    <div class="form-actions"><${Act} cls="primary" onClick=${() => { const [o, n] = JSON.parse(chosen); return cloneDialog(n, o || null); }}>Clone…<//></div><//>`;
 }
 
 /** The files an agent reads, sent with what it is told -- D1075: with their progress. */
@@ -129,16 +131,11 @@ export function NewByAgent({ draft = null, onDraft = () => {}, done }) {
 /** An agent revising an existing loop's problem as told (D704); its progress, then the diff. */
 export function ReviseByAgent({ name }) {
   const ask = useRef(null), who = useRef(""), items = useMemo(() => [], []), [st, setSt] = useState(null), [n, setN] = useState(0), [text, setText] = useState("");
-  useEffect(() => {
-    let timer = null, live = true;
-    const poll = async () => {
-      const got = await api(`/apps/${enc(name)}/author`).catch(() => null);
-      if (!live) return;
-      setSt(got);
-      if (got && got.running) timer = setTimeout(poll, 3000);
-    };
-    poll();
-    return () => { live = false; clearTimeout(timer); };
+  usePoll(async live => {
+    const got = await api(`/apps/${enc(name)}/author`).catch(() => null);
+    if (!live()) return null;
+    setSt(got);
+    return got && got.running ? 3000 : null;
   }, [n]);
   const revise = async () => {
     if (!text.trim()) { toast("Say what should change.", "warn"); ask.current.focus(); return; }

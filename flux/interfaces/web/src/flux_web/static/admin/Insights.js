@@ -11,6 +11,7 @@ import { Bin } from "../components/Bin.js";
 import { Meter } from "../components/Stat.js";
 import { SortableTable } from "../components/SortableTable.js";
 import { Loaded, useLoad } from "../components/Load.js";
+import { Select } from "../components/Select.js";
 
 const PERIODS = [[1, "24 hours"], [7, "7 days"], [30, "30 days"]];
 const TITLE = { failures: "Failures", usage: "Usage", endpoints: "Endpoints and agents" };
@@ -118,9 +119,9 @@ function Disk() {
 export function Insights({ part }) {
   const [days, setDays] = useState(period);
   const url = `/admin/insights?days=${days}&part=${part}`, read = useLoad(() => api(url), url), r = read.got?.d;
-  const pick = e => { insightsDays = Number(e.currentTarget.value); try { localStorage.setItem("flux-insights-days", String(insightsDays)); } catch (_) { /* remembered when it can be */ } setDays(insightsDays); };
+  const pick = to => { insightsDays = Number(to); try { localStorage.setItem("flux-insights-days", String(insightsDays)); } catch (_) { /* remembered when it can be */ } setDays(insightsDays); };
   const range = html`<div class="range-pick"><label for="insights-range">Over the last</label>
-    <select id="insights-range" aria-label="Over the last" onChange=${pick}>${PERIODS.map(([v, t]) => html`<option value=${v} selected=${v === days}>${t}</option>`)}</select></div>`;
+    <${Select} id="insights-range" aria-label="Over the last" options=${PERIODS} value=${days} onChange=${pick} /></div>`;
   return html`<${Card} title=${TITLE[part]} actions=${range}><${Loaded} read=${read} failed="Insights could not be read">${r => html`<div>
       <p class="muted small range-said">${`${when(r.range.start)} – ${when(r.range.end)}`}${r.catching_up ? " · counting past turns after the update: the numbers fill in within minutes" : ""}</p>
       ${part === "failures" ? html`<${Failures} f=${r.failures} />` : part === "usage" ? html`<${Usage} u=${r.usage} />` : html`<${Endpoints} eps=${r.endpoints} />`}</div>`}<//><//>

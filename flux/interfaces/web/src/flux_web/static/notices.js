@@ -3,16 +3,11 @@
 // the server is out of reach. `Toasts` is drawn by the page and by every open modal dialog: the topmost shows them
 // (the top layer -- a notice under a modal dialog was never seen), the others nothing.
 
-import { html, useLayoutEffect, useMemo, useState } from "./view.js";
+import { changes, html, useChanges, useLayoutEffect, useMemo } from "./view.js";
 
 let list = [], seq = 0, out = false, layers = [];
-const subs = new Set();
-const emit = () => { for (const f of subs) f(); };
+const said = changes(), emit = said.emit;
 const drop = id => { list = list.filter(t => t.id !== id); emit(); };
-function useNotices() {
-  const [, redraw] = useState(0);
-  useLayoutEffect(() => { const f = () => redraw(n => n + 1); subs.add(f); return () => subs.delete(f); }, []);
-}
 
 /** A modal layer while `open` (a dialog shown modal): its id, for its `Toasts`. */
 export function useLayer(open = true) {
@@ -27,14 +22,14 @@ export function useLayer(open = true) {
 
 /** The notices, where `at` (a layer's id; null the page) is the topmost open layer. */
 export function Toasts({ at = null }) {
-  useNotices();
+  useChanges(said);
   const here = (layers.length ? layers[layers.length - 1] : null) === at;
   return html`<div class="toasts" role="status" aria-live="polite">${here ? list.map(t => html`<div key=${t.id} class=${`toast ${t.kind}`}>${t.href ? html`<a href=${t.href}>${t.text}</a>` : t.text}
     <button class="x" aria-label="dismiss" onClick=${() => drop(t.id)}>×</button></div>`) : ""}</div>`;
 }
 /** The banner while the server is out of reach (D694). */
 export function Offline() {
-  useNotices();
+  useChanges(said);
   return html`<div class="offline" role="alert" hidden=${!out}>The server cannot be reached: retrying…</div>`;
 }
 

@@ -3,9 +3,10 @@
 // retained one). The toolbar and the page are its two views: a change redraws both, once a frame.
 
 import { api, enc, loopStream, request } from "../ui.js";
+import { changes } from "../view.js";
 import { journal } from "./journal.js";
-import { campaignForStart, currentTask, notePass, taskScope, taskWindow } from "../live_model.js";
-import { docNotes, flowBoxes } from "../live_views.js";
+import { campaignForStart, currentTask, notePass, taskScope, taskWindow } from "./model.js";
+import { docNotes, flowBoxes } from "./views.js";
 import { judge, namer } from "./rules.js";
 import { noteShort, scopeOf } from "./notes.js";
 
@@ -20,10 +21,10 @@ export function createStore(ctx) {
     loadMessage: "", failure: null, journal: null, selected: null, transport: null, stream: "",
     reveal: false, full: null, located: null, drawn: 0, width: 380, earlierReady: false,
   };
-  const subs = new Set();
+  const said = changes();
   let frame = 0, seq = 0, timer = null, abort = null, listeners = {}, locateTimer = null, valid = () => false;
-  const emit = () => { if (!frame) frame = requestAnimationFrame(() => { frame = 0; s.drawn++; for (const f of subs) f(); }); };
-  const now = () => { s.drawn++; for (const f of subs) f(); };
+  const emit = () => { if (!frame) frame = requestAnimationFrame(() => { frame = 0; s.drawn++; said.emit(); }); };   // once a frame
+  const now = () => { s.drawn++; said.emit(); };
 
   // ---- what is shown
   const membershipAll = () => taskScope(s.journal.model, "all").membership;
@@ -222,5 +223,5 @@ export function createStore(ctx) {
     output: (file, start, size) => api(`${path}/output?file=${encodeURIComponent(file)}&start=${start}&size=${size}`),   // D1098
     turnSteps: (t0, t1, agent) => api(`${path}/turn-steps?t0=${t0}&t1=${t1}&agent=${encodeURIComponent(agent)}`),
   };
-  return { s, a, view, sources, prepare, load, close, emit, followLog, redraw: now, revalidate: v => { valid = v; }, subscribe: f => { subs.add(f); return () => subs.delete(f); } };
+  return { s, a, view, sources, prepare, load, close, emit, followLog, redraw: now, revalidate: v => { valid = v; }, subscribe: said.subscribe };
 }

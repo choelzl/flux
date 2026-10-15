@@ -1,7 +1,8 @@
 // Flux web, a loop's page (D704, D1095): the agent writing (or revising) a loop's problem -- its state, what it is
 // doing, its conversation as it goes, its stderr, what it was asked, its creation log, a revision's diff; Stop.
 
-import { Ago, Card, html, useEffect, useState } from "../view.js";
+import { Ago, Card, html, useRef, useState } from "../view.js";
+import { usePoll } from "../components/Load.js";
 import { api, enc, toast } from "../ui.js";
 import { dur } from "../format.js";
 import { lineDiff } from "../diff.js";
@@ -40,21 +41,17 @@ export function AuthoringCard({ name, st, onStop = null }) {
     status could not be read: what was read stays, said to be reconnecting); a document written long ago, no card;
     the problem written, the page read again. `first` what /author said when the page was drawn. */
 export function AuthorBox({ name, qs, mine, first }) {
-  const [st, setSt] = useState(first);
-  useEffect(() => {
-    let timer = null, live = true, last = first;
-    const poll = async () => {
-      let got;
-      try { got = await api(`/apps/${enc(name)}/author${qs}`); } catch (e) { got = { ...(last || { ever: true }), connection_error: e.message }; }
-      if (!live) return;
-      if (!got.connection_error) last = got;
-      setSt(got);
-      if (got.running || got.connection_error) timer = setTimeout(poll, 3000);
-      else if (got.ok && !got.connection_error) { const fresh = await api(`/apps/${enc(name)}${qs}`).catch(() => null); if (live && fresh?.document && (first.running || first.connection_error)) location.reload(); }
-    };
-    if (first.running || first.connection_error) timer = setTimeout(poll, 3000);
-    return () => { live = false; clearTimeout(timer); };
-  }, []);
+  const [st, setSt] = useState(first), last = useRef(first);
+  usePoll(async live => {
+    let got;
+    try { got = await api(`/apps/${enc(name)}/author${qs}`); } catch (e) { got = { ...(last.current || { ever: true }), connection_error: e.message }; }
+    if (!live()) return null;
+    if (!got.connection_error) last.current = got;
+    setSt(got);
+    if (got.running || got.connection_error) return 3000;
+    if (got.ok) { const fresh = await api(`/apps/${enc(name)}${qs}`).catch(() => null); if (live() && fresh?.document && (first.running || first.connection_error)) location.reload(); }
+    return null;
+  }, [], { first: first.running || first.connection_error ? 3000 : null });
   // a document written long ago: no card
   if (!st?.ever || (!st.running && st.ended && Date.now() / 1000 - st.ended > 3600 * 6)) return null;
   const stop = mine ? async () => { toast((await api(`/apps/${enc(name)}/author/stop${qs}`, { method: "POST" })).ok, "ok"); } : null;

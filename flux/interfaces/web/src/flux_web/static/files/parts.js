@@ -1,10 +1,11 @@
 // Flux web, files (D808, D829, D908, D937, D1095): the pieces of the Files tab -- a path as links, what the
 // selected item is (kind, size, a folder's size counted when asked, when it changed), its Actions menu, a list.
 
-import { Ago, html, useEffect, useLayoutEffect, useRef, useState } from "../view.js";
+import { Ago, html, useLayoutEffect, useRef, useState } from "../view.js";
 import { api } from "../ui.js";
 import { bytes, plural } from "../format.js";
 import { Act } from "../components/Act.js";
+import { useLoad } from "../components/Load.js";
 
 export const parentOf = p => String(p || "").split("/").slice(0, -1).join("/");
 export const baseOf = p => String(p || "").split("/").pop();
@@ -20,15 +21,9 @@ export function PathCrumbs({ name, path, open }) {
 
 /** A folder's size in all, asked for when it is selected (bounded on the server), not on a list. */
 function FolderSize({ url }) {
-  const [s, setS] = useState(null), [n, setN] = useState(0);
-  useEffect(() => {
-    let live = true;
-    setS(null);
-    api(url).then(got => { if (live) setS(got); }).catch(() => { if (live) setS(false); });
-    return () => { live = false; };
-  }, [url, n]);
-  return html`<span class="item-size"> · ${s === null ? html`<span class="muted">counting…</span>`
-    : s === false ? html`<${Act} cls="small link" onClick=${() => setN(n + 1)}>Calculate size<//>`
+  const read = useLoad(() => api(url), url), s = read.got?.d;
+  return html`<span class="item-size"> · ${!read.got ? html`<span class="muted">counting…</span>`
+    : read.got.error ? html`<${Act} cls="small link" onClick=${read.reload}>Calculate size<//>`
     : html`<span title=${`${s.bytes} bytes; hidden and ignored files counted, links not followed`}>
         ${`${s.partial ? "at least " : ""}${bytes(s.bytes)} in ${plural(s.files, "file")}, ${plural(s.folders, "folder")}${s.links ? `, ${plural(s.links, "link")}` : ""}`}</span>`}</span>`;
 }

@@ -3,7 +3,7 @@
 // the pointer a guide, its points, and a bubble with its time and values.
 
 import { html, useRef, useState } from "../view.js";
-import { timeSegments } from "../chartdata.js";
+import { timeSegments } from "./data.js";
 import { num4 } from "./marks.js";
 
 const W = 420, H = 130, L = 62, R = 8, T = 10, B = 20;

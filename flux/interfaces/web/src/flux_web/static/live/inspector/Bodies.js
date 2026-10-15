@@ -3,7 +3,7 @@
 
 import { html } from "../../view.js";
 import { bytes, dur } from "../../format.js";
-import { WORK_COLORS as COLORS, phaseKind } from "../../work_style.js";
+import { WORK_COLORS as COLORS, phaseKind } from "../work_style.js";
 import { Block, Fold, Pre, StepRow, Stream } from "./bits.js";
 import { bestOf, candidateOf, cell, colorOf, dictsOf, failingOf, fieldsOf, fmt, isTool, linesOf, meanOf, measured, metricsOf, notReached,
   running, stdoutOf, taskLabel, tidyCommand, usualOf } from "./parts.js";

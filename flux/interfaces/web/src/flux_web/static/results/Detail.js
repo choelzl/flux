@@ -2,12 +2,14 @@
 // does not meet, its numbers at each stage, its source; Reject (with why, each number measured again or cleared,
 // hidden too at rest) and Restore.
 
-import { Ago, Skeleton, html, useEffect, useRef, useState } from "../view.js";
+import { Ago, Skeleton, html, useRef } from "../view.js";
 import { api, dialog, enc, toast } from "../ui.js";
 import { Act } from "../components/Act.js";
 import { Code } from "../components/Markdown.js";
 import { ViewerFrame, ViewerTools, useViewer } from "../viewer.js";
+import { Loaded, useLoad } from "../components/Load.js";
 import { VerdictPill, byCritic } from "./columns.js";
+import { Select } from "../components/Select.js";
 
 /** The reject form (D1043): why, each measurement measured again or cleared, hidden too (at rest). `v` {reason,
     hide, ticked: {"stage metric": "again" | "clear"} for each ticked}. */
@@ -22,7 +24,7 @@ function RejectForm({ d, fmt, live, v, set }) {
       <thead><tr><th></th><th>measurement</th><th class="num">value</th><th>do</th></tr></thead>
       <tbody>${rows.map(x => html`<tr><td><input type="checkbox" checked=${x.k in v.ticked} onChange=${e => tick(x, e.currentTarget.checked)} /></td>
           <td class="mono">${`${x.stage} · ${x.metric}`}</td><td class="mono num">${fmt(x.v)}</td>
-          <td><select class="reject-how" aria-label=${`${x.stage} ${x.metric}: measure again or clear`} onChange=${e => choose(x, e.currentTarget.value)}><option value="again">measure again</option><option value="clear">clear</option></select></td></tr>`)}</tbody></table></div>` : ""}
+          <td><${Select} class="reject-how" aria-label=${`${x.stage} ${x.metric}: measure again or clear`} onChange=${to => choose(x, to)} options=${[["again", "measure again"], ["clear", "clear"]]} /></td></tr>`)}</tbody></table></div>` : ""}
     <p class="muted small">Ticked: measured again (the new number replaces this one) or cleared (struck through). None ticked: the result is only marked.</p>
     <label class="row-inline"><input type="checkbox" class="reject-hide" disabled=${live} checked=${v.hide} onChange=${e => set({ hide: e.currentTarget.checked })} />
       <span>Also hide the design<small class="muted">${live ? " -- stop the loop first: hiding takes it out of the evidence" : " -- out of the tables, listed under Invalidated by hand"}</small></span></label>
@@ -43,15 +45,9 @@ let last = { url: null, full: null };
 export function DesignDetail({ d, ctx, fmt, reload }) {
   const { name, q, qs } = ctx;
   const url = `/apps/${enc(name)}/design?design=${enc(d.base || d.name)}&part=${enc(d.part)}&key=${enc(d.key || "")}${q}`;
-  const [full, setFull] = useState(() => last.url === url ? last.full : null), view = useViewer();
-  useEffect(() => {
-    let live = true;
-    if (last.url !== url) setFull(null);
-    api(url).then(f => { last = { url, full: f }; if (live) setFull(f); })
-      .catch(x => { if (live && x.message !== "log in") toast(x.message, "bad"); });
-    return () => { live = false; };
-  }, [url]);
-  if (!full) return html`<div class="detail"><${Skeleton} lines=${6} /></div>`;
+  const view = useViewer(), read = useLoad(() => api(url).then(f => { last = { url, full: f }; return f; }), url);
+  const full = read.got?.d ?? (last.url === url ? last.full : null);
+  if (!full) return html`<div class="detail">${read.got?.error ? html`<${Loaded} read=${read} failed="The design could not be read">${() => ""}<//>` : html`<${Skeleton} lines=${6} />`}</div>`;
   const stages = Object.entries(d.stages).filter(([, m]) => Object.keys(m).length);
   const metrics = [...new Set(stages.flatMap(([, m]) => Object.keys(m)))];
   const mine = ctx.mine, running = !!ctx.st?.running;

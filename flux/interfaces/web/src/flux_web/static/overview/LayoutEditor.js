@@ -4,30 +4,30 @@
 
 import { html, useLayoutEffect, useRef, useState } from "../view.js";
 import { Overview } from "./Overview.js";
+import { Select } from "../components/Select.js";
 
 const MOCK_CTX = { name: "sample", owner: "__overview_mock_data__", qs: "", mine: false, tab: "Overview", still: () => () => true, goTab: () => {}, drawBody: () => {} };
 
 /** One list: `ids` the cards in it, `catalog` id -> label, `column` its index (null: the small cards); `edit(f)`
     changes a copy of the list, `moveOut(id)` sends one to the other column. */
 function List({ ids, catalog, column, used, edit, moveOut }) {
-  const small = column == null, add = useRef(null);
-  const available = Object.entries(catalog).filter(([id]) => !used.includes(id));
+  const small = column == null, [toAdd, setToAdd] = useState(null);
+  const available = Object.entries(catalog).filter(([id]) => !used.includes(id)), adding = available.some(([id]) => id === toAdd) ? toAdd : available[0]?.[0];
   const btn = (label, title, fn, disabled = false) => html`<button type="button" class=${label === "Add" ? "small overview-layout-add-button" : "small overview-layout-control"}
     title=${title} aria-label=${title} disabled=${disabled} onClick=${fn}>${label}</button>`;
   return html`<div class="overview-layout-list" data-layout-list=${small ? "stats" : column}>
     <ol>${ids.length ? ids.map((id, i) => html`<li key=${id} class="overview-layout-row" data-layout-card=${id}>
         <span class="overview-layout-index" aria-hidden="true">${i + 1}</span>
-        <select title=${catalog[id]} aria-label=${`${small ? "Small" : "Large"} card ${i + 1}${small ? "" : ` in column ${column + 1}`}`} onChange=${e => { const v = e.currentTarget.value; edit(n => { n[i] = v; }); }}>
-          ${Object.entries(catalog).filter(([k]) => k === id || !used.includes(k)).map(([k, label]) => html`<option value=${k} selected=${k === id}>${label}</option>`)}</select>
+        <${Select} title=${catalog[id]} aria-label=${`${small ? "Small" : "Large"} card ${i + 1}${small ? "" : ` in column ${column + 1}`}`} value=${id}
+          onChange=${v => edit(n => { n[i] = v; })} options=${Object.entries(catalog).filter(([k]) => k === id || !used.includes(k))} />
         <div class="overview-layout-actions">
           ${btn("↑", `Move ${catalog[id]} up`, () => edit(n => { [n[i - 1], n[i]] = [n[i], n[i - 1]]; }), i === 0)}
           ${btn("↓", `Move ${catalog[id]} down`, () => edit(n => { [n[i + 1], n[i]] = [n[i], n[i + 1]]; }), i === ids.length - 1)}
           ${small ? "" : btn(column === 0 ? "→" : "←", `Move ${catalog[id]} to column ${2 - column}`, () => moveOut(id))}
           ${btn("×", `Remove ${catalog[id]}`, () => edit(n => { n.splice(i, 1); }), small && ids.length <= 3)}</div></li>`)
       : html`<li class="overview-layout-empty muted small">No cards in this column.</li>`}</ol>
-    <div class="overview-layout-row overview-layout-add"><select ref=${add} aria-label=${small ? "Add small card" : `Add card to column ${column + 1}`}>
-        ${available.map(([id, label]) => html`<option value=${id}>${label}</option>`)}</select>
-      ${btn("Add", small ? "Add small card" : `Add card to column ${column + 1}`, () => edit(n => { n.push(add.current.value); }), !available.length || (small && ids.length >= 5))}</div></div>`;
+    <div class="overview-layout-row overview-layout-add"><${Select} aria-label=${small ? "Add small card" : `Add card to column ${column + 1}`} value=${adding} onChange=${setToAdd} options=${available} />
+      ${btn("Add", small ? "Add small card" : `Add card to column ${column + 1}`, () => edit(n => { n.push(adding); }), !available.length || (small && ids.length >= 5))}</div></div>`;
 }
 
 /** `prefs` what /preferences/overview said; `example` the sample data; `save(layout)` throws what to say. */

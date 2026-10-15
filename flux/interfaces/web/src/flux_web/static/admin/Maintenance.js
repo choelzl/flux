@@ -5,6 +5,7 @@ import { Ago, Card, html, useState } from "../view.js";
 import { api, dialog, toast, when } from "../ui.js";
 import { Act } from "../components/Act.js";
 import { bound, useAutosave } from "../components/Autosave.js";
+import { Select } from "../components/Select.js";
 
 const EVERY_UNITS = [["min", 1 / 60], ["h", 1], ["d", 24]];
 const PARAM_LABEL = { days: "older than (days)", keep: "keep (names, comma-separated)", min_free_pct: "alert below (% free)",
@@ -35,10 +36,10 @@ function TaskForm({ t, loops }) {
   return html`<div class="mt-edit" ...${box}><p class="muted">${t.what}</p>
     <label class="check"><input type="checkbox" checked=${v.on} onChange=${e => set({ on: e.currentTarget.checked })} />on a schedule</label>
     <div class="row"><span>every</span><input type="number" min="1" step="1" style="width:80px" aria-label="every" ...${bound(v.n, n => set({ n }))} />
-      <select aria-label="unit" onChange=${e => set({ unit: e.currentTarget.value })}>${EVERY_UNITS.map(([k]) => html`<option value=${k} selected=${k === v.unit}>${k}</option>`)}</select></div>
+      <${Select} aria-label="unit" options=${EVERY_UNITS.map(([k]) => k)} value=${v.unit} onChange=${unit => set({ unit })} /></div>
     ${Object.entries(t.params).map(field)}
     ${t.per_loop && loops.length ? html`<div class="stack"><span class="muted small">Once, on one loop</span><div class="row">
-      <select aria-label="a loop" onChange=${e => setLoop(e.currentTarget.value)}>${loops.map(l => html`<option value=${l}>${l}</option>`)}</select>
+      <${Select} aria-label="a loop" options=${loops} value=${loop} onChange=${setLoop} />
       <${Act} cls="small" onClick=${() => runTask(t, loop)}>Run on this loop<//></div></div>` : ""}
     ${mark}</div>`;
 }

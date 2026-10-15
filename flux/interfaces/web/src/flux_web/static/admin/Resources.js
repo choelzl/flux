@@ -2,7 +2,7 @@
 // disks; the sandbox containers (one left behind killed); each loop's disk, its caches cleared; the caches no
 // loop owns; the machine and every loop's tokens over time.
 
-import { Ago, Card, Empty, Skeleton, html, useEffect, useState } from "../view.js";
+import { Ago, Card, Empty, Skeleton, html, useState } from "../view.js";
 import { api, appHref, confirmDialog, enc, toast } from "../ui.js";
 import { bytes, dur } from "../format.js";
 import { stopLoop } from "../loops.js";
@@ -10,6 +10,7 @@ import { TimeChart } from "../charts/TimeChart.js";
 import { Act } from "../components/Act.js";
 import { Meter, Stat } from "../components/Stat.js";
 import { SortableTable } from "../components/SortableTable.js";
+import { useLoad, usePoll } from "../components/Load.js";
 
 const LoopLink = ({ u, a }) => u ? html`<a href=${appHref(u, a)}>${`${u} / ${a}`}</a>` : html`<span class="muted">no loop</span>`;
 const clean = async (key, what) => { const x = await api(`/admin/caches/${enc(key)}/clean`, { method: "POST", body: { what } }); toast(`${bytes(x.freed)} freed`, "ok"); };
@@ -82,13 +83,10 @@ const RANGES = [[1, "1 h"], [6, "6 h"], [24, "24 h"], [168, "7 d"], [720, "30 d"
 /** D699: the machine over time, a sample a minute while `flux serve` runs; D838: every loop's tokens per second,
     read (in) and written (out), the agents' and Flux's model's. */
 function OverTime({ n }) {
-  const [hours, setHours] = useState(historyHours), [got, setGot] = useState(null);
-  useEffect(() => {
-    let live = true;
-    Promise.all([api(`/admin/history?hours=${hours}`).catch(() => null), api(`/admin/token-rate?hours=${hours}`).catch(() => null)])
-      .then(([hx, tr]) => { if (live && hx) setGot({ hx, tr }); });
-    return () => { live = false; };
-  }, [hours, n]);
+  const [hours, setHours] = useState(historyHours);
+  // another range, or the machine read again: what was shown stays until the next answer (and when it fails)
+  const got = useLoad(() => Promise.all([api(`/admin/history?hours=${hours}`).catch(() => null), api(`/admin/token-rate?hours=${hours}`).catch(() => null)])
+    .then(([hx, tr]) => { if (!hx) throw new Error("no history"); return { hx, tr }; }), "history", `${hours}:${n}`).got?.d;
   const chips = html`<div class="chips">${RANGES.map(([hrs, label]) => html`<button class=${`chip${hours === hrs ? " on" : ""}`} onClick=${() => { historyHours = hrs; setHours(hrs); }}>${label}</button>`)}</div>`;
   if (!got) return html`<${Card} title="Over time" actions=${chips}><${Skeleton} lines=${4} /><//>`;
   const { hx, tr } = got, ts = tr ? tr.samples : [], ss = hx.samples, last = ss.at(-1), cpus = last ? last.cpus : null;
@@ -114,11 +112,10 @@ function OverTime({ n }) {
 export function Resources() {
   const [r, setR] = useState(null), [n, setN] = useState(0);
   const reload = () => api("/admin/resources").then(x => { setR(x); setN(k => k + 1); });
-  useEffect(() => {
-    reload();
-    const t = setInterval(() => { if (!document.hidden && !document.querySelector("dialog.dlg[open]")) reload().catch(() => {}); }, 15000);
-    return () => clearInterval(t);
-  }, []);
+  usePoll(async () => {                              // the first read's failure said; a later one waits for the next
+    if (!document.hidden && !document.querySelector("dialog.dlg[open]")) await reload().catch(x => { if (!r) toast(x.message, "bad"); });
+    return 15000;
+  });
   if (!r) return html`<p class="muted">Measuring…</p>`;
   return html`<${Machine} m=${r.machine} /><${OverTime} n=${n} /><${Containers} r=${r} reload=${reload} />
     <${LoopDisk} loops=${r.loops.slice().sort((a, b) => b.total - a.total)} reload=${reload} /><${OtherCaches} caches=${r.caches} reload=${reload} />`;

@@ -5,7 +5,7 @@
 
 import { api, confirmDialog, dialog, enc, request, toast } from "../ui.js";
 import { bytes, plural } from "../format.js";
-import { html } from "../view.js";
+import { changes, html } from "../view.js";
 import { langOf } from "../highlight.js";
 import { sendFiles } from "../uploads.js";
 import { progressDialog } from "../components/Modal.js";
@@ -13,8 +13,7 @@ import { CodeEditor } from "../components/CodeEditor.js";
 
 /** `yamlOf()` the document as it stands; `namedOf()` the files the configurator's commands name (D912); `onDraw(missing)`. */
 export function filesStore(name, yamlOf, { staged = new Map(), namedOf = null, onDraw = null } = {}) {
-  const subs = new Set(), s = { files: [], missing: [], listed: false };
-  const emit = () => { for (const f of subs) f(); };
+  const said = changes(), emit = said.emit, s = { files: [], missing: [], listed: false };
   const named = () => namedOf ? namedOf() : [...new Set([...String(yamlOf() || "").matchAll(/\{home\}\/([\w.\/-]+)/g)].map(m => m[1].replace(/[.,;:)]+$/, "")))];
   async function list() {
     if (!name) return [...staged.entries()].map(([path, x]) => ({ path, size: x.text != null ? x.text.length : x.file.size, staged: true }));
@@ -64,7 +63,7 @@ export function filesStore(name, yamlOf, { staged = new Map(), namedOf = null, o
     finally { pd.close(); draw(); }
   }
   let t;
-  return { s, draw, editor, open, remove, add, subscribe: f => { subs.add(f); return () => subs.delete(f); },
+  return { s, draw, editor, open, remove, add, subscribe: said.subscribe,
     watch() { clearTimeout(t); t = setTimeout(draw, 600); },
     /** D912: which of `paths` the loop lacks; null until its files are listed. */
     missing(paths) {
