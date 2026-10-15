@@ -872,176 +872,20 @@ def flows(r: Run) -> None:
              " ['/api/apps/sw/runs', '/api/apps/sw/turns', '/api/apps/sw/results'].includes(p) ? 'application/json' : 'text/plain'}})); }; return 1",
              {"history": history, "events": "".join(json.dumps(e) + "\n" for e in events), "turn": turn, "results": GRAPHS_RESULTS})
         try:
-            b.js("localStorage.setItem('flux-tasks-view', 'tree'); return 1")
-            r.page("#/app/sw/live/history/910", "document.querySelector('.history-tasks .tree .node')", "older start's complete task tree")
-            r.check("historical start is selected from its bookmarked URL", b.js("return document.querySelector('[aria-label=\"Historical start\"]').value") == "910")
-            b.click(".history-tasks .tree .branch")
-            b.wait("document.querySelector('.history-tasks .node.leaf')", what="older pass's design")
-            r.check("history replays old passes and tool output", b.js("const text = document.querySelector('.history-tasks').textContent; return text.includes('Pass 1') && text.includes('tool: old compiler') && text.includes('old compiler output')"))
-            b.click(".history-tasks .node.leaf")
-            b.wait("document.querySelector('.history-tasks .detail').textContent.includes('agent: claude')", what="older design's agent")
-            r.check("history replays the agent conversation inside its pass", b.js("return document.querySelector('.history-tasks .detail').textContent.includes('old compiler output')"))
-            r.button("Prompt", ".history-tasks .dtabs")
-            r.check("historical tasks expose their agent prompt", b.js("return document.querySelector('.history-tasks [data-k=prompt]').textContent === 'old full prompt'"))
-            # Inspect the raw link in this tab; complete streamed content is covered by the API tests.
-            r.check("raw historical journal is scoped to the old start", b.js("return document.querySelector('.history-tasks > .actions a').getAttribute('href').includes('start_id=910')"))
-            r.button("Log", ".history-controls + p + .subtabs")
-            b.wait("document.querySelector('.history-log') && document.querySelector('.history-log').textContent.includes('OLD full output')", what="older full output")
-            r.check("older log is shown without newer output", not b.js("return document.querySelector('.history-log').textContent.includes('NEW output')"))
-            r.button("Agents", ".history-controls + p + .subtabs")
-            b.wait("document.querySelector('button.open-turn')", what="older agent turn")
-            b.click("button.open-turn")
-            b.wait("document.querySelector('.detail').textContent.includes('old compiler output')", what="old agent's complete conversation")
-            r.button("Prompt", ".detail .actions")
-            b.wait("document.querySelector('dialog[open] .raw-content')", what="agent prompt viewer")
-            r.check("agent prompt opens directly as plain text", b.js("return document.querySelector('dialog[open] .raw-content').textContent === 'old full prompt'"))
-            b.keys(b.ESCAPE)
-            b.wait("!document.querySelector('dialog[open]')", what="agent prompt returned")
-            r.button("Raw", ".detail .actions")
-            b.wait("document.querySelector('dialog.raw-content') || document.querySelector('dialog .raw-content')", what="raw agent turn")
-            r.check("historical agent raw output keeps its prompt and tool calls", b.js("return document.querySelector('dialog .raw-content').textContent.includes('old full prompt') && document.querySelector('dialog .raw-content').textContent.includes('old compiler output')"))
-            b.keys(b.ESCAPE)
-            b.wait("!document.querySelector('dialog[open]')", what="raw agent returned")
-            r.button("Results", ".history-controls + p + .subtabs")
-            b.wait("document.querySelector('table.designs')", what="retained campaign results")
-            r.check("history offers recorded results and their report", b.js("return !!document.querySelector('.results-head a[href*=\"campaign=retained-campaign\"]')"))
+            # D1095: a past start is chosen in Live's Start picker -- its tasks from its retained journal, its log its own
+            r.page("#/app/sw/live", "document.querySelector('[aria-label=\"Live start\"]')", "Live, with its starts")
+            b.js("const s = document.querySelector('[aria-label=\"Live start\"]'); s.value = '910'; s.dispatchEvent(new Event('change', {bubbles: true})); return 1")
+            b.wait("document.querySelector('.alt-tree [data-task], .alt-tree [data-pass]')", what="the older start's tasks")
+            r.check("an older start's tasks are read from its retained journal", b.js("return document.querySelector('.alt-visual').textContent.includes('Pass 1')"))
+            r.button("Log", "#main .subtabs.views")
+            b.wait("document.querySelector('.logview') && document.querySelector('.logview').textContent.includes('OLD full output')", what="the older start's log")
+            r.check("an older start's log is its own, without newer output", not b.js("return document.querySelector('.logview').textContent.includes('NEW output')"))
+            r.check("its Raw is the older start's", "run_id=910" in b.js("return document.querySelector('.log-card a.raw-view').getAttribute('href')"))
             r.clean("run history")
         finally:
-            b.js("window.fetch = window.__historyFetch; delete window.__historyFetch; localStorage.removeItem('flux-tasks-view'); return 1")
+            b.js("window.fetch = window.__historyFetch; delete window.__historyFetch; return 1")
     r.step("run history", run_history)
 
-    def live_scroll():
-        """Actual live widgets with controlled stream updates, so unrelated output redraws repeat reliably."""
-        r.page("#/app/sw/live/log", "document.querySelector('.logview')", "the log before the scroll fixture")
-        b.ajs("""const done = arguments[arguments.length - 1];
-          Promise.all([import('/static/live.js'), import('/static/ui.js')]).then(([{liveTree, logView}, {h, card}]) => {
-            const listeners = {}, stream = {on: (kind, callbacks) => listeners[kind] = callbacks, restart: () => {}};
-            const tree = liveTree('/api/apps/sw', '', () => {}, stream), log = logView('/api/apps/sw', '', stream);
-            const host = h('div', {class: 'scroll-fixture'}, h('div', {class: 'split'},
-              card(null, tree.tree, {cls: 'tree-card'}), card(null, tree.detail, {cls: 'detail-card'})), log.el);
-            document.querySelector('#main').replaceChildren(host);
-            tree.detail.style.maxHeight = '420px';
-            const wrap = [...log.el.querySelectorAll('label')].find(el => el.textContent.trim() === 'wrap').querySelector('input');
-            wrap.checked = true; wrap.dispatchEvent(new Event('change'));
-            const text = label => Array.from({length: 180}, (_, i) => label + ' line ' + i).join('\\n');
-            const steps = [{k: 'think', text: text('first thought')},
-              {k: 'tool', name: 'bash', input: {command: text('input')}, out: text('tool output')},
-              {k: 'think', text: text('second thought')}];
-            const now = Date.now() / 1000;
-            for (const e of [{ev: 'hello', t: now - 50}, {ev: 'mark', name: 'pass', why: '{"n":1}', t: now - 49},
-              {ev: 'start', id: 1, name: 'generation: prototype', t: now - 48},
-              {ev: 'start', id: 2, parent: 1, name: 'agent: claude', t: now - 47, params: {prompt: text('prompt')}},
-              {ev: 'update', id: 2, fields: {steps, 'steps total': steps.length, stderr: 'DEBUG: testing error handling'}},
-              {ev: 'start', id: 3, name: 'tool: sibling', t: now - 46, params: {command: 'compile'}}]) listeners.events.onData(e);
-            for (let i = 10; i < 100; i++) {
-              const t = now - 40 + i/10;
-              listeners.events.onData({ev: 'mark', name: 'pass', why: JSON.stringify({n: i}), t});
-              listeners.events.onData({ev: 'start', id: i, name: 'generation: variant ' + i, t: t + 0.01});
-              listeners.events.onData({ev: 'end', id: i, t: t + 0.02, seconds: 0.01});
-            }
-            listeners.events.onReady(); tree.draw();
-            listeners.log.onData(text('log') + '\\n');
-            window.__scrollFixture = {host, tree, log, listeners, steps, text, update: 0};
-            requestAnimationFrame(() => requestAnimationFrame(() => { tree.draw(); done(true); }));
-          }).catch(e => done(String(e)));""")
-        try:
-            r.check("running agent diagnostics are visible without failure coloring", b.js("const el = window.__scrollFixture.tree.detail.querySelector('[data-k=stderr]'); return el.textContent.includes('DEBUG') && !el.closest('.err')"))
-            r.button("Prompt", ".scroll-fixture .dtabs")
-            b.wait("document.querySelector('.scroll-fixture [data-k=prompt]')", what="live agent prompt")
-            r.check("live prompt is complete and opens at the beginning", b.js("const el = window.__scrollFixture.tree.detail.querySelector('[data-k=prompt]'); return el.textContent === window.__scrollFixture.text('prompt') && el.scrollTop === 0"))
-            b.js("window.__scrollFixture.tree.detail.querySelector('[data-k=prompt]').scrollTop = 160; return 1")
-            b.js("const f = window.__scrollFixture; f.listeners.live.onData({updates: {3: {stdout: 'unrelated prompt update'}}}); f.tree.draw(); return 1")
-            r.check("live prompt scrolling survives unrelated updates", b.js("return window.__scrollFixture.tree.detail.querySelector('[data-k=prompt]').scrollTop === 160"))
-            r.button("Live", ".scroll-fixture .dtabs")
-            b.js("const f = window.__scrollFixture; f.listeners.live.onData({updates: {2: {steps: f.steps, 'steps total': 3}}}); f.tree.draw(); return 1")
-            b.js("window.__scrollFixture.tree.detail.querySelectorAll('details.cv-work, details.cv-step').forEach(el => el.open = true); return 1")
-            b.wait("(() => { const d = window.__scrollFixture.tree.detail; return [...d.querySelectorAll('details.cv-step')].every(el => el.open) && d.scrollHeight > d.clientHeight + 500; })()", what="opened thinking and tool output")
-            positions = b.js("""const f = window.__scrollFixture;
-              const boxes = [...f.tree.detail.querySelectorAll('pre[data-k]')];
-              boxes.forEach((el, i) => el.scrollTop = 70 + 45*i);
-              f.tree.detail.scrollTop = 110;
-              f.host.querySelector('.tree').scrollTop = 120;
-              f.log.el.querySelector('.logview').scrollTop = 180;
-              f.log.el.querySelector('.logview').dispatchEvent(new Event('scroll'));
-              f.oldThought = boxes[0];
-              f.panelPlaces = [f.tree.detail.scrollTop, f.host.querySelector('.tree').scrollTop];
-              return boxes.map(el => [el.dataset.k, el.scrollTop]);""")
-            r.check("thinking and tool input/output have independent scrollable boxes", len(positions) == 4 and all(p[1] > 0 for p in positions), str(positions))
-            b.js("""const f = window.__scrollFixture;
-              f.listeners.live.onData({updates: {3: {stdout: 'unrelated compiler output ' + ++f.update}}});
-              f.listeners.log.onData('another log updated\\n'); return 1;""")
-            b.wait("window.__scrollFixture.oldThought !== document.querySelector('.scroll-fixture .cv-thought')", what="a stream-driven redraw")
-            after = b.js("return [...window.__scrollFixture.tree.detail.querySelectorAll('pre[data-k]')].map(el => [el.dataset.k, el.scrollTop])")
-            r.check("unrelated stream updates preserve every thinking and tool box", after == positions, str(after))
-            panels = b.js("const f = window.__scrollFixture; return [f.panelPlaces, [f.tree.detail.scrollTop, f.host.querySelector('.tree').scrollTop]]")
-            r.check("task panel and task tree keep their places", panels[0] == panels[1] == [110, 120], str(panels))
-            r.check("wrapped log keeps its place when output arrives", b.js("return Math.abs(window.__scrollFixture.log.el.querySelector('.logview').scrollTop - 180) < 2"))
-            b.js("window.__scrollFixture.tree.detail.querySelector('.cv-think').open = false; return 1")
-            b.wait("!window.__scrollFixture.tree.detail.querySelector('.cv-think').open", what="folded thinking")
-            b.js("const f = window.__scrollFixture; f.listeners.live.onData({updates: {3: {stdout: 'more unrelated output'}}}); f.tree.draw(); return 1")
-            r.check("an unrelated update keeps thinking folded", b.js("return !window.__scrollFixture.tree.detail.querySelector('.cv-think').open"))
-            b.js("window.__scrollFixture.tree.detail.querySelector('.cv-think').open = true; return 1")
-            b.wait(f"window.__scrollFixture.tree.detail.querySelector('.cv-thought').scrollTop === {positions[0][1]}", what="reopened thinking position")
-            r.check("reopening thinking restores its saved position", True)
-            r.button("Input", ".scroll-fixture .dtabs")
-            b.js("const el = window.__scrollFixture.tree.detail.querySelector('pre[data-k]'); el.scrollTop = 230; return 1")
-            r.button("Live", ".scroll-fixture .dtabs")
-            after = b.js("return [...window.__scrollFixture.tree.detail.querySelectorAll('pre[data-k]')].map(el => [el.dataset.k, el.scrollTop])")
-            r.check("changing detail tabs keeps the conversation's places", after == positions, str(after))
-            r.button("Input", ".scroll-fixture .dtabs")
-            r.check("Input keeps its own position across tab changes", b.js("return window.__scrollFixture.tree.detail.querySelector('pre[data-k]').scrollTop") == 230)
-            r.button("Live", ".scroll-fixture .dtabs")
-            b.js("const f = window.__scrollFixture, el = f.tree.detail.querySelectorAll('.cv-thought')[1]; el.scrollTop = el.scrollHeight; f.tree.draw(); return 1")
-            b.js("""const f = window.__scrollFixture; f.steps[2].text += '\\n' + f.text('more thoughts');
-              f.listeners.live.onData({updates: {2: {steps: f.steps, 'steps total': 3}, 3: {stdout: 'new compile output'}}}); f.tree.draw(); return 1;""")
-            r.check("a thinking box at the bottom follows its growing output", b.js("const el = window.__scrollFixture.tree.detail.querySelectorAll('.cv-thought')[1]; return el.scrollTop + el.clientHeight >= el.scrollHeight - 2"))
-            r.check("a different box being read upward remains in place", b.js("return window.__scrollFixture.tree.detail.querySelector('.cv-thought').scrollTop") == positions[0][1])
-            b.js("""const f = window.__scrollFixture;
-              f.tree.detail.querySelectorAll('.cv-thought')[1].scrollTop = 190;
-              f.listeners.live.onData({updates: {2: {steps: f.steps.slice(1), 'steps total': 3}}}); f.tree.draw(); return 1;""")
-            r.check("rolling conversation tails keep the same step's position", b.js("return window.__scrollFixture.tree.detail.querySelector('.cv-thought').scrollTop") == 190)
-            b.js("const f = window.__scrollFixture; f.tree.detail.style.maxHeight = ''; return 1")
-            r.button("Fullscreen", ".scroll-fixture .detail .actions")
-            b.wait("document.querySelector('dialog.fullscreen-view[open]')", what="fullscreen task")
-            b.js("document.querySelector('.fullscreen-content').scrollTop = 160; window.__scrollFixture.tree.draw(); return 1")
-            fullscreen = b.js("const el = document.querySelector('.fullscreen-content'); return [el.scrollTop, el.scrollHeight, el.clientHeight, window.__scrollFixture.tree.detail.querySelector('.cv-thought').scrollTop]")
-            r.check("fullscreen output keeps both panel and thinking positions", abs(fullscreen[0] - 160) < 2 and fullscreen[3] == 190, str(fullscreen))
-            r.button("Close", "dialog.fullscreen-view")
-            b.js("""const f = window.__scrollFixture, now = Date.now()/1000;
-              f.listeners.events.onData({ev: 'end', id: 2, t: now, seconds: 50, output: {steps: f.steps.slice(1), 'steps total': 3}});
-              f.listeners.events.onData({ev: 'end', id: 1, t: now, seconds: 50});
-              f.tree.draw(); return 1;""")
-            r.check("a different task does not inherit the previous task's scroll", b.js("return window.__scrollFixture.tree.detail.dataset.task === '3' && window.__scrollFixture.tree.detail.scrollTop === 0"))
-            b.js("const f = window.__scrollFixture; f.listeners.live.onData({updates: {3: {stdout: f.text('stdout'), stderr: f.text('stderr')}}}); f.tree.draw(); return 1")
-            r.check("running tool stderr is visible without failure coloring", b.js("return !window.__scrollFixture.tree.detail.querySelector('[data-k=stderr]').closest('.err')"))
-            b.js("const f = window.__scrollFixture; f.tree.detail.querySelector('[data-k=stdout]').scrollTop = 155; f.tree.detail.querySelector('[data-k=stderr]').scrollTop = 245; f.tree.draw(); return 1")
-            r.check("standalone tool stdout and stderr keep separate positions", b.js("const d = window.__scrollFixture.tree.detail; return d.querySelector('[data-k=stdout]').scrollTop === 155 && d.querySelector('[data-k=stderr]').scrollTop === 245"))
-            b.js("const f = window.__scrollFixture; f.tree.detail.querySelector('[data-k=stderr]').scrollTop = f.tree.detail.querySelector('[data-k=stderr]').scrollHeight; f.tree.draw(); return 1")
-            b.js("""const f = window.__scrollFixture;
-              f.listeners.events.onData({ev: 'end', id: 3, t: Date.now()/1000, seconds: 50,
-                output: {exit: 0, stdout: f.text('stdout'), stderr: f.text('stderr') + '\\n' + f.text('final stderr')}});
-              f.tree.draw(); return 1;""")
-            r.check("completion keeps stdout where it was being read", b.js("return window.__scrollFixture.tree.detail.querySelector('[data-k=stdout]').scrollTop") == 155)
-            r.check("following stderr includes the final completed output", b.js("const el = window.__scrollFixture.tree.detail.querySelector('[data-k=stderr]'); return el.scrollTop + el.clientHeight >= el.scrollHeight - 2"))
-            r.check("exit-0 tool with stderr is done and has no failure coloring", b.js("const d = window.__scrollFixture.tree.detail; return !!d.querySelector('.pill.ok') && !d.querySelector('[data-k=stderr]').closest('.err')"))
-            b.js("""const f = window.__scrollFixture, t = Date.now()/1000;
-              f.listeners.events.onData({ev: 'start', id: 101, name: 'tool: failed script', t});
-              f.listeners.events.onData({ev: 'end', id: 101, t: t + 0.1, seconds: 0.1,
-                failed: false, output: {exit: 1, stderr: 'script failed'}}); f.tree.draw(); return 1;""")
-            r.check("nonzero tool exit keeps the failed badge and stderr coloring", b.js("const d = window.__scrollFixture.tree.detail; return d.dataset.task === '101' && !!d.querySelector('.pill.bad') && !!d.querySelector('[data-k=stderr]').closest('.err')"))
-            b.js("""const f = window.__scrollFixture, t = Date.now()/1000;
-              f.listeners.events.onData({ev: 'start', id: 102, name: 'agent: diagnostic', t});
-              f.listeners.live.onData({updates: {102: {stderr: 'DEBUG: testing error handling'}}}); f.tree.draw(); return 1;""")
-            r.check("agent without conversation steps also keeps diagnostics neutral", b.js("const d = window.__scrollFixture.tree.detail; return d.dataset.task === '102' && !d.querySelector('[data-k=stderr]').closest('.err')"))
-            b.js("""const f = window.__scrollFixture;
-              f.listeners.events.onData({ev: 'end', id: 102, t: Date.now()/1000 + 0.2, seconds: 0.1,
-                failed: false, output: {exit: 0, stderr: 'DEBUG: testing error handling'}}); f.tree.draw(); return 1;""")
-            r.check("completed exit-0 agent keeps its stderr neutral", b.js("const d = window.__scrollFixture.tree.detail; return d.dataset.task === '102' && !!d.querySelector('.pill.ok') && !d.querySelector('[data-k=stderr]').closest('.err')"))
-            r.clean("live scroll")
-        finally:
-            b.js("window.__scrollFixture?.tree.close(); delete window.__scrollFixture; return 1")
-            r.page("#/app/sw", "document.querySelector('.page-head')", "the loop after the scroll fixture")
-    r.step("live scroll", live_scroll)
 
     def compact_tables():
         r.preferences(reset=True)
@@ -1322,7 +1166,7 @@ def flows(r: Run) -> None:
 
     def every_tab():
         tabs = b.js("return [...document.querySelectorAll('#main .tabs [role=tab]')].map(t => t.textContent)")
-        r.check("a loop's tabs (D713, LiveAlt beside Live)", tabs == ["Overview", "Live", "LiveAlt", "Results", "Agents", "Files", "Settings"], str(tabs))
+        r.check("a loop's tabs (D713; D1095: one Live)", tabs == ["Overview", "Live", "Results", "Agents", "Files", "Settings"], str(tabs))
         head = b.js("return document.querySelector('.page-head').innerText")
         r.check("the header has no Configure or Delete: Settings has them", "Configure" not in head and "Delete" not in head, head)
         subs_of = "[...document.querySelectorAll('#main .subtabs.views [role=tab]')]"
@@ -1640,13 +1484,13 @@ def flows(r: Run) -> None:
         r.dialog_button("Start")
         r.check("the alternative removed", r.api("/apps/sw/file?path=fast.problem.yaml", "DELETE")["status"] == 200)
         b.wait("location.hash.endsWith('/live') || document.querySelector('.pill.live')", timeout=30, what="running")
-        b.wait("document.querySelector('.tree .node')", timeout=60, what="the task tree")
+        b.wait("document.querySelector('.alt-tree [data-task], .alt-tree [data-pass]')", timeout=60, what="the task tree")
         r.check("Live shows the task tree", True)
-        b.wait("document.querySelectorAll('.livelog-card .ln').length > 3", timeout=60, what="the log on Live")
-        r.check("Live shows the log", True)
         r.page("#/app/sw/live/log", "document.querySelector('.logview')", "the log")
+        b.wait("document.querySelectorAll('.logview .ln').length > 3", timeout=60, what="the log's lines")
+        r.check("Live › Log shows the start's log as it grows (D1095)", True)
         r.check("the log has no problem arrows (D723)", not any(x in r.text() for x in ("◀ problem", "problem ▶")))
-        r.page("#/app/sw/live", "document.querySelector('.tree-card .seg')", "Live again")
+        r.page("#/app/sw/live", "document.querySelector('.alt-visual')", "Live again")
         # D758: a note to the running loop is said in the Talk drawer, from any tab, and listed there
         b.click(".ask-fab")
         b.wait("document.querySelector('.drawer.open details.steer-card')", timeout=15, what="the note section in the drawer")
@@ -1676,32 +1520,6 @@ def flows(r: Run) -> None:
                 break
             time.sleep(0.5)
         r.check("its pass ended", not st.get("running") and (st.get("last_active") or 0) >= asked, str(st)[:200])
-        r.page("#/app/sw/live", "document.querySelector('.tree-card .seg')", "Live, stopped")
-        r.button("Graph", ".tree-card .seg")                                   # D726: the loop's own drawing
-        b.wait("document.querySelector('.tasks-drawing .fc-box.fc-act[data-node=test]') && document.querySelector('.tree').hidden", timeout=60, what="the loop's drawing, its gate run")
-        acts = b.js("return [...document.querySelectorAll('.tasks-drawing .fc-box.fc-act')].map(g => g.dataset.node)")
-        r.check("Tasks switch to the loop's drawing, its used boxes lit", {"orchestrate", "test"} <= set(acts), str(acts))
-        r.check("the tree's own controls are hidden there", b.js("return document.querySelector('.tree-card input.filter').hidden"))
-        b.js("document.querySelector('.tasks-drawing .fc-box.fc-pick[data-node=test]').dispatchEvent(new MouseEvent('click', {bubbles: true})); return true;")
-        b.wait("document.querySelector('.tasks-drawing .fc-box.fc-sel[data-node=test]')", timeout=10, what="the box selected")
-        r.check("a box selects its latest task", bool(b.js("return document.querySelector('.detail-card .detail-head h2')?.textContent")))
-        r.check("a selected box shows its run's tasks (D730)", b.js("return document.querySelectorAll('.run-graph .rg-row').length") >= 1)
-        r.check("a box says its own setting, not counts (D727)", not any("×" in t for t in b.js("return [...document.querySelectorAll('.tasks-drawing .fc-box-half')].map(t => t.textContent)")))
-        # D728: the bar goes through the selected box's runs; a box opens what worked in it
-        multi = b.js("""for (const g of document.querySelectorAll('.tasks-drawing .fc-box.fc-pick')) {
-              g.dispatchEvent(new MouseEvent('click', {bubbles: true}));
-              const m = /run \\d+ of (\\d+)/.exec(document.querySelector('.step-said').textContent);
-              if (m && Number(m[1]) >= 2) return g.dataset.node; }
-            return null;""")
-        if multi:
-            r.button("⏮", ".step-bar")
-            first = b.wait("/· run 1 of /.test(document.querySelector('.step-said').textContent) && document.querySelector('.step-said').textContent", what="the box's first run")
-            r.button("▶", ".step-bar")
-            second = b.wait("/· run 2 of /.test(document.querySelector('.step-said').textContent) && document.querySelector('.step-said').textContent", what="its second run")
-            r.check("the step bar goes through the selected box's runs", first != second and first.split(" · ")[0] == second.split(" · ")[0]
-                    and b.js(f"return !!document.querySelector('.tasks-drawing .fc-sel[data-node={multi}]')"), second)
-        else:
-            r.check("the step bar goes through the selected box's runs (no box ran twice: one run each)", True)
         r.page("#/app/sw/live/log", "document.querySelector('.logview')", "the log")
         b.wait("document.querySelectorAll('.logview .ln').length > 3", timeout=30, what="the log's lines")
         stamps = b.wait("[...document.querySelectorAll('.logview .ln .at')].map(a => a.textContent).filter(Boolean)", timeout=10, what="the times")
@@ -1709,22 +1527,14 @@ def flows(r: Run) -> None:
         b.js("const c = [...document.querySelectorAll('#main .toolbar label')].find(l => l.textContent.trim() === 'times').querySelector('input'); c.click(); return 1")
         r.check("and hides them when asked", b.wait("document.querySelectorAll('.logview .ln .at').length === 0", timeout=10, what="no times"))
         b.js("const c = [...document.querySelectorAll('#main .toolbar label')].find(l => l.textContent.trim() === 'times').querySelector('input'); c.click(); return 1")
-        r.page("#/app/sw/live", "document.querySelector('.tree-card .seg')", "Live again")
-        r.check("the graph view is remembered", b.js("return !!document.querySelector('.seg button.on') && document.querySelector('.seg button.on').textContent") == "Graph")
-        r.button("Tree", ".tree-card .seg")
-        b.wait("!document.querySelector('.tree').hidden && document.querySelector('.tree .node')", timeout=10, what="the tree again")
-        r.check("and back to the tree", True)
-        # D739: the tree is the loop's -- setup, a branch per pass, the crafter's boxes as leaves
-        branches = b.js("return [...document.querySelectorAll('.tree .node.branch .nm')].map(x => x.textContent)")
-        r.check("the tree has a branch per pass, not the code's phases (D739)", "Pass 1" in branches
-                and not any(x.startswith(("propose:", "DSE:", "tool:")) for x in branches), str(branches))
-        b.js("for (const x of document.querySelectorAll('.tree .node.branch')) if (/Pass 1/.test(x.innerText) && x.querySelector('.caret').textContent === '▸') x.click(); return 1")
-        leaves = b.wait("[...document.querySelectorAll('.tree .node.leaf .nm')].map(x => x.textContent).filter(Boolean)", timeout=10, what="the pass's leaves")
-        r.check("a pass's leaves are the crafter's boxes", "Check" in leaves and "Search" in leaves, str(leaves))
-        b.js("[...document.querySelectorAll('.tree .node.leaf')].find(x => x.querySelector('.nm').textContent === 'Check').click(); return 1")
-        b.wait("document.querySelector('.tree .node.leaf.sel') && document.querySelector('.detail-card .dtabs')", timeout=10, what="the leaf's work, in tabs")
-        tabs = b.js("return [...document.querySelectorAll('.detail-card .dtabs button')].map(x => x.textContent)")
-        r.check("a leaf opens its work: output, input and every field as tabs", {"Output", "Input"} <= set(tabs), str(tabs))
+        # D739: the tree is the loop's -- a line per pass, the crafter's boxes under it; a task opens in the inspector
+        r.page("#/app/sw/live", "document.querySelector('.alt-tree [data-pass], .alt-tree [data-task]')", "Live, stopped")
+        b.js("const s = document.querySelector('[aria-label=\"Live pass\"]'); s.value = 'all'; s.dispatchEvent(new Event('change', {bubbles: true})); return 1")
+        passes = b.wait("[...document.querySelectorAll('.alt-tree [data-pass]')].map(x => x.dataset.pass)", timeout=15, what="a line per pass")
+        r.check("the tree has a line per pass, not the code's phases (D739)", "1" in passes, str(passes))
+        b.js("document.querySelector('.alt-tree [data-task]').click(); return 1")
+        b.wait("document.querySelector('.alt-detail[data-task]')", timeout=10, what="a task in the inspector")
+        r.check("a task opens in the inspector", True)
         r.page("#/app/sw/results", "document.querySelector('#main table.designs, #main .empty')", "Results")
         r.check("results listed", b.js("return document.querySelectorAll('#main table.designs tbody tr').length") > 0)
         sort_fit("Results")
@@ -1762,8 +1572,7 @@ def flows(r: Run) -> None:
                    " !!document.querySelector('#e2e-where')]")
         r.check("'Timeline' opens Live › Timeline (D928)", got == ["Live", "Timeline", False], str(got))
         r.page("#/app/sw/live", "document.querySelector('.pill.stream')", "Live")
-        b.wait("[...document.querySelectorAll('#main .livelog-card h2')].some(x => x.textContent === 'Log')", timeout=15, what="the Log card")
-        r.check("Live: the Log card and its Full log button (D927)", b.js("return [...document.querySelectorAll('#main .livelog-card button')].some(x => x.textContent === 'Full log')"))
+        r.check("Live: the inspector's Full log opens Live › Log (D927, D1095)", (b.js("return document.querySelector('.alt-log-link').getAttribute('href')") or "").endswith("/live/log"))
         b.wait("document.querySelector('.pill.stream').hidden", timeout=15, what="the connection pill hidden once connected")
         r.check("Live: no 'live' pill while connected (D856)", True)
         r.clean("start, live, stop, results")
@@ -1829,60 +1638,6 @@ def flows(r: Run) -> None:
         r.login("bob")
     r.step("nix packages setting", nix_packages_setting)
 
-    def timeline_categories():
-        """Broad work lanes and agent portions, using the real journal aggregation in a deterministic page fixture."""
-        from flux_web.timeline import timeline
-
-        r.login("bob")
-        journal = r.data / "timeline-fixture.jsonl"
-        rows = [{"t": 0, "ev": "hello"}]
-        for ident, parent, name, a, z in [
-            (1, None, "gate: tools", 0, 10), (2, None, "generation: prototype", 10, 60),
-            (3, 2, "agent: claude", 20, 50), (4, 3, "test: prototype", 30, 40),
-            (5, None, "simulation: screen", 60, 80), (6, 5, "agent: opencode", 65, 75),
-            (7, None, "decide: finalists", 80, 100),
-            (8, None, "propose: decompose", 0, 0), (9, None, "propose: decompose", 60, 60),
-        ]:
-            rows.extend([{"t": a, "ev": "start", "id": ident, "parent": parent, "name": name},
-                         {"t": z, "ev": "end", "id": ident}])
-        journal.write_text("".join(json.dumps(e) + "\n" for e in sorted(rows, key=lambda e: e["t"])))
-        payload = timeline(str(journal), now=100, running=False)
-        b.js("window.__timelineRealFetch = window.fetch.bind(window); window.__timelineFixture = arguments[0];"
-             " window.fetch = (u, o) => String(u).startsWith('/api/apps/sw/timeline')"
-             " ? Promise.resolve(new Response(JSON.stringify(window.__timelineFixture), {status: 200, headers: {'Content-Type': 'application/json'}}))"
-             " : window.__timelineRealFetch(u, o); return 1", payload)
-        try:
-            r.page("#/app/sw/live/timeline", "document.querySelector('#main svg.gantt')", "the category timeline")
-            lanes = b.js("return [...document.querySelectorAll('svg.gantt text[text-anchor=end]')].filter(t => !t.textContent.startsWith('+')).map(t => t.textContent)")
-            r.check("Timeline uses broad work lanes, with no agent or stage row", lanes == ["Setup", "Design", "Check", "Measure", "Choose"], str(lanes))
-            shares = b.js("return Object.fromEntries([...document.querySelectorAll('table.kinds tbody tr')].map(r => [r.cells[0].textContent, r.querySelector('.share span').textContent]))")
-            expected = {"Setup": "10% (0.0%)", "Design": "40% (20%)", "Check": "10% (10%)", "Measure": "20% (10%)", "Choose": "20% (0.0%)"}
-            r.check("Timeline shares say total% (agent%), with agent time included", shares == expected, str(shares))
-            geometry = b.js("return [...document.querySelectorAll('table.kinds tbody tr')].map(r => { const w = e => e.getBoundingClientRect().width;"
-                            " const track = r.querySelector('.share-track'); return [r.cells[0].textContent,"
-                            " Math.round(100*w(r.querySelector('.share-bar'))/w(track)), Math.round(100*w(r.querySelector('.agent-time'))/w(track))]; })")
-            expected_geometry = [[k["kind"].capitalize(), round(100*k["share"]), round(100*k["agent_share"])] for k in payload["kinds"]]
-            r.check("Timeline stacked bar widths match total and agent wall-clock shares", geometry == expected_geometry, str(geometry))
-            colours = b.js("return [...document.querySelectorAll('svg.gantt .agent-time, .share .agent-time, .tl-legend .sw')].map(e => getComputedStyle(e).fill === 'none'"
-                           " || e.tagName.toLowerCase() !== 'rect' ? getComputedStyle(e).backgroundColor : getComputedStyle(e).fill)")
-            r.check("Timeline reserves one colour for agents across lanes, shares and legend", len(set(colours)) == 1, str(colours))
-            highlights = b.js("return [...document.querySelectorAll('svg.gantt .agent-time')].map(e => [e.getAttribute('fill'), Number(e.getAttribute('width'))])")
-            r.check("Timeline highlights agent work inside Design, Check and Measure", len(highlights) == 4, str(highlights))
-            b.js("const s = document.querySelectorAll('.tl-head select')[1]; s.value = '0'; s.dispatchEvent(new Event('change')); return 1")
-            lanes = b.js("return [...document.querySelectorAll('svg.gantt text[text-anchor=end]')].filter(t => !t.textContent.startsWith('+')).map(t => t.textContent)")
-            # At the pass boundary the next phase's first instant is visible, as in the other timeline bars.
-            r.check("Timeline pass selection keeps broad lanes and the start's summary", "Design" in lanes and "Check" in lanes and "Choose" not in lanes
-                    and b.js("return document.querySelector('table.kinds').textContent.includes('40% (20%)')"), str(lanes))
-            b.js("window.__timelineFixture.kinds.reverse(); return 1")
-            r.page("#/app/sw/live/log", "document.querySelector('#main')", "the log")
-            r.page("#/app/sw/live/timeline", "document.querySelector('#main svg.gantt')", "the reordered timeline")
-            changed = b.js("return [...document.querySelectorAll('svg.gantt .agent-time')].map(e => e.getAttribute('fill'))")
-            r.check("Timeline agent colour stays the same after categories reorder", set(changed) == {highlights[0][0]}, str(changed))
-            r.clean("category timeline")
-        finally:
-            b.js("window.fetch = window.__timelineRealFetch; delete window.__timelineRealFetch; delete window.__timelineFixture; return 1")
-            r.page("#/app/sw", "document.querySelector('.page-head')", "the loop after the timeline")
-    r.step("timeline categories", timeline_categories)
 
     def killed_run():
         """D928 (W8): "collapse finished" keeps open only the work running now; a run killed outright
@@ -1895,7 +1650,6 @@ def flows(r: Run) -> None:
         from flux_web.store import Store
 
         r.login("bob")
-        b.js("localStorage.setItem('flux-tasks-view', 'tree'); return 1")
         # a sweep whose bench takes a while: a measurement is under way when the run is killed
         files = [[rel, "import time; time.sleep(60)\n" + text if rel.endswith("bench.py") else text] for rel, text in loop_files("slow", "sweep")]
         made = b.ajs("""const [files, done] = arguments; const f = new FormData(); f.append('name', 'slow');
@@ -1904,16 +1658,13 @@ def flows(r: Run) -> None:
         r.check("a slow loop uploaded", made["status"] == 200, str(made)[:200])
         t0 = time.time()
         r.check("the slow loop started", r.api("/apps/slow/start", "POST", {"passes": 1})["status"] == 200)
-        r.page("#/app/slow/live", "document.querySelector('.tree-card .seg')", "Live of the running loop")
-        b.wait("document.querySelector('.tree .node.leaf.running')", timeout=90, what="a task running")
-        got = b.js("return [...document.querySelectorAll('.tree .node.branch.running')].map(n => !!n.parentNode.querySelector(':scope > .kids'))")
-        r.check("collapse finished: a branch with work running stays open (D928)", got and all(got), str(got))
+        r.page("#/app/slow/live", "document.querySelector('.alt-visual')", "Live of the running loop")
+        b.wait("document.querySelector('.alt-tree .alt-spin')", timeout=90, what="a task running")
+        r.check("a task at work is said running", True)
         st = Store(r.data)
         run = max((x for x in st.runs(st.user(name="bob"), "slow") if x.get("pid")), key=lambda x: x["started"])
         r.check("the run is this start's, still running", run["started"] >= t0 - 1 and not run.get("ended"), str(run)[:200])
 
-        b.wait("[...document.querySelectorAll('.tree .node.leaf.running .nm')].some(x => x.textContent === 'Measure')", timeout=90,
-               what="the minute-long bench under way")
         top = int(run["pid"])
 
         def family():                                              # the run's process and every process below it
@@ -1968,18 +1719,9 @@ def flows(r: Run) -> None:
                 break
             time.sleep(0.5)
         b.js("if (window.__e2e) window.__e2e.bad = window.__e2e.bad.filter(t => !t.includes('slow')); return 1")
-        b.wait("!document.querySelector('.page-head .pill.live') && !document.querySelector('.tree .node.running')", timeout=40, what="the run seen over, nothing running")
-        rows = b.js("""return [...document.querySelectorAll('.tree .node.branch')].filter(n => !n.title).map(n => [n.querySelector('.nm').textContent,
-            !!n.parentNode.querySelector(':scope > .kids'), (n.querySelector('.ended-n') || {}).textContent || '', n.querySelector('.st').textContent])""")
-        r.check("a killed run's tasks are interrupted, every branch folded (D928)", rows and not any(x[1] for x in rows), str(rows))
-        r.check("a folded branch says what stopped, its failed icon kept (D928)", any("stopped" in x[2] and x[3] == "✗" for x in rows), str(rows))
-        r.check("the selected task's branch folds too; its detail stays (D928)", b.js("return !!document.querySelector('.detail .detail-head')"))
-        tick = "[...document.querySelectorAll('.tree-card label.check')].find(l => l.textContent.includes('collapse finished')).querySelector('input')"
-        b.js(f"{tick}.click(); return 1")
-        opened = b.js("return [...document.querySelectorAll('.tree .node.branch')].filter(n => !n.title).every(n => !!n.parentNode.querySelector(':scope > .kids'))")
-        b.js(f"{tick}.click(); return 1")
-        folded = b.js("return [...document.querySelectorAll('.tree .node.branch')].filter(n => !n.title).every(n => !n.parentNode.querySelector(':scope > .kids'))")
-        r.check("collapse finished off opens every branch, on folds them all again (D928)", opened and folded, f"{opened} {folded}")
+        b.wait("!document.querySelector('.page-head .pill.live') && !document.querySelector('.alt-tree .alt-spin')", timeout=40, what="the run seen over, nothing running")
+        said = b.js("return document.querySelector('.alt-summary').textContent")
+        r.check("a killed run's work is said stopped, not running (D928)", "running" not in said and any(w in said for w in ("interrupted", "failed")), said)
         r.clean("a killed run")
         r.page("#/", "document.querySelector('#main')", "the loops")
         r.api("/apps/slow", "DELETE")                               # not left for the steps after
@@ -2045,15 +1787,16 @@ def flows(r: Run) -> None:
         b.keys(b.ENTER)                                         # the dialog's Close has the focus
         b.wait("!document.querySelector('dialog.dlg[open]')", timeout=5, what="the comparison closed by Enter")
         # Live: a branch is a button that says whether it is open
-        b.js("localStorage.setItem('flux-tasks-view', 'tree'); return 1")
-        r.page("#/app/sw/live", "document.querySelector('.tree button.node.branch[aria-expanded]')", "Live's tree")
+        r.page("#/app/sw/live", "document.querySelector('[aria-label=\"Live pass\"]')", "Live")
+        b.js("const s = document.querySelector('[aria-label=\"Live pass\"]'); s.value = 'all'; s.dispatchEvent(new Event('change', {bubbles: true})); return 1")
+        b.wait("document.querySelector('.alt-tree button.alt-fold[aria-expanded]')", timeout=30, what="Live's tree, a fold in it")
         b.js("document.activeElement && document.activeElement.blur(); return 1")
-        tab_to("a.matches('.tree button.node.branch[aria-expanded]')", "a branch of the tree")
-        key, was = b.js("return [document.activeElement.dataset.key, document.activeElement.getAttribute('aria-expanded')]")
+        tab_to("a.matches('.alt-tree button.alt-fold[aria-expanded]')", "a fold of the tree")
+        key, was = b.js("return [document.activeElement.dataset.fold, document.activeElement.getAttribute('aria-expanded')]")
         b.keys(b.ENTER)
-        now = b.js("const a = document.activeElement; return [a.dataset.key, a.getAttribute('aria-expanded')]")
+        now = b.js("const a = document.activeElement; return [a.dataset.fold, a.getAttribute('aria-expanded')]")
         b.keys(b.ENTER)
-        back = b.js("const a = document.activeElement; return [a.dataset.key, a.getAttribute('aria-expanded')]")
+        back = b.js("const a = document.activeElement; return [a.dataset.fold, a.getAttribute('aria-expanded')]")
         r.check("keyboard: Enter opens and folds a Live branch, aria-expanded said, the focus kept (D929)",
                 now == [key, "true" if was == "false" else "false"] and back == [key, was], f"{key} {was} {now} {back}")
         # Agents: a turn opens from its row's button (the sweep has no agent: its turns stood in for)
@@ -2400,17 +2143,10 @@ def flows(r: Run) -> None:
                 break
             time.sleep(2)
         r.check("the run ended", not st.get("running"), str(st)[:200])
-        try:
-            b.js("localStorage.setItem('flux-tasks-view', 'tree'); return 1")
-        except RuntimeError:
-            pass
-        r.page("#/app/fromex/live", "document.querySelector('.tree .node.branch')", "the tree of passes at once")
-        b.wait("[...document.querySelectorAll('.tree .node.branch .nm')].some(x => x.textContent === 'Conclusion')", timeout=30, what="the Conclusion")
-        names = b.js("return [...document.querySelectorAll('.tree .node.branch .nm')].map(x => x.textContent)")
-        whys = b.js("return [...document.querySelectorAll('.tree .node.branch .why')].map(x => x.textContent)")
-        r.check("passes at once are their own branches, then the Conclusion",
-                [n for n in names if n.startswith("Pass")] == ["Pass 1", "Pass 2", "Pass 3", "Pass 4"] and "Conclusion" in names, str(names))
-        r.check("a pass says which ran with it", any("with " in w for w in whys), str(whys))
+        r.page("#/app/fromex/live", "document.querySelector('[aria-label=\"Live pass\"]')", "the passes at once")
+        b.js("const s = document.querySelector('[aria-label=\"Live pass\"]'); s.value = 'all'; s.dispatchEvent(new Event('change', {bubbles: true})); return 1")
+        passes = b.wait("(() => { const p = [...document.querySelectorAll('.alt-tree [data-pass]')].map(x => x.dataset.pass); return p.length >= 4 && p; })()", timeout=30, what="the passes")
+        r.check("passes at once are each their own line", {"1", "2", "3", "4"} <= set(passes), str(passes))
         r.clean("passes at once")
     r.step("passes at once", passes_at_once)
 
@@ -2418,10 +2154,9 @@ def flows(r: Run) -> None:
         """D917: four Live windows of two loops -- one stream each, not three -- leave the server
         reachable from the first: its /api/me and its Results answer at once."""
         r.login("bob")
-        b.js("localStorage.setItem('flux-tasks-view', 'tree'); return 1")
         first = b.cmd("WebDriver:GetWindowHandle", {})
         first = first.get("value", first) if isinstance(first, dict) else first
-        r.page("#/app/fromex/live", "document.querySelector('.tree .node')", "Live, the first window")
+        r.page("#/app/fromex/live", "document.querySelector('.alt-visual')", "Live, the first window")
         others = []
         try:
             for h in ("#/app/sw/live", "#/app/fromex/live/log", "#/app/sw/live"):
@@ -2429,7 +2164,7 @@ def flows(r: Run) -> None:
                 others.append(win)
                 b.cmd("WebDriver:SwitchToWindow", {"handle": win})
                 b.go(f"{r.url}/{h}")
-                b.wait("document.querySelector('.tree .node, .logview')", timeout=30, what=f"{h} in another window")
+                b.wait("document.querySelector('.alt-visual, .logview')", timeout=30, what=f"{h} in another window")
             b.cmd("WebDriver:SwitchToWindow", {"handle": first})
             ms = b.ajs("""const done = arguments[0], t = performance.now();
                 fetch('/api/me').then(() => done(performance.now() - t), () => done(-1)); setTimeout(() => done(-2), 8000);""")

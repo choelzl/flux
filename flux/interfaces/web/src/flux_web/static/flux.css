@@ -198,22 +198,6 @@ pre.log { background: var(--bg); border: 1px solid var(--line); border-radius: 7
 pre.log.small { max-height: 34vh; margin-top: 12px; }
 
 /* ---- the live tree and details */
-.tree { font-family: var(--mono); font-size: 12.5px; max-height: 70vh; overflow: auto; }
-.tree .node { display: flex; align-items: center; gap: 6px; padding: 2px 6px; border-radius: 5px; cursor: pointer; white-space: nowrap; }
-.tree .node:hover { background: var(--soft); }
-.tree .node.sel { background: color-mix(in srgb, var(--accent) 15%, transparent); }
-.tree .node.hit .nm { background: color-mix(in srgb, var(--warn) 25%, transparent); border-radius: 3px; }
-.tree .caret { width: 12px; color: var(--muted); flex: none; }
-.tree .st { width: 12px; flex: none; text-align: center; }
-.tree .running .st { color: var(--run); animation: pulse 1.4s ease-in-out infinite; }
-.tree .failed .st, .tree .failed .nm { color: var(--bad); }
-.tree .done .st { color: var(--ok); }
-.tree .nm { overflow: hidden; text-overflow: ellipsis; }
-.tree .why { color: var(--muted); overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1; }
-.tree .why::before { content: "— "; }
-.tree .kidsn { color: var(--muted); font-size: 11px; border: 1px solid var(--line); border-radius: 8px; padding: 0 5px; }
-.tree .dur { color: var(--muted); margin-left: auto; padding-left: 8px; flex: none; }
-.tree .kids { margin-left: 13px; border-left: 1px solid var(--line); padding-left: 5px; }
 /* D723: the tasks as a graph, and the Tree | Graph switch */
 .seg { display: inline-flex; }
 .seg button { border-radius: 0; margin: 0; }
@@ -221,38 +205,13 @@ pre.log.small { max-height: 34vh; margin-top: 12px; }
 .seg button:first-child { border-radius: 6px 0 0 6px; }
 .seg button:last-child { border-radius: 0 6px 6px 0; }
 .seg button.on { background: color-mix(in srgb, var(--accent) 15%, transparent); color: var(--ink); border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
-.tgraph { overflow: auto; max-height: calc(100vh - 250px); min-height: 420px; }
-.tgraph-svg { display: block; font-family: var(--mono); font-size: 12px; }
-.tgraph-svg .edge { fill: none; stroke: var(--line); stroke-width: 1.5; }
-.tgraph-svg .gnode { cursor: pointer; }
-.tgraph-svg .gnode:focus { outline: none; }
-.tgraph-svg .gnode rect { fill: var(--panel); stroke: var(--line); }
-.tgraph-svg .gnode:hover rect, .tgraph-svg .gnode:focus-visible rect { stroke: var(--accent); }
-.tgraph-svg .gnode.sel rect { fill: color-mix(in srgb, var(--accent) 15%, var(--panel)); stroke: var(--accent); stroke-width: 1.5; }
-.tgraph-svg .gnode.hit rect { fill: color-mix(in srgb, var(--warn) 22%, var(--panel)); }
-.tgraph-svg .gnode.failed rect { stroke: color-mix(in srgb, var(--bad) 60%, var(--line)); }
-.tgraph-svg .nm { fill: var(--ink); }
-.tgraph-svg .failed .nm { fill: var(--bad); }
-.tgraph-svg .dur { fill: var(--muted); font-size: 11px; }
-.tgraph-svg .st { font-size: 11px; }
-.tgraph-svg .done .st { fill: var(--ok); }
-.tgraph-svg .failed .st { fill: var(--bad); }
-.tgraph-svg .running .st { fill: var(--run); animation: pulse 1.4s ease-in-out infinite; }
-.tgraph-svg .running rect { stroke: color-mix(in srgb, var(--run) 55%, var(--line)); }
-.tgraph-svg .tog circle { fill: var(--soft); stroke: var(--line); }
-.tgraph-svg .tog text { fill: var(--muted); font-size: 12px; }
-.tgraph-svg .tog:hover circle { stroke: var(--accent); }
-.standings h2 { margin-bottom: 8px; }
 .stats { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 4px 0 8px; }
 .stats small { color: var(--muted); text-transform: uppercase; font-size: 10.5px; letter-spacing: .05em; }
 table.compact td, table.compact th { padding: 4px 8px; font-size: 12.5px; }
-.row-kv { display: flex; gap: 10px; margin: 2px 0; }
 .row-kv .k { min-width: 90px; }
-.stand-card { overflow: hidden; }
 .detail { max-height: 76vh; overflow: auto; }
 .detail-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .detail-head h2 { font-family: var(--mono); font-size: 14px; }
-.crumbs { color: var(--muted); font-size: 12px; margin: 4px 0; font-family: var(--mono); }
 .blk { margin-top: 8px; }
 .kv { margin: 6px 0; }
 .kv .k { font-family: var(--mono); font-size: 11.5px; color: var(--muted); }
@@ -484,15 +443,9 @@ dialog.dlg:has(pre.diff) { width: min(900px, calc(100vw - 32px)); }
 /* D694: the timeline, usage, compare, paging, the streams and the server out of reach */
 .stats.five { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 @media (max-width: 1100px) { .stats.five { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
-.tl-head { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; }
 svg.gantt .tick { font-size: 12px; }
 table.kinds .sw, .tl-legend .sw { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 8px; vertical-align: -1px; }
 .tl-legend { display: flex; flex-wrap: wrap; gap: 8px 20px; }
-.share { display: flex; align-items: center; gap: 8px; }
-.share-track { flex: 0 0 140px; height: 8px; border-radius: 4px; background: color-mix(in srgb, var(--muted) 12%, transparent); }
-.share .share-bar { display: flex; height: 100%; border-radius: 4px; overflow: hidden; }
-.share-bar > div { min-width: 0; }
-.share span { font-family: var(--mono); font-size: 12px; color: var(--muted); white-space: nowrap; }
 svg.gantt .agent-time { pointer-events: none; }
 svg.gantt .bar { opacity: .88; }
 svg.gantt .bar:hover { opacity: 1; stroke: var(--ink); stroke-width: 1; }
@@ -554,8 +507,6 @@ dialog.dlg:has(.upload) { width: min(600px, calc(100vw - 32px)); }
 .graphs-note { margin: 4px 0 6px; }
 table.best-n td, table.best-n th { padding-top: 4px; padding-bottom: 4px; }
 .pill.small { font-size: 10.5px; padding: 0 6px; margin-left: 6px; }
-.tree { max-height: calc(100vh - 250px); min-height: 420px; }
-pre.log-tail { max-height: 240px; font-size: 11.5px; }
 .files-card { margin-top: 16px; }
 ul.flist li { display: flex; align-items: center; gap: 10px; }
 ul.flist li a { flex: 1; }
@@ -579,7 +530,6 @@ fieldset.set-group .agent-vars h4 { margin: 0 0 4px; font-size: 0.95em; }
 fieldset.set-group { align-content: start; }
 
 /* D697: the Live log, the composer, settings */
-.live-wrap { display: grid; gap: 0; }
 .logview.mini { max-height: 300px; min-height: 160px; font-size: 11.8px; }
 .livelog-card .card-head { margin-bottom: 6px; }
 .composer { position: static; margin-top: 4px; background: var(--panel); border: 1px solid var(--line);
@@ -622,7 +572,6 @@ textarea.mono { font-family: var(--mono); font-size: 12.5px; }
 .chips-kv { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 10px; }
 .kvchip { background: var(--soft); border-radius: 6px; padding: 3px 8px; font-size: 12.5px; }
 .kvchip small { color: var(--muted); }
-table.stand-t { margin-bottom: 10px; }
 .nested { display: grid; gap: 6px; }
 .grid-2.ov { align-items: start; }
 .grid-2.ov > .col { display: grid; gap: 16px; align-content: start; }
@@ -718,8 +667,6 @@ dialog.dlg.fullscreen-view { width: calc(100vw - 24px); max-width: none; height:
 .fullscreen-content .viewer textarea { min-height: calc(100dvh - 190px); }
 .raw-content { white-space: pre-wrap; overflow-wrap: anywhere; font-family: var(--mono); }
 .fullscreen-content .detail, .fullscreen-content pre.val { max-height: none; }
-.history-controls { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; margin-bottom: 14px; }
-.history-controls select { max-width: min(100%, 500px); }
 
 /* D702: breadcrumbs, placeholders, the agent at work */
 .crumbs-bar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 13px; color: var(--muted); margin: -6px 0 8px; }
@@ -940,7 +887,6 @@ svg.gantt .bar.timeout { stroke: var(--warn); }                          /* D997
 td.bad { color: var(--bad); }
 .fact.bad span { color: var(--bad); }
 .fact.warn span { color: var(--warn); }
-.node .exitn { color: var(--bad); font-size: 11px; margin-left: 6px; white-space: nowrap; }
 
 /* D712: an agent's conversation -- its words as text, thinking and tool calls folded */
 .cv { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; }
@@ -1040,29 +986,11 @@ body:has(.drawer.open) .toast a, body:has(.drawer.open) .toast button { pointer-
 .set-tabs { margin-bottom: 10px; }
 .set-dot { color: var(--accent); font-weight: 700; }
 [hidden] { display: none !important; }   /* D721: hidden wins over a class that sets display */
-/* D727: the step bar over the loop's drawing */
-.step-bar { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin: 0 0 10px; }
-.step-bar .step-range { flex: 1 1 160px; min-width: 120px; }
-.step-bar .step-said { flex: 1 1 100%; overflow-wrap: anywhere; }
-/* D730: the selected run's own tasks, under the step bar */
-.run-graph:empty { display: none; }
-.run-graph { margin: 0 0 10px; border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; background: var(--soft); }
-.run-graph-head { margin: 0 0 4px; }
 /* D731: an agent's reply first; the panel scrolls once, clear of the Ask button */
 .detail { padding-bottom: 64px; }
 .agent-reply { border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--line)); border-radius: 8px; padding: 8px 10px; background: var(--panel); }
 .agent-reply h3, .cv-title { margin: 0 0 6px; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
 .agent-reply .cv-text { border-left: 0; padding: 0; }
-.run-graph-rows { max-height: 240px; overflow: auto; display: grid; gap: 1px; font-size: 12.5px; }
-.rg-row { display: flex; align-items: baseline; gap: 6px; padding: 2px 6px 2px calc(6px + var(--d) * 16px); border-radius: 5px; cursor: pointer; min-width: 0; }
-.rg-row:hover, .rg-row:focus-visible { background: var(--panel); outline: none; }
-.rg-row.sel { background: color-mix(in srgb, var(--accent) 14%, var(--panel)); }
-.rg-branch { color: var(--muted); margin-left: -12px; width: 10px; }
-.rg-st { width: 12px; } .rg-row.done .rg-st { color: var(--ok); } .rg-row.failed .rg-st, .rg-row.failed .rg-nm { color: var(--bad); } .rg-row.running .rg-st { color: var(--accent); }
-.rg-nm { font-family: var(--mono); white-space: nowrap; }
-.rg-why { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
-.rg-why.bad { color: var(--bad); }
-.rg-dur { margin-left: auto; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .ln .at { color: var(--muted); font-variant-numeric: tabular-nums; margin-right: 8px; white-space: nowrap; display: inline-block; min-width: 15ch; }
 /* D734: an agent's login in a small terminal */
 .login-term { margin-top: 10px; border: 1px solid var(--line); border-radius: 8px; padding: 8px; background: var(--soft); display: grid; gap: 8px; }
@@ -1073,22 +1001,6 @@ body:has(.drawer.open) .toast a, body:has(.drawer.open) .toast button { pointer-
 .login-in { flex: 1; min-width: 180px; font-family: var(--mono); }
 .login-row, .login-keys { gap: 6px; align-items: center; }
 
-/* D739: the loop tree -- a start's branches (setup, passes or parts, the end) and the crafter's boxes as leaves */
-.tree .node.branch .nm { font-family: var(--sans, inherit); font-weight: 600; }
-.tree .node.branch { cursor: pointer; }
-/* D929: a branch is a button that looks like the tree's row */
-.tree button.node { width: 100%; box-sizing: border-box; border: 0; background: transparent; font: inherit; line-height: inherit; color: inherit; text-align: left; min-height: 0; margin: 0; }
-.tree button.node:hover { background: var(--soft); }
-.tree .node:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-.tree .node.leaf { cursor: pointer; }
-.tree .node.leaf:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-.tree .node.leaf .nm { font-family: var(--sans, inherit); }
-.tree .node.box-end .st { color: var(--muted); }
-.dtabs { display: flex; flex-wrap: wrap; gap: 4px; margin: 8px 0; border-bottom: 1px solid var(--line); padding-bottom: 6px; }
-.dtabs button.on { background: color-mix(in srgb, var(--accent) 16%, transparent); border-color: var(--accent); }
-.leaf-tasks { margin: 6px 0 4px; }
-.leaf-tasks h3 { margin: 0 0 4px; font-size: 12px; color: var(--muted); font-weight: 600; }
-.leaf-tasks .run-graph-rows { max-height: 180px; }
 .agent-steps { margin: 0; padding-left: 4px; list-style: none; display: grid; gap: 2px; color: var(--muted); }
 .agent-steps li.bad { color: var(--bad); }
 .agent-test-row td { border-top: none; padding-top: 0; }

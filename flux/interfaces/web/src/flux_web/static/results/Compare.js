@@ -1,11 +1,12 @@
 // Flux web, results (D694, D1095): two designs compared -- every number at every stage, B against A (green: B
 // better), and their sources' difference.
 
-import { Dom, html } from "../view.js";
+import { html } from "../view.js";
 import { api, dialog, enc, h } from "../ui.js";
 import { plural } from "../format.js";
 import { directionOf } from "../chartdata.js";
-import { diffView, lineDiff } from "../configure.js";
+import { lineDiff } from "../diff.js";
+import { Diff } from "../components/Diff.js";
 import { VerdictPill } from "./columns.js";
 
 function Comparison({ a, b, fa, fb, stages, directions, fmt }) {
@@ -24,7 +25,7 @@ function Comparison({ a, b, fa, fb, stages, directions, fmt }) {
     <table class="list compact"><thead><tr><th>stage</th><th>metric</th><th class="num">A <${VerdictPill} d=${a} /></th><th class="num">B <${VerdictPill} d=${b} /></th><th class="num">B − A</th></tr></thead>
       <tbody>${rows.map(row => html`<tr><td class="muted">${row.st}</td><td>${row.m}</td>${cell(row.va)}${cell(row.vb)}${delta(row)}</tr>`)}</tbody></table>
     <h3>Source${ops ? html`<span class="muted">${changed ? ` · ${plural(changed, "line")} differ` : " · the same"}</span>` : ""}</h3>
-    ${ops ? (changed ? html`<${Dom} node=${diffView(ops)} />` : html`<div class="empty"><p>The two sources are the same.</p></div>`) : html`<div class="empty"><p>A source is missing.</p></div>`}</div>`;
+    ${ops ? (changed ? html`<${Diff} ops=${ops} />` : html`<div class="empty"><p>The two sources are the same.</p></div>`) : html`<div class="empty"><p>A source is missing.</p></div>`}</div>`;
 }
 
 /** The two designs ticked, compared in a dialog. */

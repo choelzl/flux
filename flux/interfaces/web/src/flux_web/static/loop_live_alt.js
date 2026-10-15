@@ -1,5 +1,5 @@
-// Flux web: a loop's LiveAlt tab -- one task scope, three representations (Tree, Graph, Timeline), one
-// inspector. D1095: Preact components, its parts in livealt/ -- rules.js (how work ended), rows.js (the tree's
+// Flux web: a loop's Live tab -- one task scope, three representations (Tree, Graph, Timeline) and one inspector,
+// and the start's log (D1095: the classic Live retired). D1095: Preact components, its parts in livealt/ -- rules.js (how work ended), rows.js (the tree's
 // lines as data), Lines/Graph/Timeline/Panels.js (drawn), store.js (state, actions, the journal), Page.js.
 
 import { card, empty, h, skeleton } from "./ui.js";
@@ -7,7 +7,7 @@ import { html, mount, render } from "./view.js";
 import { createStore } from "./livealt/store.js";
 import { Controls, Page } from "./livealt/Page.js";
 
-export function liveAltTab(ctx) {
+export function liveTab(ctx) {
   const store = createStore(ctx);
   let page = null, bar = null;
   const close = () => {
@@ -17,7 +17,7 @@ export function liveAltTab(ctx) {
   };
   async function show() {
     const valid = ctx.still();
-    if (page && ctx.body.contains(page) && ctx.tab === "LiveAlt") {   // the same page drawn again: its toolbar back under the tabs
+    if (page && ctx.body.contains(page) && ctx.tab === "Live") {   // the same page drawn again: its toolbar back under the tabs
       store.revalidate(valid); ctx.subHolder.append(bar); store.redraw(); return;   // at once: a view switched to is there when the tab is
     }
     close();

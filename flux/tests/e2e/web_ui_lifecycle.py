@@ -128,7 +128,7 @@ def lifecycle_flows(r, watch):
                 file = home / relative
                 file.parent.mkdir(parents=True, exist_ok=True)
                 file.write_text("generated data")
-            r.page(f"#/app/{name}/live/history", "document.querySelector('.history-tasks')?.innerText.includes('new design')", "existing history before reset")
+            r.page(f"#/app/{name}/live", "document.querySelectorAll('[aria-label=\"Live start\"] option').length === 3", "existing starts before reset")
             r.check("reset fixture has completed starts and retained task history", len(json.loads(r.api(f"/apps/{name}/runs")["body"])["starts"]) == len(starts) == 2)
             before = {p: (home / p).read_bytes() for p in ("out/result.txt", "runs/loop.log", "workbench/notes.md")}
             r.page(f"#/app/{name}/settings/loop", "document.querySelector('.danger-card')", "reset controls")
@@ -150,25 +150,36 @@ def lifecycle_flows(r, watch):
             r.check("reset retains the problem document, environment and sharing", file_api(r, name, "problem.yaml")["status"] == 200
                     and any(v["name"] == "MY_VAR" and v["value"] == "keep" for v in env["loop"])
                     and any(s["user"] == "cy" and s["perm"] == "watch" for s in shares["shares"]))
-            r.page(f"#/app/{name}/live/history", "document.querySelector('#main .empty')?.textContent === 'No starts recorded yet.'", "empty reset history")
-            r.check("reset history shows its empty state", True)
+            r.page(f"#/app/{name}/live", "document.querySelector('#main .empty')", "Live after the reset")
+            r.check("reset leaves no past start to pick", not b.js("return document.querySelectorAll('[aria-label=\"Live start\"] option').length > 1"))
             r.clean("reset confirmation")
 
     r.step("reset confirmation", reset_confirmation)
 
     def history_isolation():
+        """D1095: a past start picked in Live -- its tasks and its log its own; a late answer for a start no longer
+        picked draws nothing."""
         with loop(r, "ui-history-isolation") as name:
-            starts, campaigns = seed_history(r, name)
-            selector = "select[aria-label='Historical start']"
-            r.page(f"#/app/{name}/live/history", f"document.querySelector(\"{selector}\")", "run history")
+            starts, _campaigns = seed_history(r, name)
+            selector = "select[aria-label='Live start']"
+            r.page(f"#/app/{name}/live", f"document.querySelectorAll(\"{selector} option\").length === 3", "Live's starts")
 
             def choose(start):
-                b.js("const s = document.querySelector(arguments[0]); s.value = String(arguments[1]); s.dispatchEvent(new Event('change')); return 1", selector, start)
+                b.js("const s = document.querySelector(arguments[0]); s.value = String(arguments[1]); s.dispatchEvent(new Event('change', {bubbles: true})); return 1", selector, start)
 
-            b.wait("document.querySelector('.history-tasks')?.innerText.includes('new design')", what="latest task journal")
-            r.check("history lists completed starts newest first", b.js("return [...document.querySelector(arguments[0]).options].map(o => Number(o.value))", selector) == starts[::-1])
-            r.button("Log", "#main .card .subtabs")
-            b.wait("document.querySelector('.history-log')?.textContent.includes('new tool output')", what="latest log")
+            r.check("Live lists the current start, then the past ones newest first",
+                    b.js("return [...document.querySelector(arguments[0]).options].map(o => o.value)", selector) == ["current", *map(str, starts[::-1])])
+            choose(starts[1])
+            b.wait("document.querySelector('.alt-visual')?.innerText.includes('new design')", what="the newer start's tasks")
+            choose(starts[0])
+            b.wait("document.querySelector('.alt-visual')?.innerText.includes('old design')", what="the older start's tasks")
+            r.check("a past start's tasks are its own", "new design" not in b.js("return document.querySelector('.alt-visual').innerText"))
+            r.button("Log", "#main .subtabs.views")
+            b.wait("document.querySelector('.logview')?.textContent.includes('old tool output')", what="the older start's log")
+            r.check("old log excludes newer output", "new tool output" not in b.js("return document.querySelector('.logview').textContent"))
+            raw = b.ajs("""const done = arguments[arguments.length - 1]; fetch(document.querySelector('#main a.raw-view').href)
+                .then(async response => done({status: response.status, text: await response.text()}));""")
+            r.check("a past start's Raw is its own", raw["status"] == 200 and "old tool output" in raw["text"] and "new tool output" not in raw["text"])
             b.js("""window.__historyFetch = window.fetch; window.__historyHeld = [];
                 const id = String(arguments[0]); window.fetch = async (u, options) => {
                   const url = new URL(String(u), location.href);
@@ -179,51 +190,17 @@ def lifecycle_flows(r, watch):
                   } return response;
                 }; return 1;""", starts[0])
             try:
+                choose(starts[1])
+                b.wait("document.querySelector('.logview')?.textContent.includes('new tool output')", what="the newer log")
                 choose(starts[0])
                 b.wait("window.__historyHeld.length === 1", what="held historical log")
                 choose(starts[1])
-                b.wait("document.querySelector('.history-log')?.textContent.includes('new tool output')", what="newer selection")
+                b.wait("document.querySelector('.logview')?.textContent.includes('new tool output')", what="newer selection")
                 text = b.ajs("""const done = arguments[arguments.length - 1]; window.__historyHeld.splice(0).forEach(f => f());
-                    requestAnimationFrame(() => requestAnimationFrame(() => done(document.querySelector('.history-log').textContent)));""")
+                    requestAnimationFrame(() => requestAnimationFrame(() => done(document.querySelector('.logview').textContent)));""")
                 r.check("a delayed old log cannot replace the newly selected start", "new tool output" in text and "old tool output" not in text)
             finally:
                 b.js("window.fetch = window.__historyFetch; window.__historyHeld.splice(0).forEach(f => f()); return 1")
-            choose(starts[0])
-            b.wait("document.querySelector('.history-log')?.textContent.includes('old tool output')", what="old log")
-            r.check("selecting an older start chooses a campaign available at that time",
-                    b.js("return document.querySelector('select[aria-label=\"Recorded campaign\"]').value") == campaigns[0])
-            r.check("old log excludes newer output", "new tool output" not in b.js("return document.querySelector('.history-log').textContent"))
-            raw = b.ajs("""const done = arguments[arguments.length - 1]; fetch(document.querySelector('#main a.raw-view').href)
-                .then(async response => done({status: response.status, text: await response.text()}));""")
-            r.check("historical Raw uses the selected start", raw["status"] == 200 and "old tool output" in raw["text"] and "new tool output" not in raw["text"])
-            r.button("Agents", "#main .card .subtabs")
-            b.wait("document.querySelector('#main .split table tbody tr')", what="historical agent turn")
-            b.wait("document.querySelector('#main .split table tbody tr td')?.getBoundingClientRect().height > 0", what="visible agent row")
-            b.click("#main .split table tbody tr td:first-child")
-            b.wait("document.querySelector('#main .detail .detail-head')", what="complete historical turn")
-            r.button("Raw", "#main .detail")
-            b.wait("document.querySelector('dialog.fullscreen-view pre')", what="raw agent turn")
-            transcript = b.js("return document.querySelector('dialog.fullscreen-view pre').textContent")
-            r.check("old agent Raw retains its prompt, thinking, tools and reply", all(f"old {kind}" in transcript for kind in ("prompt", "thinking", "tool", "reply"))
-                    and "new prompt" not in transcript, transcript[:300])
-            b.keys(b.ESCAPE)
-            r.button("Results", "#main .card .subtabs")
-            b.wait("document.querySelector('#main .split.results table tbody tr')", what="historical results")
-            b.wait("document.querySelector('#main .split table tbody tr td')?.getBoundingClientRect().height > 0", what="visible design row")
-            b.click("#main .split table tbody tr td:nth-child(2)")
-            b.wait("document.querySelector('#main .detail')?.textContent.includes('old source')", what="historical source")
-            r.check("historical design detail excludes newer source and measurements", "new source" not in b.js("return document.querySelector('#main .detail').textContent")
-                    and b.js("return [...document.querySelectorAll('#main .detail table tbody td.num')].map(td => td.textContent)") == ["5"])
-            choose(starts[1])
-            b.wait("document.querySelector('#main .detail .empty')", what="later start loaded")
-            r.check("moving forward keeps an older campaign available for comparison", b.js("return document.querySelector('select[aria-label=\"Recorded campaign\"]').value") == campaigns[0])
-            choose(starts[0])
-            b.wait("document.querySelector('#main .split.results table tbody tr')", what="old start reselected")
-            b.cmd("WebDriver:Refresh", {})
-            b.wait(f"document.querySelector(\"{selector}\")?.value === '{starts[0]}'", what="historical selection after reload")
-            b.js(watch)
-            b.wait("document.querySelector('.history-tasks')?.innerText.includes('old design')", what="old tasks after reload")
-            r.check("reloading history keeps the selected start and its tasks", "new design" not in b.js("return document.querySelector('.history-tasks').innerText"))
             r.clean("run history isolation")
 
     r.step("run history isolation", history_isolation)

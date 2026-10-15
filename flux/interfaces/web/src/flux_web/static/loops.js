@@ -11,7 +11,8 @@ import { Conversation } from "./components/Conversation.js";
 import { can, me, pageOwner, setPageRefresh } from "./state.js";
 import { act, ago, api, on, bytes, card, confirmDialog, createFromText, dialog, dur, empty, enc, h, head, offline, owned, pageShow, toast, toasts, when, withOwner, plural } from "./ui.js";
 import { flushResultPreferences } from "./result_table.js";
-import { diffView, lineDiff } from "./configure.js";
+import { lineDiff } from "./diff.js";
+import { Diff } from "./components/Diff.js";
 
 /** Start or stop a loop: the dialog for a start's options, a confirm for "now". */
 async function startLoop(name, owner) {
@@ -301,7 +302,7 @@ function authoringCard(name, st, { onStop } = {}) {
   const steps = fields.steps || [fields["thinking (live tail)"] ? { k: "think", text: fields["thinking (live tail)"] } : null,
     fields["reply (live tail)"] ? { k: "text", text: fields["reply (live tail)"] } : null].filter(Boolean);
   const diff = !running && st.revise && st.before && st.after && st.before !== st.after ? h("details", { class: "blk", open: true },
-    h("summary", {}, `What it changed in ${st.revise}`), diffView(lineDiff(st.before, st.after))) : "";
+    h("summary", {}, `What it changed in ${st.revise}`), html`<${Diff} ops=${lineDiff(st.before, st.after)} />`) : "";
   return card(`Agent ${st.revise ? "revising" : "writing"} the problem`, [
     h("div", { class: "row" }, head, h("span", { class: "muted" }, st.author || "Agent", st.by ? ` · by ${st.by}` : "", st.started ? [" · started ", ago(st.started)] : "",
       st.ended ? [" · ended ", ago(st.ended)] : "")),

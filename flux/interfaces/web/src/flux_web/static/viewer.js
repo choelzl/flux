@@ -4,7 +4,7 @@ import { restoreScroll, scrollState } from "./scroll.js";
 
 export function fullscreen(el, title = "Viewer") {
   if (el.closest("dialog.fullscreen-view")) return;
-  const positions = () => new Map([el, ...el.querySelectorAll("[data-k], pre, textarea, .logview, .scroll-x, .run-graph-rows")]
+  const positions = () => new Map([el, ...el.querySelectorAll("[data-k], pre, textarea, .logview, .scroll-x")]
     .filter(node => node.getClientRects().length && !node.closest("details:not([open])")).map(node => [node, { ...scrollState(node),
       vertical: node.scrollHeight > node.clientHeight, horizontal: node.scrollWidth > node.clientWidth }]));
   const original = positions();

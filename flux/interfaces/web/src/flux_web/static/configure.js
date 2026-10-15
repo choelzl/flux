@@ -2,49 +2,14 @@
 // (D889: split out of app.js).
 
 import { codeEditor, langOf } from "./highlight.js";
+import { html } from "./view.js";
+import { diffCounts, lineDiff } from "./diff.js";
+import { Diff } from "./components/Diff.js";
 import { can, cleanup, crafterCatalog, me, setCrafterCatalog } from "./state.js";
 import { act, api, apiUpload, appHref, bytes, card, confirmDialog, crumbs, createFromText, dialog, empty, enc, h, head, owned, pageShow, request, skeleton, toast, when, plural } from "./ui.js";
 import { advancedCard, agentSelect, attachBox, authoringCard, dropZone, progressDialog, sendFiles, uploadForm, permissionChoice } from "./loops.js";
 
 // ================================================================ the configurator (D686)
-/** A line diff (D693): the longest common subsequence of lines, as [op, text] with op " ", "-"
-    or "+". The ends every document shares are cut off before the table, so it stays small. */
-function lineDiff(a, b) {
-  const A = String(a).split("\n"), B = String(b).split("\n");
-  let s = 0; while (s < A.length && s < B.length && A[s] === B[s]) s++;
-  let e = 0; while (e < A.length - s && e < B.length - s && A[A.length - 1 - e] === B[B.length - 1 - e]) e++;
-  const a2 = A.slice(s, A.length - e), b2 = B.slice(s, B.length - e), n = a2.length, m = b2.length;
-  const L = Array.from({ length: n + 1 }, () => new Uint32Array(m + 1));
-  for (let i = n - 1; i >= 0; i--) for (let j = m - 1; j >= 0; j--) L[i][j] = a2[i] === b2[j] ? L[i + 1][j + 1] + 1 : Math.max(L[i + 1][j], L[i][j + 1]);
-  const mid = []; let i = 0, j = 0;
-  while (i < n && j < m) {
-    if (a2[i] === b2[j]) { mid.push([" ", a2[i]]); i++; j++; }
-    else if (L[i + 1][j] >= L[i][j + 1]) mid.push(["-", a2[i++]]);
-    else mid.push(["+", b2[j++]]);
-  }
-  while (i < n) mid.push(["-", a2[i++]]);
-  while (j < m) mid.push(["+", b2[j++]]);
-  return [...A.slice(0, s).map(t => [" ", t]), ...mid, ...A.slice(A.length - e).map(t => [" ", t])];
-}
-/** The changes with three lines of context each, the rest folded. */
-function diffView(ops, context = 3) {
-  const keep = ops.map(() => false);
-  ops.forEach((o, k) => { if (o[0] !== " ") for (let d = -context; d <= context; d++) if (ops[k + d]) keep[k + d] = true; });
-  const pre = h("pre", { class: "diff" });
-  let a = 0, b = 0, folded = 0;
-  const fold = () => { if (folded) { pre.append(h("div", { class: "d-fold" }, `⋯ ${plural(folded, "unchanged line")}`)); folded = 0; } };
-  ops.forEach((o, k) => {
-    if (o[0] !== "+") a++; if (o[0] !== "-") b++;
-    if (!keep[k]) { folded++; return; }
-    fold();
-    pre.append(h("div", { class: o[0] === "+" ? "d-add" : o[0] === "-" ? "d-del" : "d-ctx" },
-      h("span", { class: "d-no" }, o[0] === "+" ? "" : String(a)), h("span", { class: "d-no" }, o[0] === "-" ? "" : String(b)),
-      h("span", { class: "d-op" }, o[0]), o[1] || " "));
-  });
-  fold();
-  return pre;
-}
-
 /** The files that go with a loop's document (D696): scripts, golden models, specs. For a loop
     that exists, its own files, edited in place; for a new one, files kept here until it is
     created. Each file the document names as `{home}/…` and nobody has is said to be missing. */
@@ -284,7 +249,8 @@ async function crafterView(body, name, owner, draft = null, onDraft = null) {
         const p = await api(`/apps/${enc(name)}/document/preview`, { method: "POST", body: { text: yaml, kept: got.kept } });
         if (p.before === p.after) return h("p", { class: "muted" }, "No change: the document already says this.");
         const ops = lineDiff(p.before, p.after);
-        return h("div", {}, h("p", { class: "muted small" }, `${plural(ops.filter(o => o[0] === "+").length, "line")} added, ${ops.filter(o => o[0] === "-").length} removed.`), diffView(ops));
+        const n = diffCounts(ops);
+        return h("div", {}, h("p", { class: "muted small" }, `${plural(n.added, "line")} added, ${n.removed} removed.`), html`<${Diff} ops=${ops} />`);
       },
       save: async (yaml) => {
         // D693: what the save changes, line by line, before it writes
@@ -348,12 +314,12 @@ function checkedOf(pre) {
 /** The changes of a save, shown before it writes (D693): true to write. */
 async function confirmDiff(file, before, after, problem = "") {
   const ops = lineDiff(before, after);
-  const plus = ops.filter(o => o[0] === "+").length, minus = ops.filter(o => o[0] === "-").length;
+  const { added: plus, removed: minus } = diffCounts(ops);
   // D757: a document that does not load is said before it is written, not after a start fails
   return dialog(`Save ${file}?`, h("div", {},
     problem ? h("div", { class: "callout bad" }, h("strong", {}, "This document does not load: "), problem,
       h("p", { class: "small" }, "A start or a check of it will be refused until it is fixed.")) : "",
-    h("p", { class: "muted" }, `${plural(plus, "line")} added, ${minus} removed.`), diffView(ops)),
+    h("p", { class: "muted" }, `${plural(plus, "line")} added, ${minus} removed.`), html`<${Diff} ops=${ops} />`),
     [["Cancel", false], problem ? ["Save anyway", true, "danger"] : ["Save", true, "primary"]]);
 }
 
@@ -461,4 +427,4 @@ async function reviseByAgent(body, name, owner) {
   poll();
 }
 
-export { configureInto, configurePage, diffView, lineDiff };
+export { configureInto, configurePage };

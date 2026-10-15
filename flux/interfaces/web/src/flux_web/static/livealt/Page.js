@@ -14,6 +14,7 @@ import { Graph } from "./Graph.js";
 import { Timeline } from "./Timeline.js";
 import { BoxPanel, PassPanel, TaskPanel } from "./Panels.js";
 import { Inspector } from "./inspector/Inspector.js";
+import { Log } from "./Log.js";
 
 /** Redrawn with the store. */
 function useStore(store) {
@@ -34,10 +35,10 @@ export function Controls({ store, ctx }) {
       title=${s.following ? "Pause automatic task selection" : "Follow the latest task in the current pass"} onClick=${a.follow}>${s.following ? "Following" : "Follow"}</button>
     <button type="button" class="small" hidden=${!(s.journal?.model.before || s.journal?.model.cut) || s.startId !== "current"} title="Load every pass of this start" onClick=${a.earlier}>Earlier passes</button>
     <div class="alt-selectors">
-      <label>Start <select aria-label="LiveAlt start" value=${s.startId} onChange=${e => a.setStart(e.currentTarget.value)}>
+      <label>Start <select aria-label="Live start" value=${s.startId} onChange=${e => a.setStart(e.currentTarget.value)}>
         <option value="current">Current start</option>
         ${s.history.starts.filter(x => !x.running).map(x => html`<option value=${String(x.id)}>${`${when(x.started)} · ${x.rc == null ? "ended" : "exit " + x.rc}`}</option>`)}</select></label>
-      <label>Pass <select aria-label="LiveAlt pass" value=${s.pass} onChange=${e => a.setPass(e.currentTarget.value)}>
+      <label>Pass <select aria-label="Live pass" value=${s.pass} onChange=${e => a.setPass(e.currentTarget.value)}>
         ${s.startId === "current" ? html`<option value="current">${`Current${current.length ? " · " + current.join(", ") : ""}`}</option>` : ""}
         <option value="all">All passes</option>
         ${passes.map(n => html`<option value=${String(n)}>${passName(n)}</option>`)}
@@ -60,6 +61,7 @@ function Summary({ v, s }) {
 /** The page once its journal is open (a model to read). */
 export function Page({ store, ctx }) {
   useStore(store);
+  if (ctx.curSub() === "log") return html`<div class="live-alt" data-drawn=${store.s.drawn}><${Log} store=${store} ctx=${ctx} /></div>`;
   return store.s.journal ? html`<${Body} store=${store} ctx=${ctx} />` : html`<section class="card"><${Empty} text="Loading…" /></section>`;
 }
 function Body({ store, ctx }) {
@@ -132,18 +134,18 @@ function Body({ store, ctx }) {
     : mode === "graph" ? html`<${Graph} v=${v} a=${a} />` : mode === "timeline" ? html`<${Timeline} v=${v} a=${a} />`
     : html`<div class="alt-tree" role="group" aria-label="Tasks as a tree"><${Lines} lines=${treeLines} a=${a} located=${v.located} /></div>`;
   const more = mode === "tree" && v.scopeRows.length > v.rows.length;
-  const logHref = `${appHref(ctx.owner, ctx.name)}/live/${s.startId === "current" ? "log" : "history/" + s.startId}`;
+  const logHref = `${appHref(ctx.owner, ctx.name)}/live/log`;
   return html`<div class="live-alt" data-drawn=${s.drawn}>
     <div class="alt-notice"><${Dom} node=${pill.el} />
       ${s.failure ? html`<p class="callout warn">${s.failure}</p><button class="small" type="button" onClick=${a.retry}>Retry</button>` : ""}</div>
     <div class=${`alt-split${mode === "timeline" && s.pass === "all" ? " wide" : ""}`}>
       <section class="card alt-visual-card"><div class="alt-list-head"><${Summary} v=${v} s=${s} /></div>
-        <div class="alt-visual" tabindex="0" aria-label="LiveAlt task view" ref=${panel} onKeyDown=${onKey}>${content}
+        <div class="alt-visual" tabindex="0" aria-label="Live task view" ref=${panel} onKeyDown=${onKey}>${content}
           ${more ? html`<button class="small alt-more" type="button" onClick=${a.more}>${`Earlier tasks (${v.scopeRows.length - v.rows.length})`}</button>` : ""}</div></section>
       <section class="card alt-inspector-card">
         <div class="alt-detail-actions">
           <button type="button" class="small" disabled=${!s.boxView && v.selected == null} title="Reveal and highlight the selected task in the list" onClick=${a.locate}>Locate</button>
-          <a class="btn small alt-log-link" title="Full output and retained run data" href=${logHref}>${s.startId === "current" ? "Full log" : "History"}</a></div>
+          <a class="btn small alt-log-link" title="The start's whole output" href=${logHref}>Full log</a></div>
         <div class="alt-inspector-host" tabindex="-1" ref=${host}>
           ${s.boxView && v.box ? html`<${BoxPanel} v=${v} a=${a} box=${v.box} />`
             : s.passView !== NO_PASS ? html`<${PassPanel} p=${s.passView} nodes=${v.passNodes} a=${a} N=${v.N} />`

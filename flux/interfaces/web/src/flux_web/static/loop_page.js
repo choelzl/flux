@@ -2,18 +2,15 @@
 // drawer, the refresh; each tab's drawing in its own module (D892: out of loops.js).
 
 import { cleanup, me, setPageRefresh } from "./state.js";
-import { act, ago, api, appHref, card, confirmDialog, dialog, dur, empty, enc, h, head, loopStream, pageShow, skeleton, toast } from "./ui.js";
-import { liveTree, logView } from "./live.js";
+import { act, api, appHref, card, confirmDialog, dialog, empty, enc, h, head, pageShow, skeleton, toast } from "./ui.js";
 import { configureInto } from "./configure.js";
 import { startLoop, stopLoop, restartLoop } from "./loops.js";
 import { authorTab, overview } from "./loop_overview.js";
 import { checkedCard, resultsView } from "./loop_results.js";
-import { timelineTab } from "./loop_timeline.js";
 import { agentsView } from "./loop_agents.js";
 import { filesTab } from "./loop_files.js";
 import { settingsView } from "./loop_settings.js";
-import { historyTab } from "./loop_history.js";
-import { liveAltTab } from "./loop_live_alt.js";
+import { liveTab } from "./loop_live_alt.js";
 import { html, mount } from "./view.js";
 import { Talk } from "./loop/Talk.js";
 import { Composer } from "./loop/Notes.js";
@@ -41,16 +38,16 @@ const canAsk = info.can_ask ?? (mine && canRun);          // D991: a group membe
   // D713: six tabs; the log and the timeline under Live, the workbench under Files, the problem
   // (the configurator, direct edit, an agent) under Settings, Delete at Settings' end; Ask a panel
   // that opens over any tab. The old addresses lead to their new places.
-  const tabs = ["Overview", "Live", "LiveAlt", "Results", "Agents", "Files", "Settings"];
-  const SLUG = { Overview: "", Live: "live", LiveAlt: "live-alt", Results: "results", Agents: "agents", Files: "files", Settings: "settings" };
+  const tabs = ["Overview", "Live", "Results", "Agents", "Files", "Settings"];
+  const SLUG = { Overview: "", Live: "live", Results: "results", Agents: "agents", Files: "files", Settings: "settings" };
   const TAB_OF = Object.fromEntries(Object.entries(SLUG).map(([t, k]) => [k, t]));
-  const ALIAS = { log: "live/log", timeline: "live/timeline", "agent-turns": "agents", workbench: "files/workbench", configure: "settings/problem" };
+  const ALIAS = { log: "live/log", timeline: "live/timeline", "agent-turns": "agents", workbench: "files/workbench", configure: "settings/problem", "live-alt": "live" };
   let parts = String(path || "").split("/").filter(Boolean);
   if (ALIAS[parts[0]]) parts = [...ALIAS[parts[0]].split("/"), ...parts.slice(1)];
   let askOpen = parts[0] === "ask";
   if (askOpen) parts = [];
   let tab = TAB_OF[parts[0] || ""] || "Overview", sub = parts[1] || "", mode = parts[2] || "";
-  const SUBS = { Live: [["", "Tasks"], ["log", "Log"], ["timeline", "Timeline"], ["history", "History"]], LiveAlt: [["", "Tree"], ["graph", "Graph"], ["timeline", "Timeline"]], Results: [["", "Results"], ["graphs", "Graphs"], ["ideas", "Ideas"], ["library", "Library"]], Files: [["", "Loop files"], ["workbench", "Workbench"]],
+  const SUBS = { Live: [["", "Tree"], ["graph", "Graph"], ["timeline", "Timeline"], ["log", "Log"]], Results: [["", "Results"], ["graphs", "Graphs"], ["ideas", "Ideas"], ["library", "Library"]], Files: [["", "Loop files"], ["workbench", "Workbench"]],
                  Settings: [["loop", "Preferences"], ["problem", "Problem"]] };
   const subsOf = (t) => (SUBS[t] || []).filter(([k]) => !(t === "Settings" && k === "problem" && !mine));
   const curSub = () => { const o = subsOf(tab); return o.some(([k]) => k === sub) ? sub : (o[0] ? o[0][0] : ""); };
@@ -61,15 +58,9 @@ const canAsk = info.can_ask ?? (mine && canRun);          // D991: a group membe
   const tabBar = h("div", {}), subHolder = h("div", { class: "subrow" }), subTabs = h("div", { style: "display:contents" });
   let results = null;                                 // D916: the Results tab's views, while it stays open
   let question = st.question || null;
-  // D917: the log, the journal and the live state over one stream, open only while a view shows them
-  const stream = loopStream(base, qs);
-  const log = logView(base, qs, stream);
-  const live = liveTree(base, qs, (qq) => { question = qq; drawBanner(); }, stream);
-  const runEnd = () => live.ended(st.running ? null : st.last_active || null);      // D928: a run over settles what its journal left open
-  runEnd();
   // D917: a poll's request, let go when the page is left
   const leaving = new AbortController();
-  cleanup.push(() => { live.close(); stream.close(); leaving.abort(); });
+  cleanup.push(() => leaving.abort());
 
   const crumbBar = h("div", {});
   // D702: a shared loop, left by its guest
@@ -108,7 +99,6 @@ const canAsk = info.can_ask ?? (mine && canRun);          // D991: a group membe
     // A start can select another problem; the header and tabs must use its current filename.
     if ("document" in st) info.document = st.document;
     question = st.question || null;                       // the state says whether the agent still asks
-    runEnd();
     drawHead(); drawBanner();
     if (askOpen && was !== st.running) askView();
     if (was !== st.running && ((tab === "Live" && !curSub()) || tab === "Overview")) drawBody();
@@ -127,32 +117,6 @@ const canAsk = info.can_ask ?? (mine && canRun);          // D991: a group membe
     askFab.classList.toggle("asking", !!(question && st.running));   // D758: the agent waits: the button says so
     mount(banner, question && st.running ? html`<${AskBanner} key=${`${question.asked}\n${question.question}`} question=${question} mine=${mine} send=${sendNote} />` : null);
   }
-  /** The log as it grows (D697), under the task: coloured as the Log tab, following its end. */
-  const liveLog = (() => {
-    const box = h("div", { class: "logview mini wrap" });
-    const toEnd = () => requestAnimationFrame(() => { box.scrollTop = box.scrollHeight; });   // once laid out
-    const N = 80;
-    const onlyBad = h("input", { type: "checkbox" });
-    const keep = (l) => !onlyBad.checked || log.problem(l.text);
-    const fill = () => { box.replaceChildren(...log.recent(4000).filter(keep).slice(-N).map(log.lineEl)); toEnd(); };
-    onlyBad.addEventListener("change", fill);
-    log.onLines((fresh) => {
-      if (!box.isConnected) return;
-      const atEnd = box.scrollTop + box.clientHeight >= box.scrollHeight - 30;
-      for (const l of fresh) if (keep(l)) box.append(log.lineEl(l));
-      while (box.childElementCount > N) box.firstChild.remove();
-      if (atEnd) toEnd();
-    });
-    log.onTimes(fill);
-    const liveTimes = h("input", { type: "checkbox", checked: log.times.checked });
-    liveTimes.addEventListener("change", () => { log.times.checked = liveTimes.checked; log.times.dispatchEvent(new Event("change")); });
-    log.onTimes(() => { liveTimes.checked = log.times.checked; });
-    const el = card("Log", box, { cls: "livelog-card", actions: [h("label", { class: "check small" }, onlyBad, "problems only"),
-      h("label", { class: "check small" }, liveTimes, "times"),
-      h("button", { class: "small", type: "button", onclick: () => goTab("Live", "log") }, "Full log")] });
-    return { el, fill };
-  })();
-
   const goTab = (t, s = "") => { tab = t; sub = s; mode = ""; results = null; setUrl(); drawTabs(); drawBody(); };
   // D892: the page as its tabs (loop_*.js) read it, instead of this function's closure: `st` and `tab`
   // are getters, so a tab that awaited reads them as they are now, not as they were when it began
@@ -161,12 +125,10 @@ const canAsk = info.can_ask ?? (mine && canRun);          // D991: a group membe
   let drawn = 0;
   const still = () => { const mine = drawn; return () => mine === drawn && !show.stale(); };
   const ctx = { name, owner, qs, q, base, info, perm, mine, isOwner, canRun, body, subHolder, curSub, goTab, drawBody, refresh, still,
-    get historyId() { return Number(mode); }, selectHistory: (id) => { mode = String(id); setUrl(); },
     get st() { return st; }, get tab() { return tab; } };
-  const timelineView = timelineTab(ctx), authorBox = authorTab(ctx), files = filesTab(ctx);
-  const past = historyTab(ctx);
-  const alt = liveAltTab(ctx);
-  cleanup.push(past.close, alt.close);
+  const authorBox = authorTab(ctx), files = filesTab(ctx);
+  const live = liveTab(ctx);
+  cleanup.push(live.close);
   // Talk (loop/Talk.js): conversations keep their own reply context; loop notes still join the next design prompt
   const steerOpen = { open: false, get() { return this.open || !!question; }, set(o) { this.open = o; } };
   const askBox = h("div", { class: "drawer-body" });
@@ -236,12 +198,7 @@ const canAsk = info.can_ask ?? (mine && canRun);          // D991: a group membe
     drawn++;
     const ok = still();
     drawBanner(); drawSubs();
-    if (tab !== "Live" || curSub() !== "history") past.close();
-    if (tab !== "LiveAlt") alt.close();
-    // D917: the stream carries what the view shows -- Tasks: the journal, the live state and the
-    // log's card; the Log: the log; any other tab: nothing (each part resumes where it was)
-    const ran = st.running || st.last_active;
-    stream.want(tab !== "Live" ? [] : curSub() === "log" ? ["log"] : !curSub() && ran ? ["events", "live", "log"] : []);
+    if (tab !== "Live") live.close();
     if (tab === "Settings") {
       if (curSub() === "problem") {
         configureInto(body, name, owner, mode, `${appHref(owner, name)}/settings/problem`, { small: true, barHost: subHolder });
@@ -275,26 +232,12 @@ const canAsk = info.can_ask ?? (mine && canRun);          // D991: a group membe
       if (ok() && ab) body.prepend(ab);
       return;
     }
-    if (tab === "LiveAlt") {
-      await alt.show();
-    } else if (tab === "Live" && !curSub()) {
+    if (tab === "Live") {
       if (!st.running && !st.last_active) {
         body.replaceChildren(card(null, empty("This loop has not run yet.", canRun ? act("Start", async () => { if (await startLoop(name, owner)) { await refresh(); drawBody(); } }, { cls: "primary" }) : "")));
         return;
       }
-      body.replaceChildren(h("div", { class: "live-wrap" },
-        h("div", { class: "split" }, card(null, [st.running ? "" : h("p", { class: "muted" }, "Last start."), live.tree], { cls: "tree-card" }),
-          h("div", { class: "side-col" }, card(null, live.detail, { cls: "detail-card" }), liveLog.el, card(null, live.stand, { cls: "stand-card" }))),
-        ""));
-      live.draw(); liveLog.fill();
-    } else if (tab === "Live" && curSub() === "history") {
-      await past.show();
-    } else if (tab === "Live" && curSub() === "timeline") {
-      body.replaceChildren(card(null, skeleton(7)));
-      await timelineView();
-    } else if (tab === "Live" && curSub() === "log") {
-      body.replaceChildren(card(null, log.el, { cls: "log-card" }));
-      log.render();
+      await live.show();
     } else if (tab === "Agents") {
       await agentsView(ctx);
     } else if (tab === "Results" && curSub() === "ideas") {
@@ -322,9 +265,9 @@ const canAsk = info.can_ask ?? (mine && canRun);          // D991: a group membe
   const tick = setInterval(async () => {
     if (document.hidden || refreshing) return;            // D917: a hidden tab asks nothing (it catches up when shown); one at a time
     await refresh().catch(() => {});
-    // the Overview and the Timeline follow a running loop (D693, D696): once a minute
-    if (++beat % 12 === 0 && (tab === "Overview" || (tab === "Live" && curSub() === "timeline")) && st.running && !document.hidden && !busy) {   // every minute (D696)
-      busy = true; try { await (tab === "Overview" ? overview(ctx) : timelineView()); } catch (_) { /* the next beat */ } finally { busy = false; }
+    // the Overview follows a running loop (D693, D696): once a minute
+    if (++beat % 12 === 0 && tab === "Overview" && st.running && !document.hidden && !busy) {
+      busy = true; try { await overview(ctx); } catch (_) { /* the next beat */ } finally { busy = false; }
     }
   }, 5000);
   const shown = () => { if (!document.hidden) refresh().catch(() => {}); };

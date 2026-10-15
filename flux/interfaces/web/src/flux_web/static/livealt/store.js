@@ -135,7 +135,7 @@ export function createStore(ctx) {
   async function load() {
     s.chainPass = undefined;                    // D1038: a start loaded anew opens on its own latest pass
     close();
-    const mine = seq, current = () => mine === seq && valid() && ctx.tab === "LiveAlt";
+    const mine = seq, current = () => mine === seq && valid() && ctx.tab === "Live";
     abort = new AbortController(); const signal = abort.signal;
     Object.assign(s, { failure: null, following: true, limit: 200, loadMessage: "", boxView: null, passView: NO_PASS, stream: "" });
     s.folded.clear(); s.viewPlaces = new Map();
@@ -155,13 +155,13 @@ export function createStore(ctx) {
       timer = setInterval(() => {                 // the clock of what runs: its durations, its spinner
         if (current() && !document.hidden && (ctx.st.running || observedRunning !== ctx.st.running)) { observedRunning = ctx.st.running; now(); }
       }, 1000);
-      s.transport.want(["events", "live"]);
+      s.transport.want(["events", "live", ...(logFollower ? ["log"] : [])]);
       now();
       return;
     }
     s.stream = "off";
     const start = s.history.starts.find(x => String(x.id) === s.startId), campaign = start && campaignForStart(s.history, start);
-    if (!campaign) { s.loadMessage = "No task journal retained for this start. Its text output is in Live › History › Log."; now(); return; }
+    if (!campaign) { s.loadMessage = "No task journal retained for this start. Its text output is in Log."; now(); return; }
     s.loadMessage = "Loading retained tasks…"; now();
     const next = s.history.starts.slice().reverse().find(x => x.id > start.id);
     s.journal.ended(start.ended || (start.running ? null : next?.started || Date.now() / 1000));
@@ -206,11 +206,20 @@ export function createStore(ctx) {
     if (!s.history.starts.some(x => !x.running && String(x.id) === s.startId)) s.startId = "current";
     if (s.startId !== "current" && s.pass === "current") s.pass = "all";       // D994
   }
+  /** D917: the log over the same stream as the tasks, while the Log view is open (`callbacks` null: closed);
+      `tail` its last bytes first (0: all). */
+  let logFollower = null;
+  function followLog(callbacks, tail = 0) {
+    logFollower = callbacks;
+    if (!s.transport) return;
+    s.transport.want(["events", "live", ...(callbacks ? ["log"] : [])]);
+    if (callbacks) { s.transport.on("log", callbacks, { tail }); s.transport.restart("log", { tail }); }      // the log from its tail, the tasks where they were
+  }
   const path = ctx.base.replace(/^\/api/, "");
   /** What the inspector reads besides the model: a turn's earlier steps from its file, or its transcript. */
   const sources = {
     steps: (file, start, count) => api(`${path}/steps?file=${encodeURIComponent(file)}&start=${start}&count=${count}`),
     turnSteps: (t0, t1, agent) => api(`${path}/turn-steps?t0=${t0}&t1=${t1}&agent=${encodeURIComponent(agent)}`),
   };
-  return { s, a, view, sources, prepare, load, close, emit, redraw: now, revalidate: v => { valid = v; }, subscribe: f => { subs.add(f); return () => subs.delete(f); } };
+  return { s, a, view, sources, prepare, load, close, emit, followLog, redraw: now, revalidate: v => { valid = v; }, subscribe: f => { subs.add(f); return () => subs.delete(f); } };
 }
