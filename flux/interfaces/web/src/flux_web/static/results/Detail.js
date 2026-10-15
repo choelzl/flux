@@ -1,0 +1,74 @@
+// Flux web, results (D690, D1095): one design in detail -- its standing, why it is rejected (D1043) or what it
+// does not meet, its numbers at each stage, its source; Reject (with why, each number measured again or cleared,
+// hidden too at rest) and Restore.
+
+import { Ago, Dom, Skeleton, html, useEffect, useMemo, useRef, useState } from "../view.js";
+import { api, dialog, enc, h, toast } from "../ui.js";
+import { viewerTools } from "../viewer.js";
+import { Act } from "../components/Act.js";
+import { Code } from "../components/Markdown.js";
+import { VerdictPill, byCritic } from "./columns.js";
+
+/** The reject form (D1043): why, each measurement measured again or cleared, hidden too (at rest) -- read from
+    the dialog when Reject is pressed. */
+function RejectForm({ d, fmt, live }) {
+  const rows = Object.entries(d.stages || {}).flatMap(([stage, m]) => Object.keys(m).map(metric => ({ stage, metric, v: m[metric] })));
+  return html`<div class="reject-form stack">
+    <textarea class="reject-reason" rows="2" placeholder="Why (kept with it; Restore undoes it)" />
+    ${rows.length ? html`<div class="scroll-x"><table class="list compact reject-measurements">
+      <thead><tr><th></th><th>measurement</th><th class="num">value</th><th>do</th></tr></thead>
+      <tbody>${rows.map(x => html`<tr><td><input type="checkbox" data-stage=${x.stage} data-metric=${x.metric} /></td>
+          <td class="mono">${`${x.stage} · ${x.metric}`}</td><td class="mono num">${fmt(x.v)}</td>
+          <td><select class="reject-how" aria-label=${`${x.stage} ${x.metric}: measure again or clear`}><option value="again">measure again</option><option value="clear">clear</option></select></td></tr>`)}</tbody></table></div>` : ""}
+    <p class="muted small">Ticked: measured again (the new number replaces this one) or cleared (struck through). None ticked: the result is only marked.</p>
+    <label class="row-inline"><input type="checkbox" class="reject-hide" disabled=${live} />
+      <span>Also hide the design<small class="muted">${live ? " -- stop the loop first: hiding takes it out of the evidence" : " -- out of the tables, listed under Invalidated by hand"}</small></span></label>
+    ${live ? html`<p class="note small">The loop is running: what is measured again is measured before its next pass (R).</p>` : ""}</div>`;
+}
+/** What the form says: why, hidden, the measurements cleared and the stages measured again. */
+function readReject(el) {
+  const reason = el.querySelector(".reject-reason").value.trim();
+  if (reason.length < 3) { toast("Say why it is rejected (3 characters or more).", "err"); return null; }
+  const ticked = [...el.querySelectorAll(".reject-measurements tbody tr")].map(tr => ({ box: tr.querySelector("input"), how: tr.querySelector("select").value })).filter(x => x.box.checked);
+  return { reason, hide: el.querySelector(".reject-hide").checked,
+    clear: ticked.filter(x => x.how === "clear").map(x => ({ stage: x.box.dataset.stage, metric: x.box.dataset.metric })),
+    again: [...new Set(ticked.filter(x => x.how === "again").map(x => x.box.dataset.stage))] };
+}
+
+export function DesignDetail({ d, ctx, fmt, reload }) {
+  const { name, q, qs } = ctx;
+  const [full, setFull] = useState(null), box = useRef(null);
+  useEffect(() => {
+    let live = true;
+    setFull(null);
+    api(`/apps/${enc(name)}/design?design=${enc(d.base || d.name)}&part=${enc(d.part)}&key=${enc(d.key || "")}${q}`).then(f => { if (live) setFull(f); })
+      .catch(x => { if (live && x.message !== "log in") toast(x.message, "bad"); });
+    return () => { live = false; };
+  }, [d]);
+  const tools = useMemo(() => full ? viewerTools(() => box.current, { title: d.name, rawText: JSON.stringify(full, null, 2) }) : [], [full]);
+  if (!full) return html`<div class="detail"><${Skeleton} lines=${6} /></div>`;
+  const stages = Object.entries(d.stages).filter(([, m]) => Object.keys(m).length);
+  const metrics = [...new Set(stages.flatMap(([, m]) => Object.keys(m)))];
+  const mine = ctx.mine, running = !!ctx.st?.running;
+  const reject = async () => {
+    const body = h("div", {}, html`<${RejectForm} d=${d} fmt=${fmt} live=${running} />`);
+    const got = await dialog(`Reject ${d.name}?`, body, [["Cancel", null], ["Reject", () => readReject(body), "primary"]]);
+    if (!got) return;
+    toast((await api(`/apps/${enc(name)}/results/reject${qs}`, { method: "POST", body: { key: d.key || "", name: d.base || d.name, ...got } })).ok, "ok");
+    reload();
+  };
+  const restore = async () => { toast((await api(`/apps/${enc(name)}/results/unreject${qs}`, { method: "POST", body: { id: d.rejected.id } })).ok, "ok"); reload(); };
+  return html`<div class="detail" ref=${box}>
+    <div class="detail-head"><h2>${d.name}</h2><${VerdictPill} d=${d} />${d.decision ? html`<span class="pill ok">★ decision</span>` : ""}
+      ${d.part ? html`<span class="muted">${`part ${d.part}`}</span>` : ""}
+      ${mine && !d.reference_only && !d.rejected ? html`<${Act} cls="small reject-design" title="Mark this result rejected, with why: it stays shown and is never chosen" onClick=${reject}>Reject…<//>` : ""}</div>
+    ${d.rejected ? html`<div class="blk rejected-blk"><h3>Rejected</h3><p>${d.rejected.why}</p>
+      <p class="muted small">${`${byCritic(d.rejected.by) ? "critic" : d.rejected.by} · `}<${Ago} t=${Date.parse(d.rejected.at) / 1000} />${(d.cleared || []).length ? ` · cleared ${d.cleared.map(c => `${c.stage} ${c.metric}`).join(", ")}` : ""}</p>
+      ${(d.rejected.again || []).length ? html`<span class="pill warn">${running ? "measured again before the next pass" : "to be measured again"}</span>` : ""}
+      ${mine ? html`<${Act} cls="small" title="It counts again as it was measured" onClick=${restore}>Restore<//>` : ""}</div>` : ""}
+    ${d.why.length ? html`<div class="blk"><h3>${d.verdict === "pending" ? "Waiting for" : "Not met"}</h3><ul class="misses">${d.why.map(w => html`<li>${w}</li>`)}</ul></div>` : ""}
+    ${stages.length ? html`<div class="blk"><h3>Measurements</h3><table class="list compact"><thead><tr><th>stage</th>${metrics.map(m => html`<th class="num">${m}</th>`)}</tr></thead>
+      <tbody>${stages.map(([st, m]) => html`<tr><td>${st}</td>${metrics.map(k => html`<td class="mono num">${fmt(m[k])}</td>`)}</tr>`)}</tbody></table></div>` : ""}
+    <div class="actions"><${Dom} node=${tools} /></div>
+    ${full.artifact ? html`<div class="blk"><h3>Design</h3><${Code} text=${full.artifact} lang="" /></div>` : ""}</div>`;
+}

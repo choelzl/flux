@@ -282,7 +282,7 @@ async function adminResources(body) {
       hx.sampling ? "" : h("p", { class: "muted small" }, "Not sampling here: older samples."),
       tr ? h("p", { class: "muted small token-rate-note" }, `Token rates: ${dur(tr.bucket_seconds)} averages, including cached inputs. An agent that reports its tokens as it works counts them as they come (read every 10 s); Flux's model and other agents count when a turn ends, spread over the turn.`) : "",
       h("div", { class: "tcharts" }, ...tokenCharts,
-        timeChart(ss, [{ label: "load", get: (s) => s.load1 }], { title: "Load", ref: cpus, refLabel: cpus ? `${cpus} CPUs` : "", fmt: (v) => v.toFixed(1) }),
+        timeChart(ss, [{ label: "load", get: (s) => s.load1 }], { title: "Load", level: cpus, levelLabel: cpus ? `${cpus} CPUs` : "", fmt: (v) => v.toFixed(1) }),
         timeChart(ss, [{ label: "used", get: (s) => s.mem_total ? s.mem_used / s.mem_total : null }], { title: "Memory", top: 1, fmt: pct }),
         timeChart(ss, disks.map(k => ({ label: k, get: (s) => (s.disks || {})[k] })), { title: "Disks", top: 1, fmt: pct }),
         timeChart(ss, [{ label: "CPU", get: (s) => s.cpu }], { title: "Containers' CPU (100% = one core)",

@@ -4,11 +4,16 @@
 // with h(), and a node h() builds (a conversation, a highlighted block) sits inside a component (`Dom`).
 
 import { html, render } from "./vendor/htm-preact.module.js";
+import { cloneElement, options } from "./vendor/preact.module.js";
 import { useEffect, useLayoutEffect, useRef, useState } from "./vendor/hooks.module.js";
 import { cleanup } from "./state.js";
 import { agoText, when } from "./format.js";
 
-export { html, render };
+export { cloneElement, html, render };
+
+// A state changed is drawn at once, as the pages built with h() always were: what a click changed is there when
+// the click's handler returns (a keyboard's next key, a test's next look) -- not a microtask later.
+options.debounceRendering = draw => draw();
 export { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "./vendor/hooks.module.js";
 
 /** A node (or nodes) built with h(), inside a component: placed as it is, the wrapper not laid out.
@@ -20,8 +25,8 @@ export function Dom({ node }) {
 }
 
 /** A card, as ui.js `card()` draws one: its head when it has a title or actions, then what it holds. */
-export function Card({ title, actions, cls = "", children }) {
-  return html`<section class=${"card " + cls}>
+export function Card({ title, actions, cls = "", children, ...rest }) {
+  return html`<section ...${rest} class=${"card " + cls}>
     ${title || actions ? html`<div class="card-head">${title ? html`<h2>${title}</h2>` : ""}${actions ? html`<div class="actions">${actions}</div>` : ""}</div>` : ""}
     ${children}</section>`;
 }

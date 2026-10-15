@@ -1738,7 +1738,7 @@ def flows(r: Run) -> None:
         r.button("Graphs", ".subrow .subtabs")
         b.wait("document.querySelector('#main svg.chart.pareto, #main svg.best-chart')", timeout=10, what="the graphs")
         r.check("Graphs has its address (D916)", b.js("return location.hash") == "#/app/sw/results/graphs")
-        r.check("the decision line shows in Graphs too (D916)", b.js("return !!document.querySelector('#main .decision-line') && !document.querySelector('#main table.designs')"))
+        r.check("the decision line shows in Graphs too (D916)", b.js("const t = document.querySelector('#main table.designs'); return !!document.querySelector('#main .decision-line') && !(t && t.checkVisibility())"))
         # D849: the chart by design has one point per design, not one per measurement
         got = json.loads(r.api("/apps/sw/results")["body"])
         metric = next(iter(got["designs"][0]["numbers"]))
