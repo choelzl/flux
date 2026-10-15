@@ -7,6 +7,7 @@ import { WORK_COLORS as COLORS, phaseKind } from "../work_style.js";
 import { Block, Fold, Pre, StepRow, Stream } from "./bits.js";
 import { bestOf, candidateOf, cell, colorOf, dictsOf, failingOf, fieldsOf, fmt, isTool, linesOf, meanOf, measured, metricsOf, notReached,
   running, stdoutOf, taskLabel, tidyCommand, usualOf } from "./parts.js";
+import { Fact, Facts } from "../../components/Tone.js";
 
 const lineCount = t => `${linesOf(t).length} line${linesOf(t).length === 1 ? "" : "s"}`;
 
@@ -74,7 +75,7 @@ export function SearchBody({ n, a, env }) {
   const c = candidateOf(n), o = n.output || {}, of = Number(o.points), k = Number(o.candidates) || 0, was = Number(o["measured before"]) || 0;
   const where = of > 0 && k > 0 ? (k === 1 ? `point ${was + 1} of ${of}` : `points ${was + 1}–${was + k} of ${of}`) : "";
   return html`<div class="task-inspector">
-    ${c || where ? html`<div class="kv"><div class="k">Point</div><div class="val mono">${[c, where].filter(Boolean).join(" · ")}</div></div>` : ""}
+    ${c || where ? html`<div class="facts"><${Fact} label="point" value=${[c, where].filter(Boolean).join(" · ")} /></div>` : ""}
     ${n.kids.length ? html`<div class="alt-steps">${n.kids.map(x => html`<${StepRow} key=${x.id} x=${x} a=${a} N=${env.N} />`)}</div>` : html`<p class="muted">${running(n) ? "Proposing…" : "Nothing under it."}</p>`}</div>`;
 }
 
@@ -137,7 +138,7 @@ export function StepsBody({ n, a, env }) {
   if (kids.length) return html`<div class="task-inspector"><div class="alt-steps">${kids.map(x => html`<${StepRow} key=${x.id} x=${x} a=${a} N=${env.N} />`)}
     ${notReached(n, env.tests).map(t => html`<div key=${t} class="alt-step-row note skipped" title="not run: a check before it failed"><span>${`○ ${t} · not run`}</span></div>`)}</div></div>`;
   const said = Object.entries(n.output || {}).filter(([k, v]) => !k.startsWith("_") && v != null && v !== "" && typeof v !== "object" && String(v).length <= 160).slice(0, 4);
-  return said.length ? html`<div class="task-inspector">${said.map(([k, v]) => html`<div key=${k} class="kv"><div class="k">${k}</div><div class="val">${String(v)}</div></div>`)}</div>` : null;
+  return said.length ? html`<div class="task-inspector"><${Facts} list=${said} /></div>` : null;
 }
 
 /** D1047: the quiet steps this task took (a brief, a frontier, the tools' gate) -- what each said, folded. */

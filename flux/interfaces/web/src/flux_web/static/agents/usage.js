@@ -2,8 +2,9 @@
 
 import { dur, fmtTok, money, plural } from "../ui.js";
 import { Card, html } from "../view.js";
+import { Fact } from "../components/Tone.js";
 
-const Fig = ({ label, value, sub }) => html`<div class="stat"><small>${label}</small><div class="big">${value}</div>${sub ? html`<div class="muted">${sub}</div>` : ""}</div>`;
+const Fig = props => html`<${Fact} size="headline" ...${props} />`;
 
 /** What the model and agent turns cost (D694): in all, and per agent or model. */
 export function UsageCard({ u }) {

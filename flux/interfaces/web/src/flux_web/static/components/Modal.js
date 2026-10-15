@@ -65,6 +65,18 @@ export function dialog(title, body, buttons, init = {}) {
     m = openModal(html`<${Question} title=${title} body=${body} buttons=${buttons} init=${init} done=${done} />`, { onCancel: () => done(null) });
   });
 }
+/** D1102: one name or path asked for, in the one dialog shape -- the field (full width, monospace), a hint under it,
+    a notice when the change has a consequence, the actions; Enter asks. `hint(text)` follows what is typed;
+    `Consequence({ text, bad })` is a component drawn under it (it may look something up), calling `bad(true)` when
+    its notice is bad -- the button is red exactly then. The trimmed text, or null. */
+export const askText = (title, { label, value = "", hint = null, Consequence = null, ok = "OK", id, maxlength, ...field } = {}) =>
+  dialog(title, ({ v, set, submit }) => {
+    const t = v.text.trim();
+    return html`<div class="stack ask-text"><label class="stack">${label}<input ...${field} id=${id} class="mono full" value=${v.text} autocomplete="off"
+        spellcheck="false" maxlength=${maxlength} onInput=${e => set({ text: e.currentTarget.value })} onKeyDown=${e => { if (e.key === "Enter") submit(); }} /></label>
+      ${hint ? html`<p class="hint">${typeof hint === "function" ? hint(t) : hint}</p>` : ""}
+      ${Consequence ? html`<${Consequence} text=${t} bad=${b => { if (b !== v.bad) set({ bad: b }); }} />` : ""}</div>`;
+  }, v => [["Cancel", null], [ok, x => x.text.trim(), v.bad ? "danger" : "primary"]], { text: value, bad: false });
 export const confirmDialog = (title, text, { ok = "OK", danger = false } = {}) =>
   dialog(title, html`<p>${text}</p>`, [["Cancel", false], [ok, true, danger ? "danger solid" : "primary"]]);
 

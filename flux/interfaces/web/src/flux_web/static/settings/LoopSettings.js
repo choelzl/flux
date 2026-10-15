@@ -2,8 +2,8 @@
 // configure.js's) -- its measurements, its variables over the user's and the server's, its sharing, its name and
 // owner, the admin's advanced settings, its own clean-up, Reset and Delete.
 
-import { Ago, Card, html, useState } from "../view.js";
-import { confirmDialog, dialog, enc, loopApi, toast } from "../ui.js";
+import { Ago, Card, html, Notice, useState } from "../view.js";
+import { askText, confirmDialog, dialog, enc, loopApi, toast } from "../ui.js";
 import { me } from "../state.js";
 import { route } from "../app.js";
 import { PermissionChoice, hasPermissions } from "../components/PermissionChoice.js";
@@ -55,10 +55,9 @@ function Ownership({ plan }) {
   const ctx = useLoop();
   const { name, info } = ctx, running = !!ctx.st.running;
   const rename = async () => {
-    const to = await dialog(`Rename ${name}`, ({ v, set }) => html`<div class="stack"><label class="stack">New loop name<input id="loop-rename-to" value=${v.to} maxlength="60" autocomplete="off" required
-        onInput=${e => set({ to: e.currentTarget.value })} /></label>
-      <p class="muted">Files, results, history, variables, sharing and admin settings are kept. Links to the old name will change.</p></div>`,
-      [["Cancel", null], ["Rename", v => v.to.trim(), "primary"]], { to: name });
+    const to = await askText(`Rename ${name}`, { label: "New loop name", value: name, ok: "Rename", id: "loop-rename-to", maxlength: 60, required: true,
+      hint: "Files, results, history, variables, sharing and admin settings are kept.",
+      Consequence: ({ text }) => text && text !== name ? html`<${Notice} tone="warn" what="Links change" why=${`links to ${name} stop working`} />` : null });
     if (!to) return;
     const got = await loopApi(name).api("/rename", { method: "POST", body: { to } });
     toast(`${name} renamed to ${got.name}`, "ok");

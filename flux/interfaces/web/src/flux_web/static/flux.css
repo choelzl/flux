@@ -95,6 +95,8 @@ main { max-width: 1320px; margin: 0 auto; padding: 22px 24px 80px; }
 .notice > .btn, .notice > button { flex-shrink: 0; margin: -3px -4px -3px 0; }
 .notice.t-none { color: var(--ink); }
 .notice.quiet { color: var(--muted); background: transparent; border-style: dashed; border-color: var(--line); }
+.hint { margin: 0; color: var(--muted); font-size: 12.5px; }
+.stack > .notice { margin: 0; }
 .callout { padding: 10px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--soft); }
 .scroll-x { overflow-x: auto; }
 
@@ -232,8 +234,6 @@ table.compact td, table.compact th { padding: 4px 8px; font-size: 12.5px; }
 .detail-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .detail-head h2 { font-family: var(--mono); font-size: 14px; }
 .blk { margin-top: 8px; }
-.kv { margin: 6px 0; }
-.kv .k { font-family: var(--mono); font-size: 11.5px; color: var(--muted); }
 .val { background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; margin: 2px 0 0; }
 pre.val { max-height: 280px; overflow: auto; white-space: pre-wrap; word-break: break-word; }
 pre.val.tall { max-height: 60vh; }
@@ -388,12 +388,7 @@ pre.code { white-space: pre; overflow: auto; }
 
 /* ---- the overview (D692) */
 .stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; margin-bottom: 16px; }
-.stat { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; box-shadow: var(--shadow); min-width: 0; }
-.stat.clickable { cursor: pointer; }
-.stat.clickable:hover { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
-.stat small, .num-cell small { color: var(--muted); text-transform: uppercase; letter-spacing: .05em; font-size: 10.5px; font-weight: 600; }
-.stat .big { font-size: 22px; font-weight: 650; margin: 2px 0; }
-.stat .obj-line { font-size: 13.5px; font-weight: 500; display: block; }
+.num-cell small { color: var(--muted); text-transform: uppercase; letter-spacing: .05em; font-size: 10.5px; font-weight: 600; }
 .decision-head { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
 .decision-nums { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px; }
 .num-cell { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; background: var(--bg); }
@@ -506,10 +501,21 @@ svg.logo .lg-os { stroke: var(--logo-forge); }
 .upload { display: grid; gap: 10px; }
 dialog.dlg:has(.upload) { width: min(600px, calc(100vw - 32px)); }
 .upload input[type=file] { max-width: 100%; }
+/* ---- tiles (D1102): a value under its label; big for a headline, wide for a long value; the value in its tone */
 .facts { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 12px; }
-.fact { display: flex; flex-direction: column; background: var(--soft); border-radius: 6px; padding: 4px 9px; max-width: 100%; }
-.fact small { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
-.fact span { overflow-wrap: anywhere; }
+.fact { display: flex; flex-direction: column; gap: 1px; background: var(--soft); border-radius: 8px; padding: 5px 10px; min-width: 0; max-width: 100%; }
+.fact > small { color: var(--muted); font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; }
+.fact > .v { font-family: var(--mono); font-size: 13px; overflow-wrap: anywhere; color: var(--t, var(--ink)); }
+.fact > .sub { color: var(--muted); font-size: 12.5px; }
+.fact.small > .v { font-size: 12px; }
+.fact.headline { padding: 12px 14px; }
+.fact.headline > .v { font: 650 22px var(--sans); font-variant-numeric: tabular-nums; margin: 2px 0; }
+.fact.headline .obj-line { font-size: 13.5px; font-weight: 500; display: block; }
+.fact.wide { flex-basis: 100%; }
+.fact.wide > pre.val { background: transparent; border: 0; padding: 0; margin: 2px 0 0; }
+.fact.clickable { cursor: pointer; }
+.fact.clickable:hover { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, var(--line)); }
+.stats > .fact.headline { background: var(--panel); border: 1px solid var(--line); }
 /* D916: the decision in a line above Results and Graphs; Graphs' scope and its note */
 .decision-line { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
 .decision-line .small { overflow-wrap: anywhere; }
@@ -588,7 +594,7 @@ textarea.mono { font-family: var(--mono); font-size: 12.5px; }
 .grid-2.ov > .col { display: grid; gap: 16px; align-content: start; }
 .grid-2.ov > .col > .card { margin: 0; }
 .stats.ov-stats { grid-template-columns: repeat(var(--overview-count, 5), minmax(0, 1fr)); }
-.ov-stats .stat { overflow-wrap: anywhere; }
+.ov-stats .fact { overflow-wrap: anywhere; }
 .overview-summary-table th:first-child, .overview-summary-table td:first-child { white-space: normal; overflow-wrap: anywhere; max-width: 220px; }
 .overview-pass-history { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
 .overview-pass-history li { overflow-wrap: anywhere; }
@@ -607,8 +613,8 @@ dialog.dlg.overview-layout-dialog[open] { display: flex; flex-direction: column;
 .overview-preview-panel { min-width: 0; background: var(--bg); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; }
 .overview-preview-head { display: flex; align-items: center; gap: 10px; }
 .overview-preview-head h3 { margin: 0; }
-.overview-layout-preview .stat { padding: 10px; }
-.overview-layout-preview .big { font-size: 19px; }
+.overview-layout-preview .fact.headline { padding: 10px; }
+.overview-layout-preview .fact.headline > .v { font-size: 19px; }
 .overview-layout-preview .stats { gap: 8px; }
 .overview-layout-preview .grid-2 { gap: 10px; }
 .overview-layout-preview .grid-2.ov > .col { gap: 10px; }
@@ -895,8 +901,6 @@ svg.gantt .bar.timeout { stroke: var(--warn); }                          /* D997
 .ask-output summary { font-size: 12px; color: var(--muted); cursor: pointer; }
 .ask-output pre { max-height: 180px; }
 td.bad { color: var(--bad); }
-.fact.bad span { color: var(--bad); }
-.fact.warn span { color: var(--warn); }
 
 /* D712: an agent's conversation -- its words as text, thinking and tool calls folded */
 .cv { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; }

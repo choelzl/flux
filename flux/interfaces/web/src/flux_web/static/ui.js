@@ -7,7 +7,7 @@ import { me, pageOwner, sessionGen, setMe, setPageOwner } from "./state.js";
 import { bytes, dur, fmtTok, money, plural, when } from "./format.js";
 import { html } from "./view.js";
 import { offline, toast } from "./notices.js";
-import { confirmDialog, dialog } from "./components/Modal.js";
+import { askText, confirmDialog, dialog } from "./components/Modal.js";
 
 
 
@@ -167,4 +167,4 @@ async function createFromText(name, filename, text) {
 // D754: a phone's width -- the tables stack their rows (app.js), the log wraps (live/Log.js)
 const NARROW = window.matchMedia ? window.matchMedia("(max-width: 640px)") : { matches: false };
 
-export { NARROW, money, plural, api, apiUpload, appHref, loopApi, request, bytes, confirmDialog, createFromText, dialog, dur, enc, fmtTok, loopStream, offline, owned, toast, when, withOwner };
+export { NARROW, money, plural, api, apiUpload, appHref, loopApi, request, bytes, askText, confirmDialog, createFromText, dialog, dur, enc, fmtTok, loopStream, offline, owned, toast, when, withOwner };

@@ -5,7 +5,7 @@ import { Conversation } from "../components/Conversation.js";
 import { Prose } from "../components/Markdown.js";
 import { ViewerFrame, ViewerTools, showRaw, useViewer } from "../viewer.js";
 import { Ago, html } from "../view.js";
-import { Pill } from "../components/Tone.js";
+import { Fact, Pill } from "../components/Tone.js";
 
 const ROLES = { generate: "design", critique: "critic" };
 /** D1092: what the turn was for (design, critic, prototype, plan); D1094: a role or nothing -- "model" is its kind. */
@@ -51,8 +51,8 @@ function factsOf(full) {
     ["finish", nt.finish], ["schema", nt.schema], ["folder", full.workdir]].filter(([, v]) => v != null && v !== "");
 }
 const MAIN = new Set(["model", "exit", "tokens in", "tokens out", "token usage", "tool calls", "cost"]);
-const Fact = ({ k, v }) => html`<div class=${"fact" + (k === "exit" && v !== 0 && v !== "0" ? (Number(v) === 124 ? " warn" : " bad") : "")}>
-  <small>${k}</small><span class=${k === "folder" ? "mono small" : "mono"}>${String(v)}</span></div>`;
+const TurnFact = ({ k, v }) => html`<${Fact} label=${k} value=${String(v)} cls=${k === "folder" ? "small" : ""}
+  tone=${k === "exit" && v !== 0 && v !== "0" ? (Number(v) === 124 ? "warn" : "bad") : null} />`;
 
 /** One turn's detail: its head, the prompt and the viewer's tools, its facts, its conversation (or its text). */
 export function TurnDetail({ full, k }) {
@@ -75,9 +75,9 @@ export function TurnDetail({ full, k }) {
     <div class="actions">
       ${full.prompt ? html`<button type="button" class="small agent-prompt-button" onClick=${prompt}>Prompt</button>` : ""}
       <${ViewerTools} v=${view} title="Agent turn" rawText=${JSON.stringify(full, null, 2)} /></div>
-    <div class="facts">${facts.filter(([f]) => MAIN.has(f)).map(([f, v]) => html`<${Fact} k=${f} v=${v} />`)}</div>
+    <div class="facts">${facts.filter(([f]) => MAIN.has(f)).map(([f, v]) => html`<${TurnFact} key=${f} k=${f} v=${v} />`)}</div>
     ${more.length ? html`<details class="facts-more"><summary>More: ${more.map(([f]) => f).join(", ")}</summary>
-      <div class="facts">${more.map(([f, v]) => html`<${Fact} k=${f} v=${v} />`)}</div></details>` : ""}
+      <div class="facts">${more.map(([f, v]) => html`<${TurnFact} key=${f} k=${f} v=${v} />`)}</div></details>` : ""}
     ${tail}
   </div><//>`;
 }

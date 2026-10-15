@@ -6,7 +6,7 @@ import { bytes, dur } from "../../format.js";
 import { restoreScroll, scrollState } from "../../scroll.js";
 import { colorOf, running, stateOf, summaryOf, taskLabel, tidyCommand } from "./parts.js";
 import { useLoad } from "../../components/Load.js";
-import { Pill } from "../../components/Tone.js";
+import { Fact, Pill } from "../../components/Tone.js";
 
 /** What the person did in a task's panel -- which folds they opened, where they left each text -- kept when
     they look at another task and back (D731), forty tasks at most. */
@@ -79,16 +79,15 @@ export function Stream({ k, text, file, size, read, mem, cls = "val astream-body
   return html`<pre class=${cls} data-k=${k} ref=${ref} onScroll=${scrolled}>${got && got.start > 0 ? html`<span class="muted stream-earlier">${`… ${bytes(got.start)} earlier of ${bytes(size)}: scroll up for more\n`}</span>` : ""}${got ? got.text : text}</pre>`;
 }
 
-/** A task's fields as name and value -- a long value its own text; the Input's command as a person reads it (D976). */
+/** A task's fields as tiles (D1102) -- a long value a wide one, its own text; the Input's command as a person reads it (D976). */
 export function Block({ title, obj, mem }) {
   if (!obj || !Object.keys(obj).length) return null;
-  return html`<div class="blk"><h3>${title}</h3>${Object.entries(obj).map(([k, v]) => {
+  return html`<div class="blk"><h3>${title}</h3><div class="facts">${Object.entries(obj).map(([k, v]) => {
     let text = typeof v === "string" ? v : JSON.stringify(v, null, 1);
     if (title === "Input" && k === "command" && typeof v === "string") text = tidyCommand(v, obj.folder);   // Raw keeps it whole
     const long = text.length > 120 || text.includes("\n"), key = k === "prompt" && title === "Input" ? "prompt" : `field:${title}:${k}`;
-    return html`<div class="kv" key=${k}><div class="k">${k}</div>${long ? html`<${Pre} k=${key} text=${text} mem=${mem} follow=${title !== "Input"} />` : html`<div class="val mono">${text}</div>`}</div>`;
-  })}</div>`;
+    return long ? html`<${Fact} key=${k} label=${k} size="wide"><${Pre} k=${key} text=${text} mem=${mem} follow=${title !== "Input"} /><//>`
+      : html`<${Fact} key=${k} label=${k} value=${text} />`;
+  })}</div></div>`;
 }
 
-/** Facts as small labelled values. */
-export const Facts = ({ list, cls = "facts" }) => list.length ? html`<div class=${cls}>${list.map(([k, v]) => html`<div key=${k} class="fact"><small>${k}</small><span class="mono">${String(v)}</span></div>`)}</div>` : null;

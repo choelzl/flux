@@ -6,8 +6,9 @@
 import { html, useLayoutEffect, useRef } from "../../view.js";
 import { Conversation, liveWork } from "../../components/Conversation.js";
 import { Markdown } from "../../components/Markdown.js";
-import { Facts, Fold, Pre } from "./bits.js";
+import { Fold, Pre } from "./bits.js";
 import { fieldsOf, linesOf, running } from "./parts.js";
+import { Facts } from "../../components/Tone.js";
 
 const CHAT_STEP = 40;
 const chatLimit = new Map(), chatAnchor = new Map();     // per task: how many steps shown, the place to keep
@@ -116,7 +117,7 @@ export function AgentChat({ n, env, mem }) {
   const lost = file ? 0 : earlier;                                         // past the 400 a turn keeps
   const prompt = typeof p.prompt === "string" ? p.prompt : "";
   const stop = running(n) ? "" : stopSaid(n, f, env.nodes);
-  return html`<${Facts} list=${usage(f, [["model", f.agent || p.model]])} cls="facts alt-usage" />
+  return html`<${Facts} list=${usage(f, [["model", f.agent || p.model]])} cls="alt-usage" />
     <div class="agent-view"><${ChatBox} n=${n} env=${env} mem=${mem} more=${above > 0}>
       ${above > 0 ? html`<button type="button" class="alt-chat-more link" title="Show earlier steps" onClick=${e => moreChat(n, env, e.currentTarget.closest(".alt-chat"))}>${`↑ ${above} earlier — scroll up or click`}</button>`
         : [lost > 0 ? html`<div class="alt-chat-more">${lostSaid(n, kept, steps, lost)}</div>` : "",
@@ -133,7 +134,7 @@ export function ModelChat({ n, env, mem }) {
   const reply = String(f.reply ?? f["reply (live tail)"] ?? ""), thinking = String(f.thinking ?? f["thinking (live tail)"] ?? "");
   let shown = reply;
   try { if (/^\s*[{[]/.test(reply)) shown = JSON.stringify(JSON.parse(reply), null, 2); } catch (_) { /* not JSON: as it came */ }
-  return html`<${Facts} list=${usage(f, [["model", p.model], ["thinking", p.think === false ? "off" : p.think ? "on" : ""]])} cls="facts alt-usage" />
+  return html`<${Facts} list=${usage(f, [["model", p.model], ["thinking", p.think === false ? "off" : p.think ? "on" : ""]])} cls="alt-usage" />
     <${ChatBox} n=${n} env=${env} mem=${mem} more=${false}>
       ${p.system ? html`<${Bubble} side="me" label=${`System · ${String(p.system).length.toLocaleString()} characters`} k="system" mem=${mem}><${Pre} k="system" cls="val tall" text=${String(p.system)} mem=${mem} follow=${false} /><//>` : ""}
       ${p.prompt ? html`<${Bubble} side="me" label=${`Prompt · ${String(p.prompt).length.toLocaleString()} characters`} k="input" mem=${mem}><${Pre} k="prompt" cls="val tall" text=${String(p.prompt)} mem=${mem} follow=${false} /><//>` : ""}

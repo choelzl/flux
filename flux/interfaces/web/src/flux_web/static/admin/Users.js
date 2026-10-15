@@ -4,7 +4,7 @@
 // added.
 
 import { Ago, Card, html, useRef, useState } from "../view.js";
-import { api, confirmDialog, dialog, enc, toast } from "../ui.js";
+import { api, askText, confirmDialog, dialog, enc, toast } from "../ui.js";
 import { dur, fmtTok, plural } from "../format.js";
 import { me } from "../state.js";
 import { route } from "../app.js";
@@ -136,8 +136,8 @@ function GroupAccess({ g }) {
 export function Groups({ catalog }) {
   const [name, setName] = useState(""), [access, setAccess] = useState("");
   const rename = async g => {
-    const renamed = await dialog("Rename group", ({ v, set }) => html`<label class="stack">Group name<input id="group-rename" value=${v.name} maxlength="60" onInput=${e => set({ name: e.currentTarget.value })} /></label>`,
-      [["Cancel", null], ["Rename", v => v.name.trim(), "primary"]], { name: g.name });
+    const renamed = await askText("Rename group", { label: "Group name", value: g.name, ok: "Rename", id: "group-rename", maxlength: 60,
+      hint: "Its members and permissions stay." });
     if (!renamed) return;
     await api(`/groups/${g.id}`, { method: "PATCH", body: { name: renamed } }); route();
   };

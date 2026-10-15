@@ -6,7 +6,7 @@ import { WORK_COLORS as COLORS, workLabel } from "./work_style.js";
 import { passName, taskLabel } from "./views.js";
 import { PassSummary } from "./inspector/Inspector.js";
 import { asYaml, noteName, noteSaid } from "./notes.js";
-import { Pill } from "../components/Tone.js";
+import { Facts, Pill } from "../components/Tone.js";
 
 const said = v => typeof v === "object" ? JSON.stringify(v) : String(v);
 
@@ -22,7 +22,7 @@ export function BoxPanel({ v, a, box }) {
     <p class="muted small">${passName(v.boxView.p)}</p>
     ${b?.runs.length ? html`<div class="alt-steps">${b.runs.map(n => html`<button key=${n.id} type="button" class="alt-step-row" data-task=${String(n.id)} onClick=${() => a.select(n.id)}>${taskLabel(n)}</button>`)}</div>`
       : b?.notes?.length === 1 ? html`<div><p>${noteSaid(b.notes[0], took)}</p>
-          ${Object.entries(b.notes[0].output || {}).filter(([k]) => k !== "scopes").map(([k, x]) => html`<div class="kv"><div class="k">${k}</div><div class="val">${said(x)}</div></div>`)}</div>`
+          <${Facts} list=${Object.entries(b.notes[0].output || {}).filter(([k]) => k !== "scopes").map(([k, x]) => [k, said(x)])} /></div>`
       : b?.notes?.length ? html`<div class="alt-steps">${b.notes.map(n => html`<div class="alt-step-row note"><span>${noteName(n)}</span>
           ${Object.keys(n.output || {}).length ? html`<span class="mono muted small">${Object.entries(n.output).map(([k, x]) => `${k} ${said(x)}`).join(" · ")}</span>` : ""}</div>`)}</div>`
       : html`<p class="muted">${b?.done ? "Baseline stored as a reference." : later ? "Nothing was recorded for it in this pass." : "Not started yet."}</p>`}

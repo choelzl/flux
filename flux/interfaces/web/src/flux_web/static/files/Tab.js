@@ -3,7 +3,7 @@
 // was read as), a binary one to download; Rename, Move and Delete on its head; files added by drop or by hand.
 
 import { Ago, Card, Empty, Notice, Skeleton, html, useEffect, useRef, useState } from "../view.js";
-import { api, dialog, enc, loopApi, toast } from "../ui.js";
+import { api, askText, dialog, enc, loopApi, toast } from "../ui.js";
 import { bytes, plural } from "../format.js";
 import { langOf } from "../highlight.js";
 import { sendFiles } from "../uploads.js";
@@ -20,11 +20,8 @@ import { useLoop } from "../loop/context.js";
 import { Failed } from "../components/Tone.js";
 
 /** A name or a folder asked for, the path it makes shown as it is typed; Enter asks. */
-const askPath = (name, title, label, value, ok, pathOf) => dialog(title, ({ v, set, submit }) => html`<div><label class="stack">${label}
-    <input value=${v.path} autocomplete="off" spellcheck="false" class="mono full"
-      onInput=${e => set({ path: e.currentTarget.value })} onKeyDown=${e => { if (e.key === "Enter") submit(); }} /></label>
-    <p class="small muted path-preview">It becomes <span class="mono">${`${name}/${pathOf(v.path.trim())}`}</span></p></div>`,
-  [["Cancel", null], [ok, v => v.path.trim(), "primary"]], { path: value });
+const askPath = (name, title, label, value, ok, pathOf) => askText(title, { label, value, ok,
+  hint: t => html`It becomes <span class="mono">${`${name}/${pathOf(t)}`}</span>` });
 
 /** The selected item and what may be done with it: `open(path, dir)`, the item's actions, the open text's draft. */
 function useFiles(ctx, refreshList = async () => {}) {

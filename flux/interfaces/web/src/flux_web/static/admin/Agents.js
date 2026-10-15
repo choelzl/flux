@@ -3,8 +3,8 @@
 // server connection and Test, its login and files, whether Ask may use it -- with its model settings and its own
 // variables under it; the variables every agent and run gets; adding an agent.
 
-import { Card, Notice, html, useEffect, useRef, useState } from "../view.js";
-import { api, confirmDialog, dialog, toast, when } from "../ui.js";
+import { Card, html, Notice, useEffect, useRef, useState } from "../view.js";
+import { api, askText, confirmDialog, toast, when } from "../ui.js";
 import { plural } from "../format.js";
 import { route } from "../app.js";
 import { Act } from "../components/Act.js";
@@ -32,25 +32,25 @@ function AskBox({ who, name, off }) {
   return html`<label class="check ask-on" title="Offered in a loop's Ask, to answer questions about it"><input type="checkbox" checked=${!off.includes(who)} id=${`ask-on-${who}`} onChange=${change} />Can be used for Ask</label>`;
 }
 
-/** D945: an added agent's name may change -- the loops that name it said first, as they break. */
-/** The new name (`v.name`), and which loops name the old one -- looked up as it is left or Enter pressed. */
-function RenameForm({ a, v, set }) {
-  const [warn, setWarn] = useState(null);
-  const look = async name => {
-    if (!name || name === a.id) { setWarn(null); return; }
-    try {
-      const r = await api(`/admin/agents/${a.id}/rename`, { method: "POST", body: { name, dry_run: true } });
-      setWarn(r.loops.length ? html`<${Notice} tone="bad" what=${`${plural(r.loops.length, "loop")} will not start`} why=${`until their documents say ${name}: ${r.loops.join(", ")}`} />`
-        : html`<p class="muted">${`No loop names ${a.id}.`}</p>`);
-    } catch (x) { setWarn(html`<p class="bad">${x.message}</p>`); }
-  };
-  return html`<div class="stack"><label class="stack">Its name in a document (lower case)<input class="mono" autocomplete="off" aria-label="New name" value=${v.name}
-      onInput=${e => set({ name: e.currentTarget.value })} onChange=${e => { set({ name: e.currentTarget.value }); look(e.currentTarget.value.trim()); }}
-      onKeyUp=${e => { if (e.key === "Enter") look(e.currentTarget.value.trim()); }} /></label>
-    <p class="muted small">Its settings, variables and tests move with it. Documents are not rewritten.</p><div class="small">${warn}</div></div>`;
-}
+/** D945: an added agent's name may change -- the loops that name it said first, as they break: looked up a moment
+    after the name is typed. */
+const Breaks = a => function Breaks({ text, bad }) {
+  const [got, setGot] = useState(null);
+  useEffect(() => {
+    if (!text || text === a.id) { setGot(null); bad(false); return; }
+    let live = true;
+    const t = setTimeout(() => api(`/admin/agents/${a.id}/rename`, { method: "POST", body: { name: text, dry_run: true } })
+      .then(r => { if (live) { setGot({ loops: r.loops }); bad(r.loops.length > 0); } }, x => { if (live) setGot({ error: x.message }); }), 300);
+    return () => { live = false; clearTimeout(t); };
+  }, [text]);
+  if (!got) return null;
+  if (got.error) return html`<${Notice} tone="warn" what="The loops naming it could not be read" why=${got.error} />`;
+  return got.loops.length ? html`<${Notice} tone="bad" what=${`${plural(got.loops.length, "loop")} will not start`} why=${`until their documents say ${text}: ${got.loops.join(", ")}`} />`
+    : html`<p class="hint">${`No loop names ${a.id}.`}</p>`;
+};
 const rename = async a => {
-  const name = await dialog(`Rename ${a.label}`, ({ v, set }) => html`<${RenameForm} a=${a} v=${v} set=${set} />`, [["Cancel", null], ["Rename", v => v.name.trim(), "danger"]], { name: a.id });
+  const name = await askText(`Rename ${a.label}`, { label: "Its name in a document (lower case)", value: a.id, ok: "Rename", "aria-label": "New name",
+    hint: "Its settings, variables and tests move with it. Documents are not rewritten.", Consequence: Breaks(a) });
   if (name == null) return;
   const r = await api(`/admin/agents/${a.id}/rename`, { method: "POST", body: { name } });
   toast(r.ok + (r.loops.length ? ` -- ${plural(r.loops.length, "loop")} still name ${a.id}` : ""), r.loops.length ? "warn" : "ok");
