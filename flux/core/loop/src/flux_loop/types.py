@@ -164,7 +164,7 @@ class LoopRequest:
     """The loop's own knobs, shared by every problem. Problem-specific settings go in `params`."""
 
     db: str = ""
-    steps: int = 24                 # work items per pass: parts, sub-tasks, batches (D457)
+    steps: int = 3                  # work items per pass: parts, sub-tasks, batches (D457)
     passes: int = 0                 # passes the document caps the run at; 0 = until stopped (D593)
     baseline: bool = False          # pass 0: check and measure without generation or repairs
     baseline_only: bool = False     # explicitly run only pass 0
@@ -174,7 +174,7 @@ class LoopRequest:
     reevaluate: bool = False        # D988: invalidate the record's evidence; check and measure every design again
     explore: int = 0                # consecutive at-rest passes before this one; > 0 = send every
                                     # admitted design back to the generator
-    repair_attempts: int = 12       # inner-loop attempts per generation
+    repair_attempts: int = 3        # inner-loop attempts per generation
     explore_every: int = 4          # 1 in N generations starts fresh, not from best
     explore_after: int = 2          # D845: passes the decision stands before a pass explores (then in turn)
     agent_continues: int = 3        # D1026: a design agent's session continued this many times past its time limit,

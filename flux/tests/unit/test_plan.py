@@ -26,7 +26,7 @@ def test_the_surface_is_the_problems_own_vocabulary(tmp_path):
     s = _surface(tmp_path)
     assert s["parts"]["choices"] == ["front", "back"] and s["stages"]["choices"] == ["stage"]
     assert "agent" in s["roles"]["fields"]["orchestrator"]["choices"] and None in s["roles"]["fields"]["orchestrator"]["choices"]
-    assert s["budget"]["fields"]["steps"]["default"] == 24 and s["tools"]["default"] is True
+    assert s["budget"]["fields"]["steps"]["default"] == 3 and s["tools"]["default"] is True
 
 
 def test_a_plan_is_checked_against_the_vocabulary_field_by_field(tmp_path):
