@@ -10,6 +10,7 @@ import { BestChart } from "../charts/BestChart.js";
 import { ParetoChart } from "../charts/ParetoChart.js";
 import { Select } from "../components/Select.js";
 import { useLoop } from "../loop/context.js";
+import { Choice } from "../components/Tabs.js";
 
 
 export function Graphs({ r, directions, onPick, detail }) {
@@ -42,8 +43,8 @@ export function Graphs({ r, directions, onPick, detail }) {
   const charted = new Set(g.metrics), perTest = new Set(g.perTest);
   const best = (m, each = false) => html`<${BestChart} rows=${designPoints(r.designs, objFor(m))} obj=${objFor(m)} passes=${r.passes} styles=${styles} scope=${g.scope} legend=${false} cls=${each ? "small-multiple" : ""} />`;
   return html`<div class="graphs">
-    <${Card} cls="graphs-ctl"><div>${groups.length ? html`<div class="chips scope" role="group" aria-label="Scope"><span class="muted">Compare within</span>
-        ${scopesOf(groups).map(([k, label]) => html`<button class=${cx("chip", g.scope === k && "on")} type="button" aria-pressed=${g.scope === k ? "true" : "false"} onClick=${() => set({ scope: k })}>${label}</button>`)}</div>` : ""}</div>
+    <${Card} cls="graphs-ctl"><div>${groups.length ? html`<div class="bar scope"><span class="muted">Compare within</span>
+        <${Choice} small label="Scope" value=${g.scope} onChange=${k => set({ scope: k })} options=${scopesOf(groups)} /></div>` : ""}</div>
       <p class="muted small graphs-note">${`Measured search designs are drawn (${r.designs.filter(d => !d.baseline).length}); baseline measurements are gray reference lines. The table's filter does not apply. `}
         The best so far and the front count only designs that meet every requirement${groups.length ? ", within the scope" : ""}.</p>
       <${Legend} S=${styles} front rejected=${r.designs.some(d => d.verdict === "rejected")} pending=${r.designs.some(d => d.verdict === "pending")} baseline=${r.designs.some(d => d.baseline)} /><//>
@@ -64,8 +65,9 @@ export function Graphs({ r, directions, onPick, detail }) {
             const chip = html`<button class=${cx("chip", on && "on")} title=${k} onClick=${toggle}>${k}</button>`;
             if (!tests.length || !on) return chip;
             const each = perTest.has(k) || !ms.includes(k);
-            return html`${chip}<span class="seg dict-view" data-dict=${k}>${(ms.includes(k) ? [["agg", metricGroups[k]?.aggregate || "aggregate"], ["each", "per test"]] : [["each", "per test"]]).map(([v, label]) =>
-              html`<button type="button" class=${(v === "each") === each ? "on" : ""} onClick=${() => set({ perTest: v === "each" ? [...perTest, k] : g.perTest.filter(x => x !== k) })}>${label}</button>`)}</span>`;
+            return html`${chip}<${Choice} small cls="dict-view" data-dict=${k} label=${`${k}: aggregate or per test`} value=${each ? "each" : "agg"}
+              onChange=${v => set({ perTest: v === "each" ? [...perTest, k] : g.perTest.filter(x => x !== k) })}
+              options=${ms.includes(k) ? [["agg", metricGroups[k]?.aggregate || "aggregate"], ["each", "per test"]] : [["each", "per test"]]} />`;
           })}</div>
           <label title="deepest stage: each design's deepest, or the stage its objective names">stage <${Select} options=${stageOpts} value=${g.timeStage} onChange=${v => set({ timeStage: v })} /></label></div>
         ${charted.size ? html`<div class="chart-grid">${folded(nums).filter(([, ms]) => ms.some(m => charted.has(m))).map(([k, ms]) => {

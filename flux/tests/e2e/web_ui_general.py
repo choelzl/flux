@@ -1937,7 +1937,7 @@ objectives: [{metric: timings.fast, goal: 15, direction: minimize},
           }; return 1;""")
         try:
             r.page("#/admin/resources", "document.querySelector('.token-rate-note')", "resource token rates")
-            r.button("1 h", ".chips")
+            r.button("1 h", ".choice")
             b.wait("document.querySelector('.token-rate-note')?.textContent.includes('20s')", what="20-second token averages")
             captions = b.js("return [...document.querySelectorAll('.tchart figcaption')].slice(0, 2).map(e => e.textContent)")
             r.check("input and output use separate series and sum agents plus model", "all 25/s" in captions[0]
@@ -1958,18 +1958,18 @@ objectives: [{metric: timings.fast, goal: 15, direction: minimize},
             r.check("D1085: resource rates explain live and completed turns and cached inputs", "as they come" in r.text()
                     and "when a turn ends" in r.text() and "including cached inputs" in r.text())
             b.js("window.__rateSmall = true; return 1")
-            r.button("6 h", ".chips")
+            r.button("6 h", ".choice")
             b.wait("document.querySelector('.token-rate-note')?.textContent.includes('2m')", what="two-minute token averages")
             r.check("changing the history range requests and labels the right averaging interval", b.js("return window.__rateRequests").count(6) >= 1)
             small = b.js("return document.querySelectorAll('.tchart figcaption')[1].textContent")
             r.check("small nonzero rates stay visible instead of rounding to zero", "all 0.004/s" in small
                     and "agents 0.003/s" in small and "Flux's model 0.001/s" in small, small)
-            r.button("30 d", ".chips")
+            r.button("30 d", ".choice")
             b.wait("document.querySelector('.token-rate-note')?.textContent.includes('4h')", what="monthly token averages")
             r.check("30 days requests both machine and token history", b.js("return window.__rateRequests.includes(720) && window.__historyRequests.includes(720)"))
-            r.check("the monthly range is selected", b.js("return document.querySelector('.chips .chip.on')?.textContent") == "30 d")
-            r.button("7 d", ".chips")
-            b.wait("document.querySelector('.chips .chip.on')?.textContent === '7 d'", what="return from month to week")
+            r.check("the monthly range is selected", b.js("return document.querySelector('.choice button.on')?.textContent") == "30 d")
+            r.button("7 d", ".choice")
+            b.wait("document.querySelector('.choice button.on')?.textContent === '7 d'", what="return from month to week")
             b.wait("window.__rateRequests.includes(168) && window.__historyRequests.includes(168)", timeout=30, what="both weekly histories requested",
                    said="JSON.stringify([window.__rateRequests, window.__historyRequests])")
             r.check("switching back requests both weekly histories", True)

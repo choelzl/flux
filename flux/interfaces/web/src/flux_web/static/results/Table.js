@@ -5,6 +5,7 @@
 import { cx, Empty, html, useLayoutEffect, useRef, useState } from "../view.js";
 import { dictionaryClasses, measurementLabels, measurementText } from "./preferences.js";
 import { GroupRow, MeasurementHeader, VerdictBadge } from "./columns.js";
+import { Choice } from "../components/Tabs.js";
 
 const PAGE = 200;
 export const keyOf = d => JSON.stringify([d.part || "", d.base || d.name, d.key || ""]);
@@ -39,7 +40,6 @@ export function ResultsTable({ t, selected, onOpen, onCompare }) {
       : html`${sortButton(k, label)}${extra}`}</th>`;
   // D694: two ticked to compare -- a third ticked lets the oldest go
   const tick = (d, on) => setPicked(p => on ? [...p.filter(x => keyOf(x) !== keyOf(d)), d].slice(-2) : p.filter(x => keyOf(x) !== keyOf(d)));
-  const chip = (key, label) => html`<button class=${cx("chip", filter === key && "on")} onClick=${() => { setFilter(key); setPage(PAGE); }}>${label}</button>`;
   const limitOf = m => (r.limits || []).find(l => l.metric === m);
   const cell = (d, m) => {
     const ok = d.meets[m], hid = columns.hidden(m) ? " hidden-measurement" : "", gone = (d.cleared || []).find(c => c.stage === d.shown && c.metric === m);   // D1043: struck through
@@ -48,8 +48,9 @@ export function ResultsTable({ t, selected, onOpen, onCompare }) {
     return html`<td class=${`mono num${hid}${dict.get(m) || ""}${ok === true ? " meets" : ok === false ? " misses" : ""}`}
       title=${`${display.title}${unit[m] ? " · " + unit[m] : ""}${ok === true ? " · meets the limit" : ok === false ? " · misses the limit" : ""}`}>${display.text}</td>`;
   };
-  return html`<div class="chips">${chip("all", `All ${r.designs.length}`)}${chip("accepted", `Accepted ${r.counts.accepted}`)}${r.counts.pending ? chip("pending", `Pending ${r.counts.pending}`) : ""}
-      ${chip("failed", `Failed ${r.counts.failed}`)}${r.counts.rejected ? chip("rejected", `Rejected ${r.counts.rejected}`) : ""}
+  const which = [["all", "All", r.designs.length], ["accepted", "Accepted", r.counts.accepted], r.counts.pending ? ["pending", "Pending", r.counts.pending] : null,
+    ["failed", "Failed", r.counts.failed], r.counts.rejected ? ["rejected", "Rejected", r.counts.rejected] : null].filter(Boolean);
+  return html`<div class="bar"><${Choice} label="Which designs" value=${filter} onChange=${k => { setFilter(k); setPage(PAGE); }} options=${which} />
       <span class="grow" />${columns.controls}${values.toggle}
       <button class="small" disabled=${picked.length !== 2} onClick=${() => onCompare(picked)}>${picked.length ? `Compare ${picked.length}/2` : "Compare"}</button></div>
     <div class="result-table-surface" data-values=${values.mode} ref=${box}>${shown.length ? html`<div class="scroll-x rows-scroll"><table class="list designs">

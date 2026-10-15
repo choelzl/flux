@@ -948,7 +948,7 @@ def flows(r: Run) -> None:
             r.check("status badges remain accessible; units and metadata stay in tooltips", b.js("const badge = document.querySelector('table.designs .verdict-badge'), name = document.querySelector('table.designs .table-design-name').closest('td'); return badge.getAttribute('aria-label') === 'accepted' && !!badge.querySelector('.g-ok') && name.title.includes('long_measurement_stage') && name.title.includes('2026-10-06') && document.querySelector('table.designs td.num').title.includes('µm²')"))
             r.check("measurement cells are plain values without checkmarks or repeated units", b.js("return [...document.querySelectorAll('table.designs td.num')].every(td => /^[-+0-9.e]+$/.test(td.textContent.trim())) && !document.querySelector('table.designs .measurement-verdict, table.designs .measurement-unit')"))
             r.check("passing and failing measurements use distinct colors and explicit tooltip status", b.js("const good = document.querySelector('table.designs td.meets'), bad = document.querySelector('table.designs td.misses'); return getComputedStyle(good).color !== getComputedStyle(bad).color && good.title.includes('meets the limit') && bad.title.includes('misses the limit')"))
-            b.click(".chips .relative-values")
+            b.click(".bar .relative-values")
             relative = b.js("const rows = [...document.querySelectorAll('table.designs tbody tr')]; const row = n => rows.find(x => x.innerText.includes(n));"
                             " const cell = (n, i) => row(n).querySelectorAll('td.num')[i]; return [cell('w-good', 0).innerText.trim(), cell('w-good', 0).title,"
                             " cell('w-good', 1).innerText.trim(), cell('dec-1', 0).innerText.trim(), cell('dec-1', 0).title,"
@@ -958,7 +958,7 @@ def flows(r: Run) -> None:
                     and relative[2] == "+9.1%" and relative[3] == "—" and "no matching baseline or accepted measurements" in relative[4]
                     and relative[5] == "0%" and relative[6], str(relative))
             r.check("relative percentile references ignore pending designs and describe their accepted population", b.js("const row = [...document.querySelectorAll('table.designs tbody tr')].find(r => r.innerText.includes('enc-22')); const cells = row.querySelectorAll('td.num'); return cells[0].innerText === '-20%' && cells[0].title.includes('P10 10') && cells[0].title.includes('1 accepted design)') && cells[1].innerText === '-26.7%' && cells[1].title.includes('P90 1500')"))
-            b.click(".chips .relative-values")
+            b.click(".bar .relative-values")
             r.check("absolute restores original measurements", b.js("return document.querySelector('table.designs tbody td.num').innerText.trim() === '31'"))
             alignment = b.js("return [...document.querySelectorAll('table.designs th.measurement-head')].map(th => { const end = th.querySelector('.th-sort').getBoundingClientRect(), col = th.getBoundingClientRect();"
                              " return [th.dataset.label, end.right - (col.right - parseFloat(getComputedStyle(th).paddingRight)), end.bottom - document.querySelector('table.designs tbody').getBoundingClientRect().top]; })")
@@ -1012,7 +1012,7 @@ def flows(r: Run) -> None:
             b.js("document.querySelector('table.designs').parentElement.scrollLeft = 0; return 1")
             b.shot(r.shots / "compact-results-mobile.png", full=True)
             b.cmd("WebDriver:SetWindowRect", {"width": 1280, "height": 900})
-            b.click(".chips .relative-values")
+            b.click(".bar .relative-values")
             r.page("#/app/sw", "document.querySelector('.best-n')", "Decision's best designs")
             r.check("Decision is always compact, with a separate status column", b.js("return !document.querySelector('.compact-table') && !!document.querySelector('.best-n .measurement-label') && document.querySelector('.best-n .table-design-name').scrollWidth > document.querySelector('.best-n .table-design-name').clientWidth && document.querySelector('.best-n td.status-column').querySelector('.verdict-badge') && document.querySelector('.best-n .table-design-name').closest('td').title.includes('long_measurement_stage')"))
             r.check("Decision retains every measurement column with readable shortened headers", b.js("const table = document.querySelector('.best-n'); return table.querySelectorAll('th.measurement-head').length === 6 && [...table.querySelectorAll('th.measurement-head')].some(th => th.title === 'another_long_measurement_for_throughput' && th.textContent.endsWith('throughput'))"))
@@ -1103,7 +1103,7 @@ def flows(r: Run) -> None:
             r.check("a rejected result stays in the table, marked, its cleared value struck through", b.js(
                 "const tr = [...document.querySelectorAll('table.designs tbody tr')].find(t => t.textContent.includes('w-bad'));"
                 " return !!tr && tr.classList.contains('rejected') && !!tr.querySelector('.verdict-badge.t-warn') && tr.querySelector('td.cleared s')?.textContent === '12.5'"
-                " && [...document.querySelectorAll('.chips .chip')].some(c => c.textContent === 'Rejected 1')"))
+                " && [...document.querySelectorAll('.bar .choice button')].some(c => c.textContent === 'Rejected 1')"))
             b.js("[...document.querySelectorAll('table.designs tbody tr')].find(t => t.textContent.includes('w-bad')).querySelector('.open-design').click(); return 1")
             b.wait("document.querySelector('.rejected-blk')", what="the rejection in the detail")
             r.check("its detail says why, by whom, what was cleared, and offers Restore -- not Reject", b.js(
@@ -1917,9 +1917,9 @@ def flows(r: Run) -> None:
         r.check("back in Results the same design stays selected (D916)", b.js(
             "return (document.querySelector('#main .split.results .detail-card h2') || {}).textContent === 'w-bad'"
             " && (document.querySelector('#main table.designs tr.sel') || {}).innerText.includes('w-bad')"))
-        b.click(".chips .relative-values")
+        b.click(".bar .relative-values")
         r.check("switching measurement values preserves the selected design", b.js("return document.querySelector('table.designs tr.sel').innerText.includes('w-bad') && document.querySelector('.detail-card h2').textContent === 'w-bad'"))
-        b.click(".chips .relative-values")
+        b.click(".bar .relative-values")
         r.button("Graphs", ".subrow .subtabs")
         b.wait("document.querySelector('#main svg.chart.pareto')", timeout=10)
         r.check("the graphs kept, not built again, the detail with them (D916)", b.js("const g = document.querySelector('#main .graphs');"
@@ -1938,7 +1938,7 @@ def flows(r: Run) -> None:
                 and not b.js(f"return {card}.querySelector('.pt.on-front')", "Pareto front"), said)
         after = colours()
         r.check("the parts keep their colours across a stage change (D915)", (after["decoder"], after["encoder"]) == (before["decoder"], before["encoder"]), f"{before} {after}")
-        b.js("const c = [...document.querySelectorAll('#main .chips.scope button')].find(x => x.textContent === 'decoder'); c.click(); return 1")
+        b.js("const c = [...document.querySelectorAll('#main .scope .choice button')].find(x => x.textContent === 'decoder'); c.click(); return 1")
         said = b.js(f"return {card}.querySelector('.front-said').textContent", "Pareto front")
         r.check("no feasible front when none qualifies (D914)", said == "No feasible design yet" and not b.js(
             f"return {card}.querySelector('.pt.on-front, path.front')", "Pareto front"), said)
@@ -1957,7 +1957,7 @@ def flows(r: Run) -> None:
             return [[...c('Pareto front').querySelectorAll('select')].map(s => s.value),
               c('Improvement by design').querySelector('select').value,
               [...c('Improvement by design').querySelectorAll('.chips button.on')].map(b => b.textContent),
-              document.querySelector('#main .chips.scope button.on').textContent];"""
+              document.querySelector('#main .scope .choice button.on').textContent];"""
         expected = [["area_um2", "fmax_mhz", "screen"], "screen", ["fmax_mhz"], "decoder"]
         r.check("graph controls change axes, stages, selected measurements and scope", b.js(preferences) == expected)
         b.click(".pareto-focus")

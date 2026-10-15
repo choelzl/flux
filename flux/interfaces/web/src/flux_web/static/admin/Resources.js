@@ -12,6 +12,7 @@ import { Meter, Stat } from "../components/Stat.js";
 import { SortableTable } from "../components/SortableTable.js";
 import { useLoad, usePoll } from "../components/Load.js";
 import { Pill } from "../components/Tone.js";
+import { Choice } from "../components/Tabs.js";
 
 const LoopLink = ({ u, a }) => u ? html`<a href=${appHref(u, a)}>${`${u} / ${a}`}</a>` : html`<span class="muted">no loop</span>`;
 const clean = async (key, what) => { const x = await api(`/admin/caches/${enc(key)}/clean`, { method: "POST", body: { what } }); toast(`${bytes(x.freed)} freed`, "ok"); };
@@ -88,7 +89,7 @@ function OverTime({ n }) {
   // another range, or the machine read again: what was shown stays until the next answer (and when it fails)
   const got = useLoad(() => Promise.all([api(`/admin/history?hours=${hours}`).catch(() => null), api(`/admin/token-rate?hours=${hours}`).catch(() => null)])
     .then(([hx, tr]) => { if (!hx) throw new Error("no history"); return { hx, tr }; }), "history", `${hours}:${n}`).got?.d;
-  const chips = html`<div class="chips">${RANGES.map(([hrs, label]) => html`<button class=${cx("chip", hours === hrs && "on")} onClick=${() => { historyHours = hrs; setHours(hrs); }}>${label}</button>`)}</div>`;
+  const chips = html`<${Choice} small label="Range" value=${hours} onChange=${hrs => { historyHours = hrs; setHours(hrs); }} options=${RANGES} />`;
   if (!got) return html`<${Card} title="Over time" actions=${chips}><${Skeleton} lines=${4} /><//>`;
   const { hx, tr } = got, ts = tr ? tr.samples : [], ss = hx.samples, last = ss.at(-1), cpus = last ? last.cpus : null;
   const rate = v => v >= 1000 ? `${(v / 1000).toFixed(1)}k/s` : `${v > 0 && v < 1 ? Number(v.toPrecision(2)) : v >= 10 ? Math.round(v) : v.toFixed(1)}/s`;
