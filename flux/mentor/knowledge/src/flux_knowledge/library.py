@@ -17,7 +17,7 @@ __all__ = ["agent_section", "cited_files", "index_for", "library_files", "paper_
 KNOWLEDGE_ROOT = Path(__file__).resolve().parents[2]     # mentor/knowledge
 FLUX_ROOT = KNOWLEDGE_ROOT.parents[1]                    # a chunk's source path is relative to it
 #: A paper, as opposed to an implementation: what the one-line index lists.
-PAPER_SUFFIXES = (".pdf", ".md", ".txt", ".adoc")
+from .convert import PAPER_SUFFIXES  # noqa: E402 -- D1099: every document format read
 
 _INDEXES: dict[tuple[str, ...], Any] = {}
 
@@ -130,7 +130,7 @@ def agent_section(question: str | Sequence[str], folders: Iterable[str] = (), db
     if not lines and not near:
         return ""
     out = ["LIBRARY (the operator's papers and reference implementations on this machine; open "
-           "what helps -- PDFs read with `pdftotext <file> -`):"]
+           "what helps -- PDFs read with `pdftotext <file> -`; a .docx, .xlsx or .pptx is a zip of XML: `unzip -p <file>`):"]
     out += lines
     if papers:
         out.append("\nNearest papers -- use these methods, numbers and pitfalls to inform your design:")

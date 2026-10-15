@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import contextlib
 import os
-import shutil
 from contextvars import ContextVar
 from pathlib import Path
 from typing import TYPE_CHECKING, Iterator
@@ -44,15 +43,15 @@ def inside(path: str | os.PathLike, what: str) -> Path:
 
 
 def read_input(path: Path) -> str:
-    """A file's text for a model to read (D586): a PDF through `pdftotext -layout`, anything
-    else as UTF-8; non-text bytes are reported as such."""
-    if path.suffix.lower() == ".pdf":
-        if shutil.which("pdftotext") is None:
-            return f"({path.name}: a PDF, and pdftotext is not on PATH to read it)"
-        import subprocess
+    """A file's text for a model to read (D586): a document of a known format converted (D1099: PDF, Office,
+    OpenDocument, HTML, EPUB, the older formats -- flux_knowledge.convert), anything else as UTF-8; non-text bytes
+    are reported as such, and a document that could not be read says why."""
+    from flux_knowledge.convert import CONVERTED_SUFFIXES, document_text
 
-        r = subprocess.run(["pdftotext", "-layout", str(path), "-"], capture_output=True, text=True, timeout=120)
-        return r.stdout if r.returncode == 0 else f"({path.name}: pdftotext failed: {r.stderr.strip()[:200]})"
+    if path.suffix.lower() in CONVERTED_SUFFIXES:
+        said: list[str] = []
+        text = document_text(path, why=said.append)
+        return text if text is not None else f"({said[0] if said else path.name + ': not read'})"
     try:
         return path.read_text()
     except UnicodeDecodeError:

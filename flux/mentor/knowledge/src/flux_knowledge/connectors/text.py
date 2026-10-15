@@ -6,7 +6,9 @@ each tagged with the nearest preceding Markdown heading. `.adoc` files delegate 
 connector.
 
 PDFs go through `pdftotext` (poppler) when available; without it they are skipped with a note
-through `log`. Markdown handling is light-touch: enough for lexical retrieval, not a parser.
+through `log`. D1099: Office (.docx, .xlsx, .pptx), OpenDocument, HTML, EPUB and the older formats are
+converted to text first (flux_knowledge.convert). Markdown handling is light-touch: enough for lexical
+retrieval, not a parser.
 """
 
 from __future__ import annotations
@@ -20,10 +22,12 @@ from flux_knowledge.document import Chunk, chunks_from, paragraphs
 
 _MD_HEADING = re.compile(r"^(#{1,6})\s+(.*)$")
 
-#: What the library connector reads; anything else in the folder is skipped.
 from flux_knowledge.connectors.source import SOURCE_SUFFIXES, ingest_source_file
+from flux_knowledge.convert import CONVERTED_SUFFIXES, DOCUMENT_SUFFIXES, document_text
 
-LIBRARY_SUFFIXES = (".md", ".txt", ".adoc", ".pdf") + SOURCE_SUFFIXES
+#: What the library connector reads; anything else in the folder is skipped. D1099: Markdown, text and AsciiDoc as they are; Office, OpenDocument, HTML, EPUB, PDF and the older formats
+#: converted (flux_knowledge.convert); the source files of an implementation
+LIBRARY_SUFFIXES = tuple(dict.fromkeys(DOCUMENT_SUFFIXES + (".adoc",) + SOURCE_SUFFIXES))
 
 
 def parse_text(text: str) -> list[tuple[str | None, str]]:
@@ -111,6 +115,11 @@ def ingest_library(directory: str | Path, *, standard_id: str = "library",
                     log("library: PDFs present but pdftotext (poppler) is not on "
                         "PATH; they are not indexed on this machine")
                     pdf_note_sent = True
+        elif path.suffix.lower() in CONVERTED_SUFFIXES and path.suffix.lower() != ".pdf":
+            text = document_text(path, why=log)              # D1099: Office, OpenDocument, HTML, EPUB, older formats
+            if text:
+                chunks.extend(chunks_from(parse_text(text), standard_id=standard_id, stem=rel_stem,
+                                          source_path=_source_path(path, repo_root)))
         elif path.suffix.lower() in SOURCE_SUFFIXES:
             chunks.extend(ingest_source_file(path, standard_id=standard_id,
                                              repo_root=repo_root, id_stem=rel_stem))

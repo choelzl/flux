@@ -105,7 +105,7 @@ def digests_in(db: str) -> dict[str, dict[str, Any]]:
 #: hundreds of files never holds a pass up for hours.
 PER_PASS = 8
 #: papers before sources: what a designer reads first
-PAPERS = (".pdf", ".md", ".txt", ".tex", ".rst", ".html", ".htm")
+from .convert import PAPER_SUFFIXES as PAPERS  # noqa: E402 -- D1099: documents before source files
 _GIVE_UP = 3                                   # failures in a row: the digester is not working today
 MIN_DIGEST_CHARS = 80                          # D785: shorter is no digest (a word, a fragment)
 
