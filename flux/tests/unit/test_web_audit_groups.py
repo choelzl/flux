@@ -14,7 +14,7 @@ def test_every_audit_kind_is_in_a_group():
     kinds = set()
     for p in WEB.glob("*.py"):
         kinds |= set(re.findall(r'audit\([^,()]+,\s*"([^"{}]+)"', p.read_text()))
-    js = (WEB / "static/admin.js").read_text()
+    js = (WEB / "static/admin/Audit.js").read_text()
     block = js[js.index("const GROUPS = ["):js.index("const groupOf")]
     grouped = set(re.findall(r'"([^"]+)"', block))
     kinds.discard("network refused")

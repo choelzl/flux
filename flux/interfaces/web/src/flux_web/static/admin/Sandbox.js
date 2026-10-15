@@ -1,0 +1,52 @@
+// Flux web, admin (D698, D744, D833, D850, D939, D1095): what every sandbox gets -- the network (open, or only the
+// hosts allowed), PATH directories, what every home starts with -- and the stderr lines the pages leave out;
+// saved as they change, applied from each loop's next start.
+
+import { Card, html, useEffect, useState } from "../view.js";
+import { api } from "../ui.js";
+import { bound, useAutosave } from "../components/Autosave.js";
+
+const lines = a => (a || []).join("\n");
+const list = text => text.split(/[\n,]/).map(x => x.trim()).filter(Boolean);
+
+/** D850: the stderr lines the pages leave out -- here since D896, beside what every sandbox gets. */
+function Masks() {
+  const [text, setText] = useState("");
+  useEffect(() => { api("/admin/masks").then(m => setText((m.masks || []).join("\n"))).catch(() => {}); }, []);
+  const { box, mark } = useAutosave(async () => {
+    const got = await api("/admin/masks", { method: "PUT", body: { masks: text.split("\n") } });
+    if (document.activeElement?.id !== "stderr-masks") setText(got.masks.join("\n"));
+  }, { delay: 1200 });
+  return html`<${Card} title="Hidden output"><div ref=${box}><p class="muted">Stderr lines the pages leave out, one per line: a piece of text or a /regular expression/. The record keeps them.</p>
+    <textarea id="stderr-masks" rows="4" class="mono" placeholder=${"failed to clean up stale arg0 temp dirs\n/^WARN .*deprecated/"} ...${bound(text, setText)} />
+    <div class="row">${mark}</div></div><//>`;
+}
+
+export function Sandbox({ r }) {
+  const c = r.config;
+  const [v, setV] = useState({ network: c.network === "allowlist" ? "allowlist" : "open", allow: lines(c.allow), endpoints: c.endpoints !== false,
+    path: lines(c.path), login_path: !!c.login_path, home_seed: lines(c.home_seed) });
+  const set = patch => setV(x => ({ ...x, ...patch }));
+  // D833: saved as they change
+  const { box, mark } = useAutosave(() => api("/admin/sandbox", { method: "PUT", body: { network: v.network, allow: list(v.allow), endpoints: v.endpoints,
+    path: list(v.path), login_path: v.login_path, home_seed: list(v.home_seed) } }));
+  const text = (id, k, rows, ph) => html`<textarea id=${id} rows=${rows} placeholder=${ph} class="mono" ...${bound(v[k], x => set({ [k]: x }))} />`;
+  const box2 = (id, k) => html`<input type="checkbox" id=${id} checked=${v[k]} onChange=${e => set({ [k]: e.currentTarget.checked })} />`;
+  const adds = r.login_path.filter(d => !r.path.includes(d));
+  return html`<div ref=${box}>${r.sandboxed ? "" : html`<p class="callout bad">This server runs without the sandbox (--no-sandbox): none of this applies.</p>`}
+    <${Card} title="Network"><p class="muted">What the containers may reach. A loop's Settings may add hosts.</p>
+      <label class="stack">Mode<select id="sb-net" onChange=${e => set({ network: e.currentTarget.value })}>
+        <option value="open" selected=${v.network !== "allowlist"}>open: the containers reach any host</option>
+        <option value="allowlist" selected=${v.network === "allowlist"}>allowlist: only the hosts below</option></select></label>
+      <div class="sb-allow" hidden=${v.network !== "allowlist"}><label class="stack">Allowed: one per line, a host (and its subdomains), *.domain, an IP or a CIDR
+          ${text("sb-allow", "allow", 5, "localai.example.org\n*.anthropic.com\n10.0.0.0/8\n192.168.1.20")}</label>
+        <label class="check">${box2("sb-ep", "endpoints")}also the model endpoints set under Models (their hosts)</label></div><//>
+    <${Card} title="PATH"><p class="muted">Mounted read-only.</p>
+      <details><summary class="muted">${`The server's own PATH: ${r.path.length} directories`}</summary><pre class="val small">${r.path.join("\n")}</pre></details>
+      <label class="check">${box2("sb-login", "login_path")}${`add ${r.home}'s login PATH`}${adds.length ? `: ${adds.join(", ")}` : " (it adds nothing to the above)"}</label>
+      <label class="stack">and these directories, first${text("sb-path", "path", 3, "/opt/tools/bin")}</label><//>
+    <${Masks} />
+    <${Card} title="Homes"><p class="muted">Every user has a home of their own: their runs' HOME, writable and kept -- their agents' settings, logins and sessions. Each user logs their agents in on their Account page; no one's login is shared.</p>
+      <label class="stack">${`Every home starts with (paths inside ${r.home}, copied where a home lacks them, never over what is there)`}${text("sb-seed", "home_seed", 3, ".config/opencode\n.gitconfig\n.npmrc")}</label><//>
+    <div class="form-actions"><span class="muted small">These apply from each loop's next start.</span>${mark}</div></div>`;
+}

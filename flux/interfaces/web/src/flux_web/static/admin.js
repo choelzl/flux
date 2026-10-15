@@ -1,12 +1,17 @@
 // Flux web: the admin's pages and the model settings form (D889: split out of app.js).
 
-import { me, setPageRefresh } from "./state.js";
-import { act, ago, api, autosave, bytes, card, confirmDialog, crumbs, dialog, dur, empty, enc, fmtTok, h, head, markSaved, pageShow, saveMark, skeleton, sortableTable, toast, when, plural } from "./ui.js";
-import { html, mount } from "./view.js";
+import { setPageRefresh } from "./state.js";
+import { act, api, autosave, card, confirmDialog, crumbs, dialog, empty, h, head, markSaved, pageShow, saveMark, skeleton, toast, when, plural } from "./ui.js";
+import { html, mount, showIn } from "./view.js";
 import { Resources } from "./admin/Resources.js";
 import { AdminLoops } from "./admin/Loops.js";
 import { Applications } from "./admin/Applications.js";
-import { binButton, envEditor, envTable } from "./loops.js";
+import { Maintenance } from "./admin/Maintenance.js";
+import { Sandbox } from "./admin/Sandbox.js";
+import { Audit } from "./admin/Audit.js";
+import { Insights } from "./admin/Insights.js";
+import { Groups, Users } from "./admin/Users.js";
+import { envEditor, envTable } from "./loops.js";
 import { route } from "./app.js";
 
 // ================================================================ admin and account
@@ -17,17 +22,6 @@ const ADMIN_TABS = { "": "Loops", insights: "Insights and audit", applications: 
 const MECHANISM = { key: "API key", provider: "provider configuration", login: "interactive login", endpoint: "endpoint without a key", none: "not detected" };
 const VERIFIED = { untested: ["", "untested"], ready: ["ok", "ready"], failed: ["bad", "failed"], changed: ["warn", "changed since test"] };
 
-/** D989: an admin table sorted by a click on a header (as Users), the phone's sort strip above it,
-    its totals (a <tfoot>) kept under the rows whatever the order. */
-function sortedTable(memo, cols, rows, rowFn, firstCol = 0, { cls = "list compact" } = {}, foot = null) {
-  const t = sortableTable(memo, cols, rows, rowFn, firstCol, { cls });
-  if (foot) t.append(foot);
-  return [t.strip, h("div", { class: "scroll-x" }, t)];
-}
-function meter(frac, cls = "") {
-  const f = Math.max(0, Math.min(1, frac || 0));
-  return h("div", { class: `meter ${cls}${f > 0.9 ? " high" : f > 0.75 ? " mid" : ""}` }, h("div", { style: `width:${(f * 100).toFixed(1)}%` }));
-}
 async function adminPage(sub = "") {
   const show = pageShow();
   // D814: Models and variables are the agents' tab; D816: the audit is Insights', the documents are the Loops'
@@ -73,7 +67,7 @@ async function adminPage(sub = "") {
       bar.replaceChildren(...PARTS.map(([k, label]) => h("button", { type: "button", role: "tab", class: k === cur ? "on" : "", "aria-selected": k === cur ? "true" : "false",
         onclick: () => { cur = k; try { localStorage.setItem("flux-insights-part", k); } catch (_) { /* per viewer */ } draw(); } }, label)));
       part.replaceChildren(skeleton(6));
-      if (cur === "audit") await adminAudit(part, ok); else await adminInsights(part, cur, ok);
+      if (cur === "audit") await adminAudit(part, ok); else adminInsights(part, cur);
     };
     body.replaceChildren(bar, part);
     await draw();
@@ -82,60 +76,12 @@ async function adminPage(sub = "") {
   if (tab === "applications") return adminApplications(body);
 }
 
-/** The audit trail (D708, D723), under Insights (D816): what happened, by whom, narrowed by both. */
+/** The audit trail (D708, D723), under Insights (D816): admin/Audit.js. */
 async function adminAudit(body, ok = () => true) {
   const audit = await api("/audit");
-  if (!ok()) return;                                       // D920: another sub-tab chosen meanwhile
-  // D708: the hosts a loop's sandbox refused are here too, once per host and run.
-  // D723: narrowed by what happened and by whom, each a list of what the trail holds
-  const NOONE = "\u0000";                                   // an entry without a user (the server's own)
-  const tally = (key) => { const m = new Map(); for (const x of audit) m.set(key(x), (m.get(key(x)) || 0) + 1); return [...m].sort((a, b) => a[0] < b[0] ? -1 : 1); };
-  const pick = (label, all, entries, name) => h("select", { "aria-label": label },
-    h("option", { value: "" }, `${all} (${audit.length})`), entries.map(([v, n]) => h("option", { value: v }, `${name(v)} (${n})`)));
-  // D724: the kinds in groups; a kind not listed is Other
-  const GROUPS = [["Users and sign-in", ["login", "login refused", "add user", "change user", "change password",
-      "invite user", "password set from a link", "create group", "rename group", "group server access", "view as user", "return from view as"]],
-    ["Runs", ["start", "stop", "restart", "restart requested", "restart failed", "note", "note removed", "stop all", "restart all",
-      "restart all requested", "starts paused", "running limit", "kill container"]],
-    ["Loops and their files", ["loop by an agent", "configure", "write document", "problem revised by an agent",
-      "edit", "upload", "add files", "delete file", "move file", "delete app", "reset app", "asked about a loop", "invalidated a design", "restored a design", "rejected a result", "restored a rejected result", "clone loop", "empty loop",
-      "document migrated", "rename loop", "transfer loop"]],
-    ["Sharing and loop settings", ["share", "left a share", "variable", "settings", "advanced settings", "sandbox mounts"]],
-    ["Agents", ["agent added", "agent removed", "agent renamed", "agent settings", "agent login", "agent test", "offered for Ask", "not offered for Ask"]],
-    // D885: the scheduled clean-up and its settings are the server's
-    ["Server", ["server settings", "sandbox settings", "clean cache", "application refreshed", "maintenance",
-      "maintenance settings", "notification", "past turns priced", "stderr masks", "insights: removed"]],
-    ["Network", ["network refused"]]];
-  const groupOf = (a) => a.startsWith("cli ") ? "Users and sign-in" : (GROUPS.find(([, ks]) => ks.includes(a)) || ["Other"])[0];
-  const kinds = new Map(tally(x => x.action));
-  const what = h("select", { "aria-label": "What" }, h("option", { value: "" }, `Every kind (${audit.length})`),
-    [...GROUPS.map(([g]) => g), "Other"].map(g => {
-      const mine = [...kinds].filter(([k]) => groupOf(k) === g);
-      if (!mine.length) return "";
-      const n = mine.reduce((t, [, c]) => t + c, 0);
-      // D733: a group only -- one kind alone is never what is looked for; the rows keep their kind
-      return h("option", { value: g, title: mine.map(([k, c]) => `${k} (${c})`).join(", ") }, `${g} (${n})`);
-    }));
-  const isWhat = (x) => !what.value || groupOf(x.action) === what.value;
-  const who = pick("Who", "Everyone", tally(x => x.user || NOONE), v => v === NOONE ? "no user" : v);
-  const find = h("input", { placeholder: "search the details", class: "filter" });
-  const count = h("span", { class: "muted" }), rows = h("tbody", {});
-  const draw = () => {
-    const f = find.value.trim().toLowerCase();
-    const got = audit.filter(x => isWhat(x) && (!who.value || (x.user || NOONE) === who.value)
-      && (!f || String(x.detail || "").toLowerCase().includes(f)));
-    count.textContent = got.length === audit.length ? `${audit.length} entries` : `${got.length} of ${audit.length} entries`;
-    rows.replaceChildren(...(got.length ? got.map(x => h("tr", {},
-      h("td", { class: "muted" }, ago(x.t)), h("td", {}, x.user || ""),
-      h("td", { class: x.action === "network refused" || x.action === "login refused" ? "bad" : "" }, x.action),
-      h("td", { class: "mono muted" }, x.detail))) : [h("tr", {}, h("td", { colspan: 4 }, empty("Nothing matches.")))]));
-  };
-  what.onchange = who.onchange = draw; find.oninput = draw; draw();
-  body.replaceChildren(card("Audit trail", [h("div", { class: "toolbar" }, what, who, find, count),
-    h("table", { class: "list" }, h("thead", {}, h("tr", {}, h("th", {}, "When"), h("th", {}, "Who"), h("th", {}, "What"), h("th", {}, "Detail"))), rows)]));
+  if (ok()) showIn(body, "audit", html`<${Audit} audit=${audit} />`);     // D920: another sub-tab chosen meanwhile, nothing drawn
 }
 
-/** D846: a notification from the admin to every user, or the ones picked, in their bell. */
 /** Admin › Loops (D695): admin/Loops.js -- the old documents read after the list, never holding it up (D921). */
 async function adminLoops(body) {
   const load = () => Promise.all([api("/admin/apps"), api("/admin/controls").catch(() => null)]);
@@ -152,264 +98,18 @@ function adminResources(body) { mount(body, html`<${Resources} />`); }
 /** The applications of this Flux (D700): admin/Applications.js. */
 async function adminApplications(body) { mount(body, html`<${Applications} r=${await api("/admin/applications")} />`); }
 
-/** Maintenance (D885): the scheduled clean-up, a row a task -- on or off, how often, its settings,
-    what it last did, Run now (a loop's tasks over every loop, or the one picked). */
-const EVERY_UNITS = [["min", 1 / 60], ["h", 1], ["d", 24]];
-const PARAM_LABEL = { days: "older than (days)", keep: "keep (names, comma-separated)", min_free_pct: "alert below (% free)",
-  keep_backups: "keep latest backups (at least 1)",
-  max_mb: "condense over (MB)", keep_mb: "keep recent (MB)", failures_days: "login failures (days)",
-  notices_days: "notifications (days)", audit_days: "audit trail (days, 0 keeps all)", delete: "delete them (not only report)" };
+/** Maintenance (D885): admin/Maintenance.js -- read again after a run or an edit. */
 async function adminMaintenance(body) {
-  // D896: a table -- the task, its schedule, when it last ran and what it did, Run; its settings and
-  // a run on one loop in Edit
-  const r = await api("/admin/maintenance");
-  const unitOf = (hrs) => hrs >= 24 && hrs % 24 === 0 ? EVERY_UNITS[2] : hrs >= 1 ? EVERY_UNITS[1] : EVERY_UNITS[0];
-  const every = (t) => { const [u, m] = unitOf(t.every_h); return `every ${Math.round(t.every_h / m)} ${u}`; };
-  const result = (x) => x ? h("span", { class: x.ok ? "" : "bad", title: x.said }, x.loop ? `${x.loop}: ` : "", x.said) : h("span", { class: "muted" }, "—");
-  const edit = async (t) => {
-    const mark = saveMark();
-    const on = h("input", { type: "checkbox", checked: t.on });
-    const [unit, mult] = unitOf(t.every_h);
-    const n = h("input", { type: "number", min: 1, step: 1, value: Math.round(t.every_h / mult), style: "width:80px", "aria-label": "every" });
-    const u = h("select", { "aria-label": "unit" }, EVERY_UNITS.map(([k]) => h("option", { value: k, selected: k === unit }, k)));
-    const fields = Object.entries(t.params).map(([k, v]) => {
-      const f = typeof v === "boolean" ? h("input", { type: "checkbox", checked: v }) : h("input", { type: typeof v === "number" ? "number" : "text", min: 0, value: v });
-      f.dataset.k = k;
-      return f;
-    });
-    autosave([on, n, u, ...fields], () => api(`/admin/maintenance/${t.key}`, { method: "PUT", body: {
-      on: on.checked, every_h: Math.max(1, Number(n.value) || 1) * EVERY_UNITS.find(([k]) => k === u.value)[1],
-      params: Object.fromEntries(fields.map(f => [f.dataset.k, f.type === "checkbox" ? f.checked : f.type === "number" ? Number(f.value) : f.value])) } }), mark);
-    const pick = t.per_loop ? h("select", { "aria-label": "a loop" }, r.loops.map(l => h("option", { value: l }, l))) : null;
-    const once = pick && r.loops.length ? h("div", { class: "row" }, pick, act("Run on this loop", async () => {
-      const got = await api(`/admin/maintenance/${t.key}/run`, { method: "POST", body: { loop: pick.value } });
-      toast(`${t.title}: ${got.said}`, got.ok ? "ok" : "bad");
-    }, { cls: "small" })) : "";
-    await dialog(t.title, h("div", { class: "mt-edit" }, h("p", { class: "muted" }, t.what),
-      h("label", { class: "check" }, on, "on a schedule"),
-      h("div", { class: "row" }, h("span", {}, "every"), n, u),
-      ...fields.map(f => h("label", { class: f.type === "checkbox" ? "check" : "stack" },
-        f.type === "checkbox" ? [f, PARAM_LABEL[f.dataset.k] || f.dataset.k] : [PARAM_LABEL[f.dataset.k] || f.dataset.k, f])),
-      once ? h("div", { class: "stack" }, h("span", { class: "muted small" }, "Once, on one loop"), once) : "",
-      mark), [["Close", false]]);                                               // D939: no "save as you" said
-    adminMaintenance(body);
-  };
-  const rowOf = (t) => h("tr", { class: t.on ? "" : "off" },
-    h("td", { "data-label": "Task", title: t.what }, h("strong", {}, t.title)),
-    h("td", { "data-label": "Schedule", class: t.on ? "" : "muted" }, t.on ? every(t) : "off"),
-    // D940: a scheduled run that found nothing to do is not kept as a run (D885), but it ran: the
-    // latest check is the last run, said as nothing to do -- not "never"
-    ...(() => {
-      const idle = t.checked && (!t.last || t.checked > t.last.t + 1);
-      return [h("td", { "data-label": "Last run" }, t.running ? h("span", { class: "pill live" }, "running")
-          : idle ? ago(t.checked) : t.last ? ago(t.last.t) : h("span", { class: "muted" }, "never")),
-        h("td", { "data-label": "Result", class: "mt-said" }, idle ? h("span", { class: "muted", title: t.last ? `last change ${when(t.last.t)}: ${t.last.said}` : "" }, "nothing to do") : result(t.last))];
-    })(),
-    h("td", { class: "right mt-acts" },
-      act("Run", async () => {
-        const got = await api(`/admin/maintenance/${t.key}/run`, { method: "POST", body: { loop: null } });
-        toast(`${t.title}: ${got.said}`, got.ok ? "ok" : "bad"); adminMaintenance(body);
-      }, { cls: "small" }),
-      h("button", { type: "button", class: "small", onclick: () => edit(t) }, "Edit")));
-  body.replaceChildren(card("Maintenance", [h("p", { class: "muted small" }, "Clean-up on a schedule. A running loop is never touched; every run is in the audit trail."),
-    h("div", { class: "scroll-x" }, h("table", { class: "list compact mt-table" },
-      h("thead", {}, h("tr", {}, h("th", {}, "Task"), h("th", {}, "Schedule"), h("th", {}, "Last run"), h("th", {}, "Result"), h("th", {}, ""))),
-      h("tbody", {}, r.tasks.map(rowOf))))]));
+  const draw = async () => mount(body, html`<${Maintenance} r=${await api("/admin/maintenance")} reload=${draw} />`);
+  await draw();
 }
 
-/** What every sandbox gets (D698): the network, PATH directories, what every home starts with (D744). */
-async function adminSandbox(body) {
-  const r = await api("/admin/sandbox");
-  const c = r.config;
-  const lines = (a) => (a || []).join("\n");
-  const list = (ta) => ta.value.split(/[\n,]/).map(x => x.trim()).filter(Boolean);
-  const ta = (id, value, rows, ph) => h("textarea", { id, rows, placeholder: ph, class: "mono", value });
-  const mode = h("select", { id: "sb-net" }, h("option", { value: "open", selected: c.network !== "allowlist" }, "open: the containers reach any host"),
-    h("option", { value: "allowlist", selected: c.network === "allowlist" }, "allowlist: only the hosts below"));
-  const allow = ta("sb-allow", lines(c.allow), 5, "localai.example.org\n*.anthropic.com\n10.0.0.0/8\n192.168.1.20");
-  const endpoints = h("input", { type: "checkbox", id: "sb-ep", checked: c.endpoints !== false });
-  const paths = ta("sb-path", lines(c.path), 3, "/opt/tools/bin");
-  const loginP = h("input", { type: "checkbox", id: "sb-login", checked: !!c.login_path });
-  const adds = r.login_path.filter(d => !r.path.includes(d));
-  const seed = ta("sb-seed", lines(c.home_seed), 3, ".config/opencode\n.gitconfig\n.npmrc");
-  const allowBox = h("div", { class: "sb-allow" }, h("label", { class: "stack" }, "Allowed: one per line, a host (and its subdomains), *.domain, an IP or a CIDR", allow),
-    h("label", { class: "check" }, endpoints, "also the model endpoints set under Models (their hosts)"));
-  const showAllow = () => { allowBox.hidden = mode.value !== "allowlist"; };
-  mode.addEventListener("change", showAllow); showAllow();
-  const sbMark = saveMark();
-  // D850: the stderr lines the pages leave out -- here since D896, beside what every sandbox gets
-  const maskBox = h("textarea", { id: "stderr-masks", rows: 4, class: "mono", placeholder: "failed to clean up stale arg0 temp dirs\n/^WARN .*deprecated/" });
-  api("/admin/masks").then(m => { maskBox.value = (m.masks || []).join("\n"); }).catch(() => {});
-  const maskMark = saveMark();
-  autosave(maskBox, async () => { const got = await api("/admin/masks", { method: "PUT", body: { masks: maskBox.value.split("\n") } });
-    if (document.activeElement !== maskBox) maskBox.value = got.masks.join("\n"); }, maskMark, { delay: 1200 });
-  const maskCard = card("Hidden output", [h("p", { class: "muted" }, "Stderr lines the pages leave out, one per line: a piece of text or a /regular expression/. The record keeps them."),
-    maskBox, h("div", { class: "row" }, maskMark)]);
-  body.replaceChildren(
-    r.sandboxed ? "" : h("p", { class: "callout bad" }, "This server runs without the sandbox (--no-sandbox): none of this applies."),
-    card("Network", [h("p", { class: "muted" }, "What the containers may reach. A loop's Settings may add hosts."),
-      h("label", { class: "stack" }, "Mode", mode), allowBox]),
-    card("PATH", [h("p", { class: "muted" }, "Mounted read-only."),
-      h("details", {}, h("summary", { class: "muted" }, `The server's own PATH: ${r.path.length} directories`), h("pre", { class: "val small" }, r.path.join("\n"))),
-      h("label", { class: "check" }, loginP, `add ${r.home}'s login PATH`, adds.length ? `: ${adds.join(", ")}` : " (it adds nothing to the above)"),
-      h("label", { class: "stack" }, "and these directories, first", paths)]),
-    maskCard,
-    card("Homes", [h("p", { class: "muted" }, "Every user has a home of their own: their runs' HOME, writable and kept -- their agents' settings, logins and sessions. ",
-        "Each user logs their agents in on their Account page; no one's login is shared."),
-      h("label", { class: "stack" }, `Every home starts with (paths inside ${r.home}, copied where a home lacks them, never over what is there)`, seed)]),
-    h("div", { class: "form-actions" }, h("span", { class: "muted small" }, "These apply from each loop's next start."), sbMark));   // D939
-  // D833: saved as they change
-  autosave([mode, allow, endpoints, paths, loginP, seed], () => api("/admin/sandbox", { method: "PUT", body: { network: mode.value,
-    allow: list(allow), endpoints: endpoints.checked, path: list(paths), login_path: loginP.checked, home_seed: list(seed) } }), sbMark);
-}
+/** What every sandbox gets (D698): admin/Sandbox.js. */
+async function adminSandbox(body) { mount(body, html`<${Sandbox} r=${await api("/admin/sandbox")} />`); }
 
-/** Admin › Insights (D766): what went wrong, what was used, how the endpoints and agents did,
-    what the network refused, where the disk goes -- over the last days. */
-// D920: the period Insights counts over, kept here in memory; the browser only remembers it
-let insightsDays = null;
-const PERIODS = [[1, "24 hours"], [7, "7 days"], [30, "30 days"]];
-async function adminInsights(body, part = "failures", ok = () => true) {   // D819: one part of them: failures, usage, endpoints
-  if (insightsDays == null) { try { insightsDays = Number(localStorage.getItem("flux-insights-days")) || 7; } catch (_) { insightsDays = 7; } }
-  if (!PERIODS.some(([v]) => v === insightsDays)) insightsDays = 7;
-  const TITLE = { failures: "Failures", usage: "Usage", endpoints: "Endpoints and agents" };
-  if (!TITLE[part]) part = "failures";
-  // D920 (W17): the period on the right of the part's first card, beside the title it counts for;
-  // the card and its control stay while only its content loads, or says it failed, with a Retry
-  const pick = h("select", { id: "insights-range", "aria-label": "Over the last" }, PERIODS.map(([v, t]) => h("option", { value: v, selected: v === insightsDays }, t)));
-  pick.addEventListener("change", () => { insightsDays = Number(pick.value); try { localStorage.setItem("flux-insights-days", pick.value); } catch (_) { /* remembered when it can be */ } load(); });
-  const box = h("div", {}, skeleton(6)), more = h("div", {});
-  const ago2 = (t) => t ? ago(t) : "—";
-  const loopLink = (u, a) => h("a", { href: `#/u/${enc(u)}/app/${enc(a)}` }, `${u}/${a}`);
-  const sum = (xs) => xs.reduce((s, x) => s + x, 0);
-  const totalCell = (label, value, mono = true) => h("td", { class: `num${mono ? " mono" : ""}`, "data-label": label }, value);
-  const totals = (label, ...cells) => h("tfoot", { class: "usage-total" }, h("tr", {}, h("td", {}, label), ...cells));
-  body.replaceChildren(card(TITLE[part], box, { actions: [h("div", { class: "range-pick" }, h("label", { for: "insights-range" }, "Over the last"), pick)] }),
-    more, part === "usage" ? diskCard() : "");
-  let seq = 0;
-  await load();
-  /** D920: the disk as it is now -- not historical, so no period; when it was measured said. */
-  function diskCard() {
-    const dbox = h("div", {}, skeleton(4)), at = h("span", { class: "muted small" });
-    const fill = async () => {
-      let d;
-      try { d = await api("/admin/insights/disk"); }
-      catch (x) { if (ok() && x.message !== "log in") dbox.replaceChildren(empty(`The disk could not be measured: ${x.message}`, act("Retry", fill, { cls: "small" }))); return; }
-      if (!ok()) return;
-      at.replaceChildren(h("span", {}, "measured ", ago(d.at)));   // D1095: ago() is a component, held by h()
-      const maxDisk = Math.max(...d.disk.map(x => x.total), 1);
-      dbox.replaceChildren(...sortedTable("flux-sort-user-disk", [{ label: "User", key: x => x.user, asc: true }, { label: "Home", key: x => x.home, num: true },
-        { label: "Loops", key: x => x.loops, num: true }, { label: "Largest loop", key: x => x.largest ? x.largest.size : null },
-        { label: "Total", key: x => x.total, num: true }, { label: "" }],
-        d.disk, x => h("tr", {}, h("td", { class: "strong" }, x.user), h("td", { class: "num mono" }, bytes(x.home)),
-          h("td", { class: "num mono" }, `${bytes(x.loops)} (${x.count})`), h("td", {}, x.largest ? [loopLink(x.user, x.largest.app), " ", h("span", { class: "muted mono small" }, bytes(x.largest.size))] : "—"),
-          h("td", { class: "num mono strong" }, bytes(x.total)), h("td", { class: "meter-cell" }, meter(x.total / maxDisk))), 4, {},
-        totals("Total", totalCell("Home", bytes(sum(d.disk.map(x => x.home)))),
-          totalCell("Loops", `${bytes(sum(d.disk.map(x => x.loops)))} (${sum(d.disk.map(x => x.count))})`), h("td", {}, ""),
-          totalCell("Total", bytes(sum(d.disk.map(x => x.total)))), h("td", {}, ""))));
-    };
-    fill();
-    return card("Current disk usage", dbox, { actions: [at] });
-  }
-  async function load() {
-    const my = ++seq, mine = () => my === seq && ok();       // D920: only the latest period's answer, on the sub-tab still shown
-    box.replaceChildren(skeleton(6));
-    let r;
-    try { r = await api(`/admin/insights?days=${insightsDays}&part=${part}`); }
-    catch (x) { if (mine() && x.message !== "log in") box.replaceChildren(empty(`Insights could not be read: ${x.message}`, act("Retry", load, { cls: "small" }))); return; }
-    if (!mine()) return;
-    // D1069: after an update the server reads every loop's past turns into its usage log once -- the numbers fill in meanwhile
-    const said = h("p", { class: "muted small range-said" }, `${when(r.range.start)} – ${when(r.range.end)}`,
-      r.catching_up ? " · counting past turns after the update: the numbers fill in within minutes" : "");
-    const fill = (...kids) => box.replaceChildren(h("div", {}, said, ...kids));   // h() flattens what replaceChildren would not
-    const spark = (xs, label) => {                       // a bar per bucket, to its row's own scale
-      const max = Math.max(...xs, 0) || 1, w = 6, gap = 2;
-      return h("span", { class: "spark", title: label, "aria-label": label },
-        ...xs.map(x => h("i", { class: x > 0 ? "" : "z", style: `height:${x > 0 ? Math.max(2, Math.round(16 * x / max)) : 1}px;width:${w}px;margin-right:${gap}px` })));
-    };
-    if (part === "failures") {
-      const f = r.failures;
-      fill(
-        f.starts.length ? h("table", { class: "list compact" }, h("thead", {}, h("tr", {}, h("th", {}, "When"), h("th", {}, "Loop"), h("th", {}, "Why"))),
-          h("tbody", {}, f.starts.slice(0, 20).map(s => h("tr", {}, h("td", { class: "muted" }, ago2(s.when)), h("td", {}, loopLink(s.user, s.app)),
-            h("td", { class: "mono small why-cell" }, (s.why || []).slice(-2).join(" · ") || `exit ${s.rc}`)))))
-          : h("p", { class: "muted" }, "No start failed."),
-        // D920: the store keeps each agent's latest Test, so this is its latest status -- failed, and set in the period
-        f.tests.length ? [h("h3", {}, "Agent Tests whose latest run failed"), h("table", { class: "list compact" },
-          h("thead", {}, h("tr", {}, h("th", {}, "User"), h("th", {}, "Agent"), h("th", {}, "Step"), h("th", {}, "Why"), h("th", {}, "When"))),
-          h("tbody", {}, f.tests.map(t => h("tr", {}, h("td", {}, t.user), h("td", {}, t.agent), h("td", {}, t.step), h("td", { class: "small" }, t.why), h("td", { class: "muted" }, ago2(t.when))))))] : "");
-      return;
-    }
-    if (part === "usage") {
-      const u = r.usage, per = u.bucket === "hour" ? "an hour" : "a day";
-      const rowsOf = (by) => Object.entries(by).sort((a, b) => b[1].tokens.reduce((s, x) => s + x, 0) - a[1].tokens.reduce((s, x) => s + x, 0));
-      const usageTable = (by, head) => {
-        const rows = rowsOf(by), values = rows.map(([, v]) => v);
-        const tokens = u.days.map((_, i) => sum(values.map(v => v.tokens[i] || 0)));
-        return sortedTable(`flux-sort-usage-${head}`, [{ label: head, key: ([k]) => k, asc: true },
-          { label: "Turns", key: ([, v]) => sum(v.turns), num: true }, { label: "Tokens", key: ([, v]) => sum(v.tokens), num: true },
-          { label: "Cost", key: ([, v]) => sum(v.cost), num: true }, { label: `Tokens ${per} (${u.days[0]} – ${u.days[u.days.length - 1]}, UTC)` }],
-          rows, ([k, v]) => h("tr", {}, h("td", { class: "strong" }, k),
-            h("td", { class: "num" }, String(sum(v.turns))), h("td", { class: "num mono" }, fmtTok(sum(v.tokens))),
-            h("td", { class: "num mono" }, `$${sum(v.cost).toFixed(2)}`), h("td", {}, spark(v.tokens, `${k}: tokens ${per}`))), 2, {},
-          totals("Total", totalCell("Turns", String(sum(values.map(v => sum(v.turns)))), false),
-            totalCell("Tokens", fmtTok(sum(tokens))), totalCell("Cost", `$${sum(values.map(v => sum(v.cost))).toFixed(2)}`),
-            h("td", { "data-label": `Tokens ${per}` }, spark(tokens, `Total: tokens ${per}`))));
-      };
-      fill(...[Object.keys(u.users).length ? [h("h3", {}, "By user"), usageTable(u.users, "User"), h("h3", {}, "By agent or model"), usageTable(u.agents, "Agent or model"),
-        u.top.length ? [h("h3", {}, "Highest usage loops"), sortedTable("flux-sort-usage-loops", [{ label: "Loop", key: t => `${t.user}/${t.app}`, asc: true },
-          { label: "Turns", key: t => t.turns, num: true }, { label: "Tokens", key: t => t.tokens, num: true },
-          { label: "Cost", key: t => t.cost, num: true }, { label: "Time", key: t => t.seconds, num: true }],
-          u.top, t => h("tr", {}, h("td", {}, loopLink(t.user, t.app)), h("td", { class: "num" }, String(t.turns)),
-            h("td", { class: "num mono" }, fmtTok(t.tokens)), h("td", { class: "num mono" }, `$${t.cost.toFixed(2)}`), h("td", { class: "num" }, dur(t.seconds))), 2, {},
-          totals("Total shown", totalCell("Turns", String(sum(u.top.map(t => t.turns))), false),
-            totalCell("Tokens", fmtTok(sum(u.top.map(t => t.tokens)))), totalCell("Cost", `$${sum(u.top.map(t => t.cost)).toFixed(2)}`),
-            totalCell("Time", dur(sum(u.top.map(t => t.seconds))), false)))] : ""]
-        : h("p", { class: "muted" }, "No model or agent turn in this time."),
-        // D841: turns recorded before a price was set, priced once at today's prices
-        h("div", { class: "row end" }, act("Price past turns…", async () => {
-          if (!await confirmDialog("Price past turns?", "Every turn recorded without a price set is priced at today's prices "
-            + "(the admin's; a user's own only with their own endpoint). A turn is priced once: one priced here, or when it was recorded, is never priced again. "
-            + "Running loops are skipped: price them once they stop.", { ok: "Price them" })) return;
-          const got = await api("/admin/reprice", { method: "POST" });
-          toast(`${plural(got.turns, "turn")} in ${plural(got.loops, "loop")} priced: $${got.usd.toFixed(2)}`
-            + (got.skipped.length ? `; skipped, running: ${got.skipped.join(", ")}` : ""), got.skipped.length ? "warn" : "ok");
-          route();
-        }, { cls: "small" }))]);
-      return;
-    }
-    // D850: each list in the order asked (kept in this browser), each row removable
-    const forget = (kind, key, what) => binButton("row", `Remove ${what}?`, "It leaves this list until it is used again.", async () => {
-      await api("/admin/insights/forget", { method: "POST", body: { kind, key } }); route(); });
-    // D859: a column's header sorts it -- a click, again for the other way; kept in this browser
-    const epCols = [
-      { label: "Which", key: e => `${e.kind} ${e.where}`, asc: true },
-      { label: "Turns", key: e => e.turns, num: true },
-      { label: "Failed", key: e => e.rate * 1e6 + e.turns, num: true },
-      { label: "Median", key: e => e.p50, num: true },
-      { label: "Slow (95%)", key: e => e.p95, num: true },
-      { label: "Last used", key: e => e.last },
-      { label: "Last failure", key: e => e.last_error_at || 0 },
-      { label: "" }];
-    const epRow = e => h("tr", {}, h("td", {}, h("span", { class: "pill" }, e.kind), " ", h("span", { class: "mono small" }, e.where)),
-      h("td", { class: "num" }, String(e.turns)),
-      h("td", { class: `num${e.rate > 0.2 ? " bad" : ""}` }, `${e.failed} (${Math.round(100 * e.rate)}%)`),
-      h("td", { class: "num" }, dur(e.p50)), h("td", { class: "num" }, dur(e.p95)), h("td", { class: "muted" }, ago2(e.last)),
-      h("td", { class: "small why-cell", title: e.last_error || "" }, e.last_error ? [ago2(e.last_error_at), ": ", e.last_error.slice(0, 140)] : "—"),
-      h("td", { class: "right" }, forget("endpoint", e.key, e.where)));
-    const netCols = [
-      { label: "Host", key: n => `${n.host}:${n.port}`, asc: true },
-      { label: "Times", key: n => n.count, num: true },
-      { label: "By", key: n => n.loops.map(([a]) => a).join(","), asc: true },
-      { label: "Last", key: n => n.last },
-      { label: "" }];
-    const netRow = n => h("tr", {}, h("td", { class: "mono" }, `${n.host}:${n.port}`), h("td", { class: "num" }, String(n.count)),
-      h("td", { class: "small" }, n.loops.map(([a, c]) => `${a} ×${c}`).join(", ")), h("td", { class: "muted" }, ago2(n.last)),
-      h("td", { class: "right" }, forget("network", n.key, `${n.host}:${n.port}`)));
-    fill(r.endpoints.length ? sortableTable("flux-insights-ep-sort", epCols, r.endpoints, epRow, 2)
-      : h("p", { class: "muted" }, "No turn in this time."));
-    more.replaceChildren(card("Network refused", r.network.length ? sortableTable("flux-insights-net-sort", netCols, r.network, netRow, 1)
-      : h("p", { class: "muted" }, "Nothing refused in this time.")));
-  }
+/** Admin › Insights (D766): admin/Insights.js -- one part at a time (D819). */
+function adminInsights(body, part = "failures") {
+  showIn(body, "insights", html`<${Insights} part=${["failures", "usage", "endpoints"].includes(part) ? part : "failures"} />`);
 }
 
 /** Admin › Agents and models (D756, D807, D814): one tab per tool -- Flux's own model and the agent by
@@ -562,134 +262,14 @@ async function adminAgents(body) {
       save: async (v) => { await api(`/admin/agents/${a}/env`, { method: "PUT", body: v }); route(); } }) })]));
 }
 
+/** Admin › Users and groups (D695): admin/Users.js. */
 async function adminUsers(body, ok = () => true) {
   const [users, use, res, catalog] = await Promise.all([api("/users"), api("/admin/usage").catch(() => []), api("/admin/controls").catch(() => null), api("/groups")]);
-  if (!ok()) return;
-  const name = h("input", { placeholder: "name", autocomplete: "off", "data-lpignore": "true" }); const pw = h("input", { type: "password", autocomplete: "new-password", placeholder: "password (empty: send an invitation link)", style: "min-width:280px" });
-  const groupSel = (value, onchange, label) => h("select", { "aria-label": label, onchange }, catalog.groups.map(g =>
-    h("option", { value: g.id, selected: g.id === value }, g.name + (g.admin ? " (server admin)" : ""))));
-  const initial = catalog.groups.find(g => g.builtin === "internal");
-  const newGroup = groupSel(initial?.id, null, "Group of the new user");
-  const permissionsButton = (u) => {
-    const button = act("Select", async () => {
-      const inputs = Object.entries(catalog.permissions).map(([key, label]) => [key,
-        h("input", { type: "checkbox", "data-permission": key, checked: u.permissions[key], disabled: u.role === "admin" }), label]);
-      const choice = await dialog(`${u.name}'s permissions`, h("div", { class: "stack" },
-        h("p", {}, u.role === "admin" ? `Members of ${u.group} have full server administration permissions.`
-          : "These permissions belong to this user. Access to other people's loops applies within their group; individual sharing also grants access across groups."),
-        inputs.map(([, input, label]) => h("label", { class: "check" }, input, label)),
-        h("p", { class: "muted small" }, "Editing does not grant permission to run, share, delete or transfer other members' loops. Running uses the loop owner's credentials and limits.")),
-        [["Cancel", null], ...(u.role === "admin" ? [] : [["Save", () => Object.fromEntries(inputs.map(([key, input]) => [key, input.checked])), "primary"]])]);
-      if (!choice) return;
-      await api(`/users/${enc(u.name)}`, { method: "PATCH", body: { permissions: choice } });
-      u.permissions = choice; toast(`${u.name}'s permissions saved`, "ok");
-    }, { cls: "small", title: `Select ${u.name}'s permissions` });
-    button.setAttribute("aria-label", `Select ${u.name}'s permissions`);
-    return button;
-  };
-  const useOf = (n) => use.find(u => u.user === n) || {};
-  const def = res ? res.max_running : 4;
-  // D926: rows sort by saved group and running limit.
-  const limits = Object.assign({}, res && res.limits);
-  const limitCell = (u) => {
-    const cur = limits[u.name];
-    const inp = h("input", { type: "number", min: 0, max: 64, value: cur ?? "", placeholder: String(def), style: "width:64px", "aria-label": `${u.name}'s running limit` });
-    const mark = saveMark();
-    autosave(inp, async () => {                                                   // D833
-      const v = inp.value.trim() === "" ? null : Number(inp.value);
-      await api(`/admin/users/${enc(u.name)}/limit`, { method: "PUT", body: { max_running: v } });
-      limits[u.name] = v;
-    }, mark);
-    return h("td", {}, h("span", { class: "inline" }, inp, mark));
-  };
-  // D926: sorted by its headers (a menu on a phone); a row is moved, never rebuilt -- an edit or a pending save stays
-  const cols = [
-    { label: "User", key: u => u.name, asc: true }, { label: "Group", key: u => u.group, asc: true },
-    { label: "Permissions" },
-    { label: "Running limit", key: u => limits[u.name], title: "Loops running at once; empty: the server's default" },
-    { label: "Loops", key: u => useOf(u.name).loops, num: true }, { label: "Turns", key: u => useOf(u.name).turns, num: true },
-    { label: "Time", key: u => useOf(u.name).seconds || null, num: true },
-    { label: "Tokens in → out", key: u => { const x = useOf(u.name); return x.counted ? [x.tokens_in, x.tokens_out] : null; }, num: true },
-    { label: "Cost", key: u => useOf(u.name).cost_usd || null, num: true },
-    { label: "Last active", key: u => u.last_active || null, num: true, title: "Their latest login, action or run" },   // D942
-    { label: "" }];
-  const table = sortableTable("flux-sort-users", cols, users, u => { const x = useOf(u.name); return h("tr", { "data-user": u.name },
-        h("td", { class: "strong" }, u.name, u.pending ? h("span", { class: "pill live small", title: "Invited: their password is not set yet" }, "invited") : ""),
-        h("td", {}, u.name === me.name ? h("span", { class: "pill" }, u.group)
-          : groupSel(u.group_id, async (e) => {
-              try { await api(`/users/${enc(u.name)}`, { method: "PATCH", body: { group_id: +e.target.value } }); route(); }
-              catch (x) { e.target.value = u.group_id; toast(x.message, "bad"); }
-            }, `${u.name}'s group`), u.disabled ? h("span", { class: "pill bad" }, "disabled") : ""),
-        h("td", {}, permissionsButton(u)),
-        limitCell(u),
-        h("td", { class: "num mono" }, String(x.loops ?? "")), h("td", { class: "num mono" }, String(x.turns ?? "")), h("td", { class: "num mono" }, x.seconds ? dur(x.seconds) : ""),
-        h("td", { class: "num mono", title: x.partial ? `${plural(x.partial, "turn")} with incomplete usage` : "" }, x.counted ? `${fmtTok(x.tokens_in)} → ${fmtTok(x.tokens_out)}` : "—"), h("td", { class: "num mono" }, x.cost_usd ? `$${x.cost_usd.toFixed(2)}` : "—"),
-        h("td", { class: "num" }, u.last_active ? ago(u.last_active) : h("span", { class: "muted" }, "never")),
-        h("td", { class: "right" }, h("div", { class: "actions end" },
-          u.name !== me.name ? Object.assign(act("View as", async () => {
-            await api(`/users/${enc(u.name)}/impersonate`, { method: "POST" });
-            location.hash = "#/"; location.reload();
-          }, { cls: "small", title: `View Flux as ${u.name} (read-only)` }), { disabled: u.disabled || u.pending }) : "",
-          act(u.disabled ? "Enable" : "Disable", async () => {
-            if (!u.disabled && !await confirmDialog(`Disable ${u.name}?`, "They are logged out and cannot log in; their loops stay.", { ok: "Disable", danger: true })) return;
-            await api(`/users/${enc(u.name)}`, { method: "PATCH", body: { disabled: !u.disabled } }); toast(`${u.name} ${u.disabled ? "enabled" : "disabled"}`, "ok"); route();
-          }, { cls: "small" }),
-          act(u.pending ? "New invitation link" : "Password reset link", async () => {
-            const got = await api(`/users/${enc(u.name)}/link`, { method: "POST" });
-            await linkDialog(u.name, got.token, got.kind);
-          }, { cls: "small", title: "A one-time link to choose a password; it replaces the last one" })))); }, 0, { cls: "list users" });
-  body.replaceChildren(card("Users", [table.strip, h("div", { class: "scroll-x" }, table),
-    h("div", { class: "row add-user" }, name, pw, newGroup,
-      act("Add user", async () => {
-        const got = await api("/users", { method: "POST", body: { name: name.value, password: pw.value || null, group_id: +newGroup.value } });
-        if (got.token) await linkDialog(got.ok, got.token, got.kind);           // D818: an invitation to send
-        else toast(`${name.value} added`, "ok");
-        route();
-      }, { cls: "primary" })),
-    h("p", { class: "muted small" }, "Server access is set for the whole group on the Groups tab. Loop creation, execution and sharing are controlled by Permissions.")]));
+  if (ok()) showIn(body, "users", html`<${Users} users=${users} use=${use} res=${res} catalog=${catalog} />`);
 }
-
 async function adminGroups(body, ok = () => true) {
   const catalog = await api("/groups");
-  if (!ok()) return;
-  const groupName = h("input", { id: "group-name", placeholder: "Group name", maxlength: 60, autocomplete: "off" });
-  const accessSelect = (value, label, onchange = null, id = null) => h("select", { "aria-label": label, onchange, ...(id ? { id } : {}) },
-    h("option", { value: "", selected: value == null, disabled: true }, value == null && !id ? "Keep existing access" : "Choose server access…"),
-    h("option", { value: "server", selected: value === true }, "Use server settings"),
-    h("option", { value: "own", selected: value === false }, "Own settings only"));
-  const newAccess = accessSelect(null, "Server access for the new group", null, "group-server-access");
-  body.replaceChildren(card("Groups", [
-    h("p", { class: "muted" }, "Server access applies to all group members on their next run or agent invocation. Personal settings and per-user permissions are preserved."),
-    catalog.groups.some(g => g.server_access == null) ? h("p", { class: "muted small" }, "Keep existing access preserves members' current settings until you choose a policy for the group.") : "",
-    h("table", { class: "list groups" },
-      h("thead", {}, h("tr", {}, h("th", {}, "Group"), h("th", { class: "num" }, "Members"),
-        h("th", { title: "Inherit server and machine model, agent and environment settings, or use members' own settings only" }, "Server access"), h("th", {}, "Actions"))),
-      h("tbody", {}, catalog.groups.map(g => h("tr", { "data-group": g.id },
-      h("td", {}, h("div", { class: "group-label" }, h("span", { class: "strong" }, g.name),
-        g.admin ? h("span", { class: "pill small", title: "Full server administration powers, retained when this group is renamed" }, "Server admin") : "")),
-      h("td", { class: "num mono" }, String(g.members)),
-      h("td", {}, accessSelect(g.server_access, `Server access for ${g.name}`, async (e) => {
-        const select = e.target;
-        select.disabled = true;
-        try {
-          await api(`/groups/${g.id}`, { method: "PATCH", body: { server_access: select.value === "server" } });
-          toast(`Server access saved for ${g.name}`, "ok"); route();
-        } catch (x) { select.value = g.server_access == null ? "" : g.server_access ? "server" : "own"; toast(x.message, "bad"); }
-        finally { select.disabled = false; }
-      })),
-      h("td", {}, act("Rename…", async () => {
-        const input = h("input", { id: "group-rename", value: g.name, maxlength: 60 });
-        const renamed = await dialog("Rename group", h("label", { class: "stack" }, "Group name", input),
-          [["Cancel", null], ["Rename", () => input.value.trim(), "primary"]]);
-        if (!renamed) return;
-        await api(`/groups/${g.id}`, { method: "PATCH", body: { name: renamed } }); route();
-      }, { cls: "small", title: `Rename ${g.name}` })))))),
-    h("div", { class: "group-create" }, h("h3", {}, "New group"), h("div", { class: "row" },
-      h("label", { class: "stack", for: "group-name" }, "Group name", groupName),
-      h("label", { class: "stack", for: "group-server-access" }, "Server access", newAccess), act("Add group", async () => {
-      if (!newAccess.value) { toast("Choose server access for the new group.", "warn"); return; }
-      await api("/groups", { method: "POST", body: { name: groupName.value.trim(), server_access: newAccess.value === "server" } }); route();
-    }, { cls: "primary small" })))], { cls: "user-groups" }));
+  if (ok()) showIn(body, "groups", html`<${Groups} catalog=${catalog} />`);
 }
 
 /** Model settings by what uses them (D696): Flux's own model and each coding agent. `server`:
@@ -810,17 +390,5 @@ function settingsForm(st, { server = null, save, scope, agentEnv = null, panels 
   return [bar, h("div", { class: "set-groups" }, groups.map(x => x.el), extras.map(x => x.holder))];   // D939: no "save as you" said
 }
 
-/** D818: the link an admin sends -- shown with a copy button; it is never shown again. */
-function linkDialog(name, token, kind) {
-  const url = `${location.origin}${location.pathname}#/invite/${token}`;
-  const field = h("input", { value: url, readonly: true, class: "mono", style: "width:100%", id: "invite-url" });
-  const copy = h("button", { type: "button", class: "small", onclick: async () => {
-    try { await navigator.clipboard.writeText(url); toast("Copied", "ok"); } catch (_) { field.select(); toast("Selected: copy it", "info"); } } }, "Copy");
-  return dialog(kind === "invite" ? `Invite ${name}` : `${name}: a password reset link`, h("div", { class: "stack" },
-    h("p", {}, kind === "invite" ? `Send ${name} this link: it lets them choose their password and log in. Until then the account cannot be used.`
-      : `Send ${name} this link: it lets them choose a new password; their current one works until then, and their sessions end when it is used.`),
-    h("div", { class: "row" }, field, copy),
-    h("p", { class: "muted small" }, "Single use, valid a week, shown once.")), [["Done", true, "primary"]]);
-}
 
 export { MECHANISM, VERIFIED, adminPage, settingsForm };

@@ -15,7 +15,7 @@ import { SortableTable } from "../components/SortableTable.js";
 const STATE_RANK = l => l.running ? 4 : l.failed ? 3 : l.stopped ? 2 : l.last_active ? 1 : 0;
 const sm = l => l.summary || {};
 // the pressed button lets go and the list is read again -- not waited for: the button, red now, is pressed again at once
-const redrawn = () => { document.activeElement?.blur?.(); if (pageRefresh) pageRefresh(); };
+const redrawn = () => { document.activeElement?.blur?.(); pageRefresh?.().catch(() => {}); };      // a session ended meanwhile: the page says so
 
 /** What one may do with a loop from the list: Start (then its page), or Stop and Restart while it runs --
     D1006: the first press schedules it after the pass, the button turns red, a second (confirmed) abandons it. */
