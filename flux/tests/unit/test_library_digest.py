@@ -37,7 +37,7 @@ def test_a_document_is_digested_once_and_kept_in_the_store(tmp_path):
     made = digest_library(db, model, index=_index())
     assert [d["source"].rsplit("/", 1)[-1] for d in made] == ["PACE.pdf", "fpnew_fma.sv"]
     assert made[0]["recipe"] and made[0]["model"] == "scripted-digester" and made[0]["digest"].startswith("PACE.pdf: a method")
-    assert "16 segments reaches 1 ULP" in model.prompts[0] and "At most 900 characters" in model.prompts[0]
+    assert "16 segments reaches 1 ULP" in model.prompts[0] and "At most 1500 characters" in model.prompts[0]
     assert digest_library(db, model, index=_index()) == [] and len(model.prompts) == 2          # nothing to do twice
     held = digests_in(db)
     assert set(p.rsplit("/", 1)[-1] for p in held) == {"PACE.pdf", "fpnew_fma.sv"}
@@ -156,3 +156,15 @@ def test_a_digest_is_kept_for_the_next_loop_and_never_asked_twice(tmp_path, monk
     assert any("2 documents taken from the digests kept before" in m for m in said), said
     changed = digest_library(str(tmp_path / "two.db"), second, documents=[("b/other.pdf", "another paper, revised")])
     assert len(second.prompts) == 1 and not changed[0].get("reused"), "new content is digested"
+
+
+def test_a_digest_is_read_for_the_problem_and_made_again_for_another(tmp_path):
+    """D1101: the brief is for any field and carries the loop's problem; the problem is part of the key."""
+    db = str(tmp_path / "d.db")
+    model = _Model()
+    docs = [("mentor/knowledge/library/notes.docx", "Quarterly churn fell to 3.1 % after the onboarding change.")]
+    assert len(digest_library(db, model, documents=docs, problem="Reduce customer churn below 3 %.")) == 1
+    assert "THE PROBLEM it is read for:\nReduce customer churn below 3 %." in model.prompts[0]
+    assert "RTL" not in model.prompts[0] and "designer" not in model.prompts[0]
+    assert digest_library(db, model, documents=docs, problem="Reduce customer churn below 3 %.") == []
+    assert len(digest_library(db, model, documents=docs, problem="Plan a warehouse layout.")) == 1

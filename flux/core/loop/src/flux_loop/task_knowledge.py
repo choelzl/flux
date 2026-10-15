@@ -112,7 +112,7 @@ class KnowledgeMixin:
                     # digested whenever the library is on, by the model or `flow.knowledge.agent`;
                     # D793: only for a loop that reads them -- a sweep with no model has no prompt
                     if model_use(self.task) or self.task.digest_by is not None:
-                        lib.append(Digest(folders=folders, whole=True, own=own))
+                        lib.append(Digest(folders=folders, whole=True, own=own, problem=self.task.statement))   # D1101
                     self._mentor = (Mentor(lib) if role is None else
                                     Mentor([*lib, *rest], budget=role.budget, share=role.share))
         return self._mentor

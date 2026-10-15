@@ -1,9 +1,11 @@
 """The library, digested (D576).
 
-A library document (a paper, a spec, a source file) is digested once by the model into a
-designer's key points -- the method, the exact numbers, the constructs, the pitfalls -- and
-stored in the flux store's `documents` table under the kind `digest`, keyed by content: every
-campaign on the machine reads it, and only a changed document is digested again. Two consumers:
+A library document (a paper, a spec, a source file) is digested once by the model into what
+someone solving the loop's problem can use from it -- its methods, its exact figures, its
+constraints, its trade-offs, its pitfalls, in any field (D1101: no longer a hardware designer's
+alone; the loop's statement in the brief) -- and stored in the flux store's `documents` table
+under the kind `digest`, keyed by its content and the problem: only a changed document, or
+another problem, is digested again. Two consumers:
 the generator's static prefix carries the digests as the `digest` knowledge source
 (window-bound, ranked against the part in hand, D548/D550); the orchestrator's planning prompt
 carries the library's index, one line per document.
@@ -28,23 +30,40 @@ from typing import Any, Iterable
 
 __all__ = ["Digest", "RECIPE", "digest_library", "digests_in", "index_lines", "library_documents"]
 
-RECIPE = "designer-key-points-v1"
+RECIPE = "problem-key-points-v2"           # D1101: any field, read for the problem in hand
 MAX_DOC_CHARS = 80_000                    # a paper whole; a long spec's head, said so in the digest
 
-BRIEF = """Read the document below and write its KEY POINTS for a hardware designer who will use it to
-design or improve an RTL block: the method (what it computes and how), every exact number it
-states that a designer would reuse (bit widths, ULP or error bounds, table sizes, latency,
-area, clock, technology), the constructs (algorithms, encodings, tricks), and the pitfalls it
-names. Numbers only as written; nothing you did not read. At most 900 characters, as short
-lines, no preamble. Begin with one line naming what the document is.
+BRIEF = """Read the document below and write what {reader} can use from it.
 
+Begin with one line naming what the document is (its kind and subject) and how it bears on the problem -- or that
+it does not. Then, as short lines, what is specific and usable:
+- the methods and approaches it describes: what each does and how, enough to apply it;
+- every figure that matters for the problem, exactly as written with its unit (sizes, limits, parameters,
+  measurements, results, costs);
+- the requirements and constraints it sets;
+- the trade-offs and comparisons it reports, with their numbers;
+- the pitfalls, failure cases and caveats it names.
+Prefer the specific over the general and the actionable over a summary; names and numbers exactly as written,
+nothing you did not read. If nothing in it bears on the problem, say so on the first line and give its main points
+in a few lines. At most 1500 characters, no preamble.
+{problem}
 DOCUMENT `{name}`{cut}:
 {text}
 """
 
 
-def _key(text: str) -> str:
-    return hashlib.sha256(text.encode("utf-8", "replace")).hexdigest()[:16]
+def _key(text: str, problem: str = "") -> str:
+    """A digest's key: its document's content -- and the problem it was read for (D1101), so one made for another
+    problem is not taken for this one's."""
+    return hashlib.sha256((text + ("\0" + problem if problem else "")).encode("utf-8", "replace")).hexdigest()[:16]
+
+
+def _brief(name: str, cut: str, text: str, problem: str) -> str:
+    """D1101: the brief -- for whoever solves the loop's problem, its statement in it; without one, for anyone
+    solving a design or optimisation problem."""
+    return BRIEF.format(name=name, cut=cut, text=text,
+                        reader="someone solving the problem below" if problem else "someone solving a design or optimisation problem",
+                        problem=f"\nTHE PROBLEM it is read for:\n{problem[:4000]}\n" if problem else "")
 
 
 def library_documents(index: Any = None, *, standard_id: str = "library") -> list[tuple[str, str]]:
@@ -104,7 +123,7 @@ def digests_in(db: str) -> dict[str, dict[str, Any]]:
 #: D782: what one Setup digests at most -- the rest in the passes after, so a library of
 #: hundreds of files never holds a pass up for hours.
 PER_PASS = 8
-#: papers before sources: what a designer reads first
+#: papers before sources: what a reader reads first
 from .convert import PAPER_SUFFIXES as PAPERS  # noqa: E402 -- D1099: documents before source files
 _GIVE_UP = 3                                   # failures in a row: the digester is not working today
 MIN_DIGEST_CHARS = 80                          # D785: shorter is no digest (a word, a fragment)
@@ -135,24 +154,25 @@ def unwrapped(text: str) -> str:
 def digest_library(db: str, proposer: Any, *, index: Any = None, say=lambda _m: None,
                    documents: Iterable[tuple[str, str]] | None = None, ask: Any = None,
                    limit: int | None = None, first: Iterable[str] = (),
-                   stopped: Any = None) -> list[dict[str, Any]]:
+                   stopped: Any = None, problem: str = "") -> list[dict[str, Any]]:
     """Digest the library documents the store does not hold yet (by content), one model call
     each -- or one `ask(path, prompt) -> (text, by)` each (D771) -- and store the digests.
     D782: at most `limit` this call (the rest in the next), those under `first` (the loop's own
     folders) first and papers before sources; three failures in a row end the call, saying
-    why. Returns the digests made this call."""
+    why. D1101: `problem` the loop's statement -- each document read for it, the digest kept for it. Returns the
+    digests made this call."""
     import os
 
     have = digests_in(db)
     made: list[dict[str, Any]] = []
     docs = list(documents) if documents is not None else library_documents(index)
-    todo = [(p, t) for p, t in docs if t.strip() and have.get(p, {}).get("hash") != _key(t)]
+    todo = [(p, t) for p, t in docs if t.strip() and have.get(p, {}).get("hash") != _key(t, problem)]
     store = _store(db) if todo else None
     kept = 0
     for path, text in list(todo):                     # D794: digested before, by another loop or run
-        got = _shared_get(_key(text))
+        got = _shared_get(_key(text, problem))
         if got is not None:
-            doc = {"source": path, "hash": _key(text), "recipe": RECIPE, "chars": len(text),
+            doc = {"source": path, "hash": _key(text, problem), "recipe": RECIPE, "chars": len(text),
                    "model": str(got.get("model") or ""), "digest": str(got["digest"])[:2000], "reused": True}
             store.results.put_document("digest", doc)
             made.append(doc)
@@ -180,7 +200,7 @@ def digest_library(db: str, proposer: Any, *, index: Any = None, say=lambda _m: 
             break
         name = path.rsplit("/", 1)[-1]
         cut = f" (the first {MAX_DOC_CHARS:,} characters of {len(text):,})" if len(text) > MAX_DOC_CHARS else ""
-        prompt = BRIEF.format(name=name, cut=cut, text=text[:MAX_DOC_CHARS])
+        prompt = _brief(name, cut, text[:MAX_DOC_CHARS], problem)
         by = str(getattr(proposer, "model", "") or "")
         try:
             if ask is not None:
@@ -204,7 +224,7 @@ def digest_library(db: str, proposer: Any, *, index: Any = None, say=lambda _m: 
                 break
             continue
         failed.clear()
-        doc = {"source": path, "hash": _key(text), "recipe": RECIPE, "chars": len(text),
+        doc = {"source": path, "hash": _key(text, problem), "recipe": RECIPE, "chars": len(text),
                "model": by, "digest": got[:2000]}
         store.results.put_document("digest", doc)
         _shared_put(doc)
@@ -233,8 +253,9 @@ class Digest:
     static = True
 
     def __init__(self, db: str = "", make: bool = True, folders: Iterable[str] = (), ask: Any = None,
-                 whole: bool = False, own: Iterable[str] = ()) -> None:
+                 whole: bool = False, own: Iterable[str] = (), problem: str = "") -> None:
         self.db = db
+        self.problem = problem                             # D1101: the problem each document is read for
         self.make = make
         self.whole = whole                                 # D774: the shared library's papers too, beside `folders`
         self.own = tuple(str(f) for f in own)              # D782: the loop's own folders, digested first
@@ -274,7 +295,7 @@ class Digest:
             except ImportError:
                 stopped = None
             made = digest_library(db, proposer, say=say, documents=documents, ask=self.ask, limit=limit,
-                                  first=self.own, stopped=stopped)
+                                  first=self.own, stopped=stopped, problem=self.problem)
         except Exception as exc:  # noqa: BLE001 -- the library stays what it is
             say(f"  digest: could not digest the library ({exc!s:.100})")
             return {"error": f"{exc!s:.300}"}
