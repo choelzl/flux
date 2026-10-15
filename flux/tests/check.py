@@ -40,7 +40,7 @@ ALONE = ("phone", "sorted lists", "invitation", "documents migrated")
 #: D1011: web_ui.py's steps that need what an earlier one made, kept together in their order; the
 #: first runs on a fresh server (it checks the empty list and uploads), the others after the setup
 CHAINS = (("login refused", "login", "upload", "every tab", "screens"),
-          ("passes at once", "live tabs", "agent test", "files and questions"),     # `fromex`, made by the first
+          ("passes at once", "live tabs", "the decision and the best", "agent test", "files and questions"),     # `fromex`, made by the first
           ("error feedback", "insights"))                                          # the failed start Insights reads
 #: the rest of web_ui.py runs on its own after the setup (`FLUX_E2E_SETUP=1`: bob, the sweep `sw`
 #: uploaded and run once -- web_ui.Run.setup); seconds of the longer steps, to deal shards evenly

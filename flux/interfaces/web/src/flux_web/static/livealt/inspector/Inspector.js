@@ -2,7 +2,7 @@
 // its parents as chips, why it ran and who did it), what it gave by its kind, the quiet steps it took, every
 // field folded -- and a pass at a glance (P11).
 
-import { html, useLayoutEffect, useRef } from "../../view.js";
+import { html, useLayoutEffect } from "../../view.js";
 import { dur } from "../../format.js";
 import { h } from "../../ui.js";
 import { fullscreen } from "../../viewer.js";

@@ -1,0 +1,62 @@
+// Flux web (D691, D696, D702, D856, D1095): the bar over every page -- the mark, where one can go, the bell and its
+// list, the theme, one's name and Log out (on a phone one menu), and while an admin views as a user, a banner.
+
+import { html, useEffect, useState } from "../view.js";
+import { api, toast } from "../ui.js";
+import { me, setMe } from "../state.js";
+import { Ago } from "../view.js";
+import { Bell as BellIcon } from "../components/Icons.js";
+import { bellState, clearBell, seenAll, subscribe } from "./bell.js";
+
+/** Where one can go; the tab of the page one is on, marked. */
+export function Nav({ here }) {
+  if (!me) return null;
+  const link = (href, text, on) => html`<a href=${href} class=${on ? "on" : ""}>${text}</a>`;
+  return html`${link("#/", "Loops", here === "#/" || here.startsWith("#/app") || here.startsWith("#/u/"))}
+    ${link("#/configure", "New loop", here.startsWith("#/configure") || here === "#/new")}${me.role === "admin" ? link("#/admin", "Admin", here.startsWith("#/admin")) : ""}`;
+}
+
+function Bell() {
+  const [, redraw] = useState(0), [open, setOpen] = useState(false);
+  useEffect(() => subscribe(() => redraw(n => n + 1)), []);
+  useEffect(() => { const close = () => setOpen(false); document.addEventListener("click", close); return () => document.removeEventListener("click", close); }, []);
+  const b = bellState(), canAsk = "Notification" in window && Notification.permission === "default";
+  return html`<div class="bell-wrap"><button class="bell" title="Notifications" aria-label="Notifications" onClick=${e => { e.stopPropagation(); setOpen(!open); seenAll(); }}>
+      <${BellIcon} />${b.unread ? html`<span class="badge">${String(b.unread)}</span>` : ""}</button>
+    <div class="bell-menu" hidden=${!open} onClick=${e => e.stopPropagation()}><div class="bell-head"><strong>Notifications</strong>
+        ${canAsk ? html`<button class="link" onClick=${async () => { await Notification.requestPermission(); redraw(n => n + 1); }}>Allow desktop notifications</button>` : ""}
+        ${b.list.length ? html`<button class="link" onClick=${clearBell}>Clear</button>` : ""}</div>
+      ${b.list.length ? b.list.map(n => html`<a class=${`bell-item ${n.kind}`} href=${n.href || "#/"} onClick=${() => setOpen(false)}><span>${n.text}</span><small><${Ago} t=${n.t} /></small></a>`)
+        : html`<p class="muted">No notifications.</p>`}</div></div>`;
+}
+
+// ---- the theme: system, light or dark, remembered in this browser (D691)
+const THEMES = { system: "◐ System", light: "☀ Light", dark: "☾ Dark" };
+export function theme() { try { return localStorage.getItem("flux-theme") || "system"; } catch (_) { return "system"; } }
+export function applyTheme(t) {
+  if (t === "system") delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = t;
+  try { localStorage.setItem("flux-theme", t); } catch (_) { /* per viewer */ }
+}
+
+/** D856: on a phone the theme, the name and Log out fold into one menu; the bell stays in the bar. */
+export function Who() {
+  const [open, setOpen] = useState(false), [t, setT] = useState(theme);
+  useEffect(() => { const close = e => { if (!e.target.closest("#who")) setOpen(false); }; document.addEventListener("click", close); return () => document.removeEventListener("click", close); }, []);
+  const next = () => { const order = ["system", "light", "dark"], n = order[(order.indexOf(theme()) + 1) % 3]; applyTheme(n); setT(n); };
+  const logout = async () => { await api("/logout", { method: "POST" }).catch(() => {}); setMe(null); location.hash = "#/login"; };
+  return html`${me ? html`<${Bell} />` : ""}
+    <button class="small acct-btn" type="button" aria-label="Account menu" aria-expanded=${String(open)} onClick=${e => { e.stopPropagation(); setOpen(!open); }}>☰</button>
+    <div class=${`who-items${open ? " open" : ""}`} onClick=${e => { if (e.target.closest("a, button")) setOpen(false); }}>
+      <button class="small theme" title="Theme: system, light or dark" onClick=${next}>${THEMES[t]}</button>
+      ${me ? html`<a href="#/account" class="me" title=${me.name}>${me.name}</a><button class="small" onClick=${logout}>Log out</button>` : ""}</div>`;
+}
+
+/** While an admin views as a user: who, read-only, the way back. */
+export function Impersonation({ view }) {
+  if (!view) return null;
+  const back = async () => {
+    try { await api("/impersonation", { method: "DELETE" }); location.hash = "#/admin/users"; location.reload(); }
+    catch (x) { if (x.message !== "log in") toast(x.message, "bad"); }
+  };
+  return html`<span>Viewing as <strong>${view.name}</strong> · Read-only</span><button type="button" class="small" onClick=${back}>Return to admin</button>`;
+}

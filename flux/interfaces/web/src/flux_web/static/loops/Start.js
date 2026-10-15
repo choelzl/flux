@@ -3,7 +3,7 @@
 // picked), a failing one turning Start into "Start anyway".
 
 import { html, useEffect, useRef, useState } from "../view.js";
-import { api, dialog, enc, h, toast, when, withOwner } from "../ui.js";
+import { api, dialog, enc, toast, when, withOwner } from "../ui.js";
 import { pageOwner } from "../state.js";
 
 function StartForm({ name, pre }) {
@@ -45,12 +45,13 @@ export async function startLoop(name, owner) {
     // D693: the last start's options, and the check when the inputs changed since it was run
     const pre = await api(`/apps/${enc(name)}/preflight`).catch(() => ({}));
     if (pre.paused) { toast(`New starts are paused by an admin: ${pre.paused}`, "warn", { timeout: 8000 }); return false; }
-    const body = h("div", {}, html`<${StartForm} name=${name} pre=${pre} />`);
-    if (!await dialog(`Start ${name}`, body, [["Cancel", false], ["Start", true, "primary"]])) return false;
-    const pick = body.querySelector(".start-doc"), forever = body.querySelector(".start-forever").checked;
-    const r = await api(`/apps/${enc(name)}/start`, { method: "POST", body: {
-      passes: forever ? null : (Number(body.querySelector(".start-passes").value) || 1), screen_only: body.querySelector(".start-screen").checked,
-      document: pick ? pick.value : null } });
+    const read = f => {
+      const pick = f.querySelector(".start-doc"), forever = f.querySelector(".start-forever").checked;
+      return { passes: forever ? null : (Number(f.querySelector(".start-passes").value) || 1), screen_only: f.querySelector(".start-screen").checked, document: pick ? pick.value : null };
+    };
+    const options = await dialog(`Start ${name}`, html`<${StartForm} name=${name} pre=${pre} />`, [["Cancel", false], ["Start", read, "primary"]]);
+    if (!options) return false;
+    const r = await api(`/apps/${enc(name)}/start`, { method: "POST", body: options });
     toast(r.ok, "ok");
     return true;
   });

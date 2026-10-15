@@ -4,7 +4,7 @@
 // note to it (the agent's open question answered there).
 
 import { Ago, Card, Empty, Skeleton, html, useEffect, useLayoutEffect, useRef, useState } from "../view.js";
-import { api, dialog, enc, h, toast } from "../ui.js";
+import { api, dialog, enc, toast } from "../ui.js";
 import { dur, plural } from "../format.js";
 import { me } from "../state.js";
 import { AgentPick } from "../components/AgentPick.js";
@@ -115,7 +115,7 @@ export function Talk({ name, qs, mine, canAsk, steer, steerOpen, open: shown = t
     fold: (id, on) => setFolds(f => { const c = new Set(f.collapsed), e = new Set(f.expanded); c.delete(id); e.delete(id); (on ? c : e).add(id); return { collapsed: c, expanded: e }; }),
     stop: async a => { toast((await api(`/apps/${enc(name)}/asks/${a.id}/stop${qs}`, { method: "POST" })).ok, "ok"); read(); },
     remove: async a => { await api(`/apps/${enc(name)}/asks/${a.id}${qs}`, { method: "DELETE" }); read(); },
-    thinking: a => dialog(`Thinking and commands · ${a.author}`, h("div", { class: "agent-view ask-agent-view" }, html`<${AgentTurn} url=${`/apps/${enc(name)}/asks/${a.id}/agent${qs}`} />`), [["Close", null]]) };
+    thinking: a => dialog(`Thinking and commands · ${a.author}`, html`<div class="agent-view ask-agent-view"><${AgentTurn} url=${`/apps/${enc(name)}/asks/${a.id}/agent${qs}`} /></div>`, [["Close", null]]) };
   const threads = new Map();
   for (const a of [...list].sort((x, y) => x.started - y.started || x.id.localeCompare(y.id))) (threads.get(a.thread_id || a.id) || threads.set(a.thread_id || a.id, []).get(a.thread_id || a.id)).push(a);
   const ordered = [...threads.values()].sort((x, y) => y.at(-1).started - x.at(-1).started);

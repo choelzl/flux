@@ -2,7 +2,7 @@
 // part at a time: what went wrong (starts, agent Tests), what was used (by user, by agent, the loops that used
 // most; the disk as it is now), how the endpoints did and what the network refused.
 
-import { Ago, Card, Empty, Skeleton, html, useEffect, useState } from "../view.js";
+import { Ago, Card, Skeleton, html, useEffect, useState } from "../view.js";
 import { api, confirmDialog, enc, toast, when } from "../ui.js";
 import { bytes, dur, fmtTok, plural } from "../format.js";
 import { route } from "../app.js";

@@ -3,7 +3,7 @@
 // was read as), a binary one to download; Rename, Move and Delete on its head; files added by drop or by hand.
 
 import { Ago, Card, Empty, Skeleton, html, useEffect, useRef, useState } from "../view.js";
-import { api, dialog, enc, h, request, toast } from "../ui.js";
+import { api, dialog, enc, request, toast } from "../ui.js";
 import { bytes, plural } from "../format.js";
 import { langOf } from "../highlight.js";
 import { progressDialog, sendFiles } from "../uploads.js";
@@ -31,8 +31,7 @@ function AskPath({ name, label, value, pathOf }) {
     <p class="small muted path-preview">It becomes <span class="mono">${`${name}/${pathOf(v.trim())}`}</span></p></div>`;
 }
 const askPath = (name, title, label, value, ok, pathOf) => {
-  const box = h("div", {}, html`<${AskPath} name=${name} label=${label} value=${value} pathOf=${pathOf} />`);
-  return dialog(title, box, [["Cancel", null], [ok, () => box.querySelector("input").value.trim(), "primary"]]);
+  return dialog(title, html`<${AskPath} name=${name} label=${label} value=${value} pathOf=${pathOf} />`, [["Cancel", null], [ok, f => f.querySelector("input").value.trim(), "primary"]]);
 };
 
 /** The selected item and what may be done with it: `open(path, dir)`, the item's actions, the open text's draft. */
@@ -45,7 +44,7 @@ function useFiles(ctx, refreshList = async () => {}) {
   const dirty = () => !!draft.current?.ed && draft.current.ed.textarea.value !== draft.current.saved;
   async function settled() {
     if (!dirty()) return true;
-    const choice = await dialog(`Unsaved changes to ${draft.current.path}`, h("p", {}, "Save them first, discard them, or go back to the file."),
+    const choice = await dialog(`Unsaved changes to ${draft.current.path}`, html`<p>Save them first, discard them, or go back to the file.</p>`,
       [["Cancel", null], ["Discard", "discard", "danger"], ["Save", "save", "primary"]]);
     if (choice === "save") return await save();
     if (choice === "discard") { draft.current = null; return true; }
@@ -70,7 +69,7 @@ function useFiles(ctx, refreshList = async () => {}) {
       return true;
     } catch (x) {
       if (x.status !== 409) { toast(x.message, "bad"); return false; }
-      const go = await dialog(`${d.path} changed since you opened it`, h("p", {}, `${x.message}. Reload it (your edit is dropped), or save yours over it.`),
+      const go = await dialog(`${d.path} changed since you opened it`, html`<p>${`${x.message}. Reload it (your edit is dropped), or save yours over it.`}</p>`,
         [["Cancel", null], ["Reload", "reload"], ["Save over it", "over", "danger"]]);
       if (go === "over") return save(true);
       if (go === "reload") await open(d.path, false, true);
@@ -107,10 +106,10 @@ function useFiles(ctx, refreshList = async () => {}) {
       if (!await settled()) return;
       const folder = it.kind === "folder";
       const s = folder ? await api(itemUrl(it.path, "/size")).catch(() => null) : null;
-      const ok = await dialog(`Delete ${baseOf(it.path)}?`, h("div", {}, html`<p class="mono path-preview">${`${name}/${it.path}`}</p>
+      const ok = await dialog(`Delete ${baseOf(it.path)}?`, html`<p class="mono path-preview">${`${name}/${it.path}`}</p>
         ${folder ? html`<p>${`The folder and everything in it${s ? `: ${s.partial ? "at least " : ""}${plural(s.files, "file")}, ${plural(s.folders, "folder")}, ${bytes(s.bytes)}.` : "."}`}</p>`
           : it.kind === "link" ? html`<p>${`The link only: what it points to (${it.target}) stays.`}</p>` : ""}
-        <p class="muted small">It cannot be undone.</p>`), [["Cancel", false], [folder ? "Delete the folder" : "Delete", true, "danger solid"]]);
+        <p class="muted small">It cannot be undone.</p>`, [["Cancel", false], [folder ? "Delete the folder" : "Delete", true, "danger solid"]]);
       if (!ok) return;
       try {
         await api(`/apps/${enc(name)}/file?path=${enc(it.path)}${folder ? "&recursive=true" : ""}&revision=${enc(it.revision)}`, { method: "DELETE" });

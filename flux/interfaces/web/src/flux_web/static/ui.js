@@ -2,9 +2,9 @@
 // dialogs, a page's parts and the formatting every page shares.
 
 import { me, navSeq, pageOwner, sessionGen, setMe, setPageOwner } from "./state.js";
-import { agoText, bytes, dur, fmtTok, money, plural, when } from "./format.js";
-import { Ago, html, render } from "./view.js";
-import { readSort, saveSort, sortRows } from "./sorting.js";
+import { bytes, dur, fmtTok, money, plural, when } from "./format.js";
+import { render } from "./view.js";
+
 
 const main = document.getElementById("main");
 
@@ -22,7 +22,6 @@ const isVnode = (x) => typeof x === "object" && x !== null && "type" in x && "pr
 function mountHere(vnode) {
   const span = document.createElement("span");
   span.style.display = "contents";
-  span.__vnode = vnode;
   render(vnode, span);
   return span;
 }
@@ -43,50 +42,6 @@ function h(tag, attrs = {}, ...kids) {
   }
   return el;
 }
-
-/** D1035: `target`'s children made `kids` by changing only what differs (idiomorph): the nodes kept keep
-    their scroll, focus, selection and what a person opened; a kept element takes the new render's
-    handlers (`h`'s). A handler must find other elements from its event (`e.currentTarget.closest(...)`),
-    never hold one made in the same render: the kept one is the old. A details' `open` is the person's --
-    a redraw opens one, never closes one. */
-let idiomorph = null;
-async function morphReady() {
-  if (!idiomorph) idiomorph = (await import("./vendor/idiomorph.esm.js")).Idiomorph;
-  return idiomorph;
-}
-function morph(target, kids) {
-  const list = [kids].flat(Infinity).filter(k => k !== null && k !== undefined && k !== false && k !== "")
-    .map(k => k instanceof Node ? k : document.createTextNode(String(k)));
-  if (!idiomorph || !target.firstChild) { target.replaceChildren(...list); return; }
-  const wrap = document.createElement(target.tagName);
-  wrap.append(...list);
-  // idiomorph inserts a new node as a clone: no listeners, no state set by script -- the clone takes the
-  // original's handlers and form state, the two walked side by side
-  const adding = [];
-  const carry = (from, to) => {
-    if (from.nodeType !== 1 || to.nodeType !== 1) return;
-    if (from.__vnode) { to.__vnode = from.__vnode; render(from.__vnode, to); return; }   // D1095: a component, drawn into the copy
-    for (const type of Object.keys(from.__on || {})) on(to, type, from.__on[type]);
-    if ("value" in from && from.value !== to.value && /^(INPUT|TEXTAREA|SELECT)$/.test(from.tagName)) to.value = from.value;
-    if (from.tagName === "INPUT" && to.checked !== from.checked) to.checked = from.checked;
-    for (let a = from.firstChild, b = to.firstChild; a && b; a = a.nextSibling, b = b.nextSibling) carry(a, b);
-  };
-  idiomorph.morph(target, wrap, { morphStyle: "innerHTML", ignoreActiveValue: true, callbacks: {
-    beforeNodeAdded(node) { adding.push(node); return true; },
-    afterNodeAdded(node) { const from = adding.pop(); if (from && from !== node) carry(from, node); },
-    beforeNodeMorphed(old, now) {
-      // D1095: a component's span kept -- the new render's component drawn into it, its insides Preact's to change
-      if (old.__vnode && now.__vnode) { old.__vnode = now.__vnode; render(now.__vnode, old); return false; }
-      if (old.nodeType === 1 && now.__on) {
-        for (const type of Object.keys(now.__on)) on(old, type, now.__on[type]);
-        for (const type of Object.keys(old.__on || {})) if (!(type in now.__on)) delete old.__on[type];
-      } else if (old.nodeType === 1 && old.__on) old.__on = {};
-      return true;
-    },
-    beforeAttributeUpdated(name, node, kind) { return !(name === "open" && kind === "remove" && node.tagName === "DETAILS"); },
-  } });
-}
-morphReady().catch(() => { /* without it, a redraw replaces: as before */ });
 
 // D701: on a loop shared with this user (or an admin's look at another's), every call about it
 // names its owner -- the server checks what this user may do with it
@@ -162,30 +117,6 @@ const offlineBar = h("div", { class: "offline", role: "alert", hidden: true }, "
 document.body.append(offlineBar);
 function offline(on) { if (offlineBar.hidden === on) offlineBar.hidden = !on; }
 
-/** A server-sent stream that outlives a dropped connection (D694). The browser reconnects by
-    itself with the last event's id; when it gives up (a proxy's error page, a restarted server),
-    the stream is opened again with that id, waiting longer each time, up to 30 s. */
-function followStream(url, event, onData, onState, onSkipped) {
-  let es = null, last = null, closed = false, wait = 1000, timer = null;
-  const say = (st) => { if (onState) onState(st); };
-  const open = () => {
-    es = new EventSource(last ? `${url}${url.includes("?") ? "&" : "?"}offset=${encodeURIComponent(last)}` : url);
-    es.addEventListener(event, (m) => {
-      if (m.lastEventId) last = m.lastEventId;
-      const d = JSON.parse(m.data);
-      if (Array.isArray(d)) d.forEach(onData); else onData(d);       // D855: a journal slice comes whole
-    });
-    if (onSkipped) es.addEventListener("skipped", (m) => onSkipped(JSON.parse(m.data)));   // D759: what a tail left out
-    es.onopen = () => { wait = 1000; say("live"); };
-    es.onerror = () => {
-      if (closed) return;
-      say("reconnecting");
-      if (es.readyState === EventSource.CLOSED) { es.close(); timer = setTimeout(open, wait); wait = Math.min(wait * 2, 30000); }
-    };
-  };
-  open();
-  return { close: () => { closed = true; clearTimeout(timer); if (es) es.close(); } };
-}
 /** D917: a loop's journal, live state and log over ONE server-sent stream (/stream): three per Live
     page took half of the six connections a browser keeps to a server on HTTP/1, and a second Live
     tab left none for an ordinary request. Each part is its view's (`on`); the stream is open only
@@ -251,8 +182,6 @@ function streamPill() {
 }
 
 const enc = encodeURIComponent;
-/** When, said as a component (D1095): kept current while it is on the page -- in a page built with h() too. */
-function ago(t) { return t ? html`<${Ago} t=${t} />` : ""; }
 function show(...nodes) { main.replaceChildren(...nodes); window.scrollTo(0, 0); }
 /** D719: each navigation's number; a page shows itself only while it is the latest -- a slow page
     (waiting on the server) must not draw over the one the user went to since. A page function's
@@ -376,12 +305,21 @@ window.addEventListener("unhandledrejection", (e) => {
 });
 window.addEventListener("error", (e) => { if (e.message) toast(`The page failed: ${e.message}`, "bad", { timeout: 8000 }); });
 
+/** A dialog (no alert, confirm or prompt): `body` a node or a component (drawn into a node of its own, unmounted
+    when it closes); `buttons` [label, value, class] -- a value that is a function is called with the body's node
+    (what a form in it says), Escape is null. */
 function dialog(title, body, buttons) {
   return new Promise((resolve) => {
     const d = h("dialog", { class: "dlg" });
-    const done = (v) => { d.close(); if (toasts.parentNode === d) document.body.append(toasts); d.remove(); resolve(v); };
-    d.append(h("h2", {}, title), body, h("div", { class: "dlg-actions" }, buttons.map(([label, value, cls]) =>
-      h("button", { class: cls || "", type: "button", onclick: () => done(typeof value === "function" ? value() : value) }, label))));
+    const content = isVnode(body) || Array.isArray(body) ? h("div", { class: "dlg-body" }) : body;   // several elements: an array
+    if (content !== body) render(body, content);
+    const done = (v) => {
+      d.close(); if (toasts.parentNode === d) document.body.append(toasts);
+      if (content !== body) render(null, content);
+      d.remove(); resolve(v);
+    };
+    d.append(h("h2", {}, title), content, h("div", { class: "dlg-actions" }, buttons.map(([label, value, cls]) =>
+      h("button", { class: cls || "", type: "button", onclick: () => done(typeof value === "function" ? value(content) : value) }, label))));
     d.addEventListener("cancel", (e) => { e.preventDefault(); done(null); });
     document.body.append(d); d.showModal();
     const f = d.querySelector("input, textarea"); (f || d.querySelector("button.primary, button.danger") || d).focus();
@@ -389,12 +327,6 @@ function dialog(title, body, buttons) {
 }
 function confirmDialog(title, text, { ok = "OK", danger = false } = {}) {
   return dialog(title, h("p", {}, text), [["Cancel", false], [ok, true, danger ? "danger solid" : "primary"]]);
-}
-function promptDialog(title, label, { type = "text", ok = "Save", min = 0 } = {}) {
-  const input = h("input", { type, autocomplete: "off", style: "width:100%" });
-  const body = h("label", { class: "stack" }, label, input);
-  input.addEventListener("keydown", (e) => { if (e.key === "Enter") body.closest("dialog").querySelector("button.primary").click(); });
-  return dialog(title, body, [["Cancel", null], [ok, () => (input.value.length >= min ? input.value : null), "primary"]]);
 }
 
 /** A new loop from a document's text (D906): a name already taken is never replaced -- the user
@@ -413,50 +345,8 @@ async function createFromText(name, filename, text) {
   }
 }
 
-/** A table sorted by a click on a column's header (D859): a button in each sortable header (so the
-    keyboard reaches it too) and `aria-sort`; the same header again turns the order round -- in the order
-    sorting.js keeps (D926), kept per table in this browser. Each row's node is made once and moved, never rebuilt -- a field
-    being edited, its pending save and the focus stay. On a phone (the header hidden) `table.strip`,
-    a column menu and an order button above the rows, sorts the same way: the caller places it. */
-function sortableTable(memo, cols, rows, rowFn, firstCol = 0, { cls = "list compact" } = {}) {
-  let { col, desc } = readSort(memo, cols, firstCol);
-  const nodes = new Map();                         // a row -> its <tr>, made once
-  const nodeOf = (r) => { let n = nodes.get(r); if (!n) nodes.set(r, n = rowFn(r)); return n; };
-  const body = h("tbody", {});
-  const ths = cols.map((c, i) => {
-    if (!c.key) return h("th", { class: c.num ? "num" : "", title: c.title || null }, c.label);
-    const arrow = h("span", { class: "th-arrow", "aria-hidden": "true" });
-    const btn = h("button", { type: "button", class: "th-sort", onclick: () => pick(i, i === col ? !desc : !c.asc) }, c.label, arrow);
-    return Object.assign(h("th", { class: c.num ? "num" : "", title: c.title || null, "data-label": c.label }, btn), { arrow, btn });
-  });
-  const colSel = h("select", { "aria-label": "Sort by", onchange: () => pick(Number(colSel.value), !cols[Number(colSel.value)].asc) },
-    cols.map((c, i) => c.key ? h("option", { value: String(i) }, c.label) : null));
-  const dirBtn = h("button", { type: "button", class: "small sort-dir", onclick: () => pick(col, !desc) });
-  const strip = h("div", { class: "sort-strip" }, h("label", { class: "sort" }, "Sort by ", colSel), dirBtn);
-  function pick(i, d) { col = i; desc = d; saveSort(memo, cols, col, desc); draw(); }
-  function draw() {
-    const had = document.activeElement;
-    body.append(...sortRows(rows, cols[col].key, desc).map(nodeOf));                           // moved, not rebuilt
-    if (had && had !== document.activeElement && body.contains(had)) had.focus({ preventScroll: true });
-    ths.forEach((th, i) => {
-      if (!cols[i].key) return;
-      th.setAttribute("aria-sort", i === col ? (desc ? "descending" : "ascending") : "none");
-      th.btn.classList.toggle("on", i === col);
-      th.arrow.textContent = i === col ? (desc ? "▾" : "▴") : "";
-    });
-    colSel.value = String(col);
-    dirBtn.textContent = desc ? "▾ Descending" : "▴ Ascending";
-    dirBtn.title = "Turn the order round";
-  }
-  draw();
-  const table = h("table", { class: `${cls} sortable` }, h("thead", {}, h("tr", {}, ths)), body);
-  table.strip = strip;
-  return table;
-}
 
 // D754: a phone's width -- the tables stack their rows (app.js), the log wraps (live.js)
 const NARROW = window.matchMedia ? window.matchMedia("(max-width: 640px)") : { matches: false };
 
-export { NARROW, act, money, plural, ago, agoText, morph, on, promptDialog, api, apiUpload, appHref, request, autosave, bytes, card, confirmDialog, createFromText, crumbs, dialog, dur, empty,
-  enc, fmtTok, followStream, h, head, loopStream, markSaved, offline, owned, pageShow, saveMark, show, skeleton, sortableTable,
-  streamPill, toast, toasts, when, withOwner };
+export { NARROW, act, money, plural, api, apiUpload, appHref, request, autosave, bytes, card, confirmDialog, createFromText, crumbs, dialog, dur, empty, enc, fmtTok, h, head, loopStream, offline, owned, pageShow, saveMark, show, skeleton, streamPill, toast, toasts, when, withOwner };

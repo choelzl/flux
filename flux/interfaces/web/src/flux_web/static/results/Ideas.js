@@ -1,9 +1,8 @@
 // Flux web, results (D1042, D1095): the loop's ideas and the trials that evaluated them -- all text literal.
 
-import { Card, Empty, html, useRef } from "../view.js";
+import { Empty, html } from "../view.js";
 import { plural } from "../format.js";
-import { Act } from "../components/Act.js";
-import { ViewerTools } from "../components/ViewerTools.js";
+import { RefreshCard } from "../components/RefreshCard.js";
 
 const Table = ({ heads, cls, children }) => html`<div class="scroll-x"><table class=${cls}>
   <thead><tr>${heads.map(s => html`<th>${s}</th>`)}</tr></thead><tbody>${children}</tbody></table></div>`;
@@ -25,13 +24,9 @@ const Evaluations = ({ rows }) => html`<details><summary>${plural(rows.length, "
     <td>${r.pass ?? "—"}</td><td>${r.design}</td><td>${r.stage || "—"}</td><td>${r.status}</td>
     <td><${Metrics} m=${r.metrics} />${r.error ? html`<${Failure} text=${r.error} />` : ""}<small class="muted">${r.at || ""}</small></td></tr>`)}<//></details>`;
 
-export function Ideas({ data, refresh }) {
-  const box = useRef(null);
-  return html`<${Card} title="Ideas"><div class="bar"><span class="muted">Measured means evidence is available; it does not mean the idea improved the objectives.</span>
-      <${Act} cls="small" onClick=${refresh}>Refresh<//><${ViewerTools} box=${box} title="Ideas notebook" rawText=${JSON.stringify(data, null, 2)} /></div>
-    <div class="ideas-view" ref=${box}>${data.ideas.length ? html`<${Table} heads=${["Idea", "Hypothesis", "State", "Evidence"]} cls="ideas-table">${data.ideas.map(idea => html`<tr>
-        <td><strong>${idea.title}</strong><small class="muted">${idea.id}</small>${idea.part ? html`<small class="muted">${`Part: ${idea.part}`}</small>` : ""}</td>
-        <td><p>${idea.hypothesis}</p>${idea.test ? html`<p class="muted">${`Test: ${idea.test}`}</p>` : ""}</td>
-        <td>${idea.status}</td><td>${idea.evaluations.length ? html`<${Evaluations} rows=${idea.evaluations} />` : "Not tested yet"}</td></tr>`)}<//>`
-      : html`<${Empty} text="No ideas recorded yet. Agents can save hypotheses and alternatives with their drafts." />`}</div><//>`;
-}
+export const Ideas = ({ data, refresh }) => html`<${RefreshCard} title="Ideas" rawTitle="Ideas notebook" said="Measured means evidence is available; it does not mean the idea improved the objectives." refresh=${refresh} raw=${data} cls="ideas-view">
+  ${data.ideas.length ? html`<${Table} heads=${["Idea", "Hypothesis", "State", "Evidence"]} cls="ideas-table">${data.ideas.map(idea => html`<tr>
+      <td><strong>${idea.title}</strong><small class="muted">${idea.id}</small>${idea.part ? html`<small class="muted">${`Part: ${idea.part}`}</small>` : ""}</td>
+      <td><p>${idea.hypothesis}</p>${idea.test ? html`<p class="muted">${`Test: ${idea.test}`}</p>` : ""}</td>
+      <td>${idea.status}</td><td>${idea.evaluations.length ? html`<${Evaluations} rows=${idea.evaluations} />` : "Not tested yet"}</td></tr>`)}<//>`
+    : html`<${Empty} text="No ideas recorded yet. Agents can save hypotheses and alternatives with their drafts." />`}<//>`;

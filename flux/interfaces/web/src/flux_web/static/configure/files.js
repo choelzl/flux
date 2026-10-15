@@ -3,7 +3,7 @@
 // here until it is created (`staged`: path -> {text} | {file}). Each file the document names as `{home}/…` and
 // nobody has is said to be missing. A store: the configurator asks it (missing, upload) and FilesPanel draws it.
 
-import { api, confirmDialog, dialog, enc, h, request, toast } from "../ui.js";
+import { api, confirmDialog, dialog, enc, request, toast } from "../ui.js";
 import { bytes, plural } from "../format.js";
 import { html } from "../view.js";
 import { langOf } from "../highlight.js";
@@ -30,13 +30,14 @@ export function filesStore(name, yamlOf, { staged = new Map(), namedOf = null, o
   /** A file written or edited in a dialog: its path (fixed once it has one) and its text. */
   async function editor(path, text) {
     let ed = null;
-    const box = h("div", { class: "file-edit" }, html`<label class="stack">Path in the loop<input class="file-path" value=${path || ""} placeholder="check.py, scripts/bench.sh" style="width:100%" readonly=${!!path} /></label>
-      <${CodeEditor} text=${text || ""} lang=${langOf(path || "")} onEditor=${e => { ed = e; }} />`);
-    if (!await dialog(path ? `Edit ${path}` : "A new file", box, [["Cancel", false], ["Save", true, "primary"]])) return;
-    const p = box.querySelector(".file-path").value.trim();
+    const got = await dialog(path ? `Edit ${path}` : "A new file", html`<div class="file-edit"><label class="stack">Path in the loop<input class="file-path" value=${path || ""} placeholder="check.py, scripts/bench.sh" style="width:100%" readonly=${!!path} /></label>
+      <${CodeEditor} text=${text || ""} lang=${langOf(path || "")} onEditor=${e => { if (e) ed = e; }} /></div>`,
+      [["Cancel", null], ["Save", f => ({ p: f.querySelector(".file-path").value.trim(), text: ed.textarea.value }), "primary"]]);
+    if (!got) return;
+    const { p } = got;
     if (!p) { toast("Name the file.", "warn"); return; }
-    if (name) { await api(`/apps/${enc(name)}/file?path=${enc(p)}`, { method: "PUT", body: { text: ed.textarea.value } }); toast(`${p} saved`, "ok"); }
-    else staged.set(p, { text: ed.textarea.value });
+    if (name) { await api(`/apps/${enc(name)}/file?path=${enc(p)}`, { method: "PUT", body: { text: got.text } }); toast(`${p} saved`, "ok"); }
+    else staged.set(p, { text: got.text });
     draw();
   }
   async function open(f) {

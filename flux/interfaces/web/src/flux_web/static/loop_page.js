@@ -2,7 +2,7 @@
 // drawer, the refresh; each tab's drawing in its own module (D892: out of loops.js).
 
 import { cleanup, me, setPageRefresh } from "./state.js";
-import { act, api, appHref, card, confirmDialog, dialog, empty, enc, h, head, pageShow, skeleton, toast } from "./ui.js";
+import { api, appHref, confirmDialog, enc, pageShow, toast } from "./ui.js";
 import { configureInto } from "./configure.js";
 import { startLoop, stopLoop, restartLoop } from "./loops.js";
 import { authorTab, overview } from "./loop_overview.js";
@@ -11,8 +11,10 @@ import { agentsView } from "./loop_agents.js";
 import { filesTab } from "./loop_files.js";
 import { settingsView } from "./loop_settings.js";
 import { liveTab } from "./loop_live_alt.js";
-import { html, mount } from "./view.js";
+import { html, mount, node } from "./view.js";
 import { Talk } from "./loop/Talk.js";
+import { Drawer } from "./loop/Drawer.js";
+import { CheckButton, NoResults, NotRun, Reading } from "./loop/Cards.js";
 import { Composer } from "./loop/Notes.js";
 import { AskBanner, Crumbs, LoopHead, Tabs } from "./loop/Head.js";
 import { ideasView } from "./loop_ideas.js";
@@ -34,7 +36,8 @@ async function loopPage(name, owner, path = "") {
 const canAsk = info.can_ask ?? (mine && canRun);          // D991: a group member may ask, seen by them alone
   const canLeave = info.can_leave ?? (perm === "edit" || perm === "watch");
   let st = info.state;
-  const header = h("div", {}), banner = h("div", {}), body = h("div", {});
+  const holder = (cls = "") => Object.assign(document.createElement("div"), { className: cls });
+  const header = holder(), banner = holder(), body = holder();
   // D713: six tabs; the log and the timeline under Live, the workbench under Files, the problem
   // (the configurator, direct edit, an agent) under Settings, Delete at Settings' end; Ask a panel
   // that opens over any tab. The old addresses lead to their new places.
@@ -55,14 +58,15 @@ const canAsk = info.can_ask ?? (mine && canRun);          // D991: a group membe
     const segs = [SLUG[tab], tab === "Overview" ? "" : (curSub() === (subsOf(tab)[0] || [""])[0] && !mode ? "" : curSub()), mode].filter(Boolean);
     history.replaceState(null, "", `#/${owner ? `u/${enc(owner)}/` : ""}app/${enc(name)}${segs.length ? "/" + segs.join("/") : ""}`);
   }
-  const tabBar = h("div", {}), subHolder = h("div", { class: "subrow" }), subTabs = h("div", { style: "display:contents" });
+  const tabBar = holder(), subHolder = holder("subrow"), subTabs = holder();
+  subTabs.style.display = "contents";
   let results = null;                                 // D916: the Results tab's views, while it stays open
   let question = st.question || null;
   // D917: a poll's request, let go when the page is left
   const leaving = new AbortController();
   cleanup.push(() => leaving.abort());
 
-  const crumbBar = h("div", {});
+  const crumbBar = holder();
   // D702: a shared loop, left by its guest
   const leave = async () => {
     if (!await confirmDialog(`Leave ${info.owner}'s ${name}?`, `${info.owner} is told.`, { ok: "Leave" })) return;
@@ -113,8 +117,7 @@ const canAsk = info.can_ask ?? (mine && canRun);          // D991: a group membe
   // D919: the banner is built once per question (by when it was asked) and kept across the polls --
   // an unsent answer stays until it is sent; only the time left is said again
   function drawBanner() {
-    if (askOpen) askView();                                       // the note's line says the question too
-    askFab.classList.toggle("asking", !!(question && st.running));   // D758: the agent waits: the button says so
+    askView();                                                    // D758: the Talk button says the agent waits; the note's line, its question
     mount(banner, question && st.running ? html`<${AskBanner} key=${`${question.asked}\n${question.question}`} question=${question} mine=${mine} send=${sendNote} />` : null);
   }
   const goTab = (t, s = "") => { tab = t; sub = s; mode = ""; results = null; setUrl(); drawTabs(); drawBody(); };
@@ -131,62 +134,16 @@ const canAsk = info.can_ask ?? (mine && canRun);          // D991: a group membe
   cleanup.push(live.close);
   // Talk (loop/Talk.js): conversations keep their own reply context; loop notes still join the next design prompt
   const steerOpen = { open: false, get() { return this.open || !!question; }, set(o) { this.open = o; } };
-  const askBox = h("div", { class: "drawer-body" });
-  const askResize = h("div", { class: "drawer-resize", role: "separator", tabindex: -1,
-    "aria-label": "Resize Talk panel", "aria-orientation": "vertical",
-    title: "Drag to resize. Arrow keys resize; Home restores the minimum width." });
-  const drawer = h("aside", { class: "drawer", "aria-label": "Talk to this loop" },
-    askResize, h("div", { class: "drawer-head" }, h("h2", {}, "Talk to this loop"), h("button", { class: "small", type: "button", onclick: () => setAsk(false) }, "Close")), askBox);
-  let askWidth = 520, askDrag = null;
-  const resizeAsk = (width = askWidth) => {
-    askWidth = Math.max(520, Math.min(width, window.innerWidth));
-    drawer.style.setProperty("--talk-width", `${askWidth}px`);
-    askResize.setAttribute("aria-valuemin", Math.min(520, window.innerWidth));
-    askResize.setAttribute("aria-valuemax", window.innerWidth);
-    askResize.setAttribute("aria-valuenow", Math.min(askWidth, window.innerWidth));
-  };
-  const endAskDrag = () => {
-    const drag = askDrag;
-    askDrag = null;
-    document.body.classList.remove("resizing-drawer");
-    if (drag && askResize.hasPointerCapture(drag.id)) askResize.releasePointerCapture(drag.id);
-  };
-  askResize.addEventListener("pointerdown", e => {
-    if (e.button !== 0 || !e.isPrimary) return;
-    e.preventDefault(); askResize.focus({ preventScroll: true });
-    askDrag = { id: e.pointerId, x: e.clientX, width: drawer.getBoundingClientRect().width };
-    askResize.setPointerCapture(e.pointerId);
-    document.body.classList.add("resizing-drawer");
-  });
-  askResize.addEventListener("pointermove", e => {
-    if (askDrag?.id === e.pointerId) resizeAsk(askDrag.width + askDrag.x - e.clientX);
-  });
-  for (const event of ["pointerup", "pointercancel", "lostpointercapture"]) askResize.addEventListener(event, endAskDrag);
-  askResize.addEventListener("keydown", e => {
-    const width = drawer.getBoundingClientRect().width, step = e.shiftKey ? 100 : 40;
-    const sizes = { ArrowLeft: width + step, ArrowRight: width - step, Home: 520, End: window.innerWidth };
-    if (!(e.key in sizes)) return;
-    e.preventDefault(); resizeAsk(sizes[e.key]);
-  });
-  const onAskResize = () => resizeAsk();
-  window.addEventListener("resize", onAskResize);
-  cleanup.push(() => { endAskDrag(); window.removeEventListener("resize", onAskResize); });
-  resizeAsk();
-  const askFab = h("button", { class: "ask-fab", type: "button", onclick: () => setAsk(!askOpen) }, "Talk");
-  function setAsk(open) {
-    askOpen = open; drawer.classList.toggle("open", open); askFab.classList.toggle("on", open);
-    askResize.tabIndex = open ? 0 : -1;
-    if (!open) endAskDrag();
-    askView();
-  }
-  const onKey = (e) => { if (e.key === "Escape" && askOpen && !document.querySelector("dialog[open]")) setAsk(false); };
-  document.addEventListener("keydown", onKey);
-  cleanup.push(() => document.removeEventListener("keydown", onKey));
-  /** The drawer's body, drawn again as the loop starts or stops (the note to a running loop above the conversations). */
+  // the Talk drawer (loop/Drawer.js): its body mounted once first opened, kept while closed
+  const drawerHost = document.createElement("div");
+  drawerHost.style.display = "contents";
+  let opened = false;
+  function setAsk(open) { askOpen = open; opened = opened || open; askView(); }
+  /** The drawer, drawn again as the loop starts or stops (the note to a running loop above the conversations). */
   function askView() {
-    if (!askOpen && !askBox.firstChild) return;                  // never opened: nothing to keep
     const steer = mine && st.running ? { asking: !!question, el: html`<${Composer} name=${name} qs=${qs} mine=${mine} question=${question} send=${sendNote} n=${notesSent} />` } : null;
-    mount(askBox, html`<${Talk} name=${name} qs=${qs} mine=${mine} canAsk=${canAsk} steer=${steer} steerOpen=${steerOpen} open=${askOpen} />`);
+    mount(drawerHost, html`<${Drawer} open=${askOpen} asking=${!!(question && st.running)} toggle=${setAsk}>
+      ${opened ? html`<${Talk} name=${name} qs=${qs} mine=${mine} canAsk=${canAsk} steer=${steer} steerOpen=${steerOpen} open=${askOpen} />` : ""}<//>`);
   }
 
   function drawSubs() {
@@ -203,15 +160,7 @@ const canAsk = info.can_ask ?? (mine && canRun);          // D991: a group membe
       if (curSub() === "problem") {
         configureInto(body, name, owner, mode, `${appHref(owner, name)}/settings/problem`, { small: true, barHost: subHolder });
         if (canRun && info.document) {
-          const check = act("Check", async () => {
-            const out = h("pre", { class: "log small" }, "Checking in the sandbox…");
-            const d = dialog("Check the saved document", out, [["Close", null]]);
-            const r = await api(`/apps/${enc(name)}/check${qs}`, { method: "POST" });
-            out.textContent = (r.ok ? "Ready to run.\n\n" : "NOT READY\n\n") + r.output;
-            await d;
-          }, { cls: "small", title: "Check the saved problem and inputs. Starting the loop also runs this check." });
-          check.style.marginBottom = "12px";
-          subHolder.append(check);
+          subHolder.append(node(html`<${CheckButton} name=${name} qs=${qs} />`));
         }
         return;
       }
@@ -223,18 +172,17 @@ const canAsk = info.can_ask ?? (mine && canRun);          // D991: a group membe
       if (!st.running && !st.last_active) {
         await overview(ctx);
         if (!ok()) return;
-        body.prepend(...[ab, card(null, info.document ? empty("This loop has not run yet.", canRun ? act("Start", async () => { if (await startLoop(name, owner)) { await refresh(); goTab("Live"); } }, { cls: "primary" }) : "")
-          : empty("This loop has no problem document yet.", mine ? h("a", { class: "btn", href: `${appHref(info.owner, name)}/settings/problem/agent` }, "Have an agent write it") : ""))].filter(Boolean));
+        body.prepend(...[ab, node(html`<${NotRun} info=${info} name=${name} mine=${mine} start=${canRun ? async () => { if (await startLoop(name, owner)) { await refresh(); goTab("Live"); } } : null} />`)].filter(Boolean));
         return;
       }
-      body.replaceChildren(card(null, skeleton(7)));
+      body.replaceChildren(node(html`<${Reading} />`));
       await overview(ctx);
       if (ok() && ab) body.prepend(ab);
       return;
     }
     if (tab === "Live") {
       if (!st.running && !st.last_active) {
-        body.replaceChildren(card(null, empty("This loop has not run yet.", canRun ? act("Start", async () => { if (await startLoop(name, owner)) { await refresh(); drawBody(); } }, { cls: "primary" }) : "")));
+        body.replaceChildren(node(html`<${NotRun} info=${info} name=${name} mine=${mine} start=${canRun ? async () => { if (await startLoop(name, owner)) { await refresh(); drawBody(); } } : null} />`));
         return;
       }
       await live.show();
@@ -248,10 +196,10 @@ const canAsk = info.can_ask ?? (mine && canRun);          // D991: a group membe
       // D916: Results and Graphs, two views of one fetch -- switching keeps the selection and the
       // graphs once built; the tab opened again reads the results afresh
       if (!results) {
-        body.replaceChildren(card(null, skeleton(7)));
+        body.replaceChildren(node(html`<${Reading} />`));
         const r = await api(`/apps/${enc(name)}/results${qs}`);
         if (!ok()) return;                                   // D919: another tab chosen meanwhile
-        if (!r.campaign || !r.designs.length) { body.replaceChildren(checkedCard(ctx, r || {}) || card(null, empty("No results yet."))); return; }   // D1094
+        if (!r.campaign || !r.designs.length) { body.replaceChildren(checkedCard(ctx, r || {}) || node(html`<${NoResults} />`)); return; }   // D1094
         results = resultsView(ctx, r);
       }
       body.replaceChildren(results.show(curSub()));
@@ -275,7 +223,7 @@ const canAsk = info.can_ask ?? (mine && canRun);          // D991: a group membe
   cleanup.push(() => { clearInterval(tick); document.removeEventListener("visibilitychange", shown); });
   setPageRefresh(() => refresh());
   drawHead(); drawTabs(); drawBanner(); drawBody();
-  show(crumbBar, header, banner, tabBar, subHolder, body, askFab, drawer);
+  show(crumbBar, header, banner, tabBar, subHolder, body, drawerHost);
   if (askOpen) setAsk(true);
 }
 

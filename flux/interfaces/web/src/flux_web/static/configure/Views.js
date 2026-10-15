@@ -4,7 +4,7 @@
 // an agent revising one's problem as told (its progress, then what it changed).
 
 import { Card, Empty, Skeleton, html, useEffect, useMemo, useRef, useState } from "../view.js";
-import { api, apiUpload, dialog, enc, h, owned, toast } from "../ui.js";
+import { api, apiUpload, dialog, enc, owned, toast } from "../ui.js";
 import { plural } from "../format.js";
 import { me } from "../state.js";
 import { diffCounts, lineDiff } from "../diff.js";
@@ -23,9 +23,9 @@ import { FilesPanel } from "./FilesPanel.js";
     before it is written, not after a start fails. */
 export function confirmDiff(file, before, after, problem = "") {
   const ops = lineDiff(before, after), { added, removed } = diffCounts(ops);
-  return dialog(`Save ${file}?`, h("div", {}, html`${problem ? html`<div class="callout bad"><strong>This document does not load: </strong>${problem}
+  return dialog(`Save ${file}?`, html`${problem ? html`<div class="callout bad"><strong>This document does not load: </strong>${problem}
       <p class="small">A start or a check of it will be refused until it is fixed.</p></div>` : ""}
-    <p class="muted">${`${plural(added, "line")} added, ${removed} removed.`}</p><${Diff} ops=${ops} />`),
+    <p class="muted">${`${plural(added, "line")} added, ${removed} removed.`}</p><${Diff} ops=${ops} />`,
     [["Cancel", false], problem ? ["Save anyway", true, "danger"] : ["Save", true, "primary"]]);
 }
 
@@ -68,13 +68,13 @@ export async function cloneDialog(name, owner) {
   const qs = owner ? `?owner=${enc(owner)}` : "";
   const permissions = me.role === "admin" ? (await api(`/apps/${enc(name)}/env${qs}`)).advanced : {};
   const keep = hasPermissions(permissions);
-  const body = h("div", { class: "stack" }, html`<label class="stack">New loop name<input value=${`${name}-2`} class="mono" id="clone-to" autocomplete="off" /></label>
+  const body = html`<div class="stack"><label class="stack">New loop name<input value=${`${name}-2`} class="mono" id="clone-to" autocomplete="off" /></label>
     <label class="check"><input type="checkbox" id="clone-wb" />with its workbench (the agents' notes and tools)</label>
     <p class="muted small">${"Copies the problem, not its runs, sharing or environment variables. " + (keep ? "Special permissions reset unless you keep them below. "
       : "Admin overrides (mounts, sandbox exemptions and network settings) are not copied. ") + "The clone uses your account and server defaults, with any permissions you choose to keep."}</p>
-    <${PermissionChoice} settings=${permissions} id="clone-keep-permissions" />`);
+    <${PermissionChoice} settings=${permissions} id="clone-keep-permissions" /></div>`;
   const go = await dialog(`Clone ${owner && owner !== me.name ? owner + "'s " : ""}${name}`, body, [["Cancel", null],
-    ["Clone", () => ({ to: body.querySelector("#clone-to").value.trim(), workbench: body.querySelector("#clone-wb").checked, keep_permissions: !!body.querySelector("#clone-keep-permissions")?.checked }), "primary"]]);
+    ["Clone", f => ({ to: f.querySelector("#clone-to").value.trim(), workbench: f.querySelector("#clone-wb").checked, keep_permissions: !!f.querySelector("#clone-keep-permissions")?.checked }), "primary"]]);
   if (!go || !go.to) return;
   const got = await api(`/apps/${enc(name)}/clone${qs}`, { method: "POST", body: go });
   toast(`${got.name}: cloned`, "ok");

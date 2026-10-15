@@ -2,7 +2,7 @@
 // better), and their sources' difference.
 
 import { html } from "../view.js";
-import { api, dialog, enc, h } from "../ui.js";
+import { api, dialog, enc } from "../ui.js";
 import { plural } from "../format.js";
 import { directionOf } from "../chartdata.js";
 import { lineDiff } from "../diff.js";
@@ -33,5 +33,5 @@ export async function compare(ctx, r, [a, b], directions, fmt) {
   const get = d => api(`/apps/${enc(ctx.name)}/design?design=${enc(d.base || d.name)}&part=${enc(d.part)}&key=${enc(d.key || "")}${ctx.q}`);
   const [fa, fb] = await Promise.all([get(a), get(b)]);
   const stages = (r.stages || []).filter(st => a.stages[st] || b.stages[st]).concat(Object.keys({ ...a.stages, ...b.stages }).filter(st => !(r.stages || []).includes(st)));
-  await dialog(`${a.name} → ${b.name}`, h("div", {}, html`<${Comparison} a=${a} b=${b} fa=${fa} fb=${fb} stages=${stages} directions=${directions} fmt=${fmt} />`), [["Close", null, "primary"]]);
+  await dialog(`${a.name} → ${b.name}`, html`<${Comparison} a=${a} b=${b} fa=${fa} fb=${fb} stages=${stages} directions=${directions} fmt=${fmt} />`, [["Close", null, "primary"]]);
 }

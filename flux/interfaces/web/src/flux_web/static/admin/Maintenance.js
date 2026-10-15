@@ -46,7 +46,7 @@ function TaskForm({ t, loops }) {
 export function Maintenance({ r, reload }) {
   const every = t => { const [u, m] = unitOf(t.every_h); return `every ${Math.round(t.every_h / m)} ${u}`; };
   // D939: no "save as you" said; the table read again when the dialog closes
-  const edit = async t => { await dialog(t.title, h("div", {}, html`<${TaskForm} t=${t} loops=${r.loops} />`), [["Close", false]]); reload(); };
+  const edit = async t => { await dialog(t.title, html`<${TaskForm} t=${t} loops=${r.loops} />`, [["Close", false]]); reload(); };
   const row = t => {
     // D940: a scheduled run that found nothing to do is not kept as a run (D885), but it ran: the latest check is
     // the last run, said as nothing to do -- not "never"

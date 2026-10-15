@@ -1331,3 +1331,4 @@ td.cleared s { color: var(--muted); }
 .alt-notes { margin: 4px 0 0; padding-left: 18px; font-size: 12.5px; display: flex; flex-direction: column; gap: 2px; } /* D1047 */
 .alt-dots { display: inline-flex; gap: 2px; margin-left: 6px; vertical-align: middle; } .alt-dots i { width: 7px; height: 7px; border-radius: 2px; background: var(--ok); display: block; }
 .alt-dots i.bad { background: var(--bad); } .alt-dots i.run { background: var(--run); }   /* D1051 */
+.dlg-body { display: contents; }

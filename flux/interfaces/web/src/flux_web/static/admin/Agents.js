@@ -4,7 +4,7 @@
 // variables under it; the variables every agent and run gets; adding an agent.
 
 import { Card, html, useEffect, useRef, useState } from "../view.js";
-import { api, confirmDialog, dialog, h, toast, when } from "../ui.js";
+import { api, confirmDialog, dialog, toast, when } from "../ui.js";
 import { plural } from "../format.js";
 import { route } from "../app.js";
 import { Act } from "../components/Act.js";
@@ -46,9 +46,9 @@ function RenameForm({ a }) {
     <p class="muted small">Its settings, variables and tests move with it. Documents are not rewritten.</p><div class="small">${warn}</div></div>`;
 }
 const rename = async a => {
-  const box = h("div", {}, html`<${RenameForm} a=${a} />`);
-  if (!await dialog(`Rename ${a.label}`, box, [["Cancel", false], ["Rename", true, "danger"]])) return;
-  const r = await api(`/admin/agents/${a.id}/rename`, { method: "POST", body: { name: box.querySelector("input").value.trim() } });
+  const name = await dialog(`Rename ${a.label}`, html`<${RenameForm} a=${a} />`, [["Cancel", null], ["Rename", f => f.querySelector("input").value.trim(), "danger"]]);
+  if (name == null) return;
+  const r = await api(`/admin/agents/${a.id}/rename`, { method: "POST", body: { name } });
   toast(r.ok + (r.loops.length ? ` -- ${plural(r.loops.length, "loop")} still name ${a.id}` : ""), r.loops.length ? "warn" : "ok");
   route();
 };

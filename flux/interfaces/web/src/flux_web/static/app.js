@@ -1,89 +1,21 @@
 // Flux web (D683-D689): hash-routed pages over /api. A loop -- an application -- is running or not;
-// a start resumes it from its record. Every node is built with h() -- text goes in as text, never as
-// HTML -- so nothing a run prints can inject script.
+// a start resumes it from its record. Text goes in as text, never as HTML -- so nothing a run prints can
+// inject script.
 //
-// D889: the pages are modules -- ui.js (building blocks), loops.js, live.js, configure.js, admin.js,
-// account.js, charts.js; state.js holds what they share. Here: the bell, the routing, the theme and the bar.
+// D889: the pages are modules; state.js holds what they share. D1095: they are Preact components (view.js);
+// the bar is shell/Bar.js, the bell shell/bell.js. Here: the routing.
 
-import { cleanup, me, navSeq, pageOwner, pageRefresh, setMe, setNavSeq, setPageOwner, setPageRefresh } from "./state.js";
-import { ago, api, appHref, card, h, show, toast } from "./ui.js";
-import { drawn, html } from "./view.js";
-import { Bell, Logo } from "./components/Icons.js";
+import { cleanup, me, navSeq, pageOwner, setMe, setNavSeq, setPageOwner, setPageRefresh } from "./state.js";
+import { api, show } from "./ui.js";
+import { Card, html, node, render } from "./view.js";
+import { Logo } from "./components/Icons.js";
+import { Impersonation, Nav, Who, applyTheme, theme } from "./shell/Bar.js";
+import { bellFor, pollLoops } from "./shell/bell.js";
 import { appsPage, newPage } from "./loops.js";
 import { loopPage } from "./loop_page.js";
 import { configurePage } from "./configure.js";
 import { adminPage } from "./admin.js";
 import { accountPage, invitePage, loginPage } from "./account.js";
-
-// ================================================================ notifications (D688, D689)
-const bell = { list: [], seen: new Map(), unread: 0, primed: false, user: null };
-// D702: the bell is each user's -- kept under their name, started afresh when another logs in here
-const bellKey = () => `flux-notes:${bell.user}`;
-function bellFor(user) {
-  if (bell.user === user) return;
-  bell.user = user; bell.seen = new Map(); bell.unread = 0; bell.primed = false;
-  try { bell.list = user ? JSON.parse(localStorage.getItem(bellKey()) || "[]") : []; } catch (_) { bell.list = []; }
-  try { localStorage.removeItem("flux-notes"); } catch (_) { /* the old, shared key */ }
-}
-function notify(text, kind, href) {
-  bell.list.unshift({ text, kind, href, t: Date.now() / 1000 });
-  bell.list = bell.list.slice(0, 30); bell.unread++;
-  try { localStorage.setItem(bellKey(), JSON.stringify(bell.list)); } catch (_) {}
-  toast(text, kind, { timeout: 9000, href });
-  if ("Notification" in window && Notification.permission === "granted" && document.hidden) {
-    try { new Notification("Flux", { body: text, tag: href }); } catch (_) {}
-  }
-  drawBell();
-}
-/** Every 10 s: a loop that stopped (finished, failed, stopped) or whose agent asks. */
-let polling = false, pollBeat = 0;
-async function pollLoops() {
-  if (!me || polling) return;                       // D917: one at a time -- a slow answer is not asked again
-  if (document.hidden && pollBeat++ % 3) return;    // a hidden tab: every 30 s, still in time for a desktop notice
-  polling = true;
-  try { await pollOnce(); } finally { polling = false; }
-}
-async function pollOnce() {
-  bellFor(me.name);
-  let loops;
-  try { loops = await api("/loops"); } catch (_) { return; }
-  let changed = false;
-  try { for (const n of await api("/notices")) notify(n.text, n.kind || "info", n.href || ""); } catch (_) { /* the next poll */ }
-  for (const l of loops) {
-    const id = `${l.owner || ""}/${l.app}`, label = l.owner ? `${l.owner}'s ${l.app}` : l.app;   // D702: shared loops too
-    const was = bell.seen.get(id);
-    const key = l.question ? `q:${l.question.asked}` : "";
-    if (!was || was.running !== l.running) changed = true;
-    if (bell.primed && was) {
-      const href = appHref(l.owner, l.app);
-      if (was.running && !l.running) {
-        if (l.failed) notify(`${label} failed`, "bad", href);
-        else if (l.stopped) notify(`${label} stopped`, "warn", href);
-        else notify(`${label} finished its passes`, "ok", href);
-      }
-      if (key && key !== was.key) notify(`${label}: the agent asks a question`, "warn", href);
-    }
-    bell.seen.set(id, { running: l.running, key });
-  }
-  if (changed && bell.primed && pageRefresh) pageRefresh().catch(() => {});
-  bell.primed = true;
-}
-setInterval(pollLoops, 10000);
-const BELL = drawn(html`<${Bell} />`);
-const bellBtn = h("button", { class: "bell", title: "Notifications", "aria-label": "Notifications" });
-const bellMenu = h("div", { class: "bell-menu", hidden: true });
-function drawBell() {
-  bellBtn.replaceChildren(BELL, bell.unread ? h("span", { class: "badge" }, String(bell.unread)) : "");
-  const canAsk = "Notification" in window && Notification.permission === "default";
-  bellMenu.replaceChildren(
-    h("div", { class: "bell-head" }, h("strong", {}, "Notifications"),
-      canAsk ? h("button", { class: "link", onclick: async () => { await Notification.requestPermission(); drawBell(); } }, "Allow desktop notifications") : "",
-      bell.list.length ? h("button", { class: "link", onclick: () => { bell.list = []; bell.unread = 0; localStorage.removeItem(bellKey()); drawBell(); } }, "Clear") : ""),
-    ...(bell.list.length ? bell.list.map(n => h("a", { class: `bell-item ${n.kind}`, href: n.href || "#/", onclick: () => { bellMenu.hidden = true; } },
-      h("span", {}, n.text), h("small", {}, ago(n.t)))) : [h("p", { class: "muted" }, "No notifications.")]));
-}
-bellBtn.addEventListener("click", (e) => { e.stopPropagation(); bellMenu.hidden = !bellMenu.hidden; bell.unread = 0; drawBell(); });
-document.addEventListener("click", (e) => { if (!bellMenu.hidden && !bellMenu.contains(e.target)) bellMenu.hidden = true; });
 
 // ================================================================ routing
 // ---- D754: on a phone nothing scrolls sideways -- a list's rows stack, each value under its column's name
@@ -135,55 +67,23 @@ async function route() {
     if ((m = hash.match(/^#\/admin(?:\/([a-z]+))?$/)) && me.role === "admin") return await adminPage(m[1] || "");
     if (hash === "#/account") return await accountPage();
     return await appsPage();
-  } catch (x) { if (x.message !== "log in") show(card(null, h("p", { class: "err" }, x.message))); }
-}
-// ---- the theme: system, light or dark, remembered in this browser (D691)
-const THEMES = { system: "◐ System", light: "☀ Light", dark: "☾ Dark" };
-function theme() { try { return localStorage.getItem("flux-theme") || "system"; } catch (_) { return "system"; } }
-function applyTheme(t) {
-  if (t === "system") delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = t;
-  try { localStorage.setItem("flux-theme", t); } catch (_) {}
+  } catch (x) { if (x.message !== "log in") show(node(html`<${Card}><p class="err">${x.message}</p><//>`)); }
 }
 applyTheme(theme());
-document.querySelector(".brand").replaceChildren(drawn(html`<${Logo} size=${24} />`), h("span", {}, "flux"));    // D696: the mark
-const themeBtn = h("button", { class: "small theme", title: "Theme: system, light or dark" });
-themeBtn.addEventListener("click", () => { const order = ["system", "light", "dark"]; applyTheme(order[(order.indexOf(theme()) + 1) % 3]); themeBtn.textContent = THEMES[theme()]; });
-themeBtn.textContent = THEMES[theme()];
+render(html`<${Logo} size=${24} /><span>flux</span>`, document.querySelector(".brand"));    // D696: the mark
 
+/** The bar over every page (shell/Bar.js): drawn again with each page -- who is logged in, where one is. */
+function drawNav() {
+  const view = me?.impersonator ? me : null, box = document.getElementById("impersonation");
+  if (box) { box.hidden = !view; render(html`<${Impersonation} view=${view} />`, box); }    // a page without the bar (one replaced, as the phone checks do)
+  bellFor(me ? me.name : null);
+  render(html`<${Nav} here=${location.hash || "#/"} />`, document.getElementById("nav"));
+  render(html`<${Who} />`, document.getElementById("who"));
+}
 function drawImpersonation(view) {
   const box = document.getElementById("impersonation");
-  if (!box) return;                         // a page without the bar (one replaced, as the phone checks do)
-  box.hidden = !view;
-  box.replaceChildren(...(view ? [h("span", {}, "Viewing as ", h("strong", {}, view.name), " · Read-only"),
-    h("button", { type: "button", class: "small", onclick: async () => {
-      try {
-        await api("/impersonation", { method: "DELETE" });
-        location.hash = "#/admin/users"; location.reload();
-      } catch (x) { if (x.message !== "log in") toast(x.message, "bad"); }
-    } }, "Return to admin")] : []));
+  if (box) { box.hidden = !view; render(html`<${Impersonation} view=${view} />`, box); }
 }
-function drawNav() {
-  drawImpersonation(me?.impersonator ? me : null);
-  bellFor(me ? me.name : null);
-  const here = location.hash || "#/";
-  const link = (href, text, on) => h("a", { href, class: on ? "on" : "" }, text);
-  document.getElementById("nav").replaceChildren(...(me ? [
-    link("#/", "Loops", here === "#/" || here.startsWith("#/app") || here.startsWith("#/u/")),
-    link("#/configure", "New loop", here.startsWith("#/configure") || here === "#/new"),
-    me.role === "admin" ? link("#/admin", "Admin", here.startsWith("#/admin")) : ""] : []));
-  drawBell();
-  // D856: on a phone the theme, the name and Log out fold into one menu; the bell stays in the bar
-  const items = h("div", { class: "who-items" }, themeBtn, ...(me ? [h("a", { href: "#/account", class: "me", title: me.name }, me.name),
-    h("button", { class: "small", onclick: async () => { await api("/logout", { method: "POST" }).catch(() => {}); setMe(null); location.hash = "#/login"; } }, "Log out")] : []));
-  const menuBtn = h("button", { class: "small acct-btn", type: "button", "aria-label": "Account menu", "aria-expanded": "false",
-    onclick: (e) => { e.stopPropagation(); const open = !items.classList.contains("open"); items.classList.toggle("open", open); menuBtn.setAttribute("aria-expanded", String(open)); } }, "☰");
-  items.addEventListener("click", (e) => { if (e.target.closest("a, button")) { items.classList.remove("open"); menuBtn.setAttribute("aria-expanded", "false"); } });
-  document.getElementById("who").replaceChildren(...(me ? [h("div", { class: "bell-wrap" }, bellBtn, bellMenu)] : []), menuBtn, items);
-}
-document.addEventListener("click", (e) => {                 // D856: a tap elsewhere closes the phone menu
-  const open = document.querySelector("#who .who-items.open");
-  if (open && !e.target.closest("#who")) { open.classList.remove("open"); const b = document.querySelector("#who .acct-btn"); if (b) b.setAttribute("aria-expanded", "false"); }
-});
 window.addEventListener("hashchange", route);
 route();
 

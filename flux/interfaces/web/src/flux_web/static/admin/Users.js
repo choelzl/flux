@@ -4,7 +4,7 @@
 // added.
 
 import { Ago, Card, html, useRef, useState } from "../view.js";
-import { api, confirmDialog, dialog, enc, h, toast } from "../ui.js";
+import { api, confirmDialog, dialog, enc, toast } from "../ui.js";
 import { dur, fmtTok, plural } from "../format.js";
 import { me } from "../state.js";
 import { route } from "../app.js";
@@ -23,7 +23,7 @@ function LinkBox({ name, url, kind }) {
     <p class="muted small">Single use, valid a week, shown once.</p></div>`;
 }
 const linkDialog = (name, token, kind) => dialog(kind === "invite" ? `Invite ${name}` : `${name}: a password reset link`,
-  h("div", {}, html`<${LinkBox} name=${name} url=${`${location.origin}${location.pathname}#/invite/${token}`} kind=${kind} />`), [["Done", true, "primary"]]);
+  html`<${LinkBox} name=${name} url=${`${location.origin}${location.pathname}#/invite/${token}`} kind=${kind} />`, [["Done", true, "primary"]]);
 
 const GroupSelect = ({ groups, value, label, onChange = null }) => html`<select aria-label=${label} onChange=${onChange}>${groups.map(g =>
   html`<option value=${g.id} selected=${g.id === value}>${g.name + (g.admin ? " (server admin)" : "")}</option>`)}</select>`;
@@ -36,9 +36,8 @@ function Permissions({ u, catalog }) {
     <p class="muted small">Editing does not grant permission to run, share, delete or transfer other members' loops. Running uses the loop owner's credentials and limits.</p></div>`;
 }
 const editPermissions = async (u, catalog) => {
-  const box = h("div", {}, html`<${Permissions} u=${u} catalog=${catalog} />`);
-  const choice = await dialog(`${u.name}'s permissions`, box, [["Cancel", null],
-    ...(u.role === "admin" ? [] : [["Save", () => Object.fromEntries([...box.querySelectorAll("[data-permission]")].map(i => [i.dataset.permission, i.checked])), "primary"]])]);
+  const choice = await dialog(`${u.name}'s permissions`, html`<${Permissions} u=${u} catalog=${catalog} />`, [["Cancel", null],
+    ...(u.role === "admin" ? [] : [["Save", f => Object.fromEntries([...f.querySelectorAll("[data-permission]")].map(i => [i.dataset.permission, i.checked])), "primary"]])]);
   if (!choice) return;
   await api(`/users/${enc(u.name)}`, { method: "PATCH", body: { permissions: choice } });
   u.permissions = choice; toast(`${u.name}'s permissions saved`, "ok");
@@ -127,8 +126,8 @@ export function Groups({ catalog }) {
     finally { select.disabled = false; }
   };
   const rename = async g => {
-    const box = h("label", { class: "stack" }, "Group name", h("input", { id: "group-rename", value: g.name, maxlength: 60 }));
-    const renamed = await dialog("Rename group", box, [["Cancel", null], ["Rename", () => box.querySelector("input").value.trim(), "primary"]]);
+    const renamed = await dialog("Rename group", html`<label class="stack">Group name<input id="group-rename" value=${g.name} maxlength="60" /></label>`,
+      [["Cancel", null], ["Rename", f => f.querySelector("input").value.trim(), "primary"]]);
     if (!renamed) return;
     await api(`/groups/${g.id}`, { method: "PATCH", body: { name: renamed } }); route();
   };

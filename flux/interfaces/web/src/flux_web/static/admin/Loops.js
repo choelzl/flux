@@ -3,7 +3,7 @@
 // loop's list, and the documents of an earlier form migrated.
 
 import { Card, html, useState } from "../view.js";
-import { api, appHref, confirmDialog, dialog, h, toast } from "../ui.js";
+import { api, appHref, confirmDialog, dialog, toast } from "../ui.js";
 import { plural } from "../format.js";
 import { route } from "../app.js";
 import { Act } from "../components/Act.js";
@@ -19,26 +19,27 @@ function NotifyForm({ users }) {
 }
 export async function notifyDialog() {
   const users = (await api("/admin/usage").catch(() => [])).map(u => u.user);
-  const body = h("div", {}, html`<${NotifyForm} users=${users} />`);
-  if (!await dialog("Send a notification", body, [["Cancel", null], ["Send", () => true, "primary"]])) return;
-  const text = body.querySelector("textarea").value, all = body.querySelector(".notify-all").checked;
-  const to = all ? [] : [...body.querySelectorAll(".notify-who input:checked")].map(i => i.value);
+  const read = f => { const all = f.querySelector(".notify-all").checked;
+    return { text: f.querySelector("textarea").value, to: all ? [] : [...f.querySelectorAll(".notify-who input:checked")].map(i => i.value), kind: f.querySelector("select").value, all }; };
+  const got = await dialog("Send a notification", html`<${NotifyForm} users=${users} />`, [["Cancel", null], ["Send", read, "primary"]]);
+  if (!got) return;
+  const { text, to, kind, all } = got;
   if (!text.trim() || (!all && !to.length)) { toast("Nothing sent: a message and someone to send it to", "warn"); return; }
-  const r = await api("/admin/notify", { method: "POST", body: { text, to, kind: body.querySelector("select").value } });
+  const r = await api("/admin/notify", { method: "POST", body: { text, to, kind } });
   toast(`Sent to ${plural(r.sent, "user")}`, "ok");
 }
 
 const restartAll = async loops => {
-  const go = await dialog("Restart all active loops?", h("div", {}, html`
+  const go = await dialog("Restart all active loops?", html`
     <p>${`${plural(loops.length, "active loop")} will finish their current pass, then resume from their records with the same run settings. Files, results and logs are kept.`}</p>
     <p>Completed passes reduce each finite run's remaining budget; run forever stays unlimited. Counts are checked after stopping. Loops with no passes left stay stopped. Only loops still active when the request begins are restarted.</p>
-    <ul>${loops.map(l => html`<li>${`${l.owner}/${l.name}: ${l.options?.passes == null ? "run forever" : `${Math.max(0, l.options.passes - (l.passes || 0))} of ${plural(l.options.passes, "pass", "passes")} remaining`}${l.options?.screen_only ? " · screen only" : ""}`}</li>`)}</ul>`),
+    <ul>${loops.map(l => html`<li>${`${l.owner}/${l.name}: ${l.options?.passes == null ? "run forever" : `${Math.max(0, l.options.passes - (l.passes || 0))} of ${plural(l.options.passes, "pass", "passes")} remaining`}${l.options?.screen_only ? " · screen only" : ""}`}</li>`)}</ul>`,
     [["Cancel", false], ["Restart loops", true, "primary"]]);
   if (!go) return;
   const r = await api("/admin/restart-all", { method: "POST", body: { now: false } });
   const errors = Object.entries(r.failed), skipped = Object.entries(r.skipped);
   toast(`${plural(Object.keys(r.scheduled || r.restarted).length, "loop")} ${r.scheduled ? "scheduled to restart after this pass" : "restarted"}${errors.length ? ` · ${errors.length} could not restart` : ""}${skipped.length ? ` · ${skipped.length} skipped` : ""}`, errors.length ? "warn" : "ok");
-  if (errors.length || skipped.length) await dialog("Restart results", h("ul", {}, html`${[...errors, ...skipped].map(([loop, why]) => html`<li>${`${loop}: ${why}`}</li>`)}`), [["Close", true, "primary"]]);
+  if (errors.length || skipped.length) await dialog("Restart results", html`<ul>${[...errors, ...skipped].map(([loop, why]) => html`<li>${`${loop}: ${why}`}</li>`)}</ul>`, [["Close", true, "primary"]]);
   route();
 };
 

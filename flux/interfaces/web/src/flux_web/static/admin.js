@@ -1,8 +1,11 @@
 // Flux web: the admin's pages and the model settings form (D889: split out of app.js).
 
 import { setPageRefresh } from "./state.js";
-import { api, crumbs, h, head, pageShow, skeleton } from "./ui.js";
-import { html, mount, showIn } from "./view.js";
+import { api, pageShow } from "./ui.js";
+import { Skeleton, html, mount, node, showIn } from "./view.js";
+import { Crumbs } from "./components/Crumbs.js";
+import { PageHead } from "./components/PageHead.js";
+import { Tabs } from "./components/Tabs.js";
 import { Resources } from "./admin/Resources.js";
 import { AdminLoops } from "./admin/Loops.js";
 import { Applications } from "./admin/Applications.js";
@@ -19,57 +22,41 @@ import { Agents } from "./admin/Agents.js";
     holds up (containers, disk, caches), users with their limits and usage, the audit trail. */
 const ADMIN_TABS = { "": "Loops", insights: "Insights and audit", applications: "Applications", resources: "Resources", maintenance: "Maintenance", sandbox: "Sandbox", agents: "Agents and models", users: "Users and groups" };
 
+/** A tab of parts (D819, D920): a sub-tab each, the last looked at kept in this browser (`memo`); each part drawn
+    is numbered, a late answer for another draws nothing. `draw(part, host, ok)` draws one into `host`. */
+async function withParts(body, { parts, memo, first = null, aria = null, id = null, partId, draw }, stale) {
+  let cur = first || (() => { try { return localStorage.getItem(memo); } catch (_) { return null; } })();
+  if (!parts.some(([k]) => k === cur)) cur = parts[0][0];
+  const bar = node(null), host = Object.assign(document.createElement("div"), { id: partId });
+  let shown = 0;
+  const go = async () => {
+    const my = ++shown, ok = () => my === shown && !stale();
+    mount(bar, html`<${Tabs} cls="subtabs" id=${id} aria-label=${aria} items=${parts} on=${cur} pick=${k => { cur = k; try { localStorage.setItem(memo, k); } catch (_) { /* per viewer */ } go(); }} />`);
+    host.replaceChildren(node(html`<${Skeleton} lines=${6} />`));
+    await draw(cur, host, ok);
+  };
+  body.replaceChildren(bar, host);
+  await go();
+}
+
 async function adminPage(sub = "") {
   const show = pageShow();
   // D814: Models and variables are the agents' tab; D816: the audit is Insights', the documents are the Loops'
   const tab = sub === "models" ? "agents" : sub === "audit" ? "insights" : ADMIN_TABS[sub] ? sub : "";
-  const tabBar = h("div", { class: "tabs admin-tabs", role: "tablist" }, Object.entries(ADMIN_TABS).map(([k, label]) =>
-    h("a", { role: "tab", class: k === tab ? "on" : "", href: `#/admin${k ? "/" + k : ""}` }, label)));
-  const body = h("div", {});
-  show(crumbs(["Admin", "#/admin"], tab ? [ADMIN_TABS[tab], null] : null),
-    head("Admin"), tabBar, body);
+  const body = document.createElement("div");
+  show(node(html`<${Crumbs} parts=${[["Admin", "#/admin"], tab ? [ADMIN_TABS[tab], null] : null]} /><${PageHead} title="Admin" />
+    <div class="tabs admin-tabs" role="tablist">${Object.entries(ADMIN_TABS).map(([k, label]) => html`<a role="tab" class=${k === tab ? "on" : ""} href=${`#/admin${k ? "/" + k : ""}`}>${label}</a>`)}</div>`), body);
   if (tab === "") return adminLoops(body);
   if (tab === "resources") return adminResources(body);
-  if (tab === "users") {
-    const PARTS = [["users", "Users"], ["groups", "Groups"]];
-    let cur;
-    try { cur = localStorage.getItem("flux-users-part"); } catch (_) { /* per viewer */ }
-    if (!PARTS.some(([k]) => k === cur)) cur = "users";
-    const bar = h("div", { id: "users-subtabs", class: "subtabs", role: "tablist", "aria-label": "Users and groups" });
-    const part = h("div", { id: "users-part" });
-    let shown = 0;
-    const draw = async () => {
-      const my = ++shown, ok = () => my === shown && !show.stale();
-      bar.replaceChildren(...PARTS.map(([k, label]) => h("button", { type: "button", role: "tab", class: k === cur ? "on" : "", "aria-selected": k === cur ? "true" : "false",
-        onclick: () => { cur = k; try { localStorage.setItem("flux-users-part", k); } catch (_) { /* per viewer */ } draw(); } }, label)));
-      part.replaceChildren(skeleton(6));
-      if (cur === "groups") await adminGroups(part, ok); else await adminUsers(part, ok);
-    };
-    body.replaceChildren(bar, part);
-    await draw();
-    return;
-  }
+  if (tab === "users") return withParts(body, { parts: [["users", "Users"], ["groups", "Groups"]], memo: "flux-users-part", aria: "Users and groups", id: "users-subtabs", partId: "users-part",
+    draw: (k, host, ok) => k === "groups" ? adminGroups(host, ok) : adminUsers(host, ok) }, show.stale);
   if (tab === "sandbox") return adminSandbox(body);
   if (tab === "maintenance") return adminMaintenance(body);
   if (tab === "agents") return adminAgents(body);
-  if (tab === "insights") {
-    // D819: a sub-tab each, a box or two that go together, so nothing scrolls far; the last looked at kept
-    const PARTS = [["failures", "Failures"], ["usage", "Usage and disk"], ["endpoints", "Endpoints and network"], ["audit", "Audit trail"]];
-    let cur = sub === "audit" ? "audit" : (() => { try { return localStorage.getItem("flux-insights-part"); } catch (_) { return null; } })();
-    if (!PARTS.some(([k]) => k === cur)) cur = "failures";
-    const bar = h("div", { class: "subtabs", role: "tablist" }), part = h("div", { id: "insights-part" });
-    let shown = 0;                                     // D920: each sub-tab drawn is numbered; a late answer for another draws nothing
-    const draw = async () => {
-      const my = ++shown, ok = () => my === shown && !show.stale();
-      bar.replaceChildren(...PARTS.map(([k, label]) => h("button", { type: "button", role: "tab", class: k === cur ? "on" : "", "aria-selected": k === cur ? "true" : "false",
-        onclick: () => { cur = k; try { localStorage.setItem("flux-insights-part", k); } catch (_) { /* per viewer */ } draw(); } }, label)));
-      part.replaceChildren(skeleton(6));
-      if (cur === "audit") await adminAudit(part, ok); else adminInsights(part, cur);
-    };
-    body.replaceChildren(bar, part);
-    await draw();
-    return;
-  }
+  // D819: Insights a sub-tab each, a box or two that go together, so nothing scrolls far
+  if (tab === "insights") return withParts(body, { parts: [["failures", "Failures"], ["usage", "Usage and disk"], ["endpoints", "Endpoints and network"], ["audit", "Audit trail"]],
+    memo: "flux-insights-part", first: sub === "audit" ? "audit" : null, partId: "insights-part",
+    draw: (k, host, ok) => k === "audit" ? adminAudit(host, ok) : adminInsights(host, k) }, show.stale);
   if (tab === "applications") return adminApplications(body);
 }
 
@@ -111,7 +98,7 @@ function adminInsights(body, part = "failures") {
 
 /** Admin › Agents and models (D756, D807, D814): admin/Agents.js -- D921: drawn at once, versions filled in. */
 async function adminAgents(body) {
-  body.replaceChildren(skeleton(6));
+  body.replaceChildren(node(html`<${Skeleton} lines=${6} />`));
   const [r, st, genv, askOff] = await Promise.all([api("/admin/agents?probe=false"), api("/admin/settings"), api("/admin/env"),
     api("/admin/ask").then(x => x.off).catch(() => [])]);
   showIn(body, "agents", html`<${Agents} r=${r} st=${st} genv=${genv} askOff=${askOff} />`);

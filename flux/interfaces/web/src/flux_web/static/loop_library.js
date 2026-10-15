@@ -1,22 +1,11 @@
-// D955: the library's digests a loop's record holds -- each paper, who digested it, the text the prompts read.
-import { act, api, card, empty, enc, h, plural } from "./ui.js";
-import { viewerTools } from "./viewer.js";
+// Flux web: a loop's library, under Results (D955; D1095: the view is results/Library.js).
+import { api, enc } from "./ui.js";
+import { html, showIn } from "./view.js";
+import { Library } from "./results/Library.js";
 
 export async function libraryView(ctx) {
   const { name, qs, body, still } = ctx;
   const ok = still();
   const data = await api(`/apps/${enc(name)}/digests${qs}`);
-  if (!ok()) return;
-  const base = (p) => String(p).split("/").pop();
-  const content = h("div", { class: "library-view" }, data.digests.length
-    ? data.digests.map(d => h("details", { class: "digest" },
-        h("summary", {}, h("strong", {}, base(d.source)), " ",
-          h("small", { class: "muted" }, [d.model || "?", `${Number(d.chars || 0).toLocaleString()} chars read`, d.reused ? "kept from before" : ""].filter(Boolean).join(" · "))),
-        h("p", { class: "muted small mono" }, d.source),
-        h("pre", { class: "digest-text" }, d.digest)))
-    : empty("No digests yet: with the library on, each Setup digests up to 8 papers of the loop's library/ folder."));
-  body.replaceChildren(card("Library", [h("div", { class: "bar" },
-    h("span", { class: "muted" }, `${plural(data.digests.length, "paper")} digested`),
-    act("Refresh", () => libraryView(ctx), { cls: "small" }),
-    ...viewerTools(content, { title: "Library digests", rawText: JSON.stringify(data, null, 2) })), content]));
+  if (ok()) showIn(body, "library", html`<${Library} data=${data} refresh=${() => libraryView(ctx)} />`);
 }

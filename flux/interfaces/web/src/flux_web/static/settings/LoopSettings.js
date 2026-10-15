@@ -3,7 +3,7 @@
 // owner, the admin's advanced settings, its own clean-up, Reset and Delete.
 
 import { Ago, Card, html, useRef, useState } from "../view.js";
-import { api, confirmDialog, dialog, enc, h, toast } from "../ui.js";
+import { api, confirmDialog, dialog, enc, toast } from "../ui.js";
 import { me } from "../state.js";
 import { route } from "../app.js";
 import { PermissionChoice, hasPermissions } from "../components/PermissionChoice.js";
@@ -51,9 +51,9 @@ function Sharing({ name, qs, sh }) {
 function Ownership({ ctx, plan }) {
   const { name, qs, info } = ctx, running = !!ctx.st.running;
   const rename = async () => {
-    const box = h("div", { class: "stack" }, h("label", { class: "stack" }, "New loop name", h("input", { id: "loop-rename-to", value: name, maxlength: 60, autocomplete: "off", required: true })),
-      h("p", { class: "muted" }, "Files, results, history, variables, sharing and admin settings are kept. Links to the old name will change."));
-    const to = await dialog(`Rename ${name}`, box, [["Cancel", null], ["Rename", () => box.querySelector("input").value.trim(), "primary"]]);
+    const to = await dialog(`Rename ${name}`, html`<div class="stack"><label class="stack">New loop name<input id="loop-rename-to" value=${name} maxlength="60" autocomplete="off" required /></label>
+      <p class="muted">Files, results, history, variables, sharing and admin settings are kept. Links to the old name will change.</p></div>`,
+      [["Cancel", null], ["Rename", f => f.querySelector("input").value.trim(), "primary"]]);
     if (!to) return;
     const got = await api(`/apps/${enc(name)}/rename${qs}`, { method: "POST", body: { to } });
     toast(`${name} renamed to ${got.name}`, "ok");
@@ -62,14 +62,14 @@ function Ownership({ ctx, plan }) {
   const transfer = async () => {
     const current = me.role === "admin" ? await api(`/apps/${enc(name)}/ownership${qs}`) : plan;
     const keep = hasPermissions(current.permissions);
-    const who = h("select", { id: "loop-transfer-user", "aria-label": "New owner" }, h("option", { value: "" }, "Choose a user…"), current.users.map(u => h("option", { value: u }, u)));
-    const input = h("input", { id: "loop-transfer-to", value: name, maxlength: 60, autocomplete: "off", required: true });
-    const got = await dialog(`Transfer ${name}`, h("div", { class: "stack" },
-      h("label", { class: "stack" }, "New owner", who), h("label", { class: "stack" }, "Loop name for the new owner", input),
-      h("p", {}, "Files, results, full run history, caches and loop variables (including secrets) move to the new owner. Your account's model keys and agent logins stay with your account."),
-      h("p", {}, keep ? "Sharing and other admin settings are cleared. Choose below whether to keep the mount, sandbox and network overrides. The recipient uses their own account settings; the former owner loses access unless it is shared back. Admins retain access."
-        : "Sharing and admin overrides are cleared, including special mounts and sandbox exemptions. The new owner uses their own account settings and the server's sandbox defaults. You lose access unless they share it back; admins retain access."), html`<${PermissionChoice} settings=${current.permissions} id="transfer-keep-permissions" />`),
-      [["Cancel", null], ["Transfer", () => ({ user: who.value, to: input.value.trim(), keep_permissions: !!document.querySelector("#transfer-keep-permissions")?.checked }), "primary"]]);
+    const got = await dialog(`Transfer ${name}`, html`<div class="stack">
+      <label class="stack">New owner<select id="loop-transfer-user" aria-label="New owner"><option value="">Choose a user…</option>${current.users.map(u => html`<option value=${u}>${u}</option>`)}</select></label>
+      <label class="stack">Loop name for the new owner<input id="loop-transfer-to" value=${name} maxlength="60" autocomplete="off" required /></label>
+      <p>Files, results, full run history, caches and loop variables (including secrets) move to the new owner. Your account's model keys and agent logins stay with your account.</p>
+      <p>${keep ? "Sharing and other admin settings are cleared. Choose below whether to keep the mount, sandbox and network overrides. The recipient uses their own account settings; the former owner loses access unless it is shared back. Admins retain access."
+        : "Sharing and admin overrides are cleared, including special mounts and sandbox exemptions. The new owner uses their own account settings and the server's sandbox defaults. You lose access unless they share it back; admins retain access."}</p>
+      <${PermissionChoice} settings=${current.permissions} id="transfer-keep-permissions" /></div>`,
+      [["Cancel", null], ["Transfer", f => ({ user: f.querySelector("#loop-transfer-user").value, to: f.querySelector("#loop-transfer-to").value.trim(), keep_permissions: !!f.querySelector("#transfer-keep-permissions")?.checked }), "primary"]]);
     if (!got) return;
     if (!got.user || !got.to) { toast("Choose a user and a loop name.", "warn"); return; }
     const moved = await api(`/apps/${enc(name)}/transfer${qs}`, { method: "POST", body: got });
@@ -109,9 +109,9 @@ function Danger({ ctx }) {
   const { name } = ctx;
   const reset = async () => {
     const plan = await api(`/apps/${enc(name)}/reset`);
-    const box = h("div", {}, html`<${ResetForm} plan=${plan} />`);
-    if (!await dialog(`Reset ${name}?`, box, [["Cancel", false], ["Reset", true, "danger solid"]])) return;
-    await api(`/apps/${enc(name)}/reset`, { method: "POST", body: { keep: [...box.querySelectorAll("[data-reset-keep]:checked")].map(i => i.dataset.resetKeep) } });
+    const keep = await dialog(`Reset ${name}?`, html`<${ResetForm} plan=${plan} />`, [["Cancel", null], ["Reset", f => [...f.querySelectorAll("[data-reset-keep]:checked")].map(i => i.dataset.resetKeep), "danger solid"]]);
+    if (!keep) return;
+    await api(`/apps/${enc(name)}/reset`, { method: "POST", body: { keep } });
     toast(`${name} reset`, "ok"); route();
   };
   const remove = async () => {

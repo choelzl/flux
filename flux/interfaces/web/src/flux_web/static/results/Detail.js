@@ -3,7 +3,7 @@
 // hidden too at rest) and Restore.
 
 import { Ago, Skeleton, html, useEffect, useRef, useState } from "../view.js";
-import { api, dialog, enc, h, toast } from "../ui.js";
+import { api, dialog, enc, toast } from "../ui.js";
 import { Act } from "../components/Act.js";
 import { Code } from "../components/Markdown.js";
 import { ViewerTools } from "../components/ViewerTools.js";
@@ -54,8 +54,7 @@ export function DesignDetail({ d, ctx, fmt, reload }) {
   const metrics = [...new Set(stages.flatMap(([, m]) => Object.keys(m)))];
   const mine = ctx.mine, running = !!ctx.st?.running;
   const reject = async () => {
-    const body = h("div", {}, html`<${RejectForm} d=${d} fmt=${fmt} live=${running} />`);
-    const got = await dialog(`Reject ${d.name}?`, body, [["Cancel", null], ["Reject", () => readReject(body), "primary"]]);
+    const got = await dialog(`Reject ${d.name}?`, html`<${RejectForm} d=${d} fmt=${fmt} live=${running} />`, [["Cancel", null], ["Reject", readReject, "primary"]]);
     if (!got) return;
     toast((await api(`/apps/${enc(name)}/results/reject${qs}`, { method: "POST", body: { key: d.key || "", name: d.base || d.name, ...got } })).ok, "ok");
     reload();
