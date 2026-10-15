@@ -1,7 +1,7 @@
 // Flux web, files (D808, D829, D908, D937, D1095): the pieces of the Files tab -- a path as links, what the
 // selected item is (kind, size, a folder's size counted when asked, when it changed), its Actions menu, a list.
 
-import { Ago, html, useEffect, useRef, useState } from "../view.js";
+import { Ago, html, useEffect, useLayoutEffect, useRef, useState } from "../view.js";
 import { api } from "../ui.js";
 import { bytes, plural } from "../format.js";
 import { Act } from "../components/Act.js";
@@ -41,8 +41,20 @@ export const MetaLine = ({ it, sizeUrl }) => html`<div class="item-meta muted sm
 /** Rename, Move and Delete (D908) on the selected item's head -- D937: the only place; what is not possible
     here disabled, with why. Opened from the keyboard, its first possible action takes the focus. */
 export function ActionsMenu({ label, it, acts }) {
-  const menu = useRef(null);
-  const toggled = e => { const d = e.currentTarget; if (d.open && document.activeElement === d.querySelector("summary")) d.querySelector(".menu-list button:not([disabled])")?.focus(); };
+  const menu = useRef(null), [open, setOpen] = useState(false);
+  const toggled = e => { const d = e.currentTarget; setOpen(d.open); if (d.open && document.activeElement === d.querySelector("summary")) d.querySelector(".menu-list button:not([disabled])")?.focus(); };
+  useLayoutEffect(() => {                             // D908: open, it closes on a click elsewhere or Escape
+    if (!open) return;
+    const d = menu.current;
+    const click = e => { if (!d.contains(e.target)) d.open = false; };
+    const key = e => {
+      if (e.key !== "Escape") return;
+      const back = d.contains(document.activeElement);       // D937: the keyboard's place kept -- back on the menu's button
+      d.open = false; if (back) d.querySelector("summary").focus();
+    };
+    document.addEventListener("click", click); document.addEventListener("keydown", key);
+    return () => { document.removeEventListener("click", click); document.removeEventListener("keydown", key); };
+  }, [open]);
   const item = (text, fn, ok) => html`<button type="button" role="menuitem" disabled=${!ok} title=${ok ? null : it.why}
     onClick=${async e => { e.preventDefault(); menu.current.open = false; await fn(it); }}>${text}</button>`;
   return html`<details class="actions-menu" ref=${menu} onToggle=${toggled}>

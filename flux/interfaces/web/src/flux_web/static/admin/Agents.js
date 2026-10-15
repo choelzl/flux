@@ -95,11 +95,11 @@ function AgentPanel({ a, version, askOff }) {
         ${st.state === "failed" && st.said ? html`<span class="bad small">${st.said}</span>` : ""}
         <${Act} cls="small" title="Ask it one short question with the server's configuration -- no one's own settings" onClick=${() => test(a)}>Test connection<//></dd>`}
       ${(a.conflicts || []).length || (a.unused || []).length ? html`<dt>Said</dt><dd><ul class="small hint-line agent-notes">${[...(a.conflicts || []), ...(a.unused || [])].map(x => html`<li>${x}</li>`)}</ul></dd>` : ""}</dl>
-    <div class="grid-2 set-fields" ref=${named.box}><label class="stack">${a.builtin ? "Program (a path, or a name on PATH)" : "Program (a path)"}${field("bin", a.builtin ? a.id : "/path/to/its/program")}</label>
+    <div class="grid-2 set-fields" ...${named.box}><label class="stack">${a.builtin ? "Program (a path, or a name on PATH)" : "Program (a path)"}${field("bin", a.builtin ? a.id : "/path/to/its/program")}</label>
       <label class="stack">Name shown${field("label", a.id, false)}</label></div>
     <${AskBox} who=${a.id} name=${a.label} off=${askOff} />
     <details class="set-fold"><summary>Login and files<span class="muted small">${nMore ? ` · ${nMore} set` : " · none"}</span></summary>
-      <div class="grid-2 set-fields" ref=${rest.box}><label class="stack">Login command${field("login", a.login_default)}</label>
+      <div class="grid-2 set-fields" ...${rest.box}><label class="stack">Login command${field("login", a.login_default)}</label>
         <label class="stack">Extra arguments, every run${field("args", "none")}</label>
         <label class="stack" title="The file in a user's home that says they are logged in">Login files (when not its usual)${area("login_files", 1, "its usual; e.g. .local/share/nga/auth.json")}</label>
         <label class="stack">Every home starts with (paths in this server account's home)${area("home", 2, HOME_PH[a.kind] || "")}</label>

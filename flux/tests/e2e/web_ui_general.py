@@ -1007,7 +1007,7 @@ def general_flows(r, watch):
                 r.button("Refresh")
                 b.wait("[...document.querySelectorAll('.toast.bad')].some(t=>t.textContent.includes('Temporary notebook error'))", what="failed notebook refresh")
                 r.check("a failed refresh keeps the current notebook and allows retry", b.js("return document.querySelector('.ideas-table').textContent.includes('Owner hypothesis') && [...document.querySelectorAll('#main button')].some(b=>b.textContent==='Refresh'&&!b.disabled)"))
-                expected = b.js("""const bad=window.__e2e.bad.splice(0); document.querySelectorAll('.toast.bad').forEach(t=>t.remove());
+                expected = b.js("""const bad=window.__e2e.bad.splice(0); document.querySelectorAll('.toast.bad .x').forEach(x=>x.click());
                   window.__sharedIdeasFail=false; window.__sharedIdeasData.ideas[0].title='Updated owner hypothesis'; return bad;""")
                 r.check("the failed refresh produces one clear error notice", expected == ["Temporary notebook error"], expected)
                 r.button("Refresh")
@@ -1224,7 +1224,7 @@ objectives: [{metric: timings.fast, goal: 15, direction: minimize},
                 b.click(".ask-send")
                 b.wait("window.__e2e.bad.some(t => t.includes('Try again shortly'))", what="failed send explained")
                 r.check("a failed send keeps the unsent message", b.js("return document.querySelector('#ask-q').value") == "Keep this draft")
-                b.js("window.__askFail = false; window.__e2e.bad.splice(0); document.querySelectorAll('.toast.bad').forEach(t => t.remove()); return 1")
+                b.js("window.__askFail = false; window.__e2e.bad.splice(0); document.querySelectorAll('.toast.bad .x').forEach(x => x.click()); return 1")
                 b.click(".steer-card > summary")
                 note = "long/path/" * 80
                 b.js("const t = document.querySelector('.composer-in'); t.value = arguments[0]; t.dispatchEvent(new Event('input')); return 1", note)
@@ -1250,7 +1250,7 @@ objectives: [{metric: timings.fast, goal: 15, direction: minimize},
                 b.wait("document.querySelector('.ask-reply') && getComputedStyle(document.querySelector('.drawer')).transform === 'none'", what="finished conversation")
                 b.click(f'.ask-reply[data-reply-to="{root}"]')
                 b.wait("document.querySelector('.ask-compose-head').textContent.includes('Reply to:')", what="selected conversation")
-                b.js("document.querySelector('.ask-history').scrollTop = 0; document.querySelectorAll('.toast').forEach(t => t.remove()); return 1")
+                b.js("document.querySelector('.ask-history').scrollTop = 0; document.querySelectorAll('.toast .x').forEach(x => x.click()); return 1")
                 b.shot(r.shots / "ask-chat-desktop.png", full=True)
                 r.check("watcher sharing for the chat fixture", r.api(f"/apps/{name}/shares", "PUT", {"user": "cy", "perm": "watch"})["status"] == 200)
                 r.login("cy")

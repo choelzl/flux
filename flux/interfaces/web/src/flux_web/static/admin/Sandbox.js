@@ -17,7 +17,7 @@ function Masks() {
     const got = await api("/admin/masks", { method: "PUT", body: { masks: text.split("\n") } });
     if (document.activeElement?.id !== "stderr-masks") setText(got.masks.join("\n"));
   }, { delay: 1200 });
-  return html`<${Card} title="Hidden output"><div ref=${box}><p class="muted">Stderr lines the pages leave out, one per line: a piece of text or a /regular expression/. The record keeps them.</p>
+  return html`<${Card} title="Hidden output"><div ...${box}><p class="muted">Stderr lines the pages leave out, one per line: a piece of text or a /regular expression/. The record keeps them.</p>
     <textarea id="stderr-masks" rows="4" class="mono" placeholder=${"failed to clean up stale arg0 temp dirs\n/^WARN .*deprecated/"} ...${bound(text, setText)} />
     <div class="row">${mark}</div></div><//>`;
 }
@@ -33,7 +33,7 @@ export function Sandbox({ r }) {
   const text = (id, k, rows, ph) => html`<textarea id=${id} rows=${rows} placeholder=${ph} class="mono" ...${bound(v[k], x => set({ [k]: x }))} />`;
   const box2 = (id, k) => html`<input type="checkbox" id=${id} checked=${v[k]} onChange=${e => set({ [k]: e.currentTarget.checked })} />`;
   const adds = r.login_path.filter(d => !r.path.includes(d));
-  return html`<div ref=${box}>${r.sandboxed ? "" : html`<p class="callout bad">This server runs without the sandbox (--no-sandbox): none of this applies.</p>`}
+  return html`<div ...${box}>${r.sandboxed ? "" : html`<p class="callout bad">This server runs without the sandbox (--no-sandbox): none of this applies.</p>`}
     <${Card} title="Network"><p class="muted">What the containers may reach. A loop's Settings may add hosts.</p>
       <label class="stack">Mode<select id="sb-net" onChange=${e => set({ network: e.currentTarget.value })}>
         <option value="open" selected=${v.network !== "allowlist"}>open: the containers reach any host</option>

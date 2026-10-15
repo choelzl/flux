@@ -51,7 +51,7 @@ function Limit({ u, limits, def }) {
     await api(`/admin/users/${enc(u.name)}/limit`, { method: "PUT", body: { max_running: n } });
     limits[u.name] = n;
   });
-  return html`<td><span class="inline" ref=${box}><input type="number" min="0" max="64" placeholder=${String(def)} style="width:64px"
+  return html`<td><span class="inline" ...${box}><input type="number" min="0" max="64" placeholder=${String(def)} style="width:64px"
     aria-label=${`${u.name}'s running limit`} ...${bound(v, setV)} />${mark}</span></td>`;
 }
 

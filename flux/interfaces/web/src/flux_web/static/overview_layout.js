@@ -29,8 +29,8 @@ async function editOverviewLayout() {
     };
     cleanup.push(cancel);
     m = openModal(html`<${LayoutEditor} prefs=${prefs} example=${overviewMockData()} save=${save} cancel=${cancel} />`,
-      { cls: "dlg overview-layout-dialog", labelledby: "overview-layout-title", onCancel: () => { if (!saving) cancel(); } });
-    m.el.querySelector(".overview-layout-editor select")?.focus();
+      { cls: "dlg overview-layout-dialog", labelledby: "overview-layout-title", onCancel: () => { if (!saving) cancel(); },
+        opened: el => el.querySelector(".overview-layout-editor select")?.focus() });
   });
 }
 

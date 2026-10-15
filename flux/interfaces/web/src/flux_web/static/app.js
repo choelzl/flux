@@ -3,11 +3,14 @@
 // inject script.
 //
 // D889: the pages are modules; state.js holds what they share. D1095: they are Preact components (view.js),
-// each route one that reads what it shows; the bar is shell/Bar.js, the bell shell/bell.js. Here: the routing.
+// each route one that reads what it shows; the bar is shell/Bar.js, the bell shell/bell.js. Here: the app and
+// its routing.
 
 import { cleanup, me, navSeq, pageOwner, setMe, setNavSeq, setPageOwner, setPageRefresh } from "./state.js";
 import { api } from "./ui.js";
-import { html, render } from "./view.js";
+import { html, render, useLayoutEffect, useState } from "./view.js";
+import { Offline, Toasts } from "./notices.js";
+import { Dialogs, cancelDialogs } from "./components/Modal.js";
 import { Logo } from "./components/Icons.js";
 import { Impersonation, Nav, Who, applyTheme, theme } from "./shell/Bar.js";
 import { bellFor, pollLoops } from "./shell/bell.js";
@@ -37,17 +40,18 @@ function labelTables(root) {
   }).observe(document.body, { childList: true, subtree: true });
 }
 
-const main = document.getElementById("main");
-let host = null;
-/** The page: drawn anew at each navigation into a host of its own that replaces whatever #main held -- the one left
-    unmounted with all it read and polls. */
-function draw(page) {
-  if (host) render(null, host);
-  host = document.createElement("div");
-  host.style.display = "contents";
-  main.replaceChildren(host);
-  render(page, host);
-  window.scrollTo(0, 0);
+/** The app: the bar over every page (shell/Bar.js -- who is logged in, where one is), the banner while an admin views
+    as a user, the page (drawn anew at each navigation: the one left unmounted with all it read and polls), the
+    banner while the server is out of reach, the notices, the dialogs. */
+let show = null;
+function App() {
+  const [at, setAt] = useState({ n: 0, page: html`<p class="muted">Loading…</p>`, here: location.hash || "#/", view: null });
+  useLayoutEffect(() => { show = next => setAt(a => ({ ...a, ...next })); }, []);
+  return html`<header class="top"><a class="brand" href="#/" aria-label="Flux, your loops"><${Logo} size=${24} /><span>flux</span></a>
+      <nav id="nav"><${Nav} here=${at.here} /></nav><span id="who"><${Who} /></span></header>
+    <div id="impersonation" hidden=${!at.view}><${Impersonation} view=${at.view} /></div>
+    <main id="main" key=${at.n}>${at.page}</main>
+    <${Offline} /><${Toasts} /><${Dialogs} />`;
 }
 
 /** Where an address leads (logged in): its page. */
@@ -67,42 +71,35 @@ function pageOf(hash) {
   return html`<${LoopsRoute} />`;
 }
 
+/** The page drawn (anew), the bar with it; `view` the banner's (D812: an admin viewing as a user). */
+function draw(page, view = me?.impersonator ? me : null) {
+  bellFor(me ? me.name : null);
+  show({ n: navSeq, page, here: location.hash || "#/", view });
+  window.scrollTo(0, 0);
+}
+
 async function route() {
   const seq = navSeq + 1;
   setNavSeq(seq);
   for (const f of cleanup.splice(0)) f();
   setPageRefresh(null);
-  for (const d of document.querySelectorAll("dialog.dlg")) d.dispatchEvent(new Event("cancel"));   // a dialog belongs to its page
+  cancelDialogs();                                       // a dialog belongs to its page
   const hash = location.hash || "#/";
   if (hash === "#/login") {
-    drawNav(); draw(html`<${LoginRoute} />`);
+    draw(html`<${LoginRoute} />`);
     const view = await api("/impersonation").catch(() => null);
-    if (location.hash === hash) drawImpersonation(view);
+    if (location.hash === hash) show({ view });
     return;
   }
-  { const m = hash.match(/^#\/invite\/([A-Za-z0-9_-]+)$/); if (m) { drawNav(); return draw(html`<${InviteRoute} token=${m[1]} />`); } }   // D818: before any login
+  { const m = hash.match(/^#\/invite\/([A-Za-z0-9_-]+)$/); if (m) return draw(html`<${InviteRoute} token=${m[1]} />`); }   // D818: before any login
   if (!me) { try { setMe(await api("/me")); pollLoops(); } catch (_) { return; } }
   // D1081: a navigation made while this one waited for /me is the page -- this one draws nothing (its page,
   // drawn after the wait, would count as the latest and draw over the one gone to: the loops over Results)
   if (seq !== navSeq) return;
-  drawNav();
   draw(pageOf(hash));
 }
 applyTheme(theme());
-render(html`<${Logo} size=${24} /><span>flux</span>`, document.querySelector(".brand"));    // D696: the mark
-
-/** The bar over every page (shell/Bar.js): drawn again with each page -- who is logged in, where one is. */
-function drawNav() {
-  const view = me?.impersonator ? me : null, box = document.getElementById("impersonation");
-  if (box) { box.hidden = !view; render(html`<${Impersonation} view=${view} />`, box); }    // a page without the bar (one replaced, as the phone checks do)
-  bellFor(me ? me.name : null);
-  render(html`<${Nav} here=${location.hash || "#/"} />`, document.getElementById("nav"));
-  render(html`<${Who} />`, document.getElementById("who"));
-}
-function drawImpersonation(view) {
-  const box = document.getElementById("impersonation");
-  if (box) { box.hidden = !view; render(html`<${Impersonation} view=${view} />`, box); }
-}
+render(html`<${App} />`, document.getElementById("app"));
 window.addEventListener("hashchange", route);
 route();
 

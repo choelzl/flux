@@ -32,7 +32,7 @@ function TaskForm({ t, loops }) {
       : html`<label class="stack">${label}<input type=${typeof val === "number" ? "number" : "text"} min="0" data-k=${k}
           ...${bound(v.params[k], x => change(typeof val === "number" ? Number(x) : x))} /></label>`;
   };
-  return html`<div class="mt-edit" ref=${box}><p class="muted">${t.what}</p>
+  return html`<div class="mt-edit" ...${box}><p class="muted">${t.what}</p>
     <label class="check"><input type="checkbox" checked=${v.on} onChange=${e => set({ on: e.currentTarget.checked })} />on a schedule</label>
     <div class="row"><span>every</span><input type="number" min="1" step="1" style="width:80px" aria-label="every" ...${bound(v.n, n => set({ n }))} />
       <select aria-label="unit" onChange=${e => set({ unit: e.currentTarget.value })}>${EVERY_UNITS.map(([k]) => html`<option value=${k} selected=${k === v.unit}>${k}</option>`)}</select></div>

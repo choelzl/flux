@@ -7,7 +7,7 @@ import { html, useEffect, useLayoutEffect, useRef, useState } from "./view.js";
 import { restoreScroll, scrollState } from "./scroll.js";
 import { Act } from "./components/Act.js";
 import { FullscreenView, openModal } from "./components/Modal.js";
-import { noticesOut } from "./notices.js";
+import { Toasts, useLayer } from "./notices.js";
 
 /** Whether a view is fullscreen: `{full, open(), close()}` -- for its frame and its tools. */
 export function useViewer() {
@@ -22,7 +22,7 @@ const placesOf = el => new Map([el, ...el.querySelectorAll("[data-k], pre, texta
 
 /** The view (`children`) in its frame: `v` from useViewer(), `title` the dialog's. */
 export function ViewerFrame({ v, title = "Viewer", children }) {
-  const ref = useRef(null), body = useRef(null), was = useRef(null);
+  const ref = useRef(null), body = useRef(null), was = useRef(null), layer = useLayer(v.full);
   useLayoutEffect(() => {
     const d = ref.current, el = body.current;
     if (v.full === d.open) return;
@@ -40,7 +40,7 @@ export function ViewerFrame({ v, title = "Viewer", children }) {
         if (b?.vertical && !st.vertical) st.top = b.top;
         if (b?.horizontal && !st.horizontal) st.left = b.left;
       }
-      noticesOut(d); d.close();
+      d.close();
       for (const [n, st] of now) restoreScroll(n, st);
       if (back?.isConnected) back.focus({ preventScroll: true });
     }
@@ -51,10 +51,10 @@ export function ViewerFrame({ v, title = "Viewer", children }) {
     addEventListener("hashchange", v.close);
     return () => removeEventListener("hashchange", v.close);
   }, [v.full]);
-  useEffect(() => () => { if (ref.current?.open) { noticesOut(ref.current); ref.current.close(); } }, []);
+  useEffect(() => () => { if (ref.current?.open) ref.current.close(); }, []);
   return html`<dialog ref=${ref} class=${v.full ? "dlg fullscreen-view" : "viewer-frame"} aria-label=${title} onCancel=${e => { e.preventDefault(); v.close(); }}>
     ${v.full ? html`<div key="head" class="fullscreen-head"><h2>${title}</h2><button class="small" type="button" onClick=${v.close}>Close</button></div>` : ""}
-    <div key="body" class=${v.full ? "fullscreen-content" : "viewer-frame-body"} ref=${body}>${children}</div></dialog>`;
+    <div key="body" class=${v.full ? "fullscreen-content" : "viewer-frame-body"} ref=${body}>${children}</div>${v.full ? html`<${Toasts} key="toasts" at=${layer} />` : ""}</dialog>`;
 }
 
 /** A raw text, fullscreen. */
@@ -62,8 +62,8 @@ export function showRaw(text, title) {
   let m = null;
   const close = () => { removeEventListener("hashchange", close); m.close(); };
   addEventListener("hashchange", close);
-  m = openModal(html`<${FullscreenView} title=${title} close=${close}><pre class="raw-content">${String(text)}</pre><//>`, { cls: "dlg fullscreen-view", label: title, onCancel: close });
-  m.el.querySelector("button").focus();
+  m = openModal(html`<${FullscreenView} title=${title} close=${close}><pre class="raw-content">${String(text)}</pre><//>`,
+    { cls: "dlg fullscreen-view", label: title, onCancel: close, opened: el => el.querySelector("button").focus() });
 }
 
 /** Raw (an address opened in a new tab, or a text shown) and Fullscreen for the view `v` frames. */

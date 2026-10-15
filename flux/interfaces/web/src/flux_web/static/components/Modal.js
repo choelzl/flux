@@ -1,40 +1,45 @@
 // Flux web (D700, D702, D1095): dialogs -- no alert, confirm or prompt. Every dialog is a `Modal`: a <dialog> drawn
-// where it stands in a component's tree, open while drawn. Those an action opens (`openModal`: a question with its
-// buttons, an upload's progress, a raw text, the layout editor) are one stack, drawn by `Dialogs` in a host of its own.
+// where it stands in a component's tree, open while drawn, the notices drawn in it while it is the top one. Those an
+// action opens (`openModal`: a question with its buttons, an upload's progress, a raw text, the layout editor) are
+// one stack, drawn by `Dialogs` (the app draws it).
 
-import { html, render, useLayoutEffect, useRef, useState } from "../view.js";
-import { noticesOut } from "../notices.js";
+import { html, useLayoutEffect, useRef, useState } from "../view.js";
+import { Toasts, useLayer } from "../notices.js";
 import { bytes } from "../format.js";
 
 /** A modal dialog (its top layer above the page): open while drawn, closed when it goes; Escape calls `onClose()`
     (none: Escape does nothing -- the caller says what it does). `at(el)` is handed the element once open. */
 export function Modal({ cls = "dlg", label = null, labelledby = null, onClose = null, at = null, children }) {
-  const ref = useRef(null);
+  const ref = useRef(null), layer = useLayer();
   useLayoutEffect(() => {
     const d = ref.current;
     d.showModal();
     at?.(d);
-    return () => { noticesOut(d); if (d.open) d.close(); };
+    return () => { if (d.open) d.close(); };
   }, []);
-  return html`<dialog class=${cls} aria-label=${label} aria-labelledby=${labelledby} ref=${ref} onCancel=${e => { e.preventDefault(); onClose?.(); }}>${children}</dialog>`;
+  return html`<dialog class=${cls} aria-label=${label} aria-labelledby=${labelledby} ref=${ref} onCancel=${e => { e.preventDefault(); onClose?.(); }}>
+    ${children}<${Toasts} at=${layer} /></dialog>`;
 }
 
 // ---- the dialogs an action opens: a stack, the latest on top
 let stack = [], seq = 0;
-const host = document.createElement("div");
-host.style.display = "contents";
-document.body.append(host);
-const Dialogs = ({ list }) => list.map(e => html`<${Modal} key=${e.id} cls=${e.cls} label=${e.label} labelledby=${e.labelledby} onClose=${e.onCancel} at=${d => { e.el = d; }}>${e.vnode}<//>`);
-const draw = () => render(html`<${Dialogs} list=${stack} />`, host);
+const subs = new Set();
+const emit = () => { for (const f of subs) f(); };
+/** The stack, drawn. */
+export function Dialogs() {
+  const [, redraw] = useState(0);
+  useLayoutEffect(() => { const f = () => redraw(n => n + 1); subs.add(f); return () => subs.delete(f); }, []);
+  return stack.map(e => html`<${Modal} key=${e.id} cls=${e.cls} label=${e.label} labelledby=${e.labelledby} onClose=${e.onCancel} at=${e.opened}>${e.vnode}<//>`);
+}
 
-/** `vnode` in a modal dialog of the stack; `cls` its classes, `label` its name; `onCancel()` for Escape. Returns
-    {el, draw(next), close()}. */
-export function openModal(vnode, { cls = "dlg", label = null, labelledby = null, onCancel = null } = {}) {
-  const e = { id: ++seq, vnode, cls, label, labelledby, onCancel, el: null };
+/** `vnode` in a modal dialog of the stack; `cls` its classes, `label` its name; `onCancel()` for Escape; `opened(el)`
+    once it is open. Returns {draw(next), close()}. */
+export function openModal(vnode, { cls = "dlg", label = null, labelledby = null, onCancel = null, opened = null } = {}) {
+  const e = { id: ++seq, vnode, cls, label, labelledby, onCancel, opened };
   stack = [...stack, e];
-  draw();
-  return { get el() { return e.el; }, draw: next => { e.vnode = next; stack = [...stack]; draw(); },
-    close: () => { if (!stack.includes(e)) return; stack = stack.filter(x => x !== e); draw(); } };
+  emit();
+  return { draw: next => { e.vnode = next; stack = [...stack]; emit(); },
+    close: () => { if (!stack.includes(e)) return; stack = stack.filter(x => x !== e); emit(); } };
 }
 
 /** A question: its title, its body (a component, or several), its buttons -- [label, value, class]; a value that is
@@ -79,3 +84,7 @@ export function FullscreenView({ title, close, children }) {
   return html`<div class="fullscreen-head"><h2>${title}</h2><button class="small" type="button" onClick=${() => { close(); redraw(n => n + 1); }}>Close</button></div>
     <div class="fullscreen-content">${children}</div>`;
 }
+
+/** The page left: each dialog of the stack cancelled as Escape would (a dialog belongs to its page; an upload's
+    progress stays). */
+export function cancelDialogs() { for (const e of stack) e.onCancel?.(); }

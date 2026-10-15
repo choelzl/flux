@@ -1170,7 +1170,7 @@ def flows(r: Run) -> None:
         r.button("Reset", ".danger-card")
         b.wait("document.querySelector('dialog[open] [data-reset-keep=workbench]')", what="second reset options")
         r.check("keep options are chosen per reset", b.js("return !document.querySelector('[data-reset-keep=workbench]').checked"))
-        b.js("document.querySelectorAll('.toast').forEach(t => t.remove()); return 1")   # the second reset's own notice, not the first's
+        b.js("document.querySelectorAll('.toast .x').forEach(x => x.click()); return 1")   # the second reset's own notice, not the first's
         r.dialog_button("Reset")
         b.wait("[...document.querySelectorAll('.toast')].some(x => x.textContent.includes('resettable reset')) && document.querySelector('#main .danger-card')",
                timeout=60, what="full reset completed")
@@ -1354,7 +1354,7 @@ def flows(r: Run) -> None:
         b.js("[...document.querySelectorAll('.files-card ul.files li a')].find(a => a.textContent.endsWith('gone.txt')).click(); return 1")
         said = b.wait("(document.querySelector('.viewer .empty') || {}).innerText && document.querySelector('.viewer .empty').innerText", what="the failure said")
         r.check("a file gone since the list is said with Retry, not as a binary", "could not be opened" in said and "Retry" in said and "binary" not in said, said[:160])
-        b.js("document.querySelectorAll('.toast').forEach(t => t.remove()); window.__e2e.bad.splice(0); window.__e2e.errors.splice(0); return 1")
+        b.js("document.querySelectorAll('.toast .x').forEach(x => x.click()); window.__e2e.bad.splice(0); window.__e2e.errors.splice(0); return 1")
         r.clean("file manager")
         # at 390 pixels: the selected item's menu inside the screen; rename, move and delete there too
         r.api("/apps/sw/file?path=phone.txt", "PUT", {"text": "p\n"})
@@ -1428,7 +1428,7 @@ def flows(r: Run) -> None:
         r.dialog_button("Save anyway")
         b.wait("document.querySelector('#main .callout.bad')", what="the loader's refusal")
         r.check("a refused document is said on saving", "loader refuses" in b.js("return document.querySelector('#main .callout.bad').textContent"))
-        b.js("document.querySelectorAll('.toast').forEach(t => t.remove()); window.__e2e.bad.splice(0); return 1")   # the warning was the point
+        b.js("document.querySelectorAll('.toast .x').forEach(x => x.click()); window.__e2e.bad.splice(0); return 1")   # the warning was the point
         b.js(edit, "statement: >- broken", "statement: >-")
         r.button("Save")
         r.dialog_button("Save")

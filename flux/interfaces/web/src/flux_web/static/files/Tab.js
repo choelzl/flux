@@ -14,15 +14,6 @@ import { CodeEditor } from "../components/CodeEditor.js";
 import { ViewerFrame, ViewerTools, useViewer } from "../viewer.js";
 import { ActionsMenu, FileList, MetaLine, PathCrumbs, baseOf, joinP, parentOf } from "./parts.js";
 
-// D908: an open Actions menu closes on a click elsewhere or Escape
-document.addEventListener("click", e => document.querySelectorAll("details.actions-menu[open]").forEach(d => { if (!d.contains(e.target)) d.open = false; }));
-document.addEventListener("keydown", e => {
-  if (e.key !== "Escape") return;
-  document.querySelectorAll("details.actions-menu[open]").forEach(d => {
-    const back = d.contains(document.activeElement);       // D937: the keyboard's place kept -- back on the menu's button
-    d.open = false; if (back) d.querySelector("summary").focus();
-  });
-});
 
 /** A name or a folder asked for, the path it makes shown as it is typed. */
 function AskPath({ name, label, value, pathOf }) {

@@ -31,7 +31,7 @@ function Field({ k, f, values, setValue }) {
   const clear = async () => { await save({ [k]: null }); setValue(k, ""); setText(""); };
   const disabled = price && f.gated && !f.ownEndpoint(k);         // D835: a user prices only an endpoint of their own
   // D820: a key is a secret of the server's, not a login: no password manager fills it, nor the field before it
-  return html`<span class="inline" ref=${box}><input type=${secret ? "password" : "text"} autocomplete=${secret ? "new-password" : "off"} name=${`flux-setting-${k}`}
+  return html`<span class="inline" ...${box}><input type=${secret ? "password" : "text"} autocomplete=${secret ? "new-password" : "off"} name=${`flux-setting-${k}`}
       data-lpignore="true" data-1p-ignore="true" data-form-type="other" id=${`set-${scope}-${k}`} title=${k} placeholder=${holder} disabled=${disabled}
       inputmode=${price ? "decimal" : null} class=${price ? "price" : null}
       value=${text} onInput=${e => { setText(e.currentTarget.value); f.typed(k, e.currentTarget.value); }} onChange=${e => setText(e.currentTarget.value)} />

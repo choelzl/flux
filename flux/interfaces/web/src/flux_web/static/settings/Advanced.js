@@ -47,7 +47,7 @@ function AdvancedForm({ a, sandboxedServer, save }) {
   const num = (k, label, ph) => html`<label class="stack">${label}<input id=${`adv-${k}`} placeholder=${ph} style="width:120px" ...${bound(v[k], x => set({ [k]: x }))} /></label>`;
   const check = (k, id, label) => html`<label class="check"><input type="checkbox" id=${id} checked=${v[k]} onChange=${e => set({ [k]: e.currentTarget.checked })} />${label}</label>`;
   const area = (k, id, label, ph) => html`<label class="stack">${label}<textarea id=${id} rows="2" class="mono" placeholder=${ph} ...${bound(v[k], x => set({ [k]: x }))} /></label>`;
-  return html`<div ref=${box}><p class="muted">From the next start.</p>
+  return html`<div ...${box}><p class="muted">From the next start.</p>
     <label class="check"><input type="checkbox" id="adv-sandbox" data-autosave-skip checked=${v.sandbox} onChange=${sandbox} />Run in the sandbox (off: trusted code only)</label>
     ${sandboxedServer ? "" : html`<p class="callout warn small">This server runs every loop without a sandbox: this choice and the settings below apply once it runs with one.</p>`}
     <div class="row">${num("memory", "Memory", "no limit")}${num("cpus", "CPUs", "no limit")}${num("pids", "Processes", "4096")}${num("tmp_size", "Scratch /tmp", "no limit")}</div>
