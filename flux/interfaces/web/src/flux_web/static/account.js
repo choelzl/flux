@@ -3,7 +3,7 @@
 
 import { setMe } from "./state.js";
 import { api, enc } from "./ui.js";
-import { html } from "./view.js";
+import { html, Notice } from "./view.js";
 import { PageRead, useLoad } from "./components/Load.js";
 import { LoginCard } from "./components/Login.js";
 import { Account } from "./account/Account.js";
@@ -22,7 +22,7 @@ function LoginRoute() {
 function InviteRoute({ token }) {
   const read = useLoad(() => api(`/invite/${enc(token)}`), token);
   if (!read.got) return null;
-  if (read.got.error) return html`<${LoginCard}><p class="err">${read.got.error}</p><a class="btn" href="#/login">Log in</a><//>`;
+  if (read.got.error) return html`<${LoginCard}><${Notice} tone="bad" what="This link does not work" why=${read.got.error} action=${html`<a class="btn small" href="#/login">Log in</a>`} /><//>`;
   const got = read.got.d, invite = got.kind === "invite";
   const submit = async f => {
     const pw = f.elements.pw.value;

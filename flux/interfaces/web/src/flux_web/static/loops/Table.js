@@ -11,6 +11,7 @@ import { startLoop, stopLoop, restartLoop } from "../loops.js";
 import { Act } from "../components/Act.js";
 import { LastSaid, StatePill } from "../components/StatePill.js";
 import { SortableTable } from "../components/SortableTable.js";
+import { Pill } from "../components/Tone.js";
 
 const STATE_RANK = l => l.running ? 4 : l.failed ? 3 : l.stopped ? 2 : l.last_active ? 1 : 0;
 const sm = l => l.summary || {};
@@ -60,7 +61,7 @@ export function LoopsTable({ loops, who = false, memo = "flux-sort-loops" }) {
     const href = owner ? `#/u/${enc(owner)}/app/${enc(name)}` : `#/app/${enc(name)}`;
     return html`<tr class="clickable" onClick=${e => { if (!e.target.closest("a, button")) location.hash = href; }}>
       ${who ? html`<td>${l.owner}</td>` : ""}<td><a href=${href} class="strong">${name}</a></td>
-      <td><${StatePill} st=${l} />${l.question ? html`<span class="pill warn">asks</span>` : ""}</td><td class="muted"><${LastSaid} st=${l} /></td>
+      <td><${StatePill} st=${l} />${l.question ? html`<${Pill} tone="warn">asks<//>` : ""}</td><td class="muted"><${LastSaid} st=${l} /></td>
       <td class="num mono" title=${s.designs ? `${s.this_run || 0} this run, ${s.designs} over every run, ${s.accepted} accepted` : null}>
         ${s.designs ? html`${String(s.this_run || 0)}<span class="muted">${` / ${s.designs}`}</span>` : html`<span class="muted">—</span>`}</td>
       <td class="mono loop-main-measurements"><${Best} l=${l} name=${name} owner=${owner} /></td>

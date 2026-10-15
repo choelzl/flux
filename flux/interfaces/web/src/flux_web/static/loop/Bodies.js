@@ -18,6 +18,7 @@ import { FilesTab, WorkbenchTab, showIgnored } from "../files/Tab.js";
 import { LoopSettings } from "../settings/LoopSettings.js";
 import { Page as LivePage } from "../live/Page.js";
 import { useLoop } from "./context.js";
+import { Failed } from "../components/Tone.js";
 
 const In = ({ read, children }) => html`<${Loaded} read=${read} wait=${html`<${Reading} />`} card=${true}>${children}<//>`;
 
@@ -94,6 +95,6 @@ export function LiveBody({ store, ready }) {
     return () => { live = false; store.close(); ready(false); };
   }, [n]);
   if (!got) return html`<${Reading} lines=${6} />`;
-  if (got !== true) return html`<${Card} actions=${html`<button type="button" onClick=${() => setN(k => k + 1)}>Retry</button>`}><div class="empty"><p>${`Starts unavailable: ${got.message}`}</p></div><//>`;
+  if (got !== true) return html`<${Card}><${Failed} what="Its starts could not be read" why=${got.message} retry=${() => setN(k => k + 1)} /><//>`;
   return html`<${LivePage} store=${store} />`;
 }

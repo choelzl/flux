@@ -2,16 +2,17 @@
 // its parents as chips, why it ran and who did it), what it gave by its kind, the quiet steps it took, every
 // field folded -- and a pass at a glance (P11).
 
-import { html, useLayoutEffect } from "../../view.js";
+import { Empty, html, useLayoutEffect } from "../../view.js";
 import { dur } from "../../format.js";
 import { showRaw } from "../../viewer.js";
 import { restoreScroll, scrollState } from "../../scroll.js";
 import { WORK_COLORS as COLORS, ownSpans, phaseKind, workLabel } from "../work_style.js";
 import { passName } from "../views.js";
-import { Block, Fold, Pill, StepRow, memoryOf } from "./bits.js";
+import { Block, Fold, StepRow, TaskPill, memoryOf } from "./bits.js";
 import { AgentChat, ModelChat } from "./Chat.js";
 import { ChooseBody, CriticBody, NotesFold, SearchBody, StepsBody, ToolBody } from "./Bodies.js";
 import { candidateOf, colorOf, fmt, has, headOf, isAgent, isModel, isTool, metricsOf, plain, running, stdoutOf, taskLabel } from "./parts.js";
+import { Pill } from "../../components/Tone.js";
 
 /** D1094: who did the work, in words -- the program a command ran, the agent or model that answered, its try
     (D1075: the tree's); an engine's own step name says nothing the title does not (it is the tooltip). */
@@ -30,7 +31,7 @@ function Head({ n, env, a }) {
   const why = n.why && !N.loopNamed(String(n.why).trim()) && !/^\s*(agent|tool|model|llm)\s*:\s*\S+\s*$/i.test(String(n.why)) ? N.shortAll(String(n.why)) : "";
   const raw = () => showRaw(JSON.stringify({ name: n.name, input: n.params, fields: n.fields, output: n.output }, null, 2), `${n.name} · raw`);
   return html`<div class="detail-head alt-ihead"><span class="alt-stripe" style=${`background:${colorOf(n)}`} />
-      <h2 title=${taskLabel(n)}>${title}</h2><${Pill} n=${n} /><span class="muted">${dur(running(n) ? env.now - n.t0 : n.seconds)}</span>
+      <h2 title=${taskLabel(n)}>${title}</h2><${TaskPill} n=${n} /><span class="muted">${dur(running(n) ? env.now - n.t0 : n.seconds)}</span>
       <span class="alt-head-tools"><button type="button" class="small raw-view alt-icon-btn" title="Raw" aria-label="Raw" onClick=${raw}>{ }</button>
         <button type="button" class="small fullscreen-button alt-icon-btn" title="Fullscreen" aria-label="Fullscreen" onClick=${() => a.fullscreen(n.name)}>⤢</button></span></div>
     ${parents.length ? html`<div class="alt-crumbs">${parents.map((p, i) => [i ? html`<span class="muted">›</span>` : "",
@@ -69,7 +70,7 @@ function Task({ n, env, a, panel }) {
 
 /** The inspector's panel: a task drawn in it; `panel()` its element (in its card, or in Fullscreen, D987). */
 export function Inspector({ n, env, a, panel }) {
-  return n ? html`<${Task} key=${n.id} n=${n} env=${env} a=${a} panel=${panel} />` : html`<div class="empty"><p>Select a task.</p></div>`;
+  return n ? html`<${Task} key=${n.id} n=${n} env=${env} a=${a} panel=${panel} />` : html`<${Empty} text="Select a task." />`;
 }
 
 /** A pass at a glance (P11): what it tried and how that ended, where its time went, its steps. */
@@ -85,7 +86,7 @@ export function PassSummary({ p, nodes, a, N, head = true }) {
   const meas = nodes.filter(n => isTool(n) && phaseKind(n) === "measure").map(n => metricsOf(stdoutOf(n))).find(m => Object.keys(m).length) || {};
   const steps = top.filter(n => phaseKind(n) !== "setup");
   return html`${head ? html`<div class="detail-head alt-ihead"><h2>${passName(p)}</h2>
-      <span class=${`pill ${live ? "live" : failed ? "bad" : "ok"}`}>${live ? html`<span class="alt-spin" />` : ""}${live ? "running" : failed ? "failed" : "done"}</span>
+      <${Pill} tone=${live ? "run" : failed ? "bad" : "ok"}>${live ? "running" : failed ? "failed" : "done"}<//>
       <span class="muted">${dur(t1 - t0)}</span></div>` : ""}
     ${cand ? html`<div key="tried" class="alt-tried"><div class="alt-label">Tried</div><b>${cand}</b><span class="mono muted small">${Object.entries(meas).slice(0, 3).map(([k, v]) => `${k} ${fmt(v)}`).join(" · ")}</span></div>` : ""}
     <div><div class="alt-label">Where the time went</div>

@@ -6,6 +6,7 @@ import { api, dialog, toast, when } from "../ui.js";
 import { Act } from "../components/Act.js";
 import { bound, useAutosave } from "../components/Autosave.js";
 import { Select } from "../components/Select.js";
+import { Pill } from "../components/Tone.js";
 
 const EVERY_UNITS = [["min", 1 / 60], ["h", 1], ["d", 24]];
 const PARAM_LABEL = { days: "older than (days)", keep: "keep (names, comma-separated)", min_free_pct: "alert below (% free)",
@@ -54,7 +55,7 @@ export function Maintenance({ r, reload }) {
     const idle = t.checked && (!t.last || t.checked > t.last.t + 1), x = t.last;
     return html`<tr class=${t.on ? "" : "off"}><td data-label="Task" title=${t.what}><strong>${t.title}</strong></td>
       <td data-label="Schedule" class=${t.on ? "" : "muted"}>${t.on ? every(t) : "off"}</td>
-      <td data-label="Last run">${t.running ? html`<span class="pill live">running</span>` : idle ? html`<${Ago} t=${t.checked} />` : x ? html`<${Ago} t=${x.t} />` : html`<span class="muted">never</span>`}</td>
+      <td data-label="Last run">${t.running ? html`<${Pill} tone="run">running<//>` : idle ? html`<${Ago} t=${t.checked} />` : x ? html`<${Ago} t=${x.t} />` : html`<span class="muted">never</span>`}</td>
       <td data-label="Result" class="mt-said">${idle ? html`<span class="muted" title=${x ? `last change ${when(x.t)}: ${x.said}` : ""}>nothing to do</span>`
         : x ? html`<span class=${x.ok ? "" : "bad"} title=${x.said}>${x.loop ? `${x.loop}: ` : ""}${x.said}</span>` : html`<span class="muted">—</span>`}</td>
       <td class="right mt-acts"><${Act} cls="small" onClick=${async () => { await runTask(t); reload(); }}>Run<//><button type="button" class="small" onClick=${() => edit(t)}>Edit</button></td></tr>`;

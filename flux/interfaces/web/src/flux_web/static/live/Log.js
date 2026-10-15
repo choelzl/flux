@@ -9,6 +9,7 @@ import { isProblem, latestStart, lineClass, logAt, logLines, matcher } from "./l
 import { ViewerFrame, ViewerTools, useViewer } from "../viewer.js";
 import { recall, remember } from "../stored.js";
 import { useLoop } from "../loop/context.js";
+import { Pill } from "../components/Tone.js";
 
 const WRAPPED = 3000, TAIL = 2 << 20;
 const storedTimes = () => recall("flux-log-times") !== "off";
@@ -76,7 +77,7 @@ export function Log({ store }) {
       <${ViewerTools} v=${view} title="Log" rawUrl=${raw} />
       ${L.past ? "" : html`<a class="btn small" href=${`${ctx.base}/log/raw${ctx.qs}`}>Download</a>`}
       ${L.skipped ? html`<span class="log-earlier small">${`${(L.skipped.bytes / 1048576).toFixed(1)} MiB of earlier lines not loaded · `}<button type="button" class="small" onClick=${L.loadAll}>Load all</button></span>` : ""}
-      ${!L.past && L.stream && L.stream !== "live" ? html`<span class="pill stream warn" title="The page's connection to the loop">reconnecting…</span>` : ""}</div>
+      ${!L.past && L.stream && L.stream !== "live" ? html`<${Pill} tone="run" small cls="stream" title="The page's connection to the loop">reconnecting<//>` : ""}</div>
     ${L.cut ? html`<p class="muted">Preview: first 1 MiB. Raw opens the complete output.</p>` : ""}${L.failed ? html`<p class="bad">${`This start's log is unavailable: ${L.failed}`}</p>` : ""}
     <div class=${cx("logview virt", o.wrap && "wrap")} ref=${box} onScroll=${onScroll}>
       ${o.wrap ? "" : html`<div class="spacer" style=${`height:${shown.length * r}px`} />`}

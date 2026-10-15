@@ -1,7 +1,7 @@
 // Flux web, results (D694, D1095): two designs compared -- every number at every stage, B against A (green: B
 // better), and their sources' difference.
 
-import { html } from "../view.js";
+import { Empty, html } from "../view.js";
 import { dialog, enc, loopApi } from "../ui.js";
 import { plural } from "../format.js";
 import { directionOf } from "../charts/data.js";
@@ -25,7 +25,7 @@ function Comparison({ a, b, fa, fb, stages, directions, fmt }) {
     <table class="list compact"><thead><tr><th>stage</th><th>metric</th><th class="num">A <${VerdictPill} d=${a} /></th><th class="num">B <${VerdictPill} d=${b} /></th><th class="num">B − A</th></tr></thead>
       <tbody>${rows.map(row => html`<tr key=${`${row.st}|${row.m}`}><td class="muted">${row.st}</td><td>${row.m}</td>${cell(row.va)}${cell(row.vb)}${delta(row)}</tr>`)}</tbody></table>
     <h3>Source${ops ? html`<span class="muted">${changed ? ` · ${plural(changed, "line")} differ` : " · the same"}</span>` : ""}</h3>
-    ${ops ? (changed ? html`<${Diff} ops=${ops} />` : html`<div class="empty"><p>The two sources are the same.</p></div>`) : html`<div class="empty"><p>A source is missing.</p></div>`}</div>`;
+    ${ops ? (changed ? html`<${Diff} ops=${ops} />` : html`<${Empty} text="The two sources are the same." />`) : html`<${Empty} text="A source is missing." />`}</div>`;
 }
 
 /** The two designs ticked, compared in a dialog. */

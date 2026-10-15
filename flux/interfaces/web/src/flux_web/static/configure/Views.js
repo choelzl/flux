@@ -3,7 +3,7 @@
 // not load said), a loop cloned, an agent writing a new loop's problem from what it should do and the files to read,
 // an agent revising one's problem as told (its progress, then what it changed).
 
-import { Card, Empty, Skeleton, html, useEffect, useMemo, useRef, useState } from "../view.js";
+import { Card, Empty, Notice, Skeleton, html, useEffect, useMemo, useRef, useState } from "../view.js";
 import { api, apiUpload, dialog, enc, loopApi, toast } from "../ui.js";
 import { plural } from "../format.js";
 import { useLoad, usePoll } from "../components/Load.js";
@@ -25,8 +25,8 @@ import { Select } from "../components/Select.js";
     before it is written, not after a start fails. */
 export function confirmDiff(file, before, after, problem = "") {
   const ops = lineDiff(before, after), { added, removed } = diffCounts(ops);
-  return dialog(`Save ${file}?`, html`${problem ? html`<div class="callout bad"><strong>This document does not load: </strong>${problem}
-      <p class="small">A start or a check of it will be refused until it is fixed.</p></div>` : ""}
+  return dialog(`Save ${file}?`, html`${problem ? html`<${Notice} tone="bad" what="This document does not load:" why=${problem}>
+      <p class="small">A start or a check of it will be refused until it is fixed.</p><//>` : ""}
     <p class="muted">${`${plural(added, "line")} added, ${removed} removed.`}</p><${Diff} ops=${ops} />`,
     [["Cancel", false], problem ? ["Save anyway", true, "danger"] : ["Save", true, "primary"]]);
 }
@@ -59,7 +59,7 @@ export function DirectEdit({ name }) {
     toast(err ? `${path} saved, but the loader refuses it: ${err}` : `${path} saved`, err ? "warn" : "ok");
   };
   return html`<${Card}><div class="row"><label class="stack">Document<input class="mono w-280" value=${typed ?? (got.doc || "problem.yaml")} readonly=${!!got.doc} onInput=${e => setTyped(e.currentTarget.value)} /></label></div>
-      ${refused ? html`<p class="callout bad">${"The loader refuses the document as it stands: " + refused}</p>` : ""}
+      ${refused ? html`<${Notice} tone="bad" what="The loader refuses the document as it stands:" why=${refused} />` : ""}
       <${CodeEditor} text=${got.text} lang="yaml" onEditor=${e => { ed.current = e; }} />
       <div class="form-actions"><${Act} cls="primary" onClick=${save}>Save<//></div><//>
     <${FilesPanel} store=${store} />`;

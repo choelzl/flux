@@ -3,7 +3,7 @@
 // server connection and Test, its login and files, whether Ask may use it -- with its model settings and its own
 // variables under it; the variables every agent and run gets; adding an agent.
 
-import { Card, html, useEffect, useRef, useState } from "../view.js";
+import { Card, Notice, html, useEffect, useRef, useState } from "../view.js";
 import { api, confirmDialog, dialog, toast, when } from "../ui.js";
 import { plural } from "../format.js";
 import { route } from "../app.js";
@@ -13,10 +13,11 @@ import { EnvEditor } from "../components/Env.js";
 import { SettingsForm } from "../settings/SettingsForm.js";
 import { Select } from "../components/Select.js";
 import { remember } from "../stored.js";
+import { Pill } from "../components/Tone.js";
 
 /** D924: how an agent connects, and whether that was verified -- the words the Account and the authoring picker say. */
 export const MECHANISM = { key: "API key", provider: "provider configuration", login: "interactive login", endpoint: "endpoint without a key", none: "not detected" };
-export const VERIFIED = { untested: ["", "untested"], ready: ["ok", "ready"], failed: ["bad", "failed"], changed: ["warn", "changed since test"] };
+export const VERIFIED = { untested: ["none", "untested"], ready: ["ok", "ready"], failed: ["bad", "failed"], changed: ["warn", "changed since test"] };
 const HOME_PH = { opencode: ".config/opencode", claude: ".claude/settings.json", codex: ".codex/config.toml" };
 const lines = a => (a || []).join("\n");
 const list = text => text.split(/[\n,]/).map(x => x.trim()).filter(Boolean);
@@ -39,7 +40,7 @@ function RenameForm({ a, v, set }) {
     if (!name || name === a.id) { setWarn(null); return; }
     try {
       const r = await api(`/admin/agents/${a.id}/rename`, { method: "POST", body: { name, dry_run: true } });
-      setWarn(r.loops.length ? html`<p class="callout bad">${`${plural(r.loops.length, "loop")} name ${a.id} and will not start until their documents say ${name}: `}<span class="mono">${r.loops.join(", ")}</span></p>`
+      setWarn(r.loops.length ? html`<${Notice} tone="bad" what=${`${plural(r.loops.length, "loop")} will not start`} why=${`until their documents say ${name}: ${r.loops.join(", ")}`} />`
         : html`<p class="muted">${`No loop names ${a.id}.`}</p>`);
     } catch (x) { setWarn(html`<p class="bad">${x.message}</p>`); }
   };
@@ -85,7 +86,7 @@ function AgentPanel({ a, version, askOff }) {
   const field = (k, ph, mono = true) => html`<input id=${`ag-${a.id}-${k}`} placeholder=${ph} class=${mono ? "mono" : null} autocomplete="off" ...${set(k)} />`;
   const area = (k, rows, ph) => html`<textarea id=${`ag-${a.id}-${k === "login_files" ? "creds" : k}`} rows=${rows} class="mono" placeholder=${ph} ...${set(k)} />`;
   return html`<div class="agent-panel" data-agent=${a.id} data-label=${a.label}>
-    <div class="agent-found small"><span class=${`pill ${a.found ? "ok" : "bad"}`}>${a.found ? "found" : "not found"}</span><span class="pill">${a.builtin ? "built in" : `a ${a.kind}`}</span>
+    <div class="agent-found small"><${Pill} tone=${a.found ? "ok" : "bad"}>${a.found ? "found" : "not found"}<//><span class="pill">${a.builtin ? "built in" : `a ${a.kind}`}</span>
       <span class="muted">in a document: <code>${a.id}</code>${a.builtin ? "" : html` <${Act} cls="small" onClick=${() => rename(a)}>Rename<//>`}</span>
       <span class="mono muted">${a.found ? html`${a.found}<span class="agent-version">${version ? " · " + version : ""}</span>`
         : a.builtin ? `${a.bin || a.id} is not on the runs' PATH: not offered to users` : `${a.bin ? a.bin + " is not there or not runnable" : "no program yet"}: not offered to users`}</span>
@@ -93,7 +94,7 @@ function AgentPanel({ a, version, askOff }) {
       ${rest.mark}</div>
     <dl class="agent-states"><dt>Connection</dt><dd><span class=${`pill ${c.mechanism === "none" ? "" : "ok"}`}>${c.mechanism === "none" ? "each user's own" : MECHANISM[c.mechanism] || c.mechanism}</span>
         <span class="muted small">${c.mechanism === "none" ? "no key or provider for every user: each logs in or sets a key on their Account" : c.said}</span></dd>
-      ${c.mechanism === "none" || !a.found ? "" : html`<dt>Verification</dt><dd class="agent-server-test"><span class=${`pill ${ver[0]}`}>${ver[1]}</span>
+      ${c.mechanism === "none" || !a.found ? "" : html`<dt>Verification</dt><dd class="agent-server-test"><${Pill} tone=${ver[0]}>${ver[1]}<//>
         <span class="muted small">${!st.shared ? "each user's own login: each tests it on their Account" : st.state === "ready" ? `for everyone without settings of their own · ${when(st.when)}` : "a passed Test counts for everyone without settings of their own"}</span>
         ${st.state === "failed" && st.said ? html`<span class="bad small">${st.said}</span>` : ""}
         <${Act} cls="small" title="Ask it one short question with the server's configuration -- no one's own settings" onClick=${() => test(a)}>Test connection<//></dd>`}

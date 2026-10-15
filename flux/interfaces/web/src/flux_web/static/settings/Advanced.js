@@ -2,7 +2,7 @@
 // host, its limits, parallel work, the hosts it may reach, raw TCP/UDP, host folders mounted, packages; only an
 // admin changes them (saved as they change; the host asked first), everyone sees what they are.
 
-import { Card, html, useState } from "../view.js";
+import { Card, html, Notice, useState } from "../view.js";
 import { confirmDialog } from "../ui.js";
 import { bound, useAutosave } from "../components/Autosave.js";
 
@@ -49,7 +49,7 @@ function AdvancedForm({ a, sandboxedServer, save }) {
   const area = (k, id, label, ph) => html`<label class="stack">${label}<textarea id=${id} rows="2" class="mono" placeholder=${ph} ...${bound(v[k], x => set({ [k]: x }))} /></label>`;
   return html`<div ...${box}><p class="muted">From the next start.</p>
     <label class="check"><input type="checkbox" id="adv-sandbox" data-autosave-skip checked=${v.sandbox} onChange=${sandbox} />Run in the sandbox (off: trusted code only)</label>
-    ${sandboxedServer ? "" : html`<p class="callout warn small">This server runs every loop without a sandbox: this choice and the settings below apply once it runs with one.</p>`}
+    ${sandboxedServer ? "" : html`<${Notice} tone="warn" what="This server runs every loop without a sandbox" why="this choice and the settings below apply once it runs with one." />`}
     <div class="row">${num("memory", "Memory", "no limit")}${num("cpus", "CPUs", "no limit")}${num("pids", "Processes", "4096")}${num("tmp_size", "Scratch /tmp", "no limit")}</div>
     ${check("parallel", "adv-parallel", "Allow parallel work")}
     ${area("allow", "adv-allow", "Hosts this loop may reach as well, under a network allowlist (one per line)", "e.g. huggingface.co\n10.1.2.0/24")}

@@ -695,7 +695,7 @@ def flows(r: Run) -> None:
         b.wait("[...document.querySelectorAll('.files-panel li')].some(l => l.textContent.includes('check.py'))", timeout=10, what="the staged file")
         b.js(click, ".fc-stepbar button", "2")             # D941: Check & Measure
         b.js(click, ".fc-step button", "+ Add a measurement")
-        named = b.wait("(document.querySelector('.files-panel .callout.bad') || {}).textContent", timeout=10, what="the measurement's script named")
+        named = b.wait("(document.querySelector('.files-panel .notice.t-bad') || {}).textContent", timeout=10, what="the measurement's script named")
         r.check("a measurement added names its script in the files at once (D912)", "bench.py" in named, named)
         b.js(click, ".fc-stepbar button", "6")
         ready =b.wait("(document.querySelector('.fc-ready') || {}).innerText", timeout=10, what="where it stands")
@@ -945,7 +945,7 @@ def flows(r: Run) -> None:
             r.check("long diagonal labels are shortened without losing their endings or accessible names", b.js("const th = document.querySelector('th[data-label=another_long_measurement_for_throughput]'), label = th.querySelector('button'); return label.textContent.length <= 20 && label.textContent.endsWith('throughput') && label.getAttribute('aria-label') === 'another_long_measurement_for_throughput' && document.querySelector('table.designs thead').getBoundingClientRect().height < 160"))
             b.click("table.designs tbody input[type=checkbox]")
             r.check("results are always compact regardless of the old preference, with no toggle", b.js("const t = document.querySelector('table.designs'), name = t.querySelector('.table-design-name'); return !document.querySelector('.compact-table') && getComputedStyle(name).maxWidth !== 'none' && t.querySelectorAll('th').length === 9 && t.getBoundingClientRect().width <= t.parentElement.clientWidth + 1"))
-            r.check("status badges remain accessible; units and metadata stay in tooltips", b.js("const badge = document.querySelector('table.designs .verdict-badge'), name = document.querySelector('table.designs .table-design-name').closest('td'); return badge.getAttribute('aria-label') === 'accepted' && badge.textContent === '✓' && name.title.includes('long_measurement_stage') && name.title.includes('2026-10-06') && document.querySelector('table.designs td.num').title.includes('µm²')"))
+            r.check("status badges remain accessible; units and metadata stay in tooltips", b.js("const badge = document.querySelector('table.designs .verdict-badge'), name = document.querySelector('table.designs .table-design-name').closest('td'); return badge.getAttribute('aria-label') === 'accepted' && !!badge.querySelector('.g-ok') && name.title.includes('long_measurement_stage') && name.title.includes('2026-10-06') && document.querySelector('table.designs td.num').title.includes('µm²')"))
             r.check("measurement cells are plain values without checkmarks or repeated units", b.js("return [...document.querySelectorAll('table.designs td.num')].every(td => /^[-+0-9.e]+$/.test(td.textContent.trim())) && !document.querySelector('table.designs .measurement-verdict, table.designs .measurement-unit')"))
             r.check("passing and failing measurements use distinct colors and explicit tooltip status", b.js("const good = document.querySelector('table.designs td.meets'), bad = document.querySelector('table.designs td.misses'); return getComputedStyle(good).color !== getComputedStyle(bad).color && good.title.includes('meets the limit') && bad.title.includes('misses the limit')"))
             b.click(".chips .relative-values")
@@ -1018,7 +1018,7 @@ def flows(r: Run) -> None:
             r.check("Decision retains every measurement column with readable shortened headers", b.js("const table = document.querySelector('.best-n'); return table.querySelectorAll('th.measurement-head').length === 6 && [...table.querySelectorAll('th.measurement-head')].some(th => th.title === 'another_long_measurement_for_throughput' && th.textContent.endsWith('throughput'))"))
             r.check("Decision shares relative preference and uses the complete measured population", b.js("return document.querySelector('.best-table-head .relative-values').getAttribute('aria-pressed') === 'true' && [...document.querySelectorAll('.best-n td.num')].some(td => td.textContent === '-22.5%' && td.title.includes('baseline (w-baseline'))"))
             b.shot(r.shots / "compact-decision.png", full=True)
-            r.check("Decision measurement cells use colors and contain no extra checkmarks", b.js("const good = document.querySelector('.best-n td.meets'), badge = document.querySelector('.best-n .verdict-badge.ok'); return getComputedStyle(good).color === getComputedStyle(badge).color && good.title.includes('meets the limit') && [...document.querySelectorAll('.best-n td.num, .num-cell')].every(td => !/[✓✗]/.test(td.textContent))"))
+            r.check("Decision measurement cells use colors and contain no extra checkmarks", b.js("const good = document.querySelector('.best-n td.meets'), badge = document.querySelector('.best-n .verdict-badge.t-ok'); return getComputedStyle(good).color === getComputedStyle(badge).color && good.title.includes('meets the limit') && [...document.querySelectorAll('.best-n td.num, .num-cell')].every(td => !/[✓✗]/.test(td.textContent))"))
             r.page("#/app/sw/settings", "document.querySelector('.measurement-options')", "Decision measurement Preferences")
             b.click('.measurement-options input[data-metric="long_measurement_name_for_latency"]')
             r.page("#/app/sw", "document.querySelector('.best-n')", "Decision with an ignored column")
@@ -1102,14 +1102,14 @@ def flows(r: Run) -> None:
             r.page("#/app/sw/results", "document.querySelector('table.designs')", "rejected results")
             r.check("a rejected result stays in the table, marked, its cleared value struck through", b.js(
                 "const tr = [...document.querySelectorAll('table.designs tbody tr')].find(t => t.textContent.includes('w-bad'));"
-                " return !!tr && tr.classList.contains('rejected') && !!tr.querySelector('.verdict-badge.rejected') && tr.querySelector('td.cleared s')?.textContent === '12.5'"
+                " return !!tr && tr.classList.contains('rejected') && !!tr.querySelector('.verdict-badge.t-warn') && tr.querySelector('td.cleared s')?.textContent === '12.5'"
                 " && [...document.querySelectorAll('.chips .chip')].some(c => c.textContent === 'Rejected 1')"))
             b.js("[...document.querySelectorAll('table.designs tbody tr')].find(t => t.textContent.includes('w-bad')).querySelector('.open-design').click(); return 1")
             b.wait("document.querySelector('.rejected-blk')", what="the rejection in the detail")
             r.check("its detail says why, by whom, what was cleared, and offers Restore -- not Reject", b.js(
                 "const k = document.querySelector('.rejected-blk'); return k.textContent.includes('the bench read the wrong clock') && k.textContent.includes('bob')"
                 " && k.textContent.includes('cleared confirm area_um2') && [...k.querySelectorAll('button')].some(x => x.textContent === 'Restore')"
-                " && !document.querySelector('.reject-design') && document.querySelector('.detail-head .pill.rejected')?.textContent === 'rejected · bob'"))
+                " && !document.querySelector('.reject-design') && document.querySelector('.detail-head .pill.t-warn')?.textContent === 'rejected · bob'"))
             b.js("[...document.querySelectorAll('table.designs tbody tr')].find(t => t.textContent.includes('w-good')).querySelector('.open-design').click(); return 1")
             b.wait("document.querySelector('.reject-design')", what="Reject on an accepted design")
             b.click(".reject-design")
@@ -1353,7 +1353,7 @@ def flows(r: Run) -> None:
         r.page("#/app/sw/files", "[...document.querySelectorAll('.files-card ul.files li')].some(l => l.innerText.includes('gone.txt'))", "gone.txt listed")
         r.api("/apps/sw/file?path=gone.txt", "DELETE")
         b.js("[...document.querySelectorAll('.files-card ul.files li a')].find(a => a.textContent.endsWith('gone.txt')).click(); return 1")
-        said = b.wait("(document.querySelector('.viewer .empty') || {}).innerText && document.querySelector('.viewer .empty').innerText", what="the failure said")
+        said = b.wait("(document.querySelector('.viewer .failed') || {}).innerText && document.querySelector('.viewer .failed').innerText", what="the failure said")
         r.check("a file gone since the list is said with Retry, not as a binary", "could not be opened" in said and "Retry" in said and "binary" not in said, said[:160])
         b.js("document.querySelectorAll('.toast .x').forEach(x => x.click()); window.__e2e.bad.splice(0); window.__e2e.errors.splice(0); return 1")
         r.clean("file manager")
@@ -1420,20 +1420,20 @@ def flows(r: Run) -> None:
                 break
             time.sleep(0.2)
         r.check("saved", "timeout_s: 90" in got["body"])
-        r.check("a document that loads: no refusal shown", not b.js("return !!document.querySelector('#main .callout.bad')"))
+        r.check("a document that loads: no refusal shown", not b.js("return !!document.querySelector('#main .notice.t-bad')"))
         # a document the loader refuses: said on saving, not first at Start
         b.js(edit, "statement: >-", "statement: >- broken")
         r.button("Save")
         said = b.wait("document.querySelector('dialog.dlg[open]') && document.querySelector('dialog.dlg[open]').innerText", what="the save dialog")
         r.check("before saving, a document that does not load is said (D757)", "does not load" in said, said[:200])
         r.dialog_button("Save anyway")
-        b.wait("document.querySelector('#main .callout.bad')", what="the loader's refusal")
-        r.check("a refused document is said on saving", "loader refuses" in b.js("return document.querySelector('#main .callout.bad').textContent"))
+        b.wait("document.querySelector('#main .notice.t-bad')", what="the loader's refusal")
+        r.check("a refused document is said on saving", "loader refuses" in b.js("return document.querySelector('#main .notice.t-bad').textContent"))
         b.js("document.querySelectorAll('.toast .x').forEach(x => x.click()); window.__e2e.bad.splice(0); return 1")   # the warning was the point
         b.js(edit, "statement: >- broken", "statement: >-")
         r.button("Save")
         r.dialog_button("Save")
-        b.wait("!document.querySelector('#main .callout.bad')", what="the refusal gone once fixed")
+        b.wait("!document.querySelector('#main .notice.t-bad')", what="the refusal gone once fixed")
         r.clean("direct edit")
     r.step("direct edit", direct_edit)
 
@@ -1485,23 +1485,23 @@ def flows(r: Run) -> None:
         r.check("another problem written", r.api("/apps/sw/file?path=fast.problem.yaml", "PUT", {"text": text})["status"] == 200)
         r.page("#/app/sw", "document.querySelector('.page-head')", "the loop")
         r.button("Start")
-        b.wait("document.querySelector('dialog.dlg[open] .preflight .callout.good, dialog.dlg[open] .preflight .callout.bad')", timeout=60, what="the check before starting")
-        r.check("the start dialog says the check", b.js("return !!document.querySelector('dialog.dlg[open] .preflight .callout.good')"),
+        b.wait("document.querySelector('dialog.dlg[open] .preflight .notice.t-ok, dialog.dlg[open] .preflight .notice.t-bad')", timeout=60, what="the check before starting")
+        r.check("the start dialog says the check", b.js("return !!document.querySelector('dialog.dlg[open] .preflight .notice.t-ok')"),
                 b.js("return document.querySelector('dialog.dlg[open]').innerText"))
         opts = b.js("return [...document.querySelectorAll('dialog.dlg[open] select option')].map(o => o.value + '|' + o.selected)")
         r.check("the start dialog asks which problem", opts == ["problem.yaml|true", "fast.problem.yaml|false"], opts)
         b.js("const s = document.querySelector('dialog.dlg[open] select'); s.value = 'fast.problem.yaml'; s.dispatchEvent(new Event('change')); return 1")
-        said = b.wait("document.querySelector('dialog.dlg[open] .preflight .callout.good') && document.querySelector('dialog.dlg[open] .preflight').innerText",
+        said = b.wait("document.querySelector('dialog.dlg[open] .preflight .notice.t-ok') && document.querySelector('dialog.dlg[open] .preflight').innerText",
                       timeout=60, what="the picked problem checked")
         r.check("the picked problem is checked", "passes" in said, said)
         b.js("const s = document.querySelector('dialog.dlg[open] select'); s.value = 'problem.yaml'; s.dispatchEvent(new Event('change')); return 1")
-        b.wait("document.querySelector('dialog.dlg[open] .preflight .callout.good')", timeout=60, what="problem.yaml checked again")
+        b.wait("document.querySelector('dialog.dlg[open] .preflight .notice.t-ok')", timeout=60, what="problem.yaml checked again")
         # until stopped: the checks below talk to a running loop, and one pass of the sweep could end
         # before the Talk drawer opens -- it did whenever the sweep ran fast (a git worktree)
         b.js("const c = [...document.querySelectorAll('dialog.dlg[open] label.check')].find(l => l.textContent.includes('until I stop it')).querySelector('input'); if (!c.checked) c.click(); return 1")
         r.dialog_button("Start")
         r.check("the alternative removed", r.api("/apps/sw/file?path=fast.problem.yaml", "DELETE")["status"] == 200)
-        b.wait("location.hash.endsWith('/live') || document.querySelector('.pill.live')", timeout=30, what="running")
+        b.wait("location.hash.endsWith('/live') || document.querySelector('.pill.t-run')", timeout=30, what="running")
         b.wait("document.querySelector('.alt-tree [data-task], .alt-tree [data-pass]')", timeout=60, what="the task tree")
         r.check("Live shows the task tree", True)
         r.page("#/app/sw/live/log", "document.querySelector('.logview')", "the log")
@@ -1521,11 +1521,11 @@ def flows(r: Run) -> None:
         r.check("a note sent is confirmed and listed under the line", True)
         b.js("document.dispatchEvent(new KeyboardEvent('keydown', {key: 'Escape'})); return 1")
         r.button("Stop", ".page-head")
-        b.wait("[...document.querySelectorAll('.page-head button.danger.solid')].some(b => b.textContent==='Stop') || !document.querySelector('.page-head .pill.live')", what="stop scheduled")
-        if b.js("return !!document.querySelector('.page-head .pill.live')"):
+        b.wait("[...document.querySelectorAll('.page-head button.danger.solid')].some(b => b.textContent==='Stop') || !document.querySelector('.page-head .pill.t-run')", what="stop scheduled")
+        if b.js("return !!document.querySelector('.page-head .pill.t-run')"):
             r.button("Stop", ".page-head")
             r.dialog_button("Stop")
-        b.wait("!document.querySelector('.page-head .pill.live')", timeout=60, what="stopped")
+        b.wait("!document.querySelector('.page-head .pill.t-run')", timeout=60, what="stopped")
         r.check("stopped", True)
         # the drawing below reads the last start: one whole pass of it, ended on its own (a run stopped
         # at rest has a last pass that built nothing)
@@ -1589,9 +1589,9 @@ def flows(r: Run) -> None:
         got = b.js("return [document.querySelector('.tabs [aria-selected=true]').textContent, (document.querySelector('.subtabs [aria-selected=true]') || {}).textContent,"
                    " !!document.querySelector('#e2e-where')]")
         r.check("'Timeline' opens Live › Timeline (D928)", got == ["Live", "Timeline", False], str(got))
-        r.page("#/app/sw/live", "document.querySelector('.pill.stream')", "Live")
+        r.page("#/app/sw/live", "document.querySelector('.alt-summary')", "Live")
         r.check("Live: the inspector's Full log opens Live › Log (D927, D1095)", (b.js("return document.querySelector('.alt-log-link').getAttribute('href')") or "").endswith("/live/log"))
-        b.wait("document.querySelector('.pill.stream').hidden", timeout=15, what="the connection pill hidden once connected")
+        b.wait("!document.querySelector('.pill.stream')", timeout=15, what="the connection pill gone once connected")
         r.check("Live: no 'live' pill while connected (D856)", True)
         r.clean("start, live, stop, results")
     r.step("start and stop", start_and_stop)
@@ -1737,7 +1737,7 @@ def flows(r: Run) -> None:
                 break
             time.sleep(0.5)
         b.js("if (window.__e2e) window.__e2e.bad = window.__e2e.bad.filter(t => !t.includes('slow')); return 1")
-        b.wait("!document.querySelector('.page-head .pill.live') && !document.querySelector('.alt-tree .alt-spin')", timeout=40, what="the run seen over, nothing running")
+        b.wait("!document.querySelector('.page-head .pill.t-run') && !document.querySelector('.alt-tree .alt-spin')", timeout=40, what="the run seen over, nothing running")
         said = b.js("return document.querySelector('.alt-summary').textContent")
         r.check("a killed run's work is said stopped, not running (D928)", "running" not in said and any(w in said for w in ("interrupted", "failed")), said)
         r.clean("a killed run")
@@ -2702,7 +2702,7 @@ def flows(r: Run) -> None:
         # before: the start dialog says the check fails
         r.page("#/app/broken", "document.querySelector('.page-head')", "the broken loop")
         r.button("Start", ".page-head")
-        bad = b.wait("document.querySelector('dialog.dlg[open] .preflight .callout.bad') && document.querySelector('dialog.dlg[open]').innerText", timeout=90, what="the check, failed")
+        bad = b.wait("document.querySelector('dialog.dlg[open] .preflight .notice.t-bad') && document.querySelector('dialog.dlg[open]').innerText", timeout=90, what="the check, failed")
         r.check("the start dialog says the check fails and offers to start anyway", "check fails" in bad and "Start anyway" in bad, bad[:200])
         t0 = time.time()
         r.dialog_button("Start anyway")

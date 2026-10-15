@@ -5,6 +5,7 @@
 import { cx, html, useState } from "../view.js";
 import { mainMeasurements, relativeMeasurement, resultPreferences } from "./preferences.js";
 import { useLoop } from "../loop/context.js";
+import { Pill } from "../components/Tone.js";
 
 /** The columns of `metrics` and their controls: `visible()` in the order shown (a dictionary's aggregate first,
     then its tests), `hidden(m)`, `controls` (Hidden N, Tests ▸), `toggle(m, on)` (the picker's). */
@@ -90,19 +91,18 @@ export function MeasurementHeader({ text, button = null, arrow = null, children 
     <div class="measurement-footer">${arrow}${children}</div></div>`;
 }
 
+/** D1102: a verdict's tone -- a rejection is a warning, pending the quiet tone. */
+const VERDICT_TONE = { accepted: "ok", pending: "none", rejected: "warn", failed: "bad" };
+
 export function VerdictBadge({ verdict, reason = "" }) {
-  const color = verdict === "accepted" ? "ok" : verdict === "pending" ? "warn" : verdict === "rejected" ? "rejected" : "bad";
-  const icon = verdict === "accepted" ? "✓" : verdict === "pending" ? "…" : verdict === "rejected" ? "⊘" : "✗";
-  return html`<span class=${`pill ${color} verdict-badge`} role="img" aria-label=${verdict} title=${reason ? `${verdict}: ${reason}` : verdict}>${icon}</span>`;
+  return html`<${Pill} icon tone=${VERDICT_TONE[verdict] || "bad"} cls="verdict-badge" title=${reason ? `${verdict}: ${reason}` : verdict} />`;
 }
 
 /** D1090: a critic's rejection is "rejected · critic"; a person's keeps the name. */
 export const byCritic = by => /^(the )?\w+ critic\b/.test(String(by || ""));
 export function VerdictPill({ d }) {
-  if (d.verdict === "accepted") return html`<span class="pill ok">accepted</span>`;
-  if (d.verdict === "pending") return html`<span class="pill warn">pending</span>`;
-  if (d.verdict === "rejected") return html`<span class="pill rejected">${!d.rejected?.by ? "rejected" : byCritic(d.rejected.by) ? "rejected · critic" : `rejected · ${d.rejected.by}`}</span>`;
-  return html`<span class="pill bad">failed</span>`;
+  const said = d.verdict !== "rejected" ? d.verdict : !d.rejected?.by ? "rejected" : byCritic(d.rejected.by) ? "rejected · critic" : `rejected · ${d.rejected.by}`;
+  return html`<${Pill} tone=${VERDICT_TONE[d.verdict] || "bad"}>${VERDICT_TONE[d.verdict] ? said : "failed"}<//>`;
 }
 
 const CheckBox = ({ checked, onChange, off, ...rest }) => html`<input type="checkbox" ...${rest} checked=${checked} disabled=${off} onChange=${e => onChange(e.currentTarget.checked)} />`;

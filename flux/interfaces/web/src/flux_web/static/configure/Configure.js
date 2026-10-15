@@ -4,7 +4,7 @@
 // crafter (website/docs/assets), mounted into this page with the files beside it; a new loop's draft is one, kept
 // across the ways and a detour to another page until the loop is made or the draft discarded.
 
-import { Card, Empty, Skeleton, html, node, useEffect, useMemo, useRef, useState } from "../view.js";
+import { Card, Empty, Notice, Skeleton, html, node, useEffect, useMemo, useRef, useState } from "../view.js";
 import { api, appHref, confirmDialog, createFromText, enc, loopApi, toast, when } from "../ui.js";
 import { plural } from "../format.js";
 import { crafterCatalog, me, setCrafterCatalog } from "../state.js";
@@ -104,11 +104,11 @@ function CrafterOf({ name, owner }) {
   }, [name]);
   if (problem === "script") return html`<${Card}><${Empty} text="The configurator's script did not load." /><//>`;
   if (problem === "none") return html`<${Card}><${Empty} text="No problem document yet." /><//>`;
-  if (problem) return html`<${Card}><p class="callout bad">${"The loader refuses the document as it stands: " + problem}</p>
+  if (problem) return html`<${Card}><${Notice} tone="bad" what="The loader refuses the document as it stands:" why=${problem} />
     <p class="muted">The configurator cannot read it. Fix it in <a href=${`${appHref(owner, name)}/settings/problem/edit`}>Direct edit</a>.</p><//>`;
   if (!doc) return html`<${Card}><${Skeleton} lines=${6} /><//>`;
   return html`<p class="muted small doc-line"><span class="mono">${doc.document}</span>${" · saving drops its comments" + (ref.current.got?.kept.length ? "; what the form does not edit is kept as written" : "")}</p>
-    ${doc.error ? html`<p class="callout bad">${"The loader refuses the document as it stands: " + doc.error}</p>` : ""}
+    ${doc.error ? html`<${Notice} tone="bad" what="The loader refuses the document as it stands:" why=${doc.error} />` : ""}
     <div class="flux-crafter" ref=${host} /><${FilesPanel} store=${store} />`;
 }
 

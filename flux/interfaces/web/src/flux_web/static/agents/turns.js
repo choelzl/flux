@@ -5,6 +5,7 @@ import { Conversation } from "../components/Conversation.js";
 import { Prose } from "../components/Markdown.js";
 import { ViewerFrame, ViewerTools, showRaw, useViewer } from "../viewer.js";
 import { Ago, html } from "../view.js";
+import { Pill } from "../components/Tone.js";
 
 const ROLES = { generate: "design", critique: "critic" };
 /** D1092: what the turn was for (design, critic, prototype, plan); D1094: a role or nothing -- "model" is its kind. */
@@ -16,9 +17,9 @@ function Tokens({ t }) {
   return `${i == null ? "—" : fmtTok(i)} → ${o == null ? "—" : fmtTok(o)}${t.tokens_complete === false ? " (partial)" : ""}`;
 }
 function Outcome({ t }) {
-  if (t.error) return html`<span class="pill bad">error</span>`;
-  if (t.ok !== false) return html`<span class="pill ok">ok</span>`;
-  return t.rc === 124 ? html`<span class="pill warn" title="stopped at its time limit">time limit</span>` : html`<span class="pill bad">exit ${t.rc}</span>`;
+  if (t.error) return html`<${Pill} tone="bad">error<//>`;
+  if (t.ok !== false) return html`<${Pill} tone="ok">ok<//>`;
+  return t.rc === 124 ? html`<${Pill} tone="warn" title="stopped at its time limit">time limit<//>` : html`<${Pill} tone="bad">exit ${t.rc}<//>`;
 }
 /** One turn a line (D1093): what it was for, who took it (its version on hover), when, how long, its tokens and tools. */
 export function TurnRow({ t, picked, onPick }) {

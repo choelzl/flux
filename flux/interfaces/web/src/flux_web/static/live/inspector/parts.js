@@ -11,8 +11,8 @@ export const isModel = n => /^\s*(llm\b|model\b)/i.test(turnOf(n));
 export const headOf = n => String(n.name).toLowerCase().split(":")[0].trim();
 export const colorOf = n => isAgent(n) ? AGENT_COLOR : COLORS[phaseKind(n)] || COLORS.setup;
 export const running = n => n.t1 == null;
-/** A task's pill: its class and its word -- D1075: a try whose check failed is a failed try. */
-export const stateOf = n => running(n) ? ["live", "running"] : n.interrupted ? ["warn", "interrupted"] : n.failed ? ["bad", "failed"] : n.timedOut ? ["warn", "time limit"]
+/** A task's pill: its tone and its word -- D1075: a try whose check failed is a failed try. */
+export const stateOf = n => running(n) ? ["run", "running"] : n.interrupted ? ["warn", "interrupted"] : n.failed ? ["bad", "failed"] : n.timedOut ? ["warn", "time limit"]
   : n.tryFailed ? ["bad", `failed · ${n.tryFailed}`] : n.rejected ? ["warn", "rejected"] : ["ok", "done"];
 /** What it gave so far: its live fields, and once it ended its output over them (D1083: the last word). */
 export const fieldsOf = n => ({ ...(n.fields || {}), ...(running(n) ? {} : (n.output || {})) });

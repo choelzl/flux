@@ -9,8 +9,8 @@ export const Reading = ({ lines = 7 }) => html`<${Card}><${Skeleton} lines=${lin
 
 /** `start()` for whoever may run it; without a document, the way to have an agent write one. */
 export const NotRun = ({ info, name, mine, start }) => html`<${Card}>${info.document
-  ? html`<div class="empty"><p>This loop has not run yet.</p>${start ? html`<${Act} cls="primary" onClick=${start}>Start<//>` : ""}</div>`
-  : html`<div class="empty"><p>This loop has no problem document yet.</p>${mine ? html`<a class="btn" href=${`${appHref(info.owner, name)}/settings/problem/agent`}>Have an agent write it</a>` : ""}</div>`}<//>`;
+  ? html`<${Empty} text="This loop has not run yet." action=${start ? html`<${Act} cls="small primary" onClick=${start}>Start<//>` : null} />`
+  : html`<${Empty} text="This loop has no problem document yet." action=${mine ? html`<a class="btn small" href=${`${appHref(info.owner, name)}/settings/problem/agent`}>Have an agent write it</a>` : null} />`}<//>`;
 
 export const NoResults = () => html`<${Card}><${Empty} text="No results yet." /><//>`;
 

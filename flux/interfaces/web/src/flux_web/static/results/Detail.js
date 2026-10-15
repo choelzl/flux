@@ -11,6 +11,7 @@ import { Loaded, useLoad } from "../components/Load.js";
 import { VerdictPill, byCritic } from "./columns.js";
 import { Select } from "../components/Select.js";
 import { useLoop } from "../loop/context.js";
+import { Pill } from "../components/Tone.js";
 
 /** The reject form (D1043): why, each measurement measured again or cleared, hidden too (at rest). `v` {reason,
     hide, ticked: {"stage metric": "again" | "clear"} for each ticked}. */
@@ -67,7 +68,7 @@ export function DesignDetail({ d, fmt, reload }) {
       ${mine && !d.reference_only && !d.rejected ? html`<${Act} cls="small reject-design" title="Mark this result rejected, with why: it stays shown and is never chosen" onClick=${reject}>Reject…<//>` : ""}</div>
     ${d.rejected ? html`<div class="blk rejected-blk"><h3>Rejected</h3><p>${d.rejected.why}</p>
       <p class="muted small">${`${byCritic(d.rejected.by) ? "critic" : d.rejected.by} · `}<${Ago} t=${Date.parse(d.rejected.at) / 1000} />${(d.cleared || []).length ? ` · cleared ${d.cleared.map(c => `${c.stage} ${c.metric}`).join(", ")}` : ""}</p>
-      ${(d.rejected.again || []).length ? html`<span class="pill warn">${running ? "measured again before the next pass" : "to be measured again"}</span>` : ""}
+      ${(d.rejected.again || []).length ? html`<${Pill} tone="none">${running ? "measured again before the next pass" : "to be measured again"}<//>` : ""}
       ${mine ? html`<${Act} cls="small" title="It counts again as it was measured" onClick=${restore}>Restore<//>` : ""}</div>` : ""}
     ${d.why.length ? html`<div class="blk"><h3>${d.verdict === "pending" ? "Waiting for" : "Not met"}</h3><ul class="misses">${d.why.map(w => html`<li>${w}</li>`)}</ul></div>` : ""}
     ${stages.length ? html`<div key="measured" class="blk"><h3>Measurements</h3><table class="list compact"><thead><tr><th>stage</th>${metrics.map(m => html`<th class="num">${m}</th>`)}</tr></thead>

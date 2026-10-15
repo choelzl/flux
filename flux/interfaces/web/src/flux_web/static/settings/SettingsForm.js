@@ -9,6 +9,7 @@ import { Act } from "../components/Act.js";
 import { useAutosave } from "../components/Autosave.js";
 import { EnvEditor, EnvTable } from "../components/Env.js";
 import { recall, remember } from "../stored.js";
+import { Pill } from "../components/Tone.js";
 
 const SETTING_LABELS = { FLUX_REMOTE_BASE_URL: "Endpoint URL", FLUX_REMOTE_MODEL: "Model", FLUX_LLM_TIMEOUT_S: "Seconds per request",
   FLUX_REMOTE_AT_ONCE: "Requests at once on its endpoint (every loop; 0: no limit)", FLUX_REMOTE_API_KEY: "Key", FLUX_DEFAULT_AGENT: "Agent" };
@@ -36,7 +37,7 @@ function Field({ k, f, values, setValue }) {
       data-lpignore="true" data-1p-ignore="true" data-form-type="other" id=${`set-${scope}-${k}`} title=${k} placeholder=${holder} disabled=${disabled}
       inputmode=${price ? "decimal" : null} class=${price ? "price" : null}
       value=${text} onInput=${e => { setText(e.currentTarget.value); f.typed(k, e.currentTarget.value); }} onChange=${e => setText(e.currentTarget.value)} />
-    ${server && server[k] && cur ? html`<span class="pill small warn set-overridden">Overridden</span>` : ""}
+    ${server && server[k] && cur ? html`<${Pill} small tone="warn" cls="set-overridden">overridden<//>` : ""}
     ${cur ? html`<${Act} cls="small" onClick=${clear}>Clear<//>` : ""}${mark}</span>`;
 }
 

@@ -8,7 +8,7 @@
 
 import { cleanup, me, navSeq, pageOwner, setMe, setNavSeq, setPageOwner, setPageRefresh } from "./state.js";
 import { api } from "./ui.js";
-import { html, render, useLayoutEffect, useState } from "./view.js";
+import { Card, Skeleton, html, render, useLayoutEffect, useState } from "./view.js";
 import { Offline, Toasts } from "./notices.js";
 import { Dialogs, cancelDialogs } from "./components/Modal.js";
 import { Logo } from "./components/Icons.js";
@@ -45,7 +45,7 @@ function labelTables(root) {
     banner while the server is out of reach, the notices, the dialogs. */
 let show = null;
 function App() {
-  const [at, setAt] = useState({ n: 0, page: html`<p class="muted">Loading…</p>`, here: location.hash || "#/", view: null });
+  const [at, setAt] = useState({ n: 0, page: html`<${Card}><${Skeleton} lines=${7} /><//>`, here: location.hash || "#/", view: null });
   useLayoutEffect(() => { show = next => setAt(a => ({ ...a, ...next })); }, []);
   return html`<header class="top"><a class="brand" href="#/" aria-label="Flux, your loops"><${Logo} size=${24} /><span>flux</span></a>
       <nav id="nav"><${Nav} here=${at.here} /></nav><span id="who"><${Who} /></span></header>

@@ -160,7 +160,7 @@ def general_flows(r, watch):
                     r.check(f"{card}: top-card preview has mock values", shown == value if value else shown not in ("", "—"), shown)
                 b.js("const s=document.querySelector('[data-layout-list=stats] li select'); s.value='state'; s.dispatchEvent(new Event('change')); return 1")
                 for card, selector, text in (("pareto", "svg.pareto", "feasible front"),
-                                             ("references", "tbody tr", "-24%"), ("goals", "tbody .pill.ok", "met"),
+                                             ("references", "tbody tr", "-24%"), ("goals", "tbody .pill.t-ok", "met"),
                                              ("recent_designs", "tbody tr", "#3"), ("pass_history", "li", "#3"),
                                              ("usage_breakdown", "tbody tr", "Coding agent"), ("ideas", "li", "Compare cache layouts")):
                     b.js("const s=document.querySelector('[data-layout-list=\"0\"] li select'); s.value=arguments[0]; s.dispatchEvent(new Event('change')); return 1", card)
@@ -333,7 +333,7 @@ def general_flows(r, watch):
                 r.api(path, "PUT", layout)
                 page()
                 r.check("top and main Ideas cards share one notebook request", b.js("return window.__overviewIdeasCalls.length===1 && document.querySelector('.ov-stats [data-overview-card=ideas] .big').textContent==='6'"))
-                r.check("Ideas shows recent proposals and evidence without calling measurements improvements", b.js("const c=document.querySelector('.grid-2.ov [data-overview-card=ideas]'); return c.querySelectorAll('li').length===5 && c.querySelector('li').textContent.includes('Pass 0 · bench · ok · cycles=0') && c.textContent.includes('Memory limit exceeded') && c.textContent.includes('Not tested yet') && !c.querySelector('.pill.ok')"))
+                r.check("Ideas shows recent proposals and evidence without calling measurements improvements", b.js("const c=document.querySelector('.grid-2.ov [data-overview-card=ideas]'); return c.querySelectorAll('li').length===5 && c.querySelector('li').textContent.includes('Pass 0 · bench · ok · cycles=0') && c.textContent.includes('Memory limit exceeded') && c.textContent.includes('Not tested yet') && !c.querySelector('.pill.t-ok')"))
                 r.check("idea text remains literal in Overview", b.js("const c=document.querySelector('.grid-2.ov [data-overview-card=ideas]'); return !c.querySelector('img') && c.textContent.includes('<img src=x onerror=alert(1)>')"))
                 r.button("All ideas")
                 b.wait("document.querySelector('.ideas-table')", what="full notebook from Overview")
@@ -403,15 +403,15 @@ def general_flows(r, watch):
                 r.check("author polling preserves thinking/log scroll and open details", b.js("const c=document.querySelector('.card.authoring'); return c.querySelector('.cv-think').open && Math.abs(c.querySelector('.cv-thought').scrollTop-53)<=2 && c.querySelector('[data-author-section=log]').open && Math.abs(c.querySelector('.author-log').scrollTop-36)<=2 && c.querySelector('[data-author-section=prompt]').open"))
                 b.js("window.__authorFailed=true; return 1")
                 b.wait("document.querySelector('.author-connection')", timeout=15, what="author status outage")
-                r.check("a failed status read warns and keeps prior output without claiming a fresh heartbeat", b.js("return document.querySelector('.author-connection').textContent.includes('Retrying') && !!document.querySelector('.authoring .cv-tool') && !document.querySelector('.author-heartbeat')"))
+                r.check("a failed status read warns and keeps prior output without claiming a fresh heartbeat", b.js("return document.querySelector('.author-connection').textContent.includes('Reconnecting') && !!document.querySelector('.authoring .cv-tool') && !document.querySelector('.author-heartbeat')"))
                 b.js("window.__authorFailed=false; window.__authorState.progress.fields.status='Model endpoint unavailable; retrying HTTP 502'; return 1")
                 b.wait("document.querySelector('.author-agent-status')?.textContent.includes('HTTP 502') && !document.querySelector('.author-connection')", timeout=15, what="author status recovery")
                 r.check("polling resumes automatically and surfaces endpoint retries", True)
                 b.cmd("WebDriver:SetWindowRect", {"width": 390, "height": 900})
                 r.check("creation feedback fits a phone", b.js("return document.documentElement.scrollWidth<=innerWidth+1"))
                 b.js("window.__authorState.running=false; window.__authorState.ok=false; window.__authorState.rc=1; window.__authorState.ended=Date.now()/1000; return 1")
-                b.wait("document.querySelector('.authoring .pill.bad')", timeout=15, what="failed author remains visible")
-                r.check("a failed revision is retained even when an older problem document exists", b.js("return document.querySelector('.card.authoring').textContent.includes('did not leave a document') && !document.querySelector('.author-heartbeat')"))
+                b.wait("document.querySelector('.authoring .pill.t-bad')", timeout=15, what="failed author remains visible")
+                r.check("a failed revision is retained even when an older problem document exists", b.js("return document.querySelector('.card.authoring').textContent.includes('No document that passes its checks') && !document.querySelector('.author-heartbeat')"))
                 b.js("window.__authorState.running=true; window.__authorState.ended=null; window.__authorState.ok=false; return 1")
                 r.page(f"#/app/{name}", "document.querySelector('.author-heartbeat')", "agent restarted fixture")
                 b.js("window.__authorDeferred=true; return 1")
@@ -729,7 +729,7 @@ def general_flows(r, watch):
                   s.emit('events',{ev:'end',id:3,t,seconds:30,output:{}});
                   s.emit('events',{ev:'mark',name:'pass',t:t+.01,why:'{"n":3}'});
                   s.emit('events',{ev:'start',id:2000,t:t+.02,name:'agent: next',params:{pass:3,prompt:'Next agent prompt'}});return 1;""")
-                b.wait("document.querySelector('.alt-detail .pill.ok')?.textContent==='done'", what="pass completes while paused")
+                b.wait("document.querySelector('.alt-detail .pill.t-ok')?.textContent==='done'", what="pass completes while paused")
                 r.check("pausing Follow pins the inspected task and pass when the loop advances", b.js("return document.querySelector('.alt-detail').dataset.task==='4' && document.querySelector('[aria-label=\"Live pass\"]').value==='2' && document.querySelector('.alt-controls button').textContent==='Follow' && document.querySelector('.alt-controls button').getAttribute('aria-pressed')==='false'"))
                 r.button("Follow", ".alt-controls")
                 r.check("resuming Follow selects the newest active agent", b.js("return document.querySelector('.alt-detail').dataset.task==='2000' && document.querySelector('.alt-controls button').getAttribute('aria-pressed')==='true'"))
@@ -772,9 +772,9 @@ def general_flows(r, watch):
                 r.check("historical errors can be retried without leaving the tab", True)
                 choose("Live start", "25")
                 b.wait("document.querySelector('.alt-detail')?.textContent.includes('Interrupted prompt')", what="interrupted retained start")
-                r.check("retained unfinished agents are interrupted rather than still running", b.js("return document.querySelector('.alt-detail').dataset.task==='53' && document.querySelector('.alt-detail .pill.warn').textContent==='interrupted' && !document.querySelector('.alt-summary .running') && document.querySelector('.alt-summary .failed').textContent==='1 failed' && document.querySelector('.alt-summary .interrupted').textContent==='1 interrupted'"))
+                r.check("retained unfinished agents are interrupted rather than still running", b.js("return document.querySelector('.alt-detail').dataset.task==='53' && document.querySelector('.alt-detail .pill.t-warn').textContent==='interrupted' && !document.querySelector('.alt-summary .running') && document.querySelector('.alt-summary .failed').textContent==='1 failed' && document.querySelector('.alt-summary .interrupted').textContent==='1 interrupted'"))
                 b.click('.alt-tree [data-task="52"]')
-                r.check("nonzero-exit tool exposes failure badge and output", b.js("return document.querySelector('.alt-detail').dataset.task==='52' && document.querySelector('.alt-detail .pill.bad').textContent==='failed' && document.querySelector('.alt-detail [data-k=stderr]').textContent==='compiler failed' && !!document.querySelector('.alt-detail [data-k=stderr]').closest('.err')"))
+                r.check("nonzero-exit tool exposes failure badge and output", b.js("return document.querySelector('.alt-detail').dataset.task==='52' && document.querySelector('.alt-detail .pill.t-bad').textContent==='failed' && document.querySelector('.alt-detail [data-k=stderr]').textContent==='compiler failed' && !!document.querySelector('.alt-detail [data-k=stderr]').closest('.err')"))
                 b.click('.alt-tree [data-task="53"]')
                 r.check("interrupted tree rows use the interruption glyph and accessible state", b.js("const n=document.querySelector('.alt-tree [data-task=\"53\"]');return n.classList.contains('interrupted') && n.querySelector('.alt-task-state').textContent==='—' && n.getAttribute('aria-label').includes('interrupted')"))
                 b.js("window.__altLast=document.querySelector('.alt-detail').dataset.task;return 1")
@@ -1645,8 +1645,8 @@ objectives: [{metric: timings.fast, goal: 15, direction: minimize},
             # A listed file disappearing is recoverable without leaving Files.
             file_api(r, name, "slow.txt", "DELETE")
             select_file(r, "slow.txt")
-            b.wait("document.querySelector('.viewer .empty') && document.querySelector('.viewer .empty').innerText.includes('Retry')", what="missing file feedback")
-            r.check("a missing file is described as an error", "could not be opened" in b.js("return document.querySelector('.viewer .empty').innerText"))
+            b.wait("document.querySelector('.viewer .failed') && document.querySelector('.viewer .failed').innerText.includes('Retry')", what="missing file feedback")
+            r.check("a missing file is described as an error", "could not be opened" in b.js("return document.querySelector('.viewer .failed').innerText"))
             put(r, name, "slow.txt", "restored file\n")
             r.button("Retry", ".viewer")
             b.wait(f"document.querySelector('{EDITOR}') && document.querySelector('{EDITOR}').value === 'restored file\\n'", what="file recovered by Retry")
@@ -1775,7 +1775,7 @@ objectives: [{metric: timings.fast, goal: 15, direction: minimize},
                 return response;
               }; return 1;""", name)
             try:
-                r.page(f"#/app/{name}", "document.querySelector('.page-head .pill.live')", "running loop controls")
+                r.page(f"#/app/{name}", "document.querySelector('.page-head .pill.t-run')", "running loop controls")
                 r.check("an active loop has just Stop and Restart controls", b.js("return [...document.querySelectorAll('.page-head button')].map(b=>b.textContent).join()==='Stop,Restart'"))
                 r.button("Stop", ".page-head")
                 b.wait("[...document.querySelectorAll('.page-head button.danger.solid')].some(b=>b.textContent==='Stop')", what="scheduled stop")

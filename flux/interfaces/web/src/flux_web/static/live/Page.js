@@ -1,7 +1,7 @@
 // Live (D1095): the page -- the toolbar (Follow, Earlier passes, the start and the pass), the list (Tree,
 // Graph or Timeline) and the inspector beside it. Both read the store; a change in it redraws them.
 
-import { cx, html, useChanges, useEffect, useLayoutEffect, useRef } from "../view.js";
+import { Card, Empty, Skeleton, cx, html, useChanges, useEffect, useLayoutEffect, useRef } from "../view.js";
 import { appHref, when } from "../ui.js";
 import { StreamPill } from "../components/StatePill.js";
 import { scrollState, restoreScroll } from "../scroll.js";
@@ -19,11 +19,14 @@ import { Inspector } from "./inspector/Inspector.js";
 import { Log } from "./Log.js";
 import { Select } from "../components/Select.js";
 import { useLoop } from "../loop/context.js";
+import { Failed, Pill } from "../components/Tone.js";
 
-const Empty = ({ text }) => html`<div class="empty"><p>${text}</p></div>`;
 const narrowScreen = () => window.matchMedia("(max-width: 960px)").matches;
 
 /** The toolbar under the tabs (D975): Follow, Earlier passes, the start and the pass. */
+/** D1102: a count's tone, as its tasks' pills. */
+const COUNT_TONE = { running: "run", done: "ok", failed: "bad", retried: "none", rejected: "warn", interrupted: "warn", timeout: "warn" };
+
 export function Controls({ store }) {
   const ctx = useLoop();
   useChanges(store);
@@ -53,7 +56,7 @@ function Summary({ v, s }) {
   return html`<div class="alt-summary"><strong>${name === "Pass 0" ? "Pass 0 · baseline" : name}</strong>
     <span class="muted small">${`${rows.length} tasks`}</span>
     ${["running", "done", "failed", "retried", "rejected", "interrupted", "timeout"].map(st => [st, count(st)]).filter(([, n]) => n)
-      .map(([st, n]) => html`<span class=${`alt-count ${st}`} title=${`All tasks in this scope: ${n} ${st}`}>${`${n} ${st === "timeout" ? "out of time" : st}`}</span>`)}</div>`;
+      .map(([st, n]) => html`<${Pill} small tone=${COUNT_TONE[st]} cls=${`alt-count ${st}`} title=${`All tasks in this scope: ${n} ${st}`}><b>${n}</b>${` ${st === "timeout" ? "out of time" : st}`}<//>`)}</div>`;
 }
 
 /** The page once its journal is open (a model to read). */
@@ -61,7 +64,7 @@ export function Page({ store }) {
   const ctx = useLoop();
   useChanges(store);
   if (ctx.curSub() === "log") return html`<div class="live-alt" data-drawn=${store.s.drawn}><${Log} store=${store} /></div>`;
-  return store.s.journal ? html`<${Body} store=${store} />` : html`<section class="card"><${Empty} text="Loading…" /></section>`;
+  return store.s.journal ? html`<${Body} store=${store} />` : html`<${Card}><${Skeleton} lines=${7} /><//>`;
 }
 function Body({ store }) {
   const ctx = useLoop();
@@ -132,7 +135,7 @@ function Body({ store }) {
   const logHref = `${appHref(ctx.owner, ctx.name)}/live/log`;
   return html`<div class="live-alt" data-drawn=${s.drawn}>
     <div class="alt-notice"><${StreamPill} state=${s.stream} />
-      ${s.failure ? html`<p class="callout warn">${s.failure}</p><button class="small" type="button" onClick=${a.retry}>Retry</button>` : ""}</div>
+      ${s.failure ? html`<${Failed} stale what="The journal could not be read" why=${s.failure} retry=${a.retry} />` : ""}</div>
     <div class=${cx("alt-split", mode === "timeline" && s.pass === "all" && "wide")}>
       <section class="card alt-visual-card"><div class="alt-list-head"><${Summary} v=${v} s=${s} /></div>
         <div class="alt-visual" tabindex="0" aria-label="Live task view" ref=${panel} onKeyDown=${onKey}>${content}

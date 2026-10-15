@@ -6,6 +6,7 @@ import { WORK_COLORS as COLORS, workLabel } from "./work_style.js";
 import { passName, taskLabel } from "./views.js";
 import { PassSummary } from "./inspector/Inspector.js";
 import { asYaml, noteName, noteSaid } from "./notes.js";
+import { Pill } from "../components/Tone.js";
 
 const said = v => typeof v === "object" ? JSON.stringify(v) : String(v);
 
@@ -13,10 +14,11 @@ const said = v => typeof v === "object" ? JSON.stringify(v) : String(v);
     document sets it to (as YAML, D1094) while it has not run. */
 export function BoxPanel({ v, a, box }) {
   const { b, boxes, config, took } = box, later = b && boxes.slice(boxes.indexOf(b) + 1).some(x => x.runs.length);
-  const pill = b?.done ? "done" : b?.runs.length || b?.notes?.length ? { ok: "done", bad: "failed", part: "partly failed", run: "running" }[b.state] || "done" : later ? "not recorded" : "waiting";
+  const [tone, said] = b?.done ? ["ok", "done"] : b?.runs.length || b?.notes?.length ? { ok: ["ok", "done"], bad: ["bad", "failed"], part: ["warn", "partly failed"], run: ["run", "running"] }[b.state] || ["ok", "done"]
+    : later ? ["none", "not recorded"] : ["none", "waiting"];
   return html`<div class="detail alt-detail alt-box-detail" data-box=${v.boxView.key} data-pass=${String(v.boxView.p ?? "setup")} data-drawn=${v.drawn}>
     <div class="detail-head alt-ihead"><span class="alt-stripe" style=${`background:${COLORS[b?.kind] || COLORS.setup}`} />
-      <h2>${b?.title || workLabel(v.boxView.key)}</h2><span class="pill">${pill}</span></div>
+      <h2>${b?.title || workLabel(v.boxView.key)}</h2><${Pill} tone=${tone}>${said}<//></div>
     <p class="muted small">${passName(v.boxView.p)}</p>
     ${b?.runs.length ? html`<div class="alt-steps">${b.runs.map(n => html`<button key=${n.id} type="button" class="alt-step-row" data-task=${String(n.id)} onClick=${() => a.select(n.id)}>${taskLabel(n)}</button>`)}</div>`
       : b?.notes?.length === 1 ? html`<div><p>${noteSaid(b.notes[0], took)}</p>

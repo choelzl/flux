@@ -2,7 +2,7 @@
 // key is never this one's (a late answer for a tab left draws nothing). And a read repeated while something runs.
 
 import { Card, Skeleton, html, useEffect, useMemo, useRef, useState } from "../view.js";
-import { Act } from "./Act.js";
+import { Failed } from "./Tone.js";
 
 /** What `load()` answers, read when drawn and again when `key` or `tick` changes or `reload()` is called: `got` {d}
     once read, {error} when it failed, null meanwhile. Read again for the same key (a tick, a reload), the last answer
@@ -50,7 +50,7 @@ export function usePoll(step, deps = [], { first = 0 } = {}) {
 export function Loaded({ read, wait = null, failed = "It could not be read", card = false, children }) {
   if (!read.got) return wait || html`<${Skeleton} lines=${6} />`;
   if (!read.got.error) return children(read.got.d);
-  const said = html`<div class="empty"><p>${`${failed}: ${read.got.error}`}</p><${Act} cls="small" onClick=${read.reload}>Retry<//></div>`;
+  const said = html`<${Failed} what=${failed} why=${read.got.error} retry=${read.reload} />`;
   return card ? html`<${Card}>${said}<//>` : said;
 }
 
@@ -58,5 +58,5 @@ export function Loaded({ read, wait = null, failed = "It could not be read", car
 export function PageRead({ load, k = "", children }) {
   const read = useLoad(load, k);
   if (!read.got) return html`<${Card}><${Skeleton} lines=${7} /><//>`;
-  return read.got.error ? html`<${Card}><p class="err">${read.got.error}</p><//>` : children(read.got.d);
+  return read.got.error ? html`<${Card}><${Failed} what="This page could not be read" why=${read.got.error} retry=${read.reload} /><//>` : children(read.got.d);
 }

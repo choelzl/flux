@@ -2,7 +2,7 @@
 // until stopped, screen only; the check of its inputs said first (run again when they changed, or another problem is
 // picked), a failing one turning Start into "Start anyway".
 
-import { html, useEffect, useState } from "../view.js";
+import { html, Notice, useEffect, useState } from "../view.js";
 import { dialog, enc, loopApi, toast, when, withOwner } from "../ui.js";
 import { pageOwner } from "../state.js";
 import { Select } from "../components/Select.js";
@@ -29,8 +29,8 @@ function StartForm({ name, pre, v, set }) {
   return html`<p class="muted">Resumes from its record.</p>
     ${docs.length > 1 ? html`<label class="stack">${`Which problem (${docs.length} in this loop)`}<${Select} class="start-doc" value=${v.document} onChange=${doc => { set({ document: doc }); check(`Checking ${doc} in the sandbox…`, doc); }}
       options=${docs.map(d => [d.path, `${d.path} — record ${d.record}`])} /></label>` : ""}
-    <div class="preflight">${said ? html`<div class=${`callout ${said.ok === true ? "good" : said.ok === false ? "bad" : ""}`}><strong>${said.text}</strong>
-      ${said.output ? html`<details><summary>Check output</summary><pre class="log small">${said.output}</pre></details>` : ""}</div>` : ""}</div>
+    <div class="preflight">${said ? html`<${Notice} tone=${said.ok === true ? "ok" : said.ok === false ? "bad" : "run"} what=${said.text}>
+      ${said.output ? html`<details><summary>Check output</summary><pre class="log small">${said.output}</pre></details>` : ""}<//>` : ""}</div>
     <div class="row"><label class="stack">Passes<input type="number" class="start-passes w-90" min="1" value=${v.passes} disabled=${v.forever} onInput=${e => set({ passes: e.currentTarget.value })} /></label>
       <label class="check"><input type="checkbox" class="start-forever" checked=${v.forever} onChange=${e => set({ forever: e.currentTarget.checked })} />until I stop it</label></div>
     <label class="check"><input type="checkbox" class="start-screen" checked=${v.screen} onChange=${e => set({ screen: e.currentTarget.checked })} />screen only (skip the costly stages)</label>`;

@@ -60,7 +60,18 @@ export function Ago({ t }) {
   return t ? html`<time ref=${ref} title=${when(t)}>${agoText(t)}</time>` : null;
 }
 
-export const Empty = ({ text }) => html`<div class="empty"><p>${text}</p></div>`;
+/** D1102: a tone's glyph -- the turning ring for run, ✓ ! ✗ ○ for ok, warn, bad, none (drawn by the stylesheet, so
+    a state's text is its words alone). */
+export const Glyph = ({ tone = "none" }) => html`<i class=${tone === "run" ? "g spin" : `g g-${tone}`} aria-hidden="true" />`;
+
+/** D1102: a state in a block -- reading, failed, out of date, empty, a dialog's consequence: its glyph, what happened
+    (in its tone), why (muted), then `children`, and its one action at the end; `quiet` (dashed) for nothing yet. */
+export const Notice = ({ tone = "none", what, why, action, quiet = false, cls = "", children, ...rest }) => html`<div ...${rest}
+  class=${cx("notice", `t-${tone}`, quiet && "quiet", cls)}><${Glyph} tone=${tone} /><div class="notice-text">${what ? html`<b>${what}</b>` : ""}${
+  why ? html`<span class="why">${what ? ` ${why}` : why}</span>` : ""}${children}</div>${action || ""}</div>`;
+
+/** Nothing yet: a quiet notice, its one action (a start, a link) at the end. */
+export const Empty = ({ text, action, children }) => html`<${Notice} quiet cls="empty" action=${action}>${text}${children}<//>`;
 
 const WIDTHS = [92, 76, 84, 60, 70, 88, 54];
 export const Skeleton = ({ lines = 5 }) => html`<div class="skeleton" aria-busy="true" aria-label="Loading">

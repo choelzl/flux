@@ -5,13 +5,14 @@ import { html, useState } from "../view.js";
 import { bound } from "./Autosave.js";
 import { toast } from "../ui.js";
 import { Act } from "./Act.js";
+import { Pill } from "./Tone.js";
 
 export function EnvTable({ rows, shadowed = new Set() }) {
   const mixed = rows.some(x => x.origin !== "server");
   return html`<table class="list compact env"><thead><tr><th>Name</th><th>Value</th><th>${mixed ? "From" : ""}</th></tr></thead>
     <tbody>${rows.map(x => html`<tr key=${x.name} class=${shadowed.has(x.name) ? "shadowed" : ""}><td class="mono">${x.name}</td>
       <td class="mono">${x.origin === "server" ? html`<span class="muted">From Server</span>` : x.secret ? html`<span class="muted">secret · set</span>` : x.value}</td>
-      <td class="muted">${x.origin === "server" ? "" : x.from}${shadowed.has(x.name) ? html`<span class="pill small warn">Overridden</span>` : ""}</td></tr>`)}</tbody></table>`;
+      <td class="muted">${x.origin === "server" ? "" : x.from}${shadowed.has(x.name) ? html`<${Pill} small tone="warn">overridden<//>` : ""}</td></tr>`)}</tbody></table>`;
 }
 
 const QUIET = { "data-lpignore": "true", "data-1p-ignore": "true", "data-form-type": "other" };     // D820: no password manager here

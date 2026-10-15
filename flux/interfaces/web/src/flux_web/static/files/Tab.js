@@ -2,7 +2,7 @@
 // one viewer for the selected item: a folder's entries, a text file in the editor (saved over the version it
 // was read as), a binary one to download; Rename, Move and Delete on its head; files added by drop or by hand.
 
-import { Ago, Card, Empty, Skeleton, html, useEffect, useRef, useState } from "../view.js";
+import { Ago, Card, Empty, Notice, Skeleton, html, useEffect, useRef, useState } from "../view.js";
 import { api, dialog, enc, loopApi, toast } from "../ui.js";
 import { bytes, plural } from "../format.js";
 import { langOf } from "../highlight.js";
@@ -17,6 +17,7 @@ import { useLoad } from "../components/Load.js";
 import { bound } from "../components/Autosave.js";
 import { recall, remember } from "../stored.js";
 import { useLoop } from "../loop/context.js";
+import { Failed } from "../components/Tone.js";
 
 /** A name or a folder asked for, the path it makes shown as it is typed; Enter asks. */
 const askPath = (name, title, label, value, ok, pathOf) => dialog(title, ({ v, set, submit }) => html`<div><label class="stack">${label}
@@ -142,11 +143,11 @@ function Viewer({ f, showIgnored }) {
     ${here ? html`<${MetaLine} it=${here} sizeUrl=${dir ? f.itemUrl(path, "/size") : null} />` : ""}</div>`;
   const onEditor = ed => { f.draft.current = ed && editable ? { path, ed, saved: got.text, rev: got.rev || here?.revision || "" } : null; };
   return html`<${ViewerFrame} v=${view} title=${path}><div class="viewer">${got === null ? html`<${Skeleton} lines=${8} />` : html`${head}${
-    got.error ? html`<div class="empty"><p>${`${path || (dir ? name : path)} could not be opened: ${got.error}`}</p><${Act} cls="small" onClick=${() => f.open(path, dir, true)}>Retry<//></div>`
+    got.error ? html`<${Failed} what=${`${path || (dir ? name : path)} could not be opened`} why=${got.error} retry=${() => f.open(path, dir, true)} />`
     : got.list ? (got.list.length ? html`<${FileList} list=${got.list} open=${f.open} />` : html`<${Empty} text="An empty folder." />`)
-    : got.binary ? html`<div class="empty"><p>A binary file.</p><a class="btn" href=${fileUrl(path, true)}>Download</a></div>`
-    : html`${got.cut ? html`<div class="callout warn truncated">${`Showing the first ${bytes(new TextEncoder().encode(got.text).length)} of ${bytes(got.size)}: `
-          + "too large to show or edit here whole. Download has all of it."}</div>` : ""}
+    : got.binary ? html`<${Empty} text="A binary file." action=${html`<a class="btn small" href=${fileUrl(path, true)}>Download</a>`} />`
+    : html`${got.cut ? html`<${Notice} tone="warn" cls="truncated" what=${`Showing the first ${bytes(new TextEncoder().encode(got.text).length)} of ${bytes(got.size)}`}
+          why="too large to show or edit here whole. Download has all of it." />` : ""}
         <${CodeEditor} key=${`${path}#${sel.n}`} text=${got.text} lang=${langOf(path)} readonly=${!editable} onEditor=${onEditor} />`}`}</div><//>`;
 }
 

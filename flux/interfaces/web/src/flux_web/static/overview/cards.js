@@ -14,6 +14,7 @@ import { VerdictBadge } from "../results/columns.js";
 import { Bin } from "../components/Bin.js";
 import { Stat, SummaryTable, ValueCell } from "./parts.js";
 import { DecisionCard, LastPass, own } from "./Decision.js";
+import { Pill } from "../components/Tone.js";
 
 /** Each card is `a => vnode` (`a` its attributes: which card it is), or null. `o`: { ctx, r, notes, bench, use, ideas, main, objs, dec, comparison, directions, unit }. */
 export function overviewCards(o) {
@@ -91,7 +92,7 @@ export function overviewCards(o) {
             ...metrics.slice(0, 3).map(([m, value]) => `${m}=${num4(value)}`), metrics.length > 3 ? `+${metrics.length - 3} metrics` : ""].filter(Boolean).join(" · ") : "Not tested yet";
           return html`<li data-idea-id=${idea.id}>
             <div class="overview-idea-head"><button type="button" class="link strong" onClick=${go("Results", "ideas")}>${idea.title}</button>
-              <span class=${`pill ${idea.status === "failed" ? "bad" : idea.status === "interrupted" ? "warn" : ""}`}>${idea.status || "proposed"}</span></div>
+              <${Pill} tone=${idea.status === "failed" ? "bad" : idea.status === "interrupted" ? "warn" : "none"}>${idea.status || "proposed"}<//></div>
             ${idea.part ? html`<small class="muted">${`Part: ${idea.part}`}</small>` : ""}
             ${idea.hypothesis ? html`<p class="overview-idea-hypothesis" title=${idea.hypothesis}>${idea.hypothesis}</p>` : ""}
             <div class="small muted overview-idea-evidence">${evidence}</div>
@@ -119,7 +120,7 @@ export function overviewCards(o) {
       ? html`<${SummaryTable} heads=${["Metric", "Goal", "Selected", "Status"]}>${limits.map(l => html`<tr key=${`${l.metric}|${l.stage}`}>
           <td title=${l.stage ? `Judged at ${l.stage}` : ""}>${l.metric}${unit[l.metric] ? html`<small class="muted">${` · ${unit[l.metric]}`}</small>` : ""}</td>
           <${ValueCell} v=${`${l.direction === "maximize" ? "≥" : "≤"} ${measured(l.goal)}`} /><${ValueCell} v=${measured(l.value)} />
-          <td class="num"><span class=${`pill ${l.met === true ? "ok" : l.met === false ? "bad" : "warn"}`}>${l.met === true ? "met" : l.met === false ? "missed" : "unmeasured"}</span></td></tr>`)}<//>`
+          <td class="num"><${Pill} tone=${l.met === true ? "ok" : l.met === false ? "bad" : "none"}>${l.met === true ? "met" : l.met === false ? "missed" : "unmeasured"}<//></td></tr>`)}<//>`
       : html`<${Empty} text="No measurement goals configured." />`}<//>`,
     recent_designs: a => {
       const recent = designs.filter(d => !d.baseline && !d.reference_only).slice()

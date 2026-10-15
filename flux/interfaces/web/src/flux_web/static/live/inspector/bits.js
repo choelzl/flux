@@ -6,6 +6,7 @@ import { bytes, dur } from "../../format.js";
 import { restoreScroll, scrollState } from "../../scroll.js";
 import { colorOf, running, stateOf, summaryOf, taskLabel, tidyCommand } from "./parts.js";
 import { useLoad } from "../../components/Load.js";
+import { Pill } from "../../components/Tone.js";
 
 /** What the person did in a task's panel -- which folds they opened, where they left each text -- kept when
     they look at another task and back (D731), forty tasks at most. */
@@ -15,8 +16,7 @@ export function memoryOf(id) {
   return memory.get(id);
 }
 
-export const Pill = ({ n }) => { const [cls, text] = stateOf(n);
-  return html`<span class=${`pill ${cls}`}>${running(n) ? html`<span class="alt-spin" aria-hidden="true" />` : ""}${text}</span>`; };
+export const TaskPill = ({ n }) => { const [tone, text] = stateOf(n); return html`<${Pill} tone=${tone}>${text}<//>`; };
 
 /** A step under a task: its mark, its name, what it gave, its time; a click opens it. */
 export function StepRow({ x, a, N }) {

@@ -9,6 +9,7 @@ import { restoreScroll, scrollState } from "../scroll.js";
 import { Act } from "../components/Act.js";
 import { MECHANISM, VERIFIED } from "../admin/Agents.js";
 import { usePoll } from "../components/Load.js";
+import { Pill } from "../components/Tone.js";
 
 const FIELD_WORD = { endpoint: "endpoint", key: "key", auth: "token", token: "login token", model: "model" };
 /** Links as links, the rest as text. */
@@ -56,19 +57,19 @@ function Terminal({ session, onEnded }) {
 /** D924: three states apart -- installation, connection (how, from where; never a value), verification. */
 function AgentLogin({ a, test, login }) {
   const c = a.connection || { mechanism: "none", said: "" }, v = a.verified || { state: "untested" };
-  const ver = a.testing ? ["live", "testing…"] : v.state === "ready" && v.by === "admin" ? ["ok", "ready (tested by the admin for everyone)"] : VERIFIED[v.state] || VERIFIED.untested;   // D935
+  const ver = a.testing ? ["run", "testing"] : v.state === "ready" && v.by === "admin" ? ["ok", "ready (tested by the admin for everyone)"] : VERIFIED[v.state] || VERIFIED.untested;   // D935
   const pill = s => VERIFIED[s] || VERIFIED.untested;
   return html`<div class="agent-conn" data-agent=${a.id}><dl class="agent-states">
-      <dt>Installation</dt><dd><span class=${`pill ${a.program ? "ok" : "bad"}`}>${a.program ? "installed" : "missing"}</span></dd>
+      <dt>Installation</dt><dd><${Pill} tone=${a.program ? "ok" : "bad"}>${a.program ? "installed" : "missing"}<//></dd>
       <dt>Connection</dt><dd><span class=${`pill ${c.mechanism === "none" ? "" : "ok"}`}>${MECHANISM[c.mechanism] || c.mechanism}</span><span class="muted small">${c.said}</span>
         ${Object.keys(a.fields || {}).length ? html`<span class="muted small agent-sources">${Object.entries(a.fields).map(([f, x]) => `${FIELD_WORD[f] || f}: ${x.source}`).join(" · ")}</span>` : ""}</dd>
-      <dt>Verification</dt><dd><span class=${`pill ${ver[0]}`} title=${v.when ? `tested ${when(v.when)}` : ""}>${ver[1]}</span>
+      <dt>Verification</dt><dd><${Pill} tone=${ver[0]} title=${v.when ? `tested ${when(v.when)}` : ""}>${ver[1]}<//>
         ${v.state === "ready" && v.when ? html`<span class="muted small">${when(v.when)}</span>` : ""}${v.state === "failed" && v.said ? html`<span class="bad small">${v.said}</span>` : ""}
         ${v.state === "changed" ? html`<span class="muted small">its endpoint, model or credential is not what was tested</span>` : ""}</dd></dl>
     ${(a.conflicts || []).length || (a.unused || []).length ? html`<ul class="small hint-line agent-notes">${[...(a.conflicts || []), ...(a.unused || [])].map(x => html`<li>${x}</li>`)}</ul>` : ""}
     <div class="actions">${a.testing ? html`<span class="muted small">testing…</span>` : html`<${Act} cls="primary small" title="Ask it one short question, as your loops run it" onClick=${() => test(a)}>Test connection<//>`}</div>
     ${(a.loops || []).length ? html`<div class="small"><span class="muted">Loops whose variables set it otherwise:</span><ul class="agent-loops">${a.loops.map(x => html`<li key=${x.loop}><span class="mono">${x.loop}</span>
-      <span class=${`pill ${pill(x.state)[0]}`}>${pill(x.state)[1]}</span>${a.testing ? "" : html` <${Act} cls="small" title="Its variables give this agent another configuration there" onClick=${() => test(a, x.loop)}>Test for this loop<//>`}</li>`)}</ul></div>` : ""}
+      <${Pill} tone=${pill(x.state)[0]}>${pill(x.state)[1]}<//>${a.testing ? "" : html` <${Act} cls="small" title="Its variables give this agent another configuration there" onClick=${() => test(a, x.loop)}>Test for this loop<//>`}</li>`)}</ul></div>` : ""}
     ${a.tested?.steps?.length ? html`<details key="tested" class="set-fold"><summary>Last test's steps</summary><ul class="agent-steps small">${a.tested.steps.map(s => html`<li key=${s.step} class=${s.ok ? "" : "bad"}>
       <span class="mono">${s.ok ? "✓ " : "✗ "}</span><strong>${s.step}</strong> ${s.said}</li>`)}</ul></details>` : ""}
     <details class="set-fold agent-login-fold"><summary>Interactive login<span class="muted small">${a.logged_in ? " · logged in" : " · optional"}</span></summary>

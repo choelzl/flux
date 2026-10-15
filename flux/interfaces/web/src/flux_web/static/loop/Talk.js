@@ -14,6 +14,7 @@ import { Bin } from "../components/Bin.js";
 import { Markdown } from "../components/Markdown.js";
 import { Conversation, liveWork } from "../components/Conversation.js";
 import { usePoll } from "../components/Load.js";
+import { Pill } from "../components/Tone.js";
 
 /** D993: the answering agent's thinking, commands and replies, as Live shows an agent; followed while it answers. */
 function AgentTurn({ url }) {
@@ -43,7 +44,7 @@ function Turn({ a, t, open }) {
   return html`<div class="ask-turn" data-ask-turn=${a.id}>
     <div class="ask-message ask-user"><div class="ask-meta"><strong>${a.by}</strong> · <${Ago} t=${a.started} /></div><p>${a.question}</p></div>
     <div class="ask-message ask-agent"><div class="ask-meta"><strong>${a.author}</strong>${a.ended ? ` · ${dur(a.ended - a.started)}` : ""}</div>
-      ${a.running ? html`<div class="row"><span class="pill live"><i class="dot" />Reading the loop</span>${t.mine || a.by === me.name ? html`<${Act} cls="small" onClick=${() => t.stop(a)}>Stop<//>` : ""}</div>`
+      ${a.running ? html`<div class="row"><${Pill} tone="run">Reading the loop<//>${t.mine || a.by === me.name ? html`<${Act} cls="small" onClick=${() => t.stop(a)}>Stop<//>` : ""}</div>`
         : a.answer ? html`<${Markdown} text=${a.answer} />` : html`<p class="muted">No answer was returned.</p>`}
       ${a.author && a.author !== "model" ? html`<div class="ask-turn-actions"><button type="button" class="small ask-thinking" data-ask-thinking=${a.id} onClick=${() => t.thinking(a)}>Thinking & commands</button></div>` : ""}
       ${(a.log || []).length ? html`<details class="ask-output" data-ask-output=${a.id} open=${open.get(a.id) || false} onToggle=${e => open.set(a.id, e.currentTarget.open)}><summary>Activity</summary>

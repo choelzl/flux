@@ -2,7 +2,7 @@
 // hosts allowed), PATH directories, what every home starts with -- and the stderr lines the pages leave out;
 // saved as they change, applied from each loop's next start.
 
-import { Card, html, useEffect, useState } from "../view.js";
+import { Card, html, Notice, useEffect, useState } from "../view.js";
 import { api } from "../ui.js";
 import { bound, useAutosave } from "../components/Autosave.js";
 import { Select } from "../components/Select.js";
@@ -34,7 +34,7 @@ export function Sandbox({ r }) {
   const text = (id, k, rows, ph) => html`<textarea id=${id} rows=${rows} placeholder=${ph} class="mono" ...${bound(v[k], x => set({ [k]: x }))} />`;
   const box2 = (id, k) => html`<input type="checkbox" id=${id} checked=${v[k]} onChange=${e => set({ [k]: e.currentTarget.checked })} />`;
   const adds = r.login_path.filter(d => !r.path.includes(d));
-  return html`<div ...${box}>${r.sandboxed ? "" : html`<p class="callout bad">This server runs without the sandbox (--no-sandbox): none of this applies.</p>`}
+  return html`<div ...${box}>${r.sandboxed ? "" : html`<${Notice} tone="warn" what="This server runs without the sandbox" why="(--no-sandbox): none of this applies." />`}
     <${Card} title="Network"><p class="muted">What the containers may reach. A loop's Settings may add hosts.</p>
       <label class="stack">Mode<${Select} id="sb-net" value=${v.network === "allowlist" ? "allowlist" : "open"} onChange=${network => set({ network })}
         options=${[["open", "open: the containers reach any host"], ["allowlist", "allowlist: only the hosts below"]]} /></label>

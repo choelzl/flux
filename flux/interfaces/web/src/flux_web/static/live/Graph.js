@@ -1,7 +1,7 @@
 // Live (D1095): the Graph -- the chain of passes, and the pass shown as its flow of boxes (D978), a box
 // opening on its list (D1044) -- in the timeline's words and colours.
 
-import { cx, html } from "../view.js";
+import { cx, Empty, html } from "../view.js";
 import { plural } from "../format.js";
 import { WORK_COLORS as COLORS } from "./work_style.js";
 import { currentTask, taskState as state } from "./model.js";
@@ -122,5 +122,5 @@ export function Graph({ v, a }) {
     ${v.pass === "all" && passes.length > 1 ? html`<${Chain} v=${v} a=${a} passes=${passes} shown=${shown} />` : ""}
     ${boxes.length ? html`<svg viewBox=${`0 0 ${W} ${H}`} class="alt-flow" style=${`max-width:${W}px`}>
       <defs><marker id="alt-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0 L10 5 L0 10 z" class="alt-arrow-head" /></marker></defs>
-      ${g}</svg>` : html`<div class="empty"><p>No work in this pass yet.</p></div>`}</div>`;
+      ${g}</svg>` : html`<${Empty} text="No work in this pass yet." />`}</div>`;
 }

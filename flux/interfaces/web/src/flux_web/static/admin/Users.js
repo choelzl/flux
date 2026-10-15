@@ -12,6 +12,7 @@ import { Act } from "../components/Act.js";
 import { bound, useAutosave } from "../components/Autosave.js";
 import { SortableTable } from "../components/SortableTable.js";
 import { Select } from "../components/Select.js";
+import { Pill } from "../components/Tone.js";
 
 /** D818: a one-time link to choose a password -- an invitation, or a reset; copied, or selected to copy. */
 function LinkBox({ name, url, kind }) {
@@ -97,9 +98,9 @@ export function Users({ users, use, res, catalog }) {
     { label: "Last active", key: u => u.last_active || null, num: true, title: "Their latest login, action or run" },   // D942
     { label: "" }];
   const row = u => { const x = useOf(u.name); return html`<tr data-user=${u.name}>
-    <td class="strong">${u.name}${u.pending ? html`<span class="pill live small" title="Invited: their password is not set yet">invited</span>` : ""}</td>
+    <td class="strong">${u.name}${u.pending ? html`<${Pill} small title="Invited: their password is not set yet">invited<//>` : ""}</td>
     <td>${u.name === me.name ? html`<span class="pill">${u.group}</span>` : html`<${GroupSelect} groups=${catalog.groups} value=${u.group_id} label=${`${u.name}'s group`} onChange=${to => setGroup(u, to)} />`}
-      ${u.disabled ? html`<span class="pill bad">disabled</span>` : ""}</td>
+      ${u.disabled ? html`<${Pill} tone="bad">disabled<//>` : ""}</td>
     <td><${Act} cls="small" title=${`Select ${u.name}'s permissions`} aria-label=${`Select ${u.name}'s permissions`} onClick=${() => editPermissions(u, catalog)}>Select<//></td>
     <${Limit} u=${u} limits=${limits} def=${def} />
     <td class="num mono">${String(x.loops ?? "")}</td><td class="num mono">${String(x.turns ?? "")}</td><td class="num mono">${x.seconds ? dur(x.seconds) : ""}</td>

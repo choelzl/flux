@@ -2,7 +2,7 @@
 // disks; the sandbox containers (one left behind killed); each loop's disk, its caches cleared; the caches no
 // loop owns; the machine and every loop's tokens over time.
 
-import { Ago, Card, Empty, Skeleton, cx, html, useState } from "../view.js";
+import { Ago, Card, Empty, Notice, Skeleton, cx, html, useState } from "../view.js";
 import { api, appHref, confirmDialog, enc, toast } from "../ui.js";
 import { bytes, dur } from "../format.js";
 import { stopLoop } from "../loops.js";
@@ -11,6 +11,7 @@ import { Act } from "../components/Act.js";
 import { Meter, Stat } from "../components/Stat.js";
 import { SortableTable } from "../components/SortableTable.js";
 import { useLoad, usePoll } from "../components/Load.js";
+import { Pill } from "../components/Tone.js";
 
 const LoopLink = ({ u, a }) => u ? html`<a href=${appHref(u, a)}>${`${u} / ${a}`}</a>` : html`<span class="muted">no loop</span>`;
 const clean = async (key, what) => { const x = await api(`/admin/caches/${enc(key)}/clean`, { method: "POST", body: { what } }); toast(`${bytes(x.freed)} freed`, "ok"); };
@@ -34,12 +35,12 @@ function Containers({ r, reload }) {
   };
   // D921: a sample, said with its time
   return html`<${Card} title=${`Sandbox containers (${r.engine || "none"})`} actions=${r.containers_at ? html`<span class="muted small">asked <${Ago} t=${r.containers_at} /></span>` : null}>
-    ${r.error ? html`<p class="callout bad">${r.error}</p>` : !cs.length ? html`<${Empty} text="No sandbox container." />`
+    ${r.error ? html`<${Notice} tone="bad" what="The containers could not be read" why=${r.error} />` : !cs.length ? html`<${Empty} text="No sandbox container." />`
     : html`<${SortableTable} memo="flux-sort-containers" first=${3} cls="list" scroll keyOf=${c => c.name} rows=${cs} cols=${[
         { label: "Container", key: c => c.name, asc: true }, { label: "Loop", key: c => c.user ? `${c.user}/${c.loop}` : "", asc: true }, { label: "State", key: state, asc: true },
         { label: "CPU", key: c => c.cpu, num: true }, { label: "Memory", key: c => c.mem, num: true }, { label: "PIDs", key: c => c.pids, num: true }, { label: "" }]}
       row=${c => html`<tr><td class="mono">${c.name}</td><td><${LoopLink} u=${c.user} a=${c.loop} /></td>
-        <td><span class=${`pill ${c.state === "running" ? (c.orphan ? "warn" : "live") : ""}`}>${state(c)}</span> <small class="muted">${c.status}</small></td>
+        <td><${Pill} tone=${c.state === "running" ? (c.orphan ? "warn" : "run") : "none"}>${state(c)}<//> <small class="muted">${c.status}</small></td>
         <td class="num mono">${c.cpu != null ? `${c.cpu.toFixed(1)}%` : ""}</td><td class="num mono">${c.mem != null ? bytes(Math.round(c.mem)) : ""}</td><td class="num mono">${c.pids != null ? String(c.pids) : ""}</td>
         <td class="right">${c.orphan ? html`<${Act} cls="small danger" onClick=${() => kill(c)}>Kill<//>`
           : c.activity && c.activity !== "loop" ? (c.user ? html`<a class="btn small" href=${appHref(c.user, c.loop)}>View</a>` : null)
@@ -54,7 +55,7 @@ function LoopDisk({ loops, reload }) {
     await clean(l.cache_key || l.key, what); reload(); }}>${label}<//>`;
   return html`<${Card} title="Disk per loop"><${SortableTable} memo="flux-sort-loop-disk" first=${7} scroll keyOf=${l => `${l.user}/${l.app}`} rows=${loops}
     cols=${[{ label: "Loop", key: l => `${l.user}/${l.app}`, asc: true }, { label: "" }, ...SIZES.map(([k, label]) => ({ label, key: l => l[k] || 0, num: true })), { label: "" }]}
-    row=${l => html`<tr><td><${LoopLink} u=${l.user} a=${l.app} /></td><td>${l.running ? html`<span class="pill live">running</span>` : ""}</td>
+    row=${l => html`<tr><td><${LoopLink} u=${l.user} a=${l.app} /></td><td>${l.running ? html`<${Pill} tone="run">running<//>` : ""}</td>
       ${SIZES.map(([k]) => html`<td class=${cx("num mono", k === "total" && "strong")}>${bytes(l[k])}</td>`)}
       <td class="right">${l.running || !l.cache ? "" : html`<div class="actions end">
         ${clear(l, "tools", "Clear tools' cache", "The tools' own cache in the sandbox (XDG_CACHE_HOME) is emptied; they rebuild what they need.")}
@@ -73,7 +74,7 @@ function OtherCaches({ caches, reload }) {
       cols=${[{ label: "Cache", key: c => c.key, asc: true }, { label: "Whose", key: c => c.kind === "gone" ? `${c.user}/${c.app}` : "", asc: true },
         { label: "Size", key: c => c.size, num: true }, { label: "Last touched", key: c => c.touched }, { label: "" }]}
       row=${c => html`<tr><td class="mono">${c.key}</td>
-        <td>${c.kind === "gone" ? html`<span>${`${c.user}'s ${c.app}, `}<span class="pill warn">deleted</span></span>` : html`<span class="muted">not the web's</span>`}</td>
+        <td>${c.kind === "gone" ? html`<span>${`${c.user}'s ${c.app}, `}<${Pill} tone="warn">deleted<//></span>` : html`<span class="muted">not the web's</span>`}</td>
         <td class="num mono">${bytes(c.size)}</td><td class="muted">${c.touched ? html`<${Ago} t=${c.touched} />` : ""}</td>
         <td class="right"><${Act} cls="small danger" onClick=${() => remove(c)}>Delete<//></td></tr>`} /><//>`;
 }
@@ -116,7 +117,7 @@ export function Resources() {
     if (!document.hidden && !document.querySelector("dialog.dlg[open]")) await reload().catch(x => { if (!r) toast(x.message, "bad"); });
     return 15000;
   });
-  if (!r) return html`<p class="muted">Measuring…</p>`;
+  if (!r) return html`<${Card}><${Skeleton} lines=${6} /><//>`;
   return html`<${Machine} m=${r.machine} /><${OverTime} n=${n} /><${Containers} r=${r} reload=${reload} />
     <${LoopDisk} loops=${r.loops.slice().sort((a, b) => b.total - a.total)} reload=${reload} /><${OtherCaches} caches=${r.caches} reload=${reload} />`;
 }

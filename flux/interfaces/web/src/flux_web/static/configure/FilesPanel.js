@@ -2,7 +2,7 @@
 // itself when there are files, or the document names one it lacks; each opened to edit, removable; a new one written
 // here; files dropped (into a folder, when one is named).
 
-import { html, useChanges, useEffect, useRef, useState } from "../view.js";
+import { html, Notice, useChanges, useEffect, useRef, useState } from "../view.js";
 import { bytes, plural } from "../format.js";
 import { DropZone } from "../components/DropZone.js";
 import { bound } from "../components/Autosave.js";
@@ -18,8 +18,8 @@ export function FilesPanel({ store }) {
         <a href="javascript:void 0" onClick=${() => store.open(f)}><span class="ic">·</span>${f.path}</a>
         <small class="muted">${bytes(f.size)}${f.staged ? " · with the new loop" : ""}</small>
         <button class="link danger-link" title=${`Delete ${f.path}`} onClick=${() => store.remove(f)}>×</button></li>`)}</ul>` : html`<p class="muted">No files.</p>`}
-      ${missing.length ? html`<div key="missing" class="callout bad"><strong>The document names these, and the loop does not have them: </strong>
-        ${missing.map((p, i) => html`${i ? ", " : ""}<a href="javascript:void 0" title="Write it here" onClick=${() => store.editor(p, "")}>${p}</a>`)}</div>` : ""}
+      ${missing.length ? html`<${Notice} key="missing" tone="bad" what="The document names these, and the loop does not have them:">
+        ${" "}${missing.map((p, i) => html`${i ? ", " : ""}<a href="javascript:void 0" title="Write it here" onClick=${() => store.editor(p, "")}>${p}</a>`)}<//>` : ""}
       <div class="row"><button class="small" type="button" onClick=${() => store.editor("", "")}>New file</button><input placeholder="folder (optional)" class="narrow-in" ...${bound(into, setInto)} /></div>
       <${DropZone} label="Drop scripts, models or folders here" onFiles=${got => store.add(got, into.trim())} /></div></details>`;
 }

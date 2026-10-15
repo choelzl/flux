@@ -2,7 +2,7 @@
 // (D929: a real button that says its order), grown by pages (D694), two ticked to compare; a row opens its
 // design. The decision (★) and the newest first, unless a column is chosen.
 
-import { cx, html, useLayoutEffect, useRef, useState } from "../view.js";
+import { cx, Empty, html, useLayoutEffect, useRef, useState } from "../view.js";
 import { dictionaryClasses, measurementLabels, measurementText } from "./preferences.js";
 import { GroupRow, MeasurementHeader, VerdictBadge } from "./columns.js";
 
@@ -69,7 +69,7 @@ export function ResultsTable({ t, selected, onOpen, onCompare }) {
         ${metrics.map(m => cell(d, m))}</tr>`)}</tbody></table></div>
       ${all.length > shown.length ? html`<div class="more"><button class="small" onClick=${() => setPage(n => n + PAGE)}>${`Show ${Math.min(PAGE, all.length - shown.length)} more`}</button>
         <span class="muted">${` ${shown.length} of ${all.length} shown`}</span></div>` : ""}`
-      : html`<div class="empty"><p>No design matches.</p></div>`}</div>`;
+      : html`<${Empty} text="No design matches." />`}</div>`;
 }
 
 /** Where a design is in the table as it is drawn (its filter and sort aside): the page that holds it. */
