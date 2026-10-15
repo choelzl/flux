@@ -1,106 +1,16 @@
-// Flux web: a loop's Overview tab -- its state, the decision, the best so far, the last pass,
-// an agent writing its problem (D892: out of loopPage).
+// Flux web: a loop's Overview tab (D892: out of loopPage; D1095: its cards are components, in overview/) -- and
+// the card of an agent writing its problem.
 
 import { cleanup } from "./state.js";
-import { ago, api, card, dur, empty, enc, fmtTok, h, toast, plural } from "./ui.js";
-import { bestChart, designPoints, directionOf, groupList, num4 } from "./charts.js";
-import { authoringCard, binButton } from "./loops.js";
-import { dictionaryClasses, defaultMainMeasurements, designLabels, mainMeasurements, measurementColumns, measurementGroupRow, measurementHeader, measurementLabels, measurementText, measurementUnitsFor, relativeMeasurement, relativeToggle, verdictBadge } from "./result_table.js";
-import { measurementComparison } from "./measurementdata.js";
+import { api, enc, toast } from "./ui.js";
+import { html, showIn } from "./view.js";
+import { authoringCard } from "./loops.js";
 import { loadOverviewLayout } from "./overview_layout.js";
-import { additionalOverviewCards } from "./overview_cards.js";
 import { restoreScroll, scrollState } from "./scroll.js";
+import { Overview } from "./overview/Overview.js";
 
 // `ctx`: the loop's page as its tabs read it (loop_page.js).
 
-/** D1094: a dictionary metric's one number says how it was made -- "sim_us (sum)". */
-const aggName = (r, m) => { const a = r.metric_info?.[m]?.aggregate || r.metric_groups?.[m]?.aggregate; return a && a !== "none" ? `${m} (${a})` : m; };
-/** A pass's conclusion as lines (D701: it is a record, not text): each field on its own line,
-    a list one item a line. */
-function conclusionText(c) {
-  if (c == null) return "";
-  if (typeof c !== "object") return String(c);
-  const one = (v) => typeof v === "object" && v !== null ? JSON.stringify(v) : String(v);
-  return Object.entries(c).filter(([, v]) => v != null && v !== "" && !(Array.isArray(v) && !v.length))
-    .map(([k, v]) => Array.isArray(v) ? `${k.replace(/_/g, " ")}:\n${v.map(x => "  - " + one(x)).join("\n")}` : `${k.replace(/_/g, " ")}: ${one(v)}`).join("\n");
-}
-/** The last pass in a line (D699): when it ended, what it concluded, how many measurements
-    it took, under the charts where the Overview had room. */
-function lastPass(ctx, r) {
-  const { goTab } = ctx;
-  const ps = r.passes || [];
-  if (!ps.length) return "";
-  const p = ps[ps.length - 1], prev = ps.length > 1 ? ps[ps.length - 2].when : 0;
-  const took = (r.designs || []).filter(d => { const t = Date.parse(d.first || "") / 1000; return t > prev && t <= p.when; }).length;   // D849
-  // D856: what the pass decided, in words, first; the record's own fields behind a fold
-  const c = p.conclusion && typeof p.conclusion === "object" ? p.conclusion : null;
-  // D900: a pass with no design meeting every requirement says so, and names its closest
-  const own = (x) => String(x) === ctx.name ? "whole" : String(x).startsWith(`${ctx.name}#`) ? String(x).slice(ctx.name.length) : String(x);   // D1093: "#3", as everywhere; D1094: the parts' whole
-  const said = c ? (c.decision ? [h("strong", { title: String(c.decision) }, own(c.decision)), c.decided_by ? ` — ${c.decided_by}` : ""]
-    : c.closest ? ["No feasible design yet; the closest is ", h("strong", {}, String(c.closest)), (c.unmet || []).length ? ` — not met: ${c.unmet.join("; ")}` : ""]
-    : "No decision.")
-    : p.conclusion ? String(p.conclusion) : "";
-  return card("Last decision", [   // D1094: the latest pass that decided -- a count beside it read as the passes runh("p", {}, ago(p.when), took ? ` · ${plural(took, "new design")}` : ""),
-    said ? h("p", { class: "pass-said" }, said) : "",
-    c ? h("details", { class: "pass-record" }, h("summary", { class: "small muted" }, "Record"),
-      h("pre", { class: "val small conclusion" }, conclusionText(c))) : "",
-    h("div", { class: "form-actions" }, h("button", { class: "small", type: "button", onclick: () => goTab("Live", "timeline") }, "Timeline"))]);
-}
-/** The best designs (D696): the decision, then the others by the loop's own order -- accepted
-    first, the deepest stage reached, then each objective without a limit in turn. */
-function topDesigns(ctx, r, n) {
-  const { goTab } = ctx;
-  const objs = r.objective_list || [], order = r.stages || [];
-  // D809: the server's ranking by the loop's own rule; the old key only where none came
-  const key = (d) => [d.rank != null ? d.rank : Infinity, d.decision ? 0 : 1, d.verdict === "accepted" ? 0 : 1, -order.indexOf(d.shown),
-    ...objs.filter(o => o.goal == null).map(o => { const v = d.numbers[o.metric]; return v == null ? Infinity : o.direction === "minimize" ? v : -v; })];
-  const cmp = (a, b) => { const x = key(a), y = key(b); for (let i = 0; i < x.length; i++) if (x[i] !== y[i]) return x[i] < y[i] ? -1 : 1; return 0; };
-  const top = (r.designs || []).slice().sort(cmp).slice(0, n);
-  if (top.length < 2) return "";
-  const groups = r.metric_groups || {}, unit = measurementUnitsFor(r);
-  const ms = [...new Set([...objs.map(o => o.metric), ...(r.metrics || [])])], labels = measurementLabels(ms, groups);
-  const names = designLabels(r.designs, ctx.name);
-  const surface = h("div", { class: "blk result-table-surface" });
-  const directions = [...objs, ...Object.entries(r.metric_info || {}).map(([metric, info]) => ({ metric, ...info }))];
-  const head = h("thead", {}), rows = h("tbody", {}), comparison = measurementComparison(r.designs, directions);
-  const columns = measurementColumns(ctx, ms, drawRows, groups);
-  function drawRows() {
-    const metrics = columns.visible(), dict = dictionaryClasses(metrics, groups), labels = measurementLabels(metrics, groups);       // D1014
-    head.replaceChildren(measurementGroupRow(metrics, groups, 3), h("tr", {}, h("th", {}, ""), h("th", {}, "Design"), h("th", { class: "status-column" }, "Status"),
-      ...metrics.map(m => h("th", { class: `num measurement-head${columns.hidden(m) ? " hidden-measurement" : ""}${dict.get(m) || ""}`, "aria-label": m, title: `${m}${unit[m] ? " (" + unit[m] + ")" : ""}` }, measurementHeader(labels.get(m))))));
-    rows.replaceChildren(...top.map((d, i) => h("tr", { class: `clickable ${d.verdict}`, onclick: () => goTab("Results") },
-        h("td", { class: "muted" }, d.decision ? "★" : String(i + 1)), h("td", { class: "mono", title: `${d.name} · ${d.shown}${d.last ? " · " + d.last : ""}` }, h("span", { class: `table-design-name${(d.base || d.name).includes("#") ? " design-id" : ""}`, title: d.name }, names.get(d))),
-        h("td", { class: "status-column" }, verdictBadge(d.verdict, d.why.join("; "))),
-        ...metrics.map(m => { const ok = d.meets[m], display = measurementText(d, m, comparison, num4, surface.dataset.values === "relative");
-          return h("td", { class: `num mono${columns.hidden(m) ? " hidden-measurement" : ""}${dict.get(m) || ""}${ok === true ? " meets" : ok === false ? " misses" : ""}`, title: `${display.title}${unit[m] ? " · " + unit[m] : ""}${ok === true ? " · meets the limit" : ok === false ? " · misses the limit" : ""}` }, display.text); }))));
-  }
-  const relative = relativeToggle(surface, drawRows, ctx);
-  surface.append(h("div", { class: "best-table-head" }, h("h3", {}, `Best ${top.length}`), columns.controls, relative),
-    h("div", { class: "scroll-x" }, h("table", { class: "list compact best-n" }, head, rows)));
-  drawRows();
-  return surface;
-}
-/** No design meets every requirement (D900): no decision -- the closest design, apart, with what it
-    does not meet; it is what the next pass can refine, not the answer. */
-function closestCard(ctx, r) {
-  const c = r.closest;
-  const candidate = r.designs.find(d => d.closest) || { ...c, stages: { [c.shown]: c.numbers } };
-  const directions = [...(r.objective_list || []), ...Object.entries(r.metric_info || {}).map(([metric, info]) => ({ metric, ...info }))];
-  const comparison = measurementComparison(r.designs, directions);
-  return card("Decision", [
-    h("p", { class: "decision-head" }, h("strong", {}, "No feasible design yet"), h("span", { class: "pill warn" }, "no design meets every requirement")),
-    h("div", { class: "decision-head" }, h("small", { class: "muted" }, "Closest candidate "), h("span", { class: "mono strong" }, c.name),
-      h("span", { class: "muted" }, `measured at ${c.shown}`)),
-    h("div", { class: "decision-nums" }, mainMeasurements(ctx, r.metrics || [], defaultMainMeasurements(r)).map(m => {
-      const lim = (r.limits || []).find(l => l.metric === m);
-      const display = measurementText(candidate, m, comparison, num4, relativeMeasurement(ctx, m));
-      return h("div", { class: "num-cell", "data-summary-metric": m, title: display.title }, h("small", {}, m), h("div", { class: "big mono" }, display.text || "—"),
-        lim ? h("small", { class: "muted" }, `${lim.direction === "maximize" ? "≥" : "≤"} ${lim.goal}`) : "");
-    })),
-    c.reasons.length ? h("ul", { class: "misses" }, c.reasons.map(w => h("li", {}, w))) : "",
-    topDesigns(ctx, r, 3)],
-    { actions: [h("button", { class: "small", onclick: () => ctx.goTab("Results") }, "All results")] });
-}
 /** The loop's front page (D692): state, designs, the decision against the limits, the best so far
     per objective, the latest notes and the agents' newest workbench entries. */
 async function overview(ctx) {
@@ -115,104 +25,10 @@ async function overview(ctx) {
   renderOverview(ctx, r, notes, bench, use, prefs, ideas);
 }
 
-/** Shared by the real Overview and the layout editor's mock-data preview. */
+/** Shared by the real Overview and the layout editor's mock-data preview: drawn again in place, a minute's
+    refresh keeps its nodes (and the author's card beside them). */
 function renderOverview(ctx, r, notes, bench, use, prefs, ideas = null) {
-  const { name, qs, body, mine, goTab, drawBody } = ctx, ok = ctx.still();
-  const designs = r.designs || [], dec = designs.find(d => d.decision) || null;
-  const unit = measurementUnitsFor(r);
-  const directions = [...(r.objective_list || []), ...Object.entries(r.metric_info || {}).map(([metric, info]) => ({ metric, ...info }))];
-  const main = mainMeasurements(ctx, r.metrics || [], defaultMainMeasurements(r));
-  const comparison = measurementComparison(designs, directions);
-  const objs = main.map(metric => ({ ...directions.find(o => o.metric === metric), metric, direction: directionOf(metric, directions) }));
-  const stat = (label, value, sub, onclick) => h("div", { class: "stat" + (onclick ? " clickable" : ""), onclick },
-    h("small", {}, label), h("div", { class: "big" }, value), sub ? h("div", { class: "muted" }, sub) : "");
-  // D1092: the decision said "#3", as everywhere -- its whole name on hover
-  const decisionCard = dec ? card("Decision", [
-      h("div", { class: "decision-head" }, h("span", { class: "mono strong", title: dec.name }, dec.name === ctx.name ? "whole" : String(dec.name).startsWith(`${ctx.name}#`) ? dec.name.slice(ctx.name.length) : dec.name), dec.verdict === "accepted" ? h("span", { class: "pill ok" }, "meets every requirement") : h("span", { class: "pill bad" }, "misses a requirement"),
-        h("span", { class: "muted" }, `measured at ${dec.shown}`)),
-      // D815: why this one, as the loop said it -- a limit is a floor to meet, the next objective decides among those that meet it
-      r.decided_by ? h("p", { class: "small decided-by" }, h("span", { class: "muted" }, "Decided by: "), r.decided_by) : "",   // D1092: says the rule
-      h("div", { class: "decision-nums" }, main.map(m => {
-        const lim = (r.limits || []).find(l => l.metric === m), ok = dec.meets[m];
-        const display = measurementText(dec, m, r.decision_measurements?.[m] ? () => r.decision_measurements[m] : comparison, num4, relativeMeasurement(ctx, m));
-        return h("div", { class: "num-cell" + (ok === false ? " misses" : ok === true ? " meets" : ""),
-          "data-summary-metric": m, title: `${display.title}${unit[m] ? " (" + unit[m] + ")" : ""}${ok === true ? " · meets the limit" : ok === false ? " · misses the limit" : ""}` }, h("small", {}, aggName(r, m)),
-          h("div", { class: "big mono" }, display.text || "—"), lim ? h("small", { class: "muted" }, `${lim.direction === "maximize" ? "≥" : "≤"} ${lim.goal}`) : "");
-      })),
-      dec.why.length ? h("ul", { class: "misses" }, dec.why.map(w => h("li", {}, w))) : "",
-      topDesigns(ctx, r, 3)],
-      { actions: [h("button", { class: "small", onclick: () => goTab("Results") }, "All results")] })
-    : r.closest ? closestCard(ctx, r)
-    : card("Decision", [empty(designs.length ? "No decision yet."
-        // D1093: chosen on its checks (no measure stage) -- said, not "nothing measured" beside a decision
-        : (r.passes || []).map(p => p.conclusion?.decision).filter(Boolean).at(-1)
-          ? `${String((r.passes || []).map(p => p.conclusion?.decision).filter(Boolean).at(-1)).replace(`${ctx.name}#`, "#")}: chosen on its checks (no measure stage)`
-          : "No design measured yet."),
-        topDesigns(ctx, r, 3)]);
-  const st = ctx.st;                                // D892: the state as it is now, after the wait
-  const q0 = st.question;
-  if (ctx.tab !== "Overview" || !ok()) return;          // the tab changed while it loaded
-  const total = use?.total;
-  const extra = additionalOverviewCards(ctx, r, use, { main, dec, comparison, directions, unit, stat, ideas });
-  const stats = {
-    ...extra.stats,
-    state: () => stat("State", st.running ? "running" : st.last_active ? (st.failed ? "failed" : st.stopped ? "stopped" : "idle") : "never run",
-        st.running ? ["since ", ago(st.since), st.passes != null ? ` · pass ${st.passes + (st.at_rest ? 0 : 1)}` : ""] : st.last_active ? ["last active ", ago(st.last_active)] : "", () => goTab("Live")),
-    // D1092: a loop with no measure stage still chooses -- on its checks; said, not "0 accepted · 0 failed" beside a decision
-    // D1094: the designs only their checks judged, said beside the measured -- a refused one is not "0 failed"
-    designs: () => stat("Designs measured", String(designs.length), !designs.length && (r.passes || []).some(p => p.conclusion?.decision)
-      ? "no measure stage: chosen on its checks"
-      : !designs.length && (r.checked || []).length
-      ? `${r.checked.length} checked, not measured · ${r.checked.filter(u => u.verdict === "failed").length} failed its checks`
-      : `${r.counts ? r.counts.accepted : 0} accepted · ${r.counts && r.counts.pending ? r.counts.pending + " pending · " : ""}${r.counts && r.counts.rejected ? r.counts.rejected + " rejected · " : ""}${r.counts ? r.counts.failed : 0} failed`, () => goTab("Results")),
-    // D1094: every pass begun, a failed one too -- as many as the tree shows; those that decided nothing said apart
-    passes: () => { const ps = r.passes || [], n = Math.max(r.passes_begun || 0, ps.length), none = n - ps.length;
-      return stat("Passes", String(n), [none ? `${none} without a decision · ` : "", ps.length ? ["last decided ", ago(ps[ps.length - 1].when)] : n ? "none decided" : ""], null); },
-    usage: () => stat("Models and agents", total ? `${plural(total.turns, "turn")}` : "—", total ? [dur(total.seconds) || "0s",
-      total.counted ? ` · ${fmtTok(total.tokens_in)} → ${fmtTok(total.tokens_out)} tokens` : "",
-      total.cost_usd ? ` · $${total.cost_usd.toFixed(2)}` : ""] : "Usage unavailable", () => goTab("Agents")),
-    objective: () => stat("Objective", h("span", { class: "obj-line" }, r.objectives || "—"), "", null),
-    tokens_in: () => stat("Tokens in", total?.counted ? fmtTok(total.tokens_in) : "—", total?.partial ? "Includes incomplete usage" : "", () => goTab("Agents")),
-    tokens_out: () => stat("Tokens out", total?.counted ? fmtTok(total.tokens_out) : "—", total?.partial ? "Includes incomplete usage" : "", () => goTab("Agents")),
-    cost: () => stat("Model and agent cost", total?.cost_usd != null ? `$${total.cost_usd.toFixed(2)}` : "—", "At the configured prices", () => goTab("Agents")),
-  };
-  const cards = {
-    ...extra.cards,
-    decision: () => decisionCard,
-    best: () => card("Best so far", objs.length ? objs.map(o => bestChart(designPoints(r.designs, o), o, r.passes, { groups: groupList(r.designs) })) : empty("Select a main metric in Settings → Measurements to chart.")),
-    last_pass: () => lastPass(ctx, r),
-    notes: () => notes.length ? card("Latest notes", h("div", { class: "notes" }, notes.slice(-5).reverse().map(n => h("div", { class: "note has-bin" },
-      h("small", { class: "muted" }, n.by, " · ", ago(n.t)), h("div", {}, n.text),
-      mine ? binButton("note", "Remove this note?", "It goes from the page, and from the loop if it has not read it yet; what the loop read already stays in its record.",
-        async () => { await api(`/apps/${enc(name)}/notes/${enc(n.id)}${qs}`, { method: "DELETE" }); toast("The note is removed", "ok"); drawBody(); }) : "")))) : "",
-    workbench: () => bench.length ? card("Agents' workbench", h("ul", { class: "bench" }, bench.slice(0, 5).map(b => h("li", {},
-      h("a", { href: "javascript:void 0", onclick: () => goTab("Files", "workbench") }, b.path.split("/").pop()), h("small", { class: "muted" }, " ", ago(b.mtime)),
-      b.first ? h("div", { class: "first" }, b.first) : "")))) : "",
-    usage: () => card("Models and agents", total ? [
-      h("p", {}, `${plural(total.turns, "turn")} · ${dur(total.seconds) || "0s"}`),
-      h("p", {}, total.counted ? `${fmtTok(total.tokens_in)} tokens in · ${fmtTok(total.tokens_out)} tokens out` : "No token usage reported."),
-      total.partial ? h("p", { class: "muted small" }, `${plural(total.partial, "turn")} with incomplete usage.`) : "",
-      total.cost_usd ? h("p", {}, `$${total.cost_usd.toFixed(2)} at the configured prices.`) : "",
-    ] : empty("Usage unavailable."), { actions: [h("button", { class: "small", onclick: () => goTab("Agents") }, "Agents")] }),
-  };
-  const selected = (id, build, small = false) => {
-    const node = build();
-    if (!node) return ""; // Empty notes, workbench and last-pass cards remain quiet.
-    node.dataset.overviewCard = id;
-    if (small) node.dataset.overviewSmall = "true";
-    return node;
-  };
-  body.replaceChildren(
-    h("div", { class: "stats ov-stats", style: `--overview-count:${prefs.layout.stats.length}` },
-      prefs.layout.stats.map(id => selected(id, stats[id], true))),
-    // D757: a failed start says why, in its log's own words, where the loop is opened
-    st.failed && (st.error || []).length ? h("section", { class: "card why-failed", role: "alert" }, h("div", { class: "card-head" }, h("h2", {}, "Why it stopped"),
-      h("button", { class: "small", onclick: () => goTab("Live", "log") }, "Log")),
-      h("pre", { class: "why-lines" }, st.error.join("\n"))) : "",
-    q0 && st.running ? h("section", { class: "card ask" }, h("div", { class: "card-head" }, h("h2", {}, "Agent asks"),
-      h("button", { class: "small primary", onclick: () => goTab("Live") }, "Answer")), h("pre", { class: "question" }, q0.question)) : "",
-    h("div", { class: "grid-2 ov" }, prefs.layout.columns.map((ids, column) => h("div", { class: "col", "data-overview-column": column },
-      ids.map(id => selected(id, cards[id]))))));
+  showIn(ctx.body, "overview", html`<${Overview} ctx=${ctx} r=${r} notes=${notes} bench=${bench} use=${use} prefs=${prefs} ideas=${ideas} />`);
 }
 
 /** The card of an agent writing the loop's problem: `authorBox()` gives it, or "" (D704). */

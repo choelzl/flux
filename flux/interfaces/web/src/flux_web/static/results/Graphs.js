@@ -32,13 +32,13 @@ export function Graphs({ ctx, r, directions, onPick, detail }) {
   const set = patch => { const next = { ...g, ...patch }; setG(next); prefs.save({ graphs: next }); };
   if (!nums.length) return html`<${Card}><${Empty} text="No metric measured to chart." /><//>`;
   const stageOpts = [["", "deepest stage"], ...stageNames.map(s => [s, s])];     // D1015: one name for the default
-  const MetricSelect = ({ value, onChange }) => html`<select onChange=${e => onChange(e.currentTarget.value)}>${folded(nums).map(([k, ms]) => {
+  const metricSelect = (value, onChange) => html`<select onChange=${e => onChange(e.currentTarget.value)}>${folded(nums).map(([k, ms]) => {
     const tests = ms.filter(m => m !== k), opt = (m, label) => html`<option value=${m} selected=${m === value}>${label}</option>`;
     return !tests.length ? opt(k, k) : html`${ms.includes(k) ? opt(k, k) : ""}<optgroup label=${`${k} ·`}>${tests.map(m => opt(m, m.slice(k.length + 1)))}</optgroup>`; })}</select>`;
   const objFor = m => { const o = directions.find(x => x.metric === m) || {}; return { metric: m, direction: directionOf(m, directions), goal: o.goal, aggregate: o.aggregate,
     stage: g.timeStage || (o.stage && o.stage !== "deepest" ? o.stage : null) }; };
   const charted = new Set(g.metrics), perTest = new Set(g.perTest);
-  const Best = ({ m, each }) => html`<${BestChart} rows=${designPoints(r.designs, objFor(m))} obj=${objFor(m)} passes=${r.passes} styles=${styles} scope=${g.scope} legend=${false} cls=${each ? "small-multiple" : ""} />`;
+  const best = (m, each = false) => html`<${BestChart} rows=${designPoints(r.designs, objFor(m))} obj=${objFor(m)} passes=${r.passes} styles=${styles} scope=${g.scope} legend=${false} cls=${each ? "small-multiple" : ""} />`;
   return html`<div class="graphs">
     <${Card} cls="graphs-ctl"><div>${groups.length ? html`<div class="chips scope" role="group" aria-label="Scope"><span class="muted">Compare within</span>
         ${scopesOf(groups).map(([k, label]) => html`<button class=${`chip${g.scope === k ? " on" : ""}`} type="button" aria-pressed=${g.scope === k ? "true" : "false"} onClick=${() => set({ scope: k })}>${label}</button>`)}</div>` : ""}</div>
@@ -47,7 +47,7 @@ export function Graphs({ ctx, r, directions, onPick, detail }) {
       <${Legend} S=${styles} front rejected=${r.designs.some(d => d.verdict === "rejected")} pending=${r.designs.some(d => d.verdict === "pending")} baseline=${r.designs.some(d => d.baseline)} /><//>
     <div class="grid-2 charts">
       <${Card} title="Pareto front"><div><div class="chart-ctl">
-          <label>x <${MetricSelect} value=${g.x} onChange=${v => set({ x: v })} /></label><label>y <${MetricSelect} value=${g.y} onChange=${v => set({ y: v })} /></label>
+          <label>x ${metricSelect(g.x, v => set({ x: v }))}</label><label>y ${metricSelect(g.y, v => set({ y: v }))}</label>
           <label>stage <${Select} opts=${stageOpts} value=${g.paretoStage} onChange=${v => set({ paretoStage: v })} /></label>
           <button type="button" class=${`small chip pareto-focus${g.paretoFocus ? " on" : ""}`} aria-pressed=${String(g.paretoFocus)} disabled=${nums.length < 2}
             title=${g.paretoFocus ? "Show the full measurement range" : "Fit axes to the feasible Pareto front; distant points may be outside the view"}
@@ -69,8 +69,8 @@ export function Graphs({ ctx, r, directions, onPick, detail }) {
         ${charted.size ? html`<div class="chart-grid">${folded(nums).filter(([, ms]) => ms.some(m => charted.has(m))).map(([k, ms]) => {
             const tests = ms.filter(m => m !== k), each = tests.length && (perTest.has(k) || !ms.includes(k));
             // per test: one chart per test at the charts' own size, under the dictionary's name
-            return each ? html`<div class="small-multiples" data-dict=${k}><div class="muted small">${`${k} · per test`}</div>${tests.map(m => html`<${Best} m=${m} each />`)}</div>`
-              : html`<${Best} m=${ms.includes(k) ? k : ms[0]} />`; })}</div>` : html`<${Empty} text="Pick a metric to chart." />`}</div><//>
+            return each ? html`<div class="small-multiples" data-dict=${k}><div class="muted small">${`${k} · per test`}</div>${tests.map(m => best(m, true))}</div>`
+              : best(ms.includes(k) ? k : ms[0]); })}</div>` : html`<${Empty} text="Pick a metric to chart." />`}</div><//>
     </div>
     <${Card} cls="detail-card">${detail}<//></div>`;
 }

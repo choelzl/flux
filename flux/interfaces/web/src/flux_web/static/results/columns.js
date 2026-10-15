@@ -3,7 +3,7 @@
 // shared preferences (result_table.js), and the table's headers and badges.
 
 import { html, useState } from "../view.js";
-import { resultPreferences } from "../result_table.js";
+import { mainMeasurements, relativeMeasurement, resultPreferences } from "../result_table.js";
 
 /** The columns of `metrics` and their controls: `visible()` in the order shown (a dictionary's aggregate first,
     then its tests), `hidden(m)`, `controls` (Hidden N, Tests ▸), `toggle(m, on)` (the picker's). */
@@ -100,4 +100,39 @@ export function VerdictPill({ d }) {
   if (d.verdict === "pending") return html`<span class="pill warn">pending</span>`;
   if (d.verdict === "rejected") return html`<span class="pill rejected">${!d.rejected?.by ? "rejected" : byCritic(d.rejected.by) ? "rejected · critic" : `rejected · ${d.rejected.by}`}</span>`;
   return html`<span class="pill bad">failed</span>`;
+}
+
+const CheckBox = ({ checked, onChange, off, ...rest }) => html`<input type="checkbox" ...${rest} checked=${checked} disabled=${off} onChange=${e => onChange(e.currentTarget.checked)} />`;
+
+/** Settings › Measurements (D1001, D1008, D1013): each metric's column shown or not, main or not, said as a
+    percent change or not -- a dictionary's tests folded under its row, its aggregate said beside it. */
+export function MeasurementOptions({ ctx, metrics, groups = {}, defaults = metrics.slice(0, 1) }) {
+  const prefs = resultPreferences(ctx), columns = useColumns(ctx, metrics, groups);
+  const [main, setMain] = useState(() => new Set(mainMeasurements(ctx, metrics, defaults)));
+  const [relative, setRelative] = useState(() => new Set(metrics.filter(m => relativeMeasurement(ctx, m))));
+  const [open, setOpen] = useState(() => new Set());
+  const dicts = Object.fromEntries(Object.entries(groups).filter(([, g]) => g && g.type === "dict"));
+  const dictParent = new Map(Object.entries(dicts).filter(([name]) => metrics.includes(name))
+    .flatMap(([name, g]) => (g.metrics || []).filter(m => m !== name && metrics.includes(m)).map(m => [m, name])));
+  const dictTests = new Map();
+  for (const [m, name] of dictParent) (dictTests.get(name) || dictTests.set(name, []).get(name)).push(m);
+  const flip = (set, m, on) => { const next = new Set(set); if (on) next.add(m); else next.delete(m); return next; };
+  const pickMain = (m, on) => { const next = flip(main, m, on); setMain(next); prefs.save({ mainMetrics: metrics.filter(x => next.has(x)) }); };
+  const pickRelative = (m, on) => {
+    const saved = prefs.read().relativeMetrics;
+    setRelative(flip(relative, m, on));
+    prefs.save({ relativeMetrics: { ...(saved && typeof saved === "object" && !Array.isArray(saved) ? saved : {}), [m]: on } });
+  };
+  const off = !ctx.mine;
+  return html`<div class="scroll-x"><table class="list compact measurement-options">
+    <thead><tr><th>Metric</th><th>Visible</th><th>Main</th><th>%</th></tr></thead>
+    <tbody>${metrics.filter(m => !dictParent.has(m)).flatMap(m => [m, ...(dictTests.get(m) || [])]).map(metric => {     // D1014: tests under their row
+      const parent = dictParent.get(metric), tests = dictTests.get(metric) || [], how = dicts[metric]?.aggregate, unfolded = open.has(metric);
+      return html`<tr key=${metric} data-dict-of=${parent} class=${parent ? "dict-test" : ""} hidden=${!!parent && !open.has(parent)}>
+        <td class="mono" title=${metric}>${tests.length ? html`<button type="button" class="link dict-fold" data-dict=${metric} aria-expanded=${String(unfolded)}
+            title=${`Show ${metric}'s ${tests.length} tests`} onClick=${() => setOpen(flip(open, metric, !unfolded))}>${unfolded ? "▾" : "▸"}</button> ` : ""}${parent ? metric.slice(parent.length + 1) : metric}
+          ${dicts[metric] ? html`<span class="muted small dict-how" title="set in the document (the measurement's aggregate:)">${` ${[how, tests.length ? `${tests.length} tests` : ""].filter(Boolean).join(" · ")}`}</span>` : ""}</td>
+        <td><${CheckBox} off=${off} data-metric=${metric} aria-label=${`Show ${metric} column`} checked=${!columns.hidden(metric)} onChange=${on => columns.toggle(metric, on)} /></td>
+        <td><${CheckBox} off=${off} data-main-metric=${metric} aria-label=${`Main metric ${metric}`} checked=${main.has(metric)} onChange=${on => pickMain(metric, on)} /></td>
+        <td><${CheckBox} off=${off} data-relative-metric=${metric} aria-label=${`Percent change for ${metric}`} checked=${relative.has(metric)} onChange=${on => pickRelative(metric, on)} /></td></tr>`; })}</tbody></table></div>`;
 }

@@ -2,11 +2,11 @@
 // does not meet, its numbers at each stage, its source; Reject (with why, each number measured again or cleared,
 // hidden too at rest) and Restore.
 
-import { Ago, Dom, Skeleton, html, useEffect, useMemo, useRef, useState } from "../view.js";
+import { Ago, Skeleton, html, useEffect, useRef, useState } from "../view.js";
 import { api, dialog, enc, h, toast } from "../ui.js";
-import { viewerTools } from "../viewer.js";
 import { Act } from "../components/Act.js";
 import { Code } from "../components/Markdown.js";
+import { ViewerTools } from "../components/ViewerTools.js";
 import { VerdictPill, byCritic } from "./columns.js";
 
 /** The reject form (D1043): why, each measurement measured again or cleared, hidden too (at rest) -- read from
@@ -35,17 +35,20 @@ function readReject(el) {
     again: [...new Set(ticked.filter(x => x.how === "again").map(x => x.box.dataset.stage))] };
 }
 
+// the last design read, by its address: the same design shown in the other view (D916) is there at once, read again
+let last = { url: null, full: null };
+
 export function DesignDetail({ d, ctx, fmt, reload }) {
   const { name, q, qs } = ctx;
-  const [full, setFull] = useState(null), box = useRef(null);
+  const url = `/apps/${enc(name)}/design?design=${enc(d.base || d.name)}&part=${enc(d.part)}&key=${enc(d.key || "")}${q}`;
+  const [full, setFull] = useState(() => last.url === url ? last.full : null), box = useRef(null);
   useEffect(() => {
     let live = true;
-    setFull(null);
-    api(`/apps/${enc(name)}/design?design=${enc(d.base || d.name)}&part=${enc(d.part)}&key=${enc(d.key || "")}${q}`).then(f => { if (live) setFull(f); })
+    if (last.url !== url) setFull(null);
+    api(url).then(f => { last = { url, full: f }; if (live) setFull(f); })
       .catch(x => { if (live && x.message !== "log in") toast(x.message, "bad"); });
     return () => { live = false; };
-  }, [d]);
-  const tools = useMemo(() => full ? viewerTools(() => box.current, { title: d.name, rawText: JSON.stringify(full, null, 2) }) : [], [full]);
+  }, [url]);
   if (!full) return html`<div class="detail"><${Skeleton} lines=${6} /></div>`;
   const stages = Object.entries(d.stages).filter(([, m]) => Object.keys(m).length);
   const metrics = [...new Set(stages.flatMap(([, m]) => Object.keys(m)))];
@@ -69,6 +72,6 @@ export function DesignDetail({ d, ctx, fmt, reload }) {
     ${d.why.length ? html`<div class="blk"><h3>${d.verdict === "pending" ? "Waiting for" : "Not met"}</h3><ul class="misses">${d.why.map(w => html`<li>${w}</li>`)}</ul></div>` : ""}
     ${stages.length ? html`<div class="blk"><h3>Measurements</h3><table class="list compact"><thead><tr><th>stage</th>${metrics.map(m => html`<th class="num">${m}</th>`)}</tr></thead>
       <tbody>${stages.map(([st, m]) => html`<tr><td>${st}</td>${metrics.map(k => html`<td class="mono num">${fmt(m[k])}</td>`)}</tr>`)}</tbody></table></div>` : ""}
-    <div class="actions"><${Dom} node=${tools} /></div>
+    <div class="actions"><${ViewerTools} box=${box} title=${d.name} rawText=${JSON.stringify(full, null, 2)} /></div>
     ${full.artifact ? html`<div class="blk"><h3>Design</h3><${Code} text=${full.artifact} lang="" /></div>` : ""}</div>`;
 }

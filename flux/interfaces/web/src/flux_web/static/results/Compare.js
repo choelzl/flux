@@ -11,8 +11,8 @@ import { VerdictPill } from "./columns.js";
 function Comparison({ a, b, fa, fb, stages, directions, fmt }) {
   const rows = stages.flatMap(st => [...new Set([...Object.keys(a.stages[st] || {}), ...Object.keys(b.stages[st] || {})])]
     .map(m => ({ st, m, va: (a.stages[st] || {})[m], vb: (b.stages[st] || {})[m] })));
-  const Cell = ({ v }) => html`<td class="num mono">${v == null ? "—" : fmt(v)}</td>`;
-  const Delta = ({ row }) => {
+  const cell = v => html`<td class="num mono">${v == null ? "—" : fmt(v)}</td>`;
+  const delta = row => {
     if (row.va == null || row.vb == null) return html`<td></td>`;
     const d = row.vb - row.va, rel = row.va ? d / Math.abs(row.va) : null;
     const better = d === 0 ? null : directionOf(row.m, directions) === "minimize" ? d < 0 : d > 0;
@@ -22,7 +22,7 @@ function Comparison({ a, b, fa, fb, stages, directions, fmt }) {
   const changed = ops ? ops.filter(o => o[0] !== " ").length : 0;
   return html`<div class="compare"><p class="muted">Green: B is better.</p>
     <table class="list compact"><thead><tr><th>stage</th><th>metric</th><th class="num">A <${VerdictPill} d=${a} /></th><th class="num">B <${VerdictPill} d=${b} /></th><th class="num">B − A</th></tr></thead>
-      <tbody>${rows.map(row => html`<tr><td class="muted">${row.st}</td><td>${row.m}</td><${Cell} v=${row.va} /><${Cell} v=${row.vb} /><${Delta} row=${row} /></tr>`)}</tbody></table>
+      <tbody>${rows.map(row => html`<tr><td class="muted">${row.st}</td><td>${row.m}</td>${cell(row.va)}${cell(row.vb)}${delta(row)}</tr>`)}</tbody></table>
     <h3>Source${ops ? html`<span class="muted">${changed ? ` · ${plural(changed, "line")} differ` : " · the same"}</span>` : ""}</h3>
     ${ops ? (changed ? html`<${Dom} node=${diffView(ops)} />` : html`<div class="empty"><p>The two sources are the same.</p></div>`) : html`<div class="empty"><p>A source is missing.</p></div>`}</div>`;
 }

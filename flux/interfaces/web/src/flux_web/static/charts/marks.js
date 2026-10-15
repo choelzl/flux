@@ -21,11 +21,13 @@ export function Mark({ st, x, y, r, attrs = {}, children }) {
 /** The decision (D915): a ring around its point, the point keeping its group's colour and shape. */
 export const Ring = ({ x, y, r }) => html`<circle cx=${x} cy=${y} r=${r + 3.5} class="ring" />`;
 
+/** A legend's key: a point as the chart draws it, its ring for the decision. */
+const Key = ({ st, cls, ring }) => html`<svg viewBox="-6 -6 12 12" class="chart key" aria-hidden="true"><${Mark} st=${st} x=${0} y=${0} r=${3.6} attrs=${{ class: `pt ${cls}` }} />${ring ? html`<${Ring} x=${0} y=${0} r=${1.2} />` : ""}</svg>`;
+
 /** The legend (D915): each group's colour and shape, then what the outlines say -- meets every requirement
     (filled), misses one (hollow), waits for a later stage (dashed), rejected (D1094) -- the decision's ring and,
     on the Pareto chart, the feasible front. Colour is never the only cue. */
 export function Legend({ S, front = false, pending = false, baseline = false, rejected = false }) {
-  const Key = ({ st, cls, ring }) => html`<svg viewBox="-6 -6 12 12" class="chart key" aria-hidden="true"><${Mark} st=${st} x=${0} y=${0} r=${3.6} attrs=${{ class: `pt ${cls}` }} />${ring ? html`<${Ring} x=${0} y=${0} r=${1.2} />` : ""}</svg>`;
   const plain = { color: S.groups.length ? "var(--muted)" : "var(--accent)", shape: "circle" };   // D1094: the points' own colour when there are no groups
   const item = (key, label, extra = {}) => html`<span class="key-item" ...${extra}>${key}${label}</span>`;
   return html`<span class="legend groups">

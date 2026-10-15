@@ -31,12 +31,12 @@ export function ResultsTable({ t, selected, onOpen, onCompare }) {
   const shown = all.slice(0, pageN);
   useLayoutEffect(() => { if (focus.current) { box.current?.querySelector(`button.th-sort[data-key="${CSS.escape(focus.current)}"]`)?.focus(); focus.current = null; } });
   const by = key => { focus.current = key; setSort(s => s.key === key ? { key, dir: -s.dir } : { key, dir: ["name", "verdict", "stage"].includes(key) ? 1 : -1 }); };
-  const SortButton = ({ k, label }) => html`<button type="button" class=${`th-sort${sortKey === k ? " on" : ""}`} data-key=${k} aria-label=${label} onClick=${() => by(k)}>
+  const sortButton = (k, label) => html`<button type="button" class=${`th-sort${sortKey === k ? " on" : ""}`} data-key=${k} aria-label=${label} onClick=${() => by(k)}>
     ${labels.get(k) || label}${k === "name" || k === "verdict" ? html`<span class="th-arrow" aria-hidden="true">${sortKey === k ? (sort.dir > 0 ? "▴" : "▾") : ""}</span>` : ""}</button>`;
   const th = (k, label, cls = "", title = null, extra = null) => html`<th class=${`sortable ${cls}${sortKey === k ? " sorted" : ""}`} aria-sort=${sortKey === k ? (sort.dir > 0 ? "ascending" : "descending") : "none"} data-label=${label} title=${title}>
-    ${cls.includes("measurement-head") ? html`<${MeasurementHeader} text=${labels.get(k)} button=${html`<${SortButton} k=${k} label=${label} />`}
+    ${cls.includes("measurement-head") ? html`<${MeasurementHeader} text=${labels.get(k)} button=${sortButton(k, label)}
         arrow=${html`<span class="th-arrow measurement-sort-arrow" aria-hidden="true" onClick=${() => by(k)}>${sortKey === k ? (sort.dir > 0 ? "▴" : "▾") : ""}</span>`}>${extra}<//>`
-      : html`<${SortButton} k=${k} label=${label} />${extra}`}</th>`;
+      : html`${sortButton(k, label)}${extra}`}</th>`;
   // D694: two ticked to compare -- a third ticked lets the oldest go
   const tick = (d, on) => setPicked(p => on ? [...p.filter(x => keyOf(x) !== keyOf(d)), d].slice(-2) : p.filter(x => keyOf(x) !== keyOf(d)));
   const chip = (key, label) => html`<button class=${`chip${filter === key ? " on" : ""}`} onClick=${() => { setFilter(key); setPage(PAGE); }}>${label}</button>`;

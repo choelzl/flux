@@ -1,9 +1,12 @@
 // Flux web: the admin's pages and the model settings form (D889: split out of app.js).
 
-import { cleanup, me, setPageRefresh } from "./state.js";
-import { act, ago, api, appHref, autosave, bytes, card, confirmDialog, crumbs, dialog, dur, empty, enc, fmtTok, h, head, markSaved, pageShow, saveMark, skeleton, sortableTable, toast, when, plural } from "./ui.js";
-import { timeChart } from "./charts.js";
-import { binButton, envEditor, envTable, loopsBrowser, stopLoop } from "./loops.js";
+import { me, setPageRefresh } from "./state.js";
+import { act, ago, api, autosave, bytes, card, confirmDialog, crumbs, dialog, dur, empty, enc, fmtTok, h, head, markSaved, pageShow, saveMark, skeleton, sortableTable, toast, when, plural } from "./ui.js";
+import { html, mount } from "./view.js";
+import { Resources } from "./admin/Resources.js";
+import { AdminLoops } from "./admin/Loops.js";
+import { Applications } from "./admin/Applications.js";
+import { binButton, envEditor, envTable } from "./loops.js";
 import { route } from "./app.js";
 
 // ================================================================ admin and account
@@ -133,230 +136,21 @@ async function adminAudit(body, ok = () => true) {
 }
 
 /** D846: a notification from the admin to every user, or the ones picked, in their bell. */
-async function notifyDialog() {
-  const users = (await api("/admin/usage").catch(() => [])).map(u => u.user);
-  const text = h("textarea", { rows: 3, placeholder: "The message", style: "width:100%" });
-  const kind = h("select", {}, ["info", "warn", "bad"].map(k => h("option", { value: k }, k === "info" ? "information" : k === "warn" ? "warning" : "alert")));
-  const all = h("input", { type: "checkbox", checked: true });
-  const picks = users.map(u => h("label", { class: "check" }, h("input", { type: "checkbox", value: u }), u));
-  const who = h("div", { class: "notify-who", hidden: true }, picks);
-  all.addEventListener("change", () => { who.hidden = all.checked; });
-  const body = h("div", { class: "stack" }, text, h("div", { class: "row" }, kind, h("label", { class: "check" }, all, "everyone")), who);
-  const go = await dialog("Send a notification", body, [["Cancel", null], ["Send", () => true, "primary"]]);
-  if (!go) return;
-  const to = all.checked ? [] : picks.map(l => l.querySelector("input")).filter(i => i.checked).map(i => i.value);
-  if (!text.value.trim() || (!all.checked && !to.length)) { toast("Nothing sent: a message and someone to send it to", "warn"); return; }
-  const r = await api("/admin/notify", { method: "POST", body: { text: text.value, to, kind: kind.value } });
-  toast(`Sent to ${plural(r.sent, "user")}`, "ok");
-}
-
+/** Admin › Loops (D695): admin/Loops.js -- the old documents read after the list, never holding it up (D921). */
 async function adminLoops(body) {
-  // D921: the pause from the controls -- never Resources' disk walk and containers, seconds cold
-  const [allApps, res] = await Promise.all([api("/admin/apps"), api("/admin/controls").catch(() => null)]);
-  const migration = h("div", { id: "document-migration", hidden: true });
-  const paused = res ? res.paused : null;
-  const running = allApps.filter(l => l.running).length;
-  const restart = act("Restart", async () => {
-    const loops = allApps.filter(l => l.running);
-    const go = await dialog("Restart all active loops?", h("div", {},
-      h("p", {}, `${plural(loops.length, "active loop")} will finish their current pass, then resume from their records with the same run settings. Files, results and logs are kept.`),
-      h("p", {}, "Completed passes reduce each finite run's remaining budget; run forever stays unlimited. Counts are checked after stopping. Loops with no passes left stay stopped. Only loops still active when the request begins are restarted."),
-      h("ul", {}, loops.map(l => h("li", {}, `${l.owner}/${l.name}: ${l.options?.passes == null ? "run forever" : `${Math.max(0, l.options.passes - (l.passes || 0))} of ${plural(l.options.passes, "pass", "passes")} remaining`}${l.options?.screen_only ? " · screen only" : ""}`)))),
-      [["Cancel", false], ["Restart loops", true, "primary"]]);
-    if (!go) return;
-    const r = await api("/admin/restart-all", { method: "POST", body: { now: false } });
-    const errors = Object.entries(r.failed), skipped = Object.entries(r.skipped);
-    toast(`${plural(Object.keys(r.scheduled || r.restarted).length, "loop")} ${r.scheduled ? "scheduled to restart after this pass" : "restarted"}${errors.length ? ` · ${errors.length} could not restart` : ""}${skipped.length ? ` · ${skipped.length} skipped` : ""}`, errors.length ? "warn" : "ok");
-    if (errors.length || skipped.length) await dialog("Restart results", h("ul", {},
-      [...errors, ...skipped].map(([loop, why]) => h("li", {}, `${loop}: ${why}`))), [["Close", true, "primary"]]);
-    route();
-  }, { cls: "small", title: paused ? "Resume starts before restarting loops" : "Keep each loop's run settings and recorded results" });
-  restart.disabled = !running || !!paused;
-  const reason = h("input", { placeholder: "why (users see it)" });
-  // D846: one line per control -- what it is, then its buttons
-  const line = (label, ...kids) => h("div", { class: "ctl-line" }, h("span", { class: "ctl-label" }, label), h("div", { class: "ctl-acts" }, ...kids));
-  const controls = card("Controls", h("div", { class: "ctl-grid" },
-    paused ? line("Starts", h("span", { class: "pill bad" }, "paused"), h("span", { class: "muted" }, paused),
-        act("Resume starts", async () => { await api("/admin/paused", { method: "PUT", body: { reason: null } }); toast("Starts resumed", "ok"); route(); }, { cls: "small primary" }))
-      : line("Starts", reason, act("Pause new starts", async () => {
-          await api("/admin/paused", { method: "PUT", body: { reason: reason.value.trim() || "maintenance" } }); toast("New starts paused", "ok"); route();
-        }, { cls: "small" })),
-    line(`Running: ${running}`,
-      act("Stop", async () => {
-        if (!await confirmDialog("Stop every loop?", `${plural(running, "loop")} stop at the end of their pass.`, { ok: "Stop after the pass" })) return;
-        const r = await api("/admin/stop-all", { method: "POST", body: { now: false } }); toast(`${plural(Object.keys(r.stopped).length, "loop")} asked to stop`, "ok"); route();
-      }, { cls: "small" }),
-      restart),
-    line("Users", act("Send a notification…", () => notifyDialog(), { cls: "small" }))));
-  const box = h("div", {}, loopsBrowser(allApps, { who: true, memo: "flux-sort-admin-loops" }));
-  body.replaceChildren(controls, card("Every loop", box), migration);
-  setPageRefresh(async () => { if (!box.contains(document.activeElement)) box.replaceChildren(loopsBrowser(await api("/admin/apps"), { who: true, memo: "flux-sort-admin-loops" })); });
-  await adminDocuments(migration);
+  const load = () => Promise.all([api("/admin/apps"), api("/admin/controls").catch(() => null)]);
+  let [loops, res] = await load(), docs = null;
+  const draw = () => mount(body, html`<${AdminLoops} loops=${loops} paused=${res ? res.paused : null} docs=${docs} />`);
+  draw();
+  setPageRefresh(async () => { loops = await api("/admin/apps"); draw(); });
+  docs = await api("/admin/documents");
+  draw();
 }
-let historyHours = 24;
-async function adminResources(body) {
-  body.replaceChildren(h("p", { class: "muted" }, "Measuring…"));
-  let r;
-  async function load() { r = await api("/admin/resources"); draw(); }
-  function draw() {
-    const m = r.machine, mem = m.memory || {};
-    const machineCard = card("Machine", h("div", { class: "stats five" },
-      h("div", { class: "stat" }, h("small", {}, "CPUs"), h("div", { class: "big" }, String(m.cpus))),
-      h("div", { class: "stat" }, h("small", {}, "Load (1 · 5 · 15 min)"), h("div", { class: "big" }, (m.load || []).map(x => x.toFixed(1)).join(" · ")),
-        meter((m.load || [0])[0] / m.cpus), h("div", { class: "muted" }, `${Math.round((m.load || [0])[0] / m.cpus * 100)}% of the CPUs`)),
-      h("div", { class: "stat" }, h("small", {}, "Memory used"), h("div", { class: "big" }, mem.total ? bytes(mem.total - mem.available) : "?"),
-        mem.total ? [meter(1 - mem.available / mem.total), h("div", { class: "muted" }, `of ${bytes(mem.total)}`)] : ""),
-      ...m.disks.filter(d => !d.same_as).slice(0, 2).map(d => h("div", { class: "stat" }, h("small", {}, `Disk: ${d.label}`), h("div", { class: "big" }, `${bytes(d.free)} free`),
-        meter(d.used / d.total), h("div", { class: "muted", title: d.path }, `of ${bytes(d.total)}${m.disks.some(x => x.same_as === d.label) ? " · also " + m.disks.filter(x => x.same_as === d.label).map(x => x.label).join(", ") : ""}`)))));
-    const cs = r.containers || [];
-    const loopLink = (u, a) => u ? h("a", { href: appHref(u, a) }, `${u} / ${a}`) : h("span", { class: "muted" }, "no loop");
-    const contCard = card(`Sandbox containers (${r.engine || "none"})`, r.error ? h("p", { class: "callout bad" }, r.error)
-      : cs.length ? sortedTable("flux-sort-containers", [      // D989: sorted by a header, as Users
-          { label: "Container", key: c => c.name, asc: true }, { label: "Loop", key: c => c.user ? `${c.user}/${c.loop}` : "", asc: true },
-          { label: "State", key: c => c.orphan && c.state === "running" ? "left behind" : c.activity && c.activity !== "loop" ? c.activity : c.state, asc: true },
-          { label: "CPU", key: c => c.cpu, num: true }, { label: "Memory", key: c => c.mem, num: true }, { label: "PIDs", key: c => c.pids, num: true }, { label: "" }],
-          cs, c => h("tr", {},
-            h("td", { class: "mono" }, c.name), h("td", {}, loopLink(c.user, c.loop)),
-            h("td", {}, h("span", { class: `pill ${c.state === "running" ? (c.orphan ? "warn" : "live") : ""}` }, c.orphan && c.state === "running" ? "left behind" : c.activity && c.activity !== "loop" ? c.activity : c.state), " ", h("small", { class: "muted" }, c.status)),
-            h("td", { class: "num mono" }, c.cpu != null ? `${c.cpu.toFixed(1)}%` : ""),
-            h("td", { class: "num mono" }, c.mem != null ? bytes(Math.round(c.mem)) : ""),
-            h("td", { class: "num mono" }, c.pids != null ? String(c.pids) : ""),
-            h("td", { class: "right" }, c.orphan ? act("Kill", async () => {
-                if (!await confirmDialog(`Kill ${c.name}?`, "No active task owns it; it is removed.", { ok: "Kill", danger: true })) return;
-                toast((await api(`/admin/containers/${enc(c.name)}/kill`, { method: "POST" })).ok, "ok"); load();
-              }, { cls: "small danger" })
-              : c.activity && c.activity !== "loop" ? (c.user ? h("a", { class: "btn small", href: appHref(c.user, c.loop) }, "View") : null)
-              : act("Stop", async () => { await stopLoop(c.loop, false, c.user); load(); }, { cls: "small", title: "Stop the loop after this pass" }))), 3, { cls: "list" }) : empty("No sandbox container."),
-      { actions: r.containers_at ? [h("span", { class: "muted small" }, "asked ", ago(r.containers_at))] : null });   // D921: a sample, said with its time
-    const loops = r.loops.slice().sort((a, b) => b.total - a.total);
-    const totalOf = (k) => loops.reduce((s, l) => s + (l[k] || 0), 0);
-    const cleanBtn = (l, what, label, text) => act(label, async () => {
-      if (!await confirmDialog(`${label}: ${l.user} / ${l.app}?`, text, { ok: label, danger: what === "all" })) return;
-      const x = await api(`/admin/caches/${enc(l.cache_key || l.key)}/clean`, { method: "POST", body: { what } }); toast(`${bytes(x.freed)} freed`, "ok"); load();
-    }, { cls: "small" });
-    const SIZES = ["inputs", "record", "log", "workbench", "cache", "total"];
-    const diskCard = card("Disk per loop", sortedTable("flux-sort-loop-disk", [
-      { label: "Loop", key: l => `${l.user}/${l.app}`, asc: true }, { label: "" },
-      ...SIZES.map((k, i) => ({ label: ["Inputs", "Record", "Log", "Workbench", "Sandbox cache", "Total"][i], key: l => l[k] || 0, num: true })), { label: "" }],
-      loops, l => h("tr", {}, h("td", {}, loopLink(l.user, l.app)), h("td", {}, l.running ? h("span", { class: "pill live" }, "running") : ""),
-          ...SIZES.map(k => h("td", { class: `num mono${k === "total" ? " strong" : ""}` }, bytes(l[k]))),
-          h("td", { class: "right" }, l.running || !l.cache ? "" : h("div", { class: "actions end" },
-            cleanBtn(l, "tools", "Clear tools' cache", "The tools' own cache in the sandbox (XDG_CACHE_HOME) is emptied; they rebuild what they need."),
-            cleanBtn(l, "scratch", "Clear past scratch", "The agents' working folders of past passes go. The journal, the transcript, the record and the workbench stay.")))),
-      7, {}, h("tfoot", {}, h("tr", { class: "sum" }, h("td", {}, "All loops"), h("td", {}), ...SIZES.map(k => h("td", { class: "num mono strong" }, bytes(totalOf(k)))), h("td", {})))));
-    const other = r.caches;
-    const cacheCard = other.length ? card("Caches no loop owns", [h("p", { class: "muted" }, "Deleting one frees its space; it is rebuilt when needed."),
-      sortedTable("flux-sort-caches", [{ label: "Cache", key: c => c.key, asc: true }, { label: "Whose", key: c => c.kind === "gone" ? `${c.user}/${c.app}` : "", asc: true },
-        { label: "Size", key: c => c.size, num: true }, { label: "Last touched", key: c => c.touched }, { label: "" }],
-        other, c => h("tr", {}, h("td", { class: "mono" }, c.key),
-          h("td", {}, c.kind === "gone" ? h("span", {}, `${c.user}'s ${c.app}, `, h("span", { class: "pill warn" }, "deleted")) : h("span", { class: "muted" }, "not the web's")),
-          h("td", { class: "num mono" }, bytes(c.size)), h("td", { class: "muted" }, c.touched ? ago(c.touched) : ""),
-          h("td", { class: "right" }, act("Delete", async () => {
-            if (!await confirmDialog(`Delete the cache ${c.key}?`, `${bytes(c.size)}: its scratch, the agents' sessions and the tools' cache.`, { ok: "Delete", danger: true })) return;
-            const x = await api(`/admin/caches/${enc(c.key)}/clean`, { method: "POST", body: { what: "all" } }); toast(`${bytes(x.freed)} freed`, "ok"); load();
-          }, { cls: "small danger" }))), 2)]) : "";
-    body.replaceChildren(machineCard, overTime, contCard, diskCard, cacheCard);
-    drawHistory();
-  }
-  // D699: the machine over time, a sample a minute while `flux serve` runs
-  const overTime = card("Over time", skeleton(4));
-  async function drawHistory() {
-    const [hx, tr] = await Promise.all([api(`/admin/history?hours=${historyHours}`).catch(() => null),
-      api(`/admin/token-rate?hours=${historyHours}`).catch(() => null)]);
-    if (!hx) return;
-    // D838: every loop's tokens per second, read (in) and written (out), the agents' and Flux's model's
-    const ts = tr ? tr.samples : [], rate = (v) => v >= 1000 ? `${(v / 1000).toFixed(1)}k/s`
-      : `${v > 0 && v < 1 ? Number(v.toPrecision(2)) : v >= 10 ? Math.round(v) : v.toFixed(1)}/s`;
-    const sum = (s, d) => s[`${d}_agent`] + s[`${d}_model`];
-    const tokenCharts = [
-      timeChart(ts, [{ label: "all", get: (s) => sum(s, "in") }, { label: "agents", get: (s) => s.in_agent }, { label: "Flux's model", get: (s) => s.in_model }],
-        { title: "Tokens in per second, every loop", fmt: rate, intervals: true }),
-      timeChart(ts, [{ label: "all", get: (s) => sum(s, "out") }, { label: "agents", get: (s) => s.out_agent }, { label: "Flux's model", get: (s) => s.out_model }],
-        { title: "Tokens out (generated) per second, every loop", fmt: rate, intervals: true })];
-    const ss = hx.samples, cpus = ss.length ? ss[ss.length - 1].cpus : null;
-    const pct = (v) => `${Math.round(v * 100)}%`;
-    const disks = ss.length ? Object.keys(ss[ss.length - 1].disks || {}) : [];
-    const ranges = [[1, "1 h"], [6, "6 h"], [24, "24 h"], [168, "7 d"], [720, "30 d"]];
-    overTime.replaceChildren(h("div", { class: "card-head" }, h("h2", {}, "Over time"),
-        h("div", { class: "chips" }, ranges.map(([hrs, label]) => h("button", { class: `chip${historyHours === hrs ? " on" : ""}`, onclick: () => { historyHours = hrs; drawHistory(); } }, label)))),
-      hx.sampling ? "" : h("p", { class: "muted small" }, "Not sampling here: older samples."),
-      tr ? h("p", { class: "muted small token-rate-note" }, `Token rates: ${dur(tr.bucket_seconds)} averages, including cached inputs. An agent that reports its tokens as it works counts them as they come (read every 10 s); Flux's model and other agents count when a turn ends, spread over the turn.`) : "",
-      h("div", { class: "tcharts" }, ...tokenCharts,
-        timeChart(ss, [{ label: "load", get: (s) => s.load1 }], { title: "Load", level: cpus, levelLabel: cpus ? `${cpus} CPUs` : "", fmt: (v) => v.toFixed(1) }),
-        timeChart(ss, [{ label: "used", get: (s) => s.mem_total ? s.mem_used / s.mem_total : null }], { title: "Memory", top: 1, fmt: pct }),
-        timeChart(ss, disks.map(k => ({ label: k, get: (s) => (s.disks || {})[k] })), { title: "Disks", top: 1, fmt: pct }),
-        timeChart(ss, [{ label: "CPU", get: (s) => s.cpu }], { title: "Containers' CPU (100% = one core)",
-          top: Math.max(100, ...ss.map(s => s.cpu || 0)) * 1.05, fmt: (v) => `${Math.round(v)}%` }),
-        timeChart(ss, [{ label: "memory", get: (s) => s.cmem }], { title: "Containers' memory", fmt: (v) => bytes(Math.round(v)) }),
-        timeChart(ss, [{ label: "loops", get: (s) => s.loops }, { label: "containers", get: (s) => s.containers }],
-          { title: "Running", top: 2 * Math.ceil((Math.max(1, ...ss.map(s => Math.max(s.loops || 0, s.containers || 0))) + 1) / 2), fmt: (v) => String(Math.round(v)) })));
-  }
-  await load();
-  const t = setInterval(() => { if (!document.hidden && !body.contains(document.querySelector("dialog.dlg"))) load().catch(() => {}); }, 15000);
-  cleanup.push(() => clearInterval(t));
-}
+/** What the machine holds up (D695): admin/Resources.js. */
+function adminResources(body) { mount(body, html`<${Resources} />`); }
 
-/** The applications of this Flux (D700): an admin sees each and makes it one of their loops --
-    its files linked in, its record its own; Refresh takes the folder's files again. */
-async function adminApplications(body) {
-  const r = await api("/admin/applications");
-  if (!r.root) { body.replaceChildren(card(null, empty("No applications folder: set FLUX_APPLICATIONS to one."))); return; }
-  const use = async (a, refresh) => {
-    if (refresh && !await confirmDialog(`Refresh ${a.name}?`, "Edits to its files in the loop are lost; its record and log stay.", { ok: "Refresh" })) return;
-    await api(`/admin/applications/${enc(a.name)}/use${refresh ? "?refresh=true" : ""}`, { method: "POST" });
-    toast(refresh ? `${a.name}: its files taken again` : `${a.name} is one of your loops`, "ok");
-    location.hash = `#/app/${enc(a.name)}`;
-  };
-  body.replaceChildren(card("Applications folder", [h("p", { class: "muted" }, h("span", { class: "mono" }, r.root)),
-    h("table", { class: "list" }, h("thead", {}, h("tr", {}, ["Application", "What it asks", "Size", ""].map((x, i) => h("th", { class: i === 2 ? "num" : "" }, x)))),
-      h("tbody", {}, r.applications.map(a => h("tr", {},
-        h("td", {}, h("strong", {}, a.name), h("div", { class: "mono muted small" }, a.document)),
-        h("td", { class: "muted small app-what" }, a.statement),
-        h("td", { class: "num mono" }, bytes(a.size)),
-        h("td", { class: "right" }, h("div", { class: "actions end" }, a.loop
-          ? [h("a", { class: "btn small primary", href: `#/app/${enc(a.name)}` }, "Open"), a.linked ? act("Refresh", () => use(a, true), { cls: "small" }) : h("span", { class: "muted small", title: "A loop of yours has this name; it was not made from this folder" }, "name taken")]
-          : act("Use", () => use(a, false), { cls: "small primary" })))))))]));
-}
-
-/** Admin › Documents (D811): every loop's documents of an earlier form, what each would change to
-    be of today's, and the migration -- one loop or all; a result is written only when it loads, the
-    original kept as `<file>.orig`; what needs a person is said, not written. */
-async function adminDocuments(body) {
-  const r = await api("/admin/documents");
-  body.dataset.loaded = "true";
-  body.hidden = !r.loops.length;
-  if (!r.loops.length) { body.replaceChildren(); return; }
-  const PILL = { "would migrate": "live", "needs a hand": "bad", failed: "bad", current: "ok", migrated: "ok" };
-  const run = async (b, what) => {
-    const got = await api("/admin/documents/migrate", { method: "POST", body: b });
-    const left = got.done.flatMap(x => x.why ? [`${x.user}/${x.app}: ${x.why}`] : x.documents.filter(d => d.status !== "migrated" && d.status !== "current").map(d => `${x.user}/${x.app}/${d.file}: ${d.status}`));
-    toast(`${what}: ${plural(got.migrated, "document")} migrated${left.length ? `; left: ${left.join("; ")}` : ""}`, left.length ? "warn" : "ok");
-    route();
-  };
-  const ready = r.loops.filter(l => !l.running && l.documents.some(d => d.status === "would migrate"));
-  const rows = r.loops.map(l => h("div", { class: "mig-loop" },
-    h("div", { class: "mig-head" }, h("strong", {}, `${l.user} / `, h("a", { href: appHref(l.user, l.app) }, l.app)), l.running ? h("span", { class: "pill live" }, "running") : "",
-      h("span", { class: "grow" }),
-      l.documents.some(d => d.status === "would migrate") ? (l.running ? h("span", { class: "muted small" }, "stop it to migrate: its document is in use")
-        : act("Migrate", () => run({ user: l.user, app: l.app }, `${l.user}/${l.app}`), { cls: "small primary", title: "Write the documents that load; keep each original" }))
-        // D813: no document it can write by itself -- why, said where the button would be, and the way to do it by hand
-        : [h("span", { class: "small bad" }, l.documents.some(d => d.status === "needs a hand") ? "not by itself: a part needs rewriting by hand (below)"
-            : "not by itself: its result would not load (below)"),
-          h("a", { class: "btn small", href: `${appHref(l.user, l.app)}/settings/problem` }, "Edit its document")]),
-    ...l.documents.filter(d => d.status !== "current").map(d => h("div", { class: "mig-doc" },
-      h("div", {}, h("span", { class: "mono" }, d.file), d.to !== d.file ? h("span", { class: "mono muted" }, ` → ${d.to}`) : "", " ",
-        h("span", { class: `pill ${PILL[d.status] || ""}` }, d.status)),
-      d.why ? h("p", { class: "small bad" }, d.why) : "",
-      d.manual.length ? h("ul", { class: "small bad" }, d.manual.map(m => h("li", {}, m))) : "",
-      d.said.length ? h("details", {}, h("summary", { class: "small" }, `${plural(d.said.length, "change")}`),
-        h("ul", { class: "small mono" }, d.said.map(x => h("li", {}, x))),
-        d.text ? h("pre", { class: "log small" }, d.text) : "") : ""))));
-  body.replaceChildren(card("Old documents", [
-    h("p", { class: "muted small" }, `${r.loops.length} of ${plural(r.total, "loop")} to migrate. `,
-      "Originals kept as ", h("code", {}, "<file>.orig"), "."),
-    ready.length ? h("div", { class: "toolbar" }, act(`Migrate all (${ready.length})`, () => run({}, "Every loop"), { cls: "primary" })) : "",
-    ...rows]));
-}
+/** The applications of this Flux (D700): admin/Applications.js. */
+async function adminApplications(body) { mount(body, html`<${Applications} r=${await api("/admin/applications")} />`); }
 
 /** Maintenance (D885): the scheduled clean-up, a row a task -- on or off, how often, its settings,
     what it last did, Run now (a loop's tasks over every loop, or the one picked). */

@@ -3,13 +3,15 @@
 // configure.js; D892: a loop's page in loop_page.js, each of its tabs in a loop_*.js).
 
 import { codeEditor } from "./highlight.js";
-import { html } from "./view.js";
+import { html, mount, node } from "./view.js";
+import { LastSaid } from "./components/StatePill.js";
+import { LoopsPage } from "./loops/Page.js";
 import { Markdown } from "./components/Markdown.js";
 import { Conversation } from "./components/Conversation.js";
-import { can, me, pageOwner, pageRefresh, setPageRefresh } from "./state.js";
-import { act, ago, api, on, autosave, bytes, card, confirmDialog, createFromText, dialog, dur, empty, enc, h, head, offline, owned, pageShow, saveMark, sortableTable, statePill, toast, toasts, when, withOwner, plural } from "./ui.js";
-import { num4, sv } from "./charts.js";
-import { flushResultPreferences, mainMeasurements, measurementText, relativeMeasurement } from "./result_table.js";
+import { Bin } from "./components/Bin.js";
+import { can, me, pageOwner, setPageRefresh } from "./state.js";
+import { act, ago, api, on, autosave, bytes, card, confirmDialog, createFromText, dialog, dur, empty, enc, h, head, offline, owned, pageShow, saveMark, toast, toasts, when, withOwner, plural } from "./ui.js";
+import { flushResultPreferences } from "./result_table.js";
 import { diffView, lineDiff } from "./configure.js";
 
 /** Start or stop a loop: the dialog for a start's options, a confirm for "now". */
@@ -79,10 +81,7 @@ async function restartLoop(name, now = false, owner) {
   toast(r.ok, now ? "warn" : "info");
   return true;
 }
-function lastSaid(st) {
-  if (st.running) return ["running since ", ago(st.since), st.baseline ? " · baseline pass 0" : st.passes != null ? ` · pass ${st.passes + (st.at_rest ? 0 : 1)}` : ""];
-  return st.last_active ? ["last active ", ago(st.last_active)] : ["never run"];
-}
+const lastSaid = st => html`<${LastSaid} st=${st} />`;
 
 /** An upload's progress (D702): a dialog Escape does not close -- a Cancel stops the upload
     between batches and parts, and says what was already written. */
@@ -182,81 +181,6 @@ function dropZone(label, onFiles) {
     kept (`memo`); newest activity first until one is chosen. Designs sorts by what it shows (this run,
     then every run); Best by whether a decision is there, then the name -- the values are of
     different metrics, never ranked across loops. */
-const STATE_RANK = (l) => l.running ? 4 : l.failed ? 3 : l.stopped ? 2 : l.last_active ? 1 : 0;
-function loopsTable(loops, { who = false, memo = "flux-sort-loops" } = {}) {
-  if (!loops.length) return empty("No loop yet.");
-  const sm = (l) => l.summary || {};
-  const cols = [
-    ...(who ? [{ label: "User", key: l => l.owner || "", asc: true }] : []),
-    { label: "Loop", key: l => l.name || l.app, asc: true },
-    { label: "State", key: STATE_RANK },
-    { label: "Activity", key: l => l.running ? [1, l.since || 0] : l.last_active ? [0, l.last_active] : null },
-    { label: "Designs", key: l => sm(l).designs ? [sm(l).this_run || 0, sm(l).designs] : null, num: true, title: "this run / every run" },
-    { label: "Best", key: l => sm(l).best ? l.name || l.app : null, asc: true, title: "a decision first, by name" },
-    { label: "" }];
-  const t = sortableTable(memo, cols, loops, l => {
-    const name = l.name || l.app, owner = l.owner && l.owner !== me.name ? l.owner : null, sm = l.summary || {};
-    const href = owner ? `#/u/${enc(owner)}/app/${enc(name)}` : `#/app/${enc(name)}`;
-    const canRun = l.can_run ?? (owner ? l.perm === "edit" || me.role === "admin" : can("run_loops"));
-    // D1006: as on the loop's page -- the first press schedules it after the pass, the button turns
-    // red, a second press (confirmed) abandons the pass
-    const stopNow = !!l.stop_requested && !l.restart_requested, restartNow = !!l.restart_requested;
-    // the list keeps still while focus is in it: the pressed button lets go, so it turns red at once
-    const redrawn = () => { document.activeElement?.blur?.(); return pageRefresh && pageRefresh(); };
-    const runningActions = () => [
-      owner && !canRun ? "" : act("Stop", () => stopLoop(name, stopNow, owner).then(redrawn),
-        { cls: `small${stopNow ? " danger solid" : ""}`, title: stopNow ? "Stop is scheduled. Press again to abandon the current pass." : "Stop after this pass" }),
-      canRun ? act("Restart", () => restartLoop(name, restartNow, owner).then(redrawn),
-        { cls: `small${restartNow ? " danger solid" : ""}`, title: restartNow ? "Restart is scheduled. Press again to abandon the current pass." : "Restart after this pass with the same run settings" }) : "",
-    ];
-    const acts = owner ? (!canRun ? [h("span", { class: "pill" }, l.perm === "edit" ? "can edit" : "watching")]
-        : l.running ? runningActions()
-        : [act("Start", async () => { if (await startLoop(name, owner)) location.hash = href; }, { cls: "small primary" })])
-      : l.running ? runningActions()
-      : [canRun ? act("Start", async () => { if (await startLoop(name)) location.hash = href; }, { cls: "small primary" }) : "",
-         h("a", { class: "btn small", href: `#/app/${enc(name)}/settings/problem` }, "Configure")];
-    return h("tr", { class: "clickable", onclick: (e) => { if (!e.target.closest("a, button")) location.hash = href; } },
-      who ? h("td", {}, l.owner) : "",
-      h("td", {}, h("a", { href, class: "strong" }, name)),
-      h("td", {}, statePill(l), l.question ? h("span", { class: "pill warn" }, "asks") : ""),
-      h("td", { class: "muted" }, lastSaid(l)),
-      h("td", { class: "num mono", title: sm.designs ? `${sm.this_run || 0} this run, ${sm.designs} over every run, ${sm.accepted} accepted` : null },   // D837
-        sm.designs ? [String(sm.this_run || 0), h("span", { class: "muted" }, ` / ${sm.designs}`)] : h("span", { class: "muted" }, "—")),
-      h("td", { class: "mono loop-main-measurements" }, sm.best ? mainMeasurements({ name, owner, result_preferences: l.result_preferences },
-        sm.metrics || Object.keys(sm.best.measurements || { [sm.best.metric]: sm.best.value }), sm.main_metrics || [sm.best.metric]).map(metric => {
-          const measurement = sm.best.measurements?.[metric] || (metric === sm.best.metric ? sm.best : { value: null });
-          const display = measurementText({ shown: sm.best.stage || "" }, metric, () => measurement, num4, relativeMeasurement({ name, owner, result_preferences: l.result_preferences }, metric));
-          return h("div", { class: measurement.meets === false ? "misses" : measurement.meets === true ? "meets" : "",
-            "data-summary-metric": metric, title: `the decision, ${sm.best.design} · ${display.title}` },
-            h("span", { class: "muted" }, metric + " "), display.text || "—");
-        }) : ""),
-      h("td", { class: "right" }, h("div", { class: "actions end" }, acts)));
-  }, who ? 3 : 2, { cls: "list" });                     // newest activity first (D926)
-  return h("div", {}, t.strip, t);
-}
-
-const loopView = { q: "", state: "all" };     // the list's search and filter (D693); its order is the table's (D926)
-function loopsBrowser(loops, { who = false, memo } = {}) {
-  const box = h("div", {});
-  const stateOf = (l) => l.running ? "running" : l.failed ? "failed" : "idle";
-  function draw() {
-    const q = loopView.q.trim().toLowerCase();
-    const list = loops.filter(l => (loopView.state === "all" || stateOf(l) === loopView.state)
-      && (!q || [l.name, l.document, l.owner].some(x => String(x || "").toLowerCase().includes(q))));
-    const count = (k) => loops.filter(l => k === "all" || stateOf(l) === k).length;
-    bar.replaceChildren(search,
-      h("div", { class: "chips" }, ["all", "running", "idle", "failed"].map(k => h("button", { class: `chip${loopView.state === k ? " on" : ""}`,
-        onclick: () => { loopView.state = k; draw(); } }, `${k[0].toUpperCase() + k.slice(1)} ${count(k)}`))));
-    table.replaceChildren(loops.length && !list.length ? empty("No loop matches.") : loopsTable(list, { who, memo }));
-  }
-  const search = h("input", { type: "search", placeholder: "Search loops", value: loopView.q, class: "search",
-    oninput: (e) => { loopView.q = e.target.value; draw(); } });
-  const bar = h("div", { class: "list-bar" }), table = h("div", {});
-  draw();
-  box.append(loops.length ? bar : "", table);
-  return box;
-}
-
 /** Create a loop from a starter document or uploaded files, a folder, or a single ZIP. */
 function uploadForm() {
   const name = h("input", { placeholder: "my_loop", pattern: "[A-Za-z0-9_\\-]{1,60}", maxlength: 60, style: "width:100%", id: "up-name", autocomplete: "off" });
@@ -406,25 +330,11 @@ function authoringCard(name, st, { onStop } = {}) {
 async function appsPage() {
   const show = pageShow();
   await flushResultPreferences();
-  const [loops, shared, group] = await Promise.all([api("/apps"), api("/shared").catch(() => []), api("/group-loops")]);
-  const box = h("div", {}, loopsBrowser(loops));
-  const sharedBox = h("div", {}, shared.length ? loopsTable(shared, { who: true, memo: "flux-sort-shared" }) : "");
-  const groupBox = h("div", {}, group.length ? loopsTable(group, { who: true, memo: "flux-sort-group" }) : "");
-  const sharedCard = card("Shared with me", sharedBox), groupCard = card("Group loops", groupBox, { cls: "group-loops" });
-  sharedCard.hidden = !shared.length; groupCard.hidden = !group.length;
-  show(
-    head("Loops", "Each loop is a problem document and its files; it runs or it does not, and a start resumes it.",
-      can("create_loops") ? h("a", { class: "btn primary", href: "#/configure" }, "New loop") : ""),
-    card(null, box), sharedCard, groupCard);
-  setPageRefresh(async () => {
-    if (!box.contains(document.activeElement)) box.replaceChildren(loopsBrowser(await api("/apps")));
-    const sh = await api("/shared").catch(() => []);
-    sharedBox.replaceChildren(sh.length ? loopsTable(sh, { who: true, memo: "flux-sort-shared" }) : "");
-    sharedCard.hidden = !sh.length;
-    const gr = await api("/group-loops");
-    groupBox.replaceChildren(gr.length ? loopsTable(gr, { who: true, memo: "flux-sort-group" }) : "");
-    groupCard.hidden = !gr.length;
-  });
+  const load = () => Promise.all([api("/apps"), api("/shared").catch(() => []), api("/group-loops")]);
+  const host = node(null), draw = ([loops, shared, group]) => mount(host, html`<${LoopsPage} loops=${loops} shared=${shared} group=${group} />`);
+  draw(await load());
+  show(host);
+  setPageRefresh(async () => draw(await load()));
 }
 
 async function newPage() {
@@ -445,14 +355,8 @@ async function newPage() {
 }
 
 /** Environment variables (D697): a table, and for whoever may change them a row to add one. */
-/** D808: a bin at a card's top right that removes it once confirmed. */
-function binButton(what, title, said, remove) {
-  return h("button", { type: "button", class: "bin", title: `Remove this ${what}`, "aria-label": `Remove this ${what}`,
-    onclick: async () => { if (await confirmDialog(title, said, { ok: "Remove", danger: true })) await remove(); } },
-    sv("svg", { viewBox: "0 0 16 16", width: 15, height: 15, "aria-hidden": "true" },
-      sv("path", { d: "M2.5 4h11M6 4V2.5h4V4M4 4l.7 9.5h6.6L12 4M6.6 6.5v5M9.4 6.5v5", fill: "none", stroke: "currentColor",
-        "stroke-width": 1.3, "stroke-linecap": "round", "stroke-linejoin": "round" })));
-}
+/** D808: a bin at a card's top right that removes it once confirmed (components/Bin.js). */
+const binButton = (what, title, said, remove) => h("span", { style: "display:contents" }, html`<${Bin} what=${what} title=${title} said=${said} remove=${remove} />`);
 function envTable(rows, shadowed = new Set()) {
   const mixed = rows.some(x => x.origin !== "server");
   return h("table", { class: "list compact env" }, h("thead", {}, h("tr", {}, h("th", {}, "Name"), h("th", {}, "Value"), h("th", {}, mixed ? "From" : ""))),
@@ -555,5 +459,5 @@ function permissionChoice(settings = {}, id = "keep-permissions") {
 }
 
 export { advancedCard, agentSelect, appsPage, attachBox, authoringCard, binButton, conversation, dropZone,
-  envEditor, envTable, lastSaid, loopsBrowser, markdown, newPage, progressDialog, sendFiles, startLoop, stopLoop, restartLoop,
+  envEditor, envTable, lastSaid, markdown, newPage, progressDialog, sendFiles, startLoop, stopLoop, restartLoop,
   uploadForm, permissionChoice };

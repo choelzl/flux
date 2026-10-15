@@ -2,12 +2,12 @@
 // of the same designs: Results (the table, its filters, two compared, the selected design) and Graphs (the front,
 // the improvement by design); the selected design's detail in whichever shows, kept from one to the other.
 
-import { Ago, Card, Dom, Empty, html, useMemo, useRef, useState } from "../view.js";
+import { Ago, Card, Empty, html, useMemo, useRef, useState } from "../view.js";
 import { api, enc, toast } from "../ui.js";
-import { viewerTools } from "../viewer.js";
 import { measurementComparison } from "../measurementdata.js";
 import { defaultMainMeasurements, designLabels, mainMeasurements, measurementText, measurementUnitsFor, relativeMeasurement } from "../result_table.js";
 import { Act } from "../components/Act.js";
+import { ViewerTools } from "../components/ViewerTools.js";
 import { useColumns, useValuesMode } from "./columns.js";
 import { ResultsTable, keyOf } from "./Table.js";
 import { DesignDetail } from "./Detail.js";
@@ -49,14 +49,14 @@ function Invalidated({ ctx, r, reload }) {
 /** The decision, in a line, above both views (D900: none, when no design meets every requirement). */
 function DecisionLine({ ctx, r, names, comparison, onPick }) {
   const dec = r.designs.find(d => d.decision), near = r.designs.find(d => d.closest);
-  const NameBtn = ({ d }) => html`<button class="link mono strong" type="button" title=${d.name} aria-label=${`Open ${d.name}`} onClick=${() => onPick(d)}>${names.get(d)}</button>`;
-  return html`<div class="decision-line">${dec ? html`<span class="pill ok">★ decision</span><${NameBtn} d=${dec} />${dec.part ? html`<span class="muted">${`part ${dec.part}`}</span>` : ""}
+  const nameBtn = d => html`<button class="link mono strong" type="button" title=${d.name} aria-label=${`Open ${d.name}`} onClick=${() => onPick(d)}>${names.get(d)}</button>`;
+  return html`<div class="decision-line">${dec ? html`<span class="pill ok">★ decision</span>${nameBtn(dec)}${dec.part ? html`<span class="muted">${`part ${dec.part}`}</span>` : ""}
       <span class="muted">${`measured at ${dec.shown}`}</span>
       ${mainMeasurements(ctx, r.metrics, defaultMainMeasurements(r)).map(m => {
         const display = measurementText(dec, m, r.decision_measurements?.[m] ? () => r.decision_measurements[m] : comparison, fmt, relativeMeasurement(ctx, m));
         const ag = r.metric_info?.[m]?.aggregate || r.metric_groups?.[m]?.aggregate;     // D1094: "sim_us (sum) 26"
         return html`<span class="mono small" data-summary-metric=${m} title=${display.title}>${`${m}${ag && ag !== "none" ? ` (${ag})` : ""} ${display.text || "—"}`}</span>`; })}`
-    : r.closest ? html`<strong>No feasible design yet</strong><span class="muted">· closest</span>${near ? html`<${NameBtn} d=${near} />` : html`<span class="mono">${r.closest.name}</span>`}
+    : r.closest ? html`<strong>No feasible design yet</strong><span class="muted">· closest</span>${near ? html`${nameBtn(near)}` : html`<span class="mono">${r.closest.name}</span>`}
       ${(r.closest.reasons || []).length ? html`<span class="muted small">${`not met: ${r.closest.reasons.join("; ")}`}</span>` : ""}`
     : html`<span class="muted">No decision yet.</span>`}</div>`;
 }
@@ -70,7 +70,6 @@ export function ResultsTab({ ctx, r, view }) {
   const directions = useMemo(() => [...(r.objective_list || r.limits || []), ...Object.entries(r.metric_info || {}).map(([metric, info]) => ({ metric, ...info }))], [r]);
   const comparison = useMemo(() => measurementComparison(r.designs, directions), [r]);
   const columns = useColumns(ctx, r.metrics, r.metric_groups || {}), values = useValuesMode(ctx);
-  const tools = useMemo(() => viewerTools(() => root.current, { title: "Results", rawUrl: `${base}/results${qs}${qs ? "&" : "?"}raw=true` }), []);
   const reload = () => ctx.goTab("Results", ctx.curSub());
   // a point, or the decision's name: its detail, its row in sight
   const pick = d => {
@@ -83,7 +82,7 @@ export function ResultsTab({ ctx, r, view }) {
   const detail = open ? html`<${DesignDetail} key=${keyOf(open)} d=${open} ctx=${ctx} fmt=${fmt} reload=${reload} />` : html`<div class="detail"><${Empty} text="Select a design." /></div>`;
   return html`<div ref=${root}>
     <${Card}><div class="results-head"><div><h2>Objective</h2><p class="muted">${r.objectives}${r.total > r.designs.length ? ` · the newest ${r.designs.length} of ${r.total} designs` : ""}</p></div>
-        <div class="actions"><${Dom} node=${tools} />${r.answer ? html`<a class="btn small" href=${`/api/apps/${enc(name)}/file?path=runs/answer.json&download=1${q}`}>Answer (JSON)</a>` : ""}
+        <div class="actions"><${ViewerTools} box=${root} title="Results" rawUrl=${`${base}/results${qs}${qs ? "&" : "?"}raw=true`} />${r.answer ? html`<a class="btn small" href=${`/api/apps/${enc(name)}/file?path=runs/answer.json&download=1${q}`}>Answer (JSON)</a>` : ""}
           <a class="btn small" href=${`${base}/report${qs}`} target="_blank" rel="noopener">Report</a></div></div>
       <${DecisionLine} ctx=${ctx} r=${r} names=${names} comparison=${comparison} onPick=${pick} /><${Invalidated} ctx=${ctx} r=${r} reload=${reload} /><//>
     ${seen.has("results") ? html`<div key="results" hidden=${view === "graphs"}><div class="split results"><${Card}><${ResultsTable} t=${{ r, names, unit, fmt, comparison, columns, values }} selected=${open && keyOf(open)}

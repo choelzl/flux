@@ -4,6 +4,8 @@
 import { me, navSeq, pageOwner, sessionGen, setMe, setPageOwner } from "./state.js";
 import { agoText, bytes, dur, fmtTok, money, plural, when } from "./format.js";
 import { Ago, html, render } from "./view.js";
+import { readSort, saveSort, sortRows } from "./sorting.js";
+import { StatePill } from "./components/StatePill.js";
 
 const main = document.getElementById("main");
 
@@ -253,13 +255,7 @@ const enc = encodeURIComponent;
 /** When, said as a component (D1095): kept current while it is on the page -- in a page built with h() too. */
 function ago(t) { return t ? html`<${Ago} t=${t} />` : ""; }
 /** A loop's state: running (since), idle, or how its last start ended. */
-function statePill(st) {
-  if (!st) return "";
-  if (st.running) return h("span", { class: "pill live" }, h("i", { class: "dot" }), st.stop_requested ? "stopping" : "running");
-  if (st.failed) return h("span", { class: "pill bad" }, "failed");
-  if (st.stopped) return h("span", { class: "pill warn" }, "stopped");
-  return h("span", { class: "pill" }, st.last_active ? "idle" : "never run");
-}
+const statePill = st => html`<${StatePill} st=${st} />`;
 function show(...nodes) { main.replaceChildren(...nodes); window.scrollTo(0, 0); }
 /** D719: each navigation's number; a page shows itself only while it is the latest -- a slow page
     (waiting on the server) must not draw over the one the user went to since. A page function's
@@ -420,42 +416,13 @@ async function createFromText(name, filename, text) {
   }
 }
 
-/** Sizes as people read them (moved from the admin pages, D889: the uploads use it too); D908:
-    powers of 1024 named as such -- KiB, MiB, GiB -- everywhere a size is shown. */
 /** A table sorted by a click on a column's header (D859): a button in each sortable header (so the
-    keyboard reaches it too) and `aria-sort`; the same header again turns the order round. A column's
-    first order is descending (most, newest) unless it says `asc`. Kept per table in this browser.
-    D926: names natural and case-insensitive (item2 before Item10), numbers as numbers, a list key one
-    value after the other (what a cell shows, in its order); ties keep the rows' own order; a missing
-    value (null, "") last either way. Each row's node is made once and moved, never rebuilt -- a field
+    keyboard reaches it too) and `aria-sort`; the same header again turns the order round -- in the order
+    sorting.js keeps (D926), kept per table in this browser. Each row's node is made once and moved, never rebuilt -- a field
     being edited, its pending save and the focus stay. On a phone (the header hidden) `table.strip`,
     a column menu and an order button above the rows, sorts the same way: the caller places it. */
-const COLLATE = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
-const isMissing = (v) => v == null || v === "" || (typeof v === "number" && isNaN(v))
-  || (Array.isArray(v) && v.every(x => x == null || x === ""));
-function cmpSort(x, y) {
-  if (Array.isArray(x) || Array.isArray(y)) {
-    const a = [].concat(x), b = [].concat(y);
-    for (let i = 0; i < Math.max(a.length, b.length); i++) {
-      const ma = isMissing(a[i]), mb = isMissing(b[i]);
-      if (ma || mb) { if (ma !== mb) return ma ? 1 : -1; continue; }
-      const c = cmpSort(a[i], b[i]); if (c) return c;
-    }
-    return 0;
-  }
-  if (typeof x === "number" && typeof y === "number") return x - y;
-  return COLLATE.compare(String(x), String(y));
-}
-const sortMemo = new Map();                       // D926: when this browser keeps nothing, kept for the page's life
 function sortableTable(memo, cols, rows, rowFn, firstCol = 0, { cls = "list compact" } = {}) {
-  const idOf = (c) => c.id || c.label;
-  let col = firstCol, desc = !cols[firstCol].asc;
-  try {
-    let m = sortMemo.get(memo);
-    try { m = JSON.parse(localStorage.getItem(memo) || "null") || m; } catch (_) { /* this page's own */ }
-    const at = m ? (m.id != null ? cols.findIndex(c => c.key && idOf(c) === m.id) : m.col) : -1;
-    if (at >= 0 && cols[at] && cols[at].key) { col = at; desc = !!m.desc; }
-  } catch (_) { /* a default */ }
+  let { col, desc } = readSort(memo, cols, firstCol);
   const nodes = new Map();                         // a row -> its <tr>, made once
   const nodeOf = (r) => { let n = nodes.get(r); if (!n) nodes.set(r, n = rowFn(r)); return n; };
   const body = h("tbody", {});
@@ -469,23 +436,10 @@ function sortableTable(memo, cols, rows, rowFn, firstCol = 0, { cls = "list comp
     cols.map((c, i) => c.key ? h("option", { value: String(i) }, c.label) : null));
   const dirBtn = h("button", { type: "button", class: "small sort-dir", onclick: () => pick(col, !desc) });
   const strip = h("div", { class: "sort-strip" }, h("label", { class: "sort" }, "Sort by ", colSel), dirBtn);
-  function pick(i, d) {
-    col = i; desc = d;
-    const m = { id: idOf(cols[col]), desc };
-    sortMemo.set(memo, m);
-    try { localStorage.setItem(memo, JSON.stringify(m)); } catch (_) { /* per viewer */ }
-    draw();
-  }
+  function pick(i, d) { col = i; desc = d; saveSort(memo, cols, col, desc); draw(); }
   function draw() {
-    const k = cols[col].key;
-    const keyed = rows.map((r, i) => ({ r, i, v: k(r) }));
-    keyed.sort((a, b) => {
-      const ma = isMissing(a.v), mb = isMissing(b.v);
-      if (ma || mb) return ma === mb ? a.i - b.i : ma ? 1 : -1;               // missing last, either way
-      return (desc ? cmpSort(b.v, a.v) : cmpSort(a.v, b.v)) || a.i - b.i;    // ties: the rows' own order
-    });
     const had = document.activeElement;
-    body.append(...keyed.map(x => nodeOf(x.r)));                           // moved, not rebuilt
+    body.append(...sortRows(rows, cols[col].key, desc).map(nodeOf));                           // moved, not rebuilt
     if (had && had !== document.activeElement && body.contains(had)) had.focus({ preventScroll: true });
     ths.forEach((th, i) => {
       if (!cols[i].key) return;

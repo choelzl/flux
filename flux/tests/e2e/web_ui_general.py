@@ -161,7 +161,7 @@ def general_flows(r, watch):
                 b.js("const s=document.querySelector('[data-layout-list=stats] li select'); s.value='state'; s.dispatchEvent(new Event('change')); return 1")
                 for card, selector, text in (("pareto", "svg.pareto", "feasible front"),
                                              ("references", "tbody tr", "-24%"), ("goals", "tbody .pill.ok", "met"),
-                                             ("recent_designs", "tbody tr", "#3"), ("pass_history", "li", "sample#3"),
+                                             ("recent_designs", "tbody tr", "#3"), ("pass_history", "li", "#3"),
                                              ("usage_breakdown", "tbody tr", "Coding agent"), ("ideas", "li", "Compare cache layouts")):
                     b.js("const s=document.querySelector('[data-layout-list=\"0\"] li select'); s.value=arguments[0]; s.dispatchEvent(new Event('change')); return 1", card)
                     r.check(f"{card}: main-card preview has real content", b.js("const c=document.querySelector('dialog .overview-layout-preview .grid-2.ov [data-overview-card='+arguments[0]+']'); return !!c?.querySelector(arguments[1]) && c.textContent.includes(arguments[2])", card, selector, text))

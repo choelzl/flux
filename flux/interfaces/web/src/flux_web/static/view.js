@@ -12,8 +12,18 @@ import { agoText, when } from "./format.js";
 export { cloneElement, html, render };
 
 // A state changed is drawn at once, as the pages built with h() always were: what a click changed is there when
-// the click's handler returns (a keyboard's next key, a test's next look) -- not a microtask later.
-options.debounceRendering = draw => draw();
+// the click's handler returns (a keyboard's next key, a test's next look) -- not a microtask later. Not while
+// Preact runs the effects of a draw: an effect that sets a state would draw again inside that run, and the draw
+// runs the same effects a second time (a file read twice) -- then a microtask later.
+let effects = 0;
+function afterNextFrame(run) {                // as preact/hooks schedules them: the next frame, or 35 ms
+  let frame = 0;
+  const go = () => { clearTimeout(timer); cancelAnimationFrame(frame); setTimeout(run); };
+  const timer = setTimeout(go, 35);
+  frame = requestAnimationFrame(go);
+}
+options.requestAnimationFrame = flush => afterNextFrame(() => { effects++; try { flush(); } finally { effects--; } });
+options.debounceRendering = draw => effects ? Promise.resolve().then(draw) : draw();
 export { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "./vendor/hooks.module.js";
 
 /** A node (or nodes) built with h(), inside a component: placed as it is, the wrapper not laid out.
@@ -48,15 +58,45 @@ const WIDTHS = [92, 76, 84, 60, 70, 88, 54];
 export const Skeleton = ({ lines = 5 }) => html`<div class="skeleton" aria-busy="true" aria-label="Loading">
   ${Array.from({ length: lines }, (_, i) => html`<div class="sk-line" style=${`width:${WIDTHS[i % 7]}%`}></div>`)}</div>`;
 
-const mounted = new Set();
+const mounted = new Map();       // host -> seen on the page once
 /** A component drawn into `host`, a node of a page: unmounted when the page goes (the route's cleanup),
-    or when another is mounted and `host` has left the page (a tab drawn over it). */
+    or when another is mounted and `host` has left the page (a tab drawn over it) -- one not placed yet stays. */
 export function mount(host, vnode) {
-  for (const old of mounted) if (old !== host && !old.isConnected) { render(null, old); mounted.delete(old); }
-  render(vnode, host);
-  if (!mounted.has(host)) {
-    mounted.add(host);
-    cleanup.push(() => { if (mounted.delete(host)) render(null, host); });
+  for (const [old, seen] of mounted) {
+    if (old === host) continue;
+    if (old.isConnected) mounted.set(old, true);
+    else if (seen) { render(null, old); mounted.delete(old); }
   }
+  render(vnode, host);
+  if (!mounted.has(host)) cleanup.push(() => { if (mounted.delete(host)) render(null, host); });
+  mounted.set(host, host.isConnected || !!mounted.get(host));
+  queueMicrotask(() => { if (host.isConnected && mounted.has(host)) mounted.set(host, true); });    // placed by its caller
   return host;
+}
+
+/** A tab's component shown as the page's body: drawn into a host of its own, kept on `body` under `name`, so
+    drawing it again (a refresh, a choice) changes only what differs -- and whatever else stands in the body
+    beside it (a card prepended) stays; another tab drawn over it unmounts it (`mount`). */
+export function showIn(body, name, vnode) {
+  const hosts = body.__hosts || (body.__hosts = {});
+  const host = hosts[name] || (hosts[name] = Object.assign(document.createElement("div"), { className: `${name}-tab` }));
+  host.style.display = "contents";
+  mount(host, vnode);
+  if (host.parentNode !== body) body.replaceChildren(host);
+  return host;
+}
+
+/** A component in a node of its own, for a page built with h() to place: unmounted with the route. */
+export function node(vnode) {
+  const host = document.createElement("div");
+  host.style.display = "contents";
+  return mount(host, vnode);
+}
+
+/** A component drawn once into a node of its own, kept apart from any page (the bar's mark; a chart a page
+    built with h() places): the node itself, no wrapper; still live (a time chart's pointer follows it). */
+export function drawn(vnode) {
+  const box = document.createElement("div");
+  render(vnode, box);
+  return box.firstElementChild || box;
 }

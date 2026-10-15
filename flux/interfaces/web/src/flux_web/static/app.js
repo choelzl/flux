@@ -7,7 +7,8 @@
 
 import { cleanup, me, navSeq, pageOwner, pageRefresh, setMe, setNavSeq, setPageOwner, setPageRefresh } from "./state.js";
 import { ago, api, appHref, card, h, show, toast } from "./ui.js";
-import { bellIcon, logo } from "./charts.js";
+import { drawn, html } from "./view.js";
+import { Bell, Logo } from "./components/Icons.js";
 import { appsPage, newPage } from "./loops.js";
 import { loopPage } from "./loop_page.js";
 import { configurePage } from "./configure.js";
@@ -68,10 +69,11 @@ async function pollOnce() {
   bell.primed = true;
 }
 setInterval(pollLoops, 10000);
+const BELL = drawn(html`<${Bell} />`);
 const bellBtn = h("button", { class: "bell", title: "Notifications", "aria-label": "Notifications" });
 const bellMenu = h("div", { class: "bell-menu", hidden: true });
 function drawBell() {
-  bellBtn.replaceChildren(bellIcon(), bell.unread ? h("span", { class: "badge" }, String(bell.unread)) : "");
+  bellBtn.replaceChildren(BELL, bell.unread ? h("span", { class: "badge" }, String(bell.unread)) : "");
   const canAsk = "Notification" in window && Notification.permission === "default";
   bellMenu.replaceChildren(
     h("div", { class: "bell-head" }, h("strong", {}, "Notifications"),
@@ -143,7 +145,7 @@ function applyTheme(t) {
   try { localStorage.setItem("flux-theme", t); } catch (_) {}
 }
 applyTheme(theme());
-document.querySelector(".brand").replaceChildren(logo(24), h("span", {}, "flux"));    // D696: the mark
+document.querySelector(".brand").replaceChildren(drawn(html`<${Logo} size=${24} />`), h("span", {}, "flux"));    // D696: the mark
 const themeBtn = h("button", { class: "small theme", title: "Theme: system, light or dark" });
 themeBtn.addEventListener("click", () => { const order = ["system", "light", "dark"]; applyTheme(order[(order.indexOf(theme()) + 1) % 3]); themeBtn.textContent = THEMES[theme()]; });
 themeBtn.textContent = THEMES[theme()];
