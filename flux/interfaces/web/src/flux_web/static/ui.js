@@ -2,6 +2,8 @@
 // dialogs, a page's parts and the formatting every page shares.
 
 import { me, navSeq, pageOwner, sessionGen, setMe, setPageOwner } from "./state.js";
+import { agoText, bytes, dur, fmtTok, money, plural, when } from "./format.js";
+import { Ago, html, render } from "./view.js";
 
 const main = document.getElementById("main");
 
@@ -12,6 +14,13 @@ function on(el, type, fn) {
   const table = el.__on || (el.__on = {});
   if (!(type in table)) el.addEventListener(type, e => el.__on?.[type]?.call(el, e));
   table[type] = fn;
+}
+const isVnode = (x) => typeof x === "object" && x !== null && "type" in x && "props" in x && !(x instanceof Node);
+function mountHere(vnode) {
+  const span = document.createElement("span");
+  span.style.display = "contents";
+  render(vnode, span);
+  return span;
 }
 function h(tag, attrs = {}, ...kids) {
   const el = document.createElement(tag);
@@ -25,7 +34,8 @@ function h(tag, attrs = {}, ...kids) {
   }
   for (const kid of kids.flat(Infinity)) {
     if (kid === null || kid === undefined || kid === false || kid === "") continue;
-    el.append(kid instanceof Node ? kid : document.createTextNode(String(kid)));
+    // D1095: a component (a Preact vnode) is mounted in place -- the wrapper not laid out
+    el.append(kid instanceof Node ? kid : isVnode(kid) ? mountHere(kid) : document.createTextNode(String(kid)));
   }
   return el;
 }
@@ -232,29 +242,10 @@ function streamPill() {
   const el = h("span", { class: "pill stream warn", title: "The page's connection to the loop" }, "connecting…");
   return { el, set: (st) => { el.hidden = st === "live"; el.textContent = "reconnecting…"; } };
 }
-const fmtTok = (n) => !n ? "0" : n >= 1e9 ? (n / 1e9).toFixed(2) + "G" : n >= 1e6 ? (n / 1e6).toFixed(2) + "M" : n >= 1e4 ? Math.round(n / 1e3) + "k" : n >= 1e3 ? (n / 1e3).toFixed(1) + "k" : String(Math.round(n));
 
 const enc = encodeURIComponent;
-const when = (t) => t ? new Date(t * 1000).toLocaleString() : "";
-/** "$1.25" -- an amount of money, `n` decimals. */
-const money = (v, n = 2) => `$${Number(v).toFixed(n)}`;
-/** "1 file", "3 files" (D1094: never "file(s)"); `many` where "s" is not the plural. */
-function plural(n, one, many = one + "s") { return `${n} ${n === 1 ? one : many}`; }
-function dur(s) {
-  if (s == null || !isFinite(s)) return "";
-  if (s < 60) return `${s < 10 ? s.toFixed(1) : Math.round(s)}s`;
-  if (s < 3600) return `${Math.floor(s / 60)}m ${String(Math.round(s % 60)).padStart(2, "0")}s`;
-  return `${Math.floor(s / 3600)}h ${String(Math.round((s % 3600) / 60)).padStart(2, "0")}m`;
-}
-/** How long ago, in words: "just now", "5 min ago", "3 h ago", "2 d ago". */
-function agoText(t) {
-  const s = Date.now() / 1000 - t;
-  return s < 45 ? "just now" : s < 3600 ? `${Math.round(s / 60)} min ago` : s < 86400 ? `${Math.round(s / 3600)} h ago` : `${Math.round(s / 86400)} d ago`;
-}
-function ago(t) {
-  if (!t) return "";
-  return h("time", { title: when(t) }, agoText(t));
-}
+/** When, said as a component (D1095): kept current while it is on the page -- in a page built with h() too. */
+function ago(t) { return t ? html`<${Ago} t=${t} />` : ""; }
 /** A loop's state: running (since), idle, or how its last start ended. */
 function statePill(st) {
   if (!st) return "";
@@ -423,7 +414,6 @@ async function createFromText(name, filename, text) {
 
 /** Sizes as people read them (moved from the admin pages, D889: the uploads use it too); D908:
     powers of 1024 named as such -- KiB, MiB, GiB -- everywhere a size is shown. */
-const bytes = (n) => n == null ? "" : n < 1024 ? `${n} B` : n < 1048576 ? `${(n / 1024).toFixed(1)} KiB` : n < 1073741824 ? `${(n / 1048576).toFixed(1)} MiB` : `${(n / 1073741824).toFixed(2)} GiB`;
 /** A table sorted by a click on a column's header (D859): a button in each sortable header (so the
     keyboard reaches it too) and `aria-sort`; the same header again turns the order round. A column's
     first order is descending (most, newest) unless it says `asc`. Kept per table in this browser.

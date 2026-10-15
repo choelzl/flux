@@ -1,15 +1,15 @@
 // Flux web: pages as Preact components (D1095) -- written with htm's tagged templates, no build step.
-// Preact and htm are vendored unchanged (static/vendor); the import map in index.html names them.
+// Preact and htm are vendored (static/vendor), their imports made relative.
 // A page moves over one tab at a time; until all have, a component sits inside a page still built
 // with h(), and a node h() builds (a conversation, a highlighted block) sits inside a component (`Dom`).
 
-import { html, render } from "htm/preact";
-import { useLayoutEffect, useRef } from "preact/hooks";
+import { html, render } from "./vendor/htm-preact.module.js";
+import { useEffect, useLayoutEffect, useRef, useState } from "./vendor/hooks.module.js";
 import { cleanup } from "./state.js";
-import { agoText, when } from "./ui.js";
+import { agoText, when } from "./format.js";
 
 export { html, render };
-export { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "preact/hooks";
+export { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "./vendor/hooks.module.js";
 
 /** A node (or nodes) built with h(), inside a component: placed as it is, the wrapper not laid out.
     Never a DOM node as a component's child itself -- Preact draws it once and throws on the redraw. */
@@ -26,8 +26,16 @@ export function Card({ title, actions, cls = "", children }) {
     ${children}</section>`;
 }
 
-/** When, said as ui.js `ago()` says it -- a component: a node built with h() is no child of a component. */
-export const Ago = ({ t }) => t ? html`<time title=${when(t)}>${agoText(t)}</time>` : null;
+// One clock for every "5 min ago" on the page: a minute's tick redraws those still on it. A page built with
+// h() never unmounts what it redraws over, so one that has left the page is dropped at the tick, not kept.
+const ticking = new Set();
+setInterval(() => { for (const s of ticking) { if (s.ref.current?.isConnected) s.tick(); else ticking.delete(s); } }, 30000);
+/** When, in words ("5 min ago", the date on hover), kept current while it is on the page. */
+export function Ago({ t }) {
+  const ref = useRef(null), [, setN] = useState(0);
+  useEffect(() => { const s = { ref, tick: () => setN(n => n + 1) }; ticking.add(s); return () => ticking.delete(s); }, []);
+  return t ? html`<time ref=${ref} title=${when(t)}>${agoText(t)}</time>` : null;
+}
 
 export const Empty = ({ text }) => html`<div class="empty"><p>${text}</p></div>`;
 
