@@ -1,7 +1,7 @@
 // Live (D1095): the page -- the toolbar (Follow, Earlier passes, the start and the pass), the list (Tree,
 // Graph or Timeline) and the inspector beside it. Both read the store; a change in it redraws them.
 
-import { html, useChanges, useEffect, useLayoutEffect, useRef } from "../view.js";
+import { cx, html, useChanges, useEffect, useLayoutEffect, useRef } from "../view.js";
 import { appHref, when } from "../ui.js";
 import { StreamPill } from "../components/StatePill.js";
 import { scrollState, restoreScroll } from "../scroll.js";
@@ -18,18 +18,20 @@ import { ViewerFrame } from "../viewer.js";
 import { Inspector } from "./inspector/Inspector.js";
 import { Log } from "./Log.js";
 import { Select } from "../components/Select.js";
+import { useLoop } from "../loop/context.js";
 
 const Empty = ({ text }) => html`<div class="empty"><p>${text}</p></div>`;
 const narrowScreen = () => window.matchMedia("(max-width: 960px)").matches;
 
 /** The toolbar under the tabs (D975): Follow, Earlier passes, the start and the pass. */
-export function Controls({ store, ctx }) {
+export function Controls({ store }) {
+  const ctx = useLoop();
   useChanges(store);
   const { s, a } = store, scope = s.scopeRows && s.journal ? s.lastScope : null;
   if (!s.history) return null;
   const passes = scope?.passes || [], current = scope?.current || [];
   return html`<div class="alt-controls">
-    <button type="button" class=${`small${s.following ? " on" : ""}`} hidden=${!ctx.st.running} aria-pressed=${String(s.following)}
+    <button type="button" class=${cx("small", s.following && "on")} hidden=${!ctx.st.running} aria-pressed=${String(s.following)}
       title=${s.following ? "Pause automatic task selection" : "Follow the latest task in the current pass"} onClick=${a.follow}>${s.following ? "Following" : "Follow"}</button>
     <button type="button" class="small" hidden=${!(s.journal?.model.before || s.journal?.model.cut) || s.startId !== "current"} title="Load every pass of this start" onClick=${a.earlier}>Earlier passes</button>
     <div class="alt-selectors">
@@ -55,12 +57,14 @@ function Summary({ v, s }) {
 }
 
 /** The page once its journal is open (a model to read). */
-export function Page({ store, ctx }) {
+export function Page({ store }) {
+  const ctx = useLoop();
   useChanges(store);
-  if (ctx.curSub() === "log") return html`<div class="live-alt" data-drawn=${store.s.drawn}><${Log} store=${store} ctx=${ctx} /></div>`;
-  return store.s.journal ? html`<${Body} store=${store} ctx=${ctx} />` : html`<section class="card"><${Empty} text="Loading…" /></section>`;
+  if (ctx.curSub() === "log") return html`<div class="live-alt" data-drawn=${store.s.drawn}><${Log} store=${store} /></div>`;
+  return store.s.journal ? html`<${Body} store=${store} />` : html`<section class="card"><${Empty} text="Loading…" /></section>`;
 }
-function Body({ store, ctx }) {
+function Body({ store }) {
+  const ctx = useLoop();
   const { s, a } = store, panel = useRef(null), host = useRef(null), places = useRef({ mode: "", saved: new Map() }), detailRef = useRef(null);
   useEffect(() => () => { s.full = null; }, []);                    // Fullscreen goes with the page
   const mode = ctx.curSub() || "tree";
@@ -129,7 +133,7 @@ function Body({ store, ctx }) {
   return html`<div class="live-alt" data-drawn=${s.drawn}>
     <div class="alt-notice"><${StreamPill} state=${s.stream} />
       ${s.failure ? html`<p class="callout warn">${s.failure}</p><button class="small" type="button" onClick=${a.retry}>Retry</button>` : ""}</div>
-    <div class=${`alt-split${mode === "timeline" && s.pass === "all" ? " wide" : ""}`}>
+    <div class=${cx("alt-split", mode === "timeline" && s.pass === "all" && "wide")}>
       <section class="card alt-visual-card"><div class="alt-list-head"><${Summary} v=${v} s=${s} /></div>
         <div class="alt-visual" tabindex="0" aria-label="Live task view" ref=${panel} onKeyDown=${onKey}>${content}
           ${more ? html`<button class="small alt-more" type="button" onClick=${a.more}>${`Earlier tasks (${v.scopeRows.length - v.rows.length})`}</button>` : ""}</div></section>

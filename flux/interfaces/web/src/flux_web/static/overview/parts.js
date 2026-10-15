@@ -4,6 +4,7 @@
 import { html } from "../view.js";
 import { measurementText, relativeMeasurement } from "../results/preferences.js";
 import { num4 } from "../charts/marks.js";
+import { useLoop } from "../loop/context.js";
 
 export { Stat } from "../components/Stat.js";
 
@@ -12,7 +13,8 @@ export const aggName = (r, m) => { const a = r.metric_info?.[m]?.aggregate || r.
 
 /** The main measurements of a design, a cell each: its number (or its change, as the loop shows them), its
     limit under it, green or red by it. `reference(m)`: what it is compared with (the decision's own, D1001). */
-export function MainNumbers({ ctx, r, d, main, compare, unit }) {
+export function MainNumbers({ r, d, main, compare, unit }) {
+  const ctx = useLoop();
   return html`<div class="decision-nums">${main.map(m => {
     const lim = (r.limits || []).find(l => l.metric === m), ok = d.meets?.[m];
     const display = measurementText(d, m, compare(m), num4, relativeMeasurement(ctx, m));

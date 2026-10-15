@@ -5,7 +5,7 @@
 // across the ways and a detour to another page until the loop is made or the draft discarded.
 
 import { Card, Empty, Skeleton, html, node, useEffect, useMemo, useRef, useState } from "../view.js";
-import { api, appHref, confirmDialog, createFromText, enc, toast, when } from "../ui.js";
+import { api, appHref, confirmDialog, createFromText, enc, loopApi, toast, when } from "../ui.js";
 import { plural } from "../format.js";
 import { crafterCatalog, me, setCrafterCatalog } from "../state.js";
 import { diffCounts, lineDiff } from "../diff.js";
@@ -16,6 +16,7 @@ import { filesStore } from "./files.js";
 import { FilesPanel } from "./FilesPanel.js";
 import { CloneForm, DirectEdit, NewByAgent, ReviseByAgent, confirmDiff } from "./Views.js";
 import { Select } from "../components/Select.js";
+import { recallJson, remember } from "../stored.js";
 
 export const MODES = { configurator: "Configurator", upload: "Create or upload", edit: "Direct edit", agent: "Agent", clone: "Clone a loop" };
 export const modesOf = name => name ? ["configurator", "edit", "agent"] : ["upload", "configurator", "agent", "clone"];
@@ -26,10 +27,10 @@ const newDraft = () => ({ state: null, staged: new Map(), step: 0 });
 /** D941: Save draft keeps the draft's state and step in this browser, per user (its staged files stay in the page). */
 const draftKey = () => `flux-config-draft:${me.name || ""}`;
 function storedDraft() {
-  try { const got = JSON.parse(localStorage.getItem(draftKey()) || "null"); return got && got.state ? { ...newDraft(), state: got.state, step: got.step || 0 } : null; }
-  catch (_) { return null; }
+  const got = recallJson(draftKey());
+  return got && got.state ? { ...newDraft(), state: got.state, step: got.step || 0 } : null;
 }
-const forgetDraft = () => { try { localStorage.removeItem(draftKey()); } catch (_) { /* per viewer */ } };
+const forgetDraft = () => remember(draftKey(), null);
 export const currentDraft = () => (DRAFT = DRAFT || storedDraft() || newDraft());
 const draftDone = draft => { if (DRAFT === draft) { DRAFT = null; forgetDraft(); } };
 function draftUsed(d) {
@@ -58,7 +59,7 @@ async function crafterReady() {
 
 /** Save's folded Changes (D941) and the save (D693): what it changes, line by line, before it writes. */
 const changesOf = (name, kept) => async yaml => {
-  const p = await api(`/apps/${enc(name)}/document/preview`, { method: "POST", body: { text: yaml, kept } });
+  const p = await loopApi(name).api("/document/preview", { method: "POST", body: { text: yaml, kept } });
   if (p.before === p.after) return node(html`<p class="muted">No change: the document already says this.</p>`);
   const ops = lineDiff(p.before, p.after), n = diffCounts(ops);
   return node(html`<p class="muted small">${`${plural(n.added, "line")} added, ${n.removed} removed.`}</p><${Diff} ops=${ops} />`);
@@ -76,23 +77,23 @@ function CrafterOf({ name, owner }) {
       const C = await crafterReady();
       if (!live) return;
       if (!C) { setProblem("script"); return; }
-      const v = await api(`/apps/${enc(name)}/document`);
+      const v = await loopApi(name).api("/document");
       if (!live) return;
       if (!v.document) { setProblem("none"); return; }
       // D710: not YAML at all -- the form would read nothing and save over it
       if (v.raw == null) { setProblem(v.error); return; }
       setDoc(v);
       const got = ref.current.got = C.fromDoc(v.raw, v.normal || v.raw);
-      const readCheck = () => api(`/apps/${enc(name)}/preflight`).then(p => { ref.current.pre = p; ref.current.crafter?.refresh(); }, () => {});
+      const readCheck = () => loopApi(name).api("/preflight").then(p => { ref.current.pre = p; ref.current.crafter?.refresh(); }, () => {});
       requestAnimationFrame(() => {
         if (!live || !host.current) return;
         ref.current.crafter = C.mount(host.current, false, { state: got.state, notes: got.notes, saveLabel: "Save to " + v.document, nextSteps: false, foldSteps: true,
           onChange: store.watch, files: paths => store.missing(paths), checked: () => checkedOf(ref.current.pre), changes: changesOf(name, got.kept),
           save: async yaml => {
-            const p = await api(`/apps/${enc(name)}/document/preview`, { method: "POST", body: { text: yaml, kept: got.kept } });
+            const p = await loopApi(name).api("/document/preview", { method: "POST", body: { text: yaml, kept: got.kept } });
             if (p.before === p.after) { toast("Nothing changes: the document already says this.", "info"); return "No change."; }
             if (!await confirmDiff(p.document, p.before, p.after)) return "Not saved.";
-            const r = await api(`/apps/${enc(name)}/document`, { method: "PUT", body: { text: yaml, kept: got.kept } });
+            const r = await loopApi(name).api("/document", { method: "PUT", body: { text: yaml, kept: got.kept } });
             toast(r.ok, r.error ? "warn" : "ok"); store.draw(); readCheck(); return r.ok;
           } });
         setTimeout(store.draw, 300);
@@ -143,7 +144,7 @@ function CrafterNew({ draft, onDraft }) {
           if (!/^[A-Za-z0-9_-]{1,60}$/.test(name)) throw Object.assign(new Error("Give the loop a name first (Prompt › Loop name): letters, digits, - and _ (1–60 characters)."), { field: "id" });
           if (!await createFromText(name, "problem.yaml", yaml)) return "Not created: the name is taken.";   // D906
           const n = await store.upload(name);
-          if (adv.current) await api(`/apps/${enc(name)}/advanced`, { method: "PUT", body: adv.current });
+          if (adv.current) await loopApi(name).api("/advanced", { method: "PUT", body: adv.current });
           draftDone(draft);                                // made: the draft is the loop now
           toast(`${name} created${n ? ` with ${plural(n, "file")}` : ""}`, "ok");
           setTimeout(() => { location.hash = `#/app/${enc(name)}`; }, 400);

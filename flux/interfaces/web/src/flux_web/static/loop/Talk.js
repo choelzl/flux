@@ -4,7 +4,7 @@
 // note to it (the agent's open question answered there).
 
 import { Ago, Card, Empty, Skeleton, html, useLayoutEffect, useRef, useState } from "../view.js";
-import { api, dialog, enc, toast } from "../ui.js";
+import { api, dialog, loopApi, toast } from "../ui.js";
 import { dur, plural } from "../format.js";
 import { me } from "../state.js";
 import { AgentPick } from "../components/AgentPick.js";
@@ -64,7 +64,7 @@ function Thread({ turns, folded, t, open }) {
 
 /** The drawer's body: `steer` -- {el, asking}: the note to a running loop (its composer), or null --
     above the conversations; `steerOpen` -- {get, set}: whether it is unfolded, kept by the page. */
-export function Talk({ name, qs, mine, canAsk, steer, steerOpen, open: shown = true }) {
+export function Talk({ name, mine, canAsk, steer, steerOpen, open: shown = true }) {
   const [list, setList] = useState(null), [offline, setOffline] = useState(false), [reply, setReply] = useState(null), [sending, setSending] = useState(false);
   const [folds, setFolds] = useState({ collapsed: new Set(), expanded: new Set() }), [who, setWho] = useState(""), [replyAuthor, setReplyAuthor] = useState(null);
   const history = useRef(null), q = useRef(null), open = useRef(new Map()).current;
@@ -74,7 +74,7 @@ export function Talk({ name, qs, mine, canAsk, steer, steerOpen, open: shown = t
     if (!shown) return null;
     let got;
     // D1009: the server away (a restart) -- what is shown kept, said, tried again; never an empty list
-    try { got = await api(`/apps/${enc(name)}/asks${qs}`); } catch (_) { if (live()) setOffline(true); return 3000; }
+    try { got = await loopApi(name).api("/asks"); } catch (_) { if (live()) setOffline(true); return 3000; }
     if (!live()) return null;
     setOffline(false); setList(got);
     return got.some(a => a.running) ? 3000 : null;
@@ -96,7 +96,7 @@ export function Talk({ name, qs, mine, canAsk, steer, steerOpen, open: shown = t
     if (!who) { toast("No agent or model is offered for Ask on this server: an admin sets it in Admin › Agents and models", "warn"); return; }   // D1025
     setSending(true);
     try {
-      const sent = await api(`/apps/${enc(name)}/asks${qs}`, { method: "POST", body: { question: text, author: who, parent_id: current?.id || null } });
+      const sent = await loopApi(name).api("/asks", { method: "POST", body: { question: text, author: who, parent_id: current?.id || null } });
       setDraft(d => d.trim() === text ? "" : d);
       setReply(sent.id);
       await read();
@@ -106,9 +106,9 @@ export function Talk({ name, qs, mine, canAsk, steer, steerOpen, open: shown = t
   const t = { mine, canAsk, reply: current?.id, busy: busy || sending,
     replyTo: a => { setReply(a.id); setReplyAuthor(a.author); requestAnimationFrame(() => q.current?.focus()); },
     fold: (id, on) => setFolds(f => { const c = new Set(f.collapsed), e = new Set(f.expanded); c.delete(id); e.delete(id); (on ? c : e).add(id); return { collapsed: c, expanded: e }; }),
-    stop: async a => { toast((await api(`/apps/${enc(name)}/asks/${a.id}/stop${qs}`, { method: "POST" })).ok, "ok"); read(); },
-    remove: async a => { await api(`/apps/${enc(name)}/asks/${a.id}${qs}`, { method: "DELETE" }); read(); },
-    thinking: a => dialog(`Thinking and commands · ${a.author}`, html`<div class="agent-view ask-agent-view"><${AgentTurn} url=${`/apps/${enc(name)}/asks/${a.id}/agent${qs}`} /></div>`, [["Close", null]]) };
+    stop: async a => { toast((await loopApi(name).api(`/asks/${a.id}/stop`, { method: "POST" })).ok, "ok"); read(); },
+    remove: async a => { await loopApi(name).api(`/asks/${a.id}`, { method: "DELETE" }); read(); },
+    thinking: a => dialog(`Thinking and commands · ${a.author}`, html`<div class="agent-view ask-agent-view"><${AgentTurn} url=${loopApi(name).at(`/asks/${a.id}/agent`)} /></div>`, [["Close", null]]) };
   const threads = new Map();
   for (const a of [...list].sort((x, y) => x.started - y.started || x.id.localeCompare(y.id))) (threads.get(a.thread_id || a.id) || threads.set(a.thread_id || a.id, []).get(a.thread_id || a.id)).push(a);
   const ordered = [...threads.values()].sort((x, y) => y.at(-1).started - x.at(-1).started);

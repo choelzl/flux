@@ -2,7 +2,7 @@
 // selected, followed, folded, opened -- and the task journal it reads (the live stream, or a past start's
 // retained one). The toolbar and the page are its two views: a change redraws both, once a frame.
 
-import { api, enc, loopStream, request } from "../ui.js";
+import { api, loopApi, loopStream } from "../ui.js";
 import { changes } from "../view.js";
 import { journal } from "./journal.js";
 import { campaignForStart, currentTask, notePass, taskScope, taskWindow } from "./model.js";
@@ -169,7 +169,7 @@ export function createStore(ctx) {
     const query = new URLSearchParams({ run_id: String(start.record_id), campaign: campaign.campaign_id, start_id: String(start.id), kind: "events" });
     if (ctx.owner) query.set("owner", ctx.owner);
     try {
-      const response = await request(`/apps/${enc(ctx.name)}/run-data?${query}`, { signal });
+      const response = await loopApi(ctx.name).request(`/run-data?${query}`, { signal });
       const reader = response.body.getReader(), decoder = new TextDecoder(); let pending = "";
       while (current()) {
         const { value, done } = await reader.read();
@@ -191,11 +191,11 @@ export function createStore(ctx) {
   /** The starts, the document (the boxes' notes and settings, the goals, how designs are named), the record's designs. */
   async function prepare(validPage) {
     valid = validPage;
-    s.history = await api(`/apps/${enc(ctx.name)}/runs${ctx.qs}`);
+    s.history = await loopApi(ctx.name).api("/runs");
     s.notes = {}; s.problem = null; s.record = [];
     // D1094: the record's designs, for a measurement's "best so far" -- the passes loaded here are not all of them
-    api(`/apps/${enc(ctx.name)}/results${ctx.qs}`).then(r => { s.record = (r.designs || []).filter(d => d.verdict === "accepted" && !d.baseline); }).catch(() => {});
-    api(`/apps/${enc(ctx.name)}/document${ctx.qs}`).then(d => {
+    loopApi(ctx.name).api("/results").then(r => { s.record = (r.designs || []).filter(d => d.verdict === "accepted" && !d.baseline); }).catch(() => {});
+    loopApi(ctx.name).api("/document").then(d => {
       const id = String(d.raw?.id || "");
       s.problem = d; s.notes = docNotes(d.raw, d.document); s.names = [ctx.name, id, id.split("/").pop()].filter(Boolean);
       // D1065: the document's checks, in order -- a check stopped at a failure lists those it never reached

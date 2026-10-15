@@ -167,9 +167,9 @@ def general_flows(r, watch):
                     r.check(f"{card}: main-card preview has real content", b.js("const c=document.querySelector('dialog .overview-layout-preview .grid-2.ov [data-overview-card='+arguments[0]+']'); return !!c?.querySelector(arguments[1]) && c.textContent.includes(arguments[2])", card, selector, text))
                 r.check("recent search designs exclude the baseline and show the newest first", b.js("const p=document.querySelector('dialog .overview-layout-preview'); const s=document.querySelector('[data-layout-list=\"0\"] li select'); s.value='recent_designs'; s.dispatchEvent(new Event('change')); const rows=document.querySelectorAll('dialog [data-overview-card=recent_designs] tbody tr'); return rows.length===3 && rows[0].textContent.includes('#3') && ![...rows].some(r=>r.textContent.includes('#0'))"))
                 b.js("const s=document.querySelector('[data-layout-list=\"0\"] li select'); s.value='decision'; s.dispatchEvent(new Event('change')); return 1")
-                sparse = b.ajs("""const done=arguments[arguments.length-1]; Promise.all([import('/static/view.js'),import('/static/overview/Overview.js'),import('/static/overview/mock.js')]).then(([V,{Overview},{overviewMockData}])=>{
+                sparse = b.ajs("""const done=arguments[arguments.length-1]; Promise.all([import('/static/view.js'),import('/static/overview/Overview.js'),import('/static/overview/mock.js'),import('/static/loop/context.js')]).then(([V,{Overview},{overviewMockData},{LoopContext}])=>{
                   const sample=overviewMockData(), body=document.createElement('div');
-                  const renderOverview=(ctx,r,notes,bench,use,prefs)=>V.render(V.html`<${Overview} ctx=${ctx} r=${r} notes=${notes} bench=${bench} use=${use} prefs=${prefs} />`,body);
+                  const renderOverview=(ctx,r,notes,bench,use,prefs)=>V.render(V.html`<${LoopContext.Provider} value=${ctx}><${Overview} r=${r} notes=${notes} bench=${bench} use=${use} prefs=${prefs} /><//>`,body);
                   const ctx={name:'sample',owner:'__mock__',qs:'',mine:false,st:{running:false},tab:'Overview',goTab:()=>{},drawBody:()=>{},
                     result_preferences:{graphs:{x:'latency',y:'area',paretoStage:'timing',scope:'whole',paretoFocus:true}}};
                   const prefs={layout:{stats:['primary_metric','reference_change','goals'],columns:[['references','goals','pareto'],['recent_designs','pass_history','usage_breakdown']]}};
@@ -1377,7 +1377,7 @@ objectives: [{metric: timings.fast, goal: 15, direction: minimize},
                     b.click("#transfer-keep-permissions")
                 r.dialog_button("Transfer")
                 b.wait(f"location.hash === '#/u/cy/app/{name}/settings' && document.querySelector('#loop-transfer')", timeout=90, what="admin transfer completed",
-                       said="JSON.stringify([location.hash, !!document.querySelector('dialog[open]'), [...document.querySelectorAll('.toast')].map(t => t.textContent)])")
+                       said="JSON.stringify([location.hash, !!document.querySelector('dialog[open]'), [...document.querySelectorAll('.toast')].map(t => t.textContent), (window.__e2e || {}).bad])")
                 settings = json.loads(r.api(f"/apps/{name}/env?owner=cy")["body"])["advanced"]
                 r.check(f"{name}: transfer respects permission choice", settings == (permissions if keep else {}), str(settings))
 

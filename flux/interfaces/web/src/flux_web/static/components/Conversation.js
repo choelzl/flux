@@ -2,7 +2,7 @@
 // text, its thinking and each tool call (input and output) folded, opened on a click and kept open across
 // redraws (D1030: the work between two answers one dashed line, opened to its steps; the answers in view).
 
-import { html } from "../view.js";
+import { cx, html } from "../view.js";
 import { Markdown } from "./Markdown.js";
 
 const convOpen = new Set();          // which steps a person opened, by key: kept across redraws and tasks
@@ -25,7 +25,7 @@ function Step({ st, id, live }) {
       ${state ? html`<span class=${`cv-state ${state === "failed" ? "bad" : "live"}`}>${state}</span>` : ""}</summary>
     ${Object.entries(input).map(([k, v]) => { const t = String(v ?? "");
       return html`<div class="cv-io"><small>${k || "input"}</small>${t.includes("\n") || t.length > 90 ? html`<pre class="cv-body" data-k=${`${id}:input:${k}`}>${t}</pre>` : html`<div><code class="cv-arg">${t}</code></div>`}</div>`; })}
-    ${st.out != null ? html`<div class="cv-io"><small>${st.error ? "error" : "output"}</small><pre class=${`cv-body${st.error ? " err" : ""}`} data-k=${`${id}:output`}>${String(st.out).trim() || "(nothing)"}</pre></div>` : ""}</details>`;
+    ${st.out != null ? html`<div class="cv-io"><small>${st.error ? "error" : "output"}</small><pre class=${cx("cv-body", st.error && "err")} data-k=${`${id}:output`}>${String(st.out).trim() || "(nothing)"}</pre></div>` : ""}</details>`;
 }
 
 /** D1033: the conversation draws its own "working" line -- a stretch of work at its end, live. */
@@ -53,10 +53,10 @@ export function Conversation({ steps, k = "", offset = 0, live = false, scroll =
     const id = `${k}:w${offset + i}`;
     // open while a step in it is open: a live tail rolls its first steps away, and with them the line's own key
     const open = convOpen.has(id) || work.some((_x, n) => convOpen.has(`${k}:${offset + first + n}`));
-    items.push(html`<details key=${id} class=${`cv-work${now ? " live" : ""}${failed ? " bad" : ""}`} open=${open} onToggle=${remember(id)}>
+    items.push(html`<details key=${id} class=${cx("cv-work", now && "live", failed && "bad")} open=${open} onToggle=${remember(id)}>
       <summary title="Its thinking and commands: click to open"><span class="cv-work-said">${now ? html`<span class="alt-spin" aria-hidden="true" />` : ""}${now ? `working · ${said}` : said}</span></summary>
       <div class="cv-work-steps">${work.map((x, n) => html`<${Step} key=${`${k}:${offset + first + n}`} st=${x} id=${`${k}:${offset + first + n}`} live=${live && first + n === steps.length - 1} />`)}</div></details>`);
     i = j;
   }
-  return html`<div class=${`cv${scroll ? " cv-live-box" : ""}`} data-k=${`cv-${k}`}>${items.length ? items : html`<p class="muted">Nothing yet.</p>`}</div>`;
+  return html`<div class=${cx("cv", scroll && "cv-live-box")} data-k=${`cv-${k}`}>${items.length ? items : html`<p class="muted">Nothing yet.</p>`}</div>`;
 }

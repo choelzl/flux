@@ -1,7 +1,7 @@
 // Live (D1095): the Graph -- the chain of passes, and the pass shown as its flow of boxes (D978), a box
 // opening on its list (D1044) -- in the timeline's words and colours.
 
-import { html } from "../view.js";
+import { cx, html } from "../view.js";
 import { plural } from "../format.js";
 import { WORK_COLORS as COLORS } from "./work_style.js";
 import { currentTask, taskState as state } from "./model.js";
@@ -68,7 +68,7 @@ function Box({ b, i, y, BH, note, shown, v, a, task, isOpen, listed }) {
     e.currentTarget.focus({ preventScroll: true });
     if (task) { a.openBox(v.openBox !== me ? me : null); a.select(task.id); } else a.showBox(shown, b.key);
   };
-  return html`<g class=${`alt-flow-box${picked ? " sel" : ""}${isOpen ? " open" : ""}${b.state === "wait" ? " wait" : ""}${here ? " alt-located" : ""}`}
+  return html`<g class=${cx("alt-flow-box", picked && "sel", isOpen && "open", b.state === "wait" && "wait", here && "alt-located")}
     data-kind=${b.kind} data-box=${b.key} aria-pressed=${String(picked)} tabindex="0" role="button"
     aria-label=${`${b.title} · ${task ? state(task) : b.done || b.notes?.length ? "done" : "no task recorded"}`}
     data-task=${task ? String(task.id) : null} aria-expanded=${task ? String(!!isOpen) : null} data-open=${me}

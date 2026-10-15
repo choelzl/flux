@@ -3,7 +3,7 @@
 
 import { Ago, Card, html, useRef, useState } from "../view.js";
 import { usePoll } from "../components/Load.js";
-import { api, enc, toast } from "../ui.js";
+import { loopApi, toast } from "../ui.js";
 import { dur } from "../format.js";
 import { lineDiff } from "../diff.js";
 import { Act } from "../components/Act.js";
@@ -40,20 +40,20 @@ export function AuthoringCard({ name, st, onStop = null }) {
 /** D704: an agent writing (or revising) the problem, on the Overview -- followed every 3 s while it runs (or the
     status could not be read: what was read stays, said to be reconnecting); a document written long ago, no card;
     the problem written, the page read again. `first` what /author said when the page was drawn. */
-export function AuthorBox({ name, qs, mine, first }) {
+export function AuthorBox({ name, mine, first }) {
   const [st, setSt] = useState(first), last = useRef(first);
   usePoll(async live => {
     let got;
-    try { got = await api(`/apps/${enc(name)}/author${qs}`); } catch (e) { got = { ...(last.current || { ever: true }), connection_error: e.message }; }
+    try { got = await loopApi(name).api("/author"); } catch (e) { got = { ...(last.current || { ever: true }), connection_error: e.message }; }
     if (!live()) return null;
     if (!got.connection_error) last.current = got;
     setSt(got);
     if (got.running || got.connection_error) return 3000;
-    if (got.ok) { const fresh = await api(`/apps/${enc(name)}${qs}`).catch(() => null); if (live() && fresh?.document && (first.running || first.connection_error)) location.reload(); }
+    if (got.ok) { const fresh = await loopApi(name).api().catch(() => null); if (live() && fresh?.document && (first.running || first.connection_error)) location.reload(); }
     return null;
   }, [], { first: first.running || first.connection_error ? 3000 : null });
   // a document written long ago: no card
   if (!st?.ever || (!st.running && st.ended && Date.now() / 1000 - st.ended > 3600 * 6)) return null;
-  const stop = mine ? async () => { toast((await api(`/apps/${enc(name)}/author/stop${qs}`, { method: "POST" })).ok, "ok"); } : null;
+  const stop = mine ? async () => { toast((await loopApi(name).api("/author/stop", { method: "POST" })).ok, "ok"); } : null;
   return html`<${AuthoringCard} name=${name} st=${st} onStop=${stop} />`;
 }

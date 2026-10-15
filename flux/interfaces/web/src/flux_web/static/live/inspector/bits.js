@@ -91,4 +91,4 @@ export function Block({ title, obj, mem }) {
 }
 
 /** Facts as small labelled values. */
-export const Facts = ({ list, cls = "facts" }) => list.length ? html`<div class=${cls}>${list.map(([k, v]) => html`<div class="fact"><small>${k}</small><span class="mono">${String(v)}</span></div>`)}</div>` : null;
+export const Facts = ({ list, cls = "facts" }) => list.length ? html`<div class=${cls}>${list.map(([k, v]) => html`<div key=${k} class="fact"><small>${k}</small><span class="mono">${String(v)}</span></div>`)}</div>` : null;

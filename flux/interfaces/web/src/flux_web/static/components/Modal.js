@@ -83,8 +83,7 @@ export function progressDialog(title, said) {
 
 /** A view shown fullscreen: its head (the title, Close) and `children`. */
 export function FullscreenView({ title, close, children }) {
-  const [, redraw] = useState(0);
-  return html`<div class="fullscreen-head"><h2>${title}</h2><button class="small" type="button" onClick=${() => { close(); redraw(n => n + 1); }}>Close</button></div>
+  return html`<div class="fullscreen-head"><h2>${title}</h2><button class="small" type="button" onClick=${close}>Close</button></div>
     <div class="fullscreen-content">${children}</div>`;
 }
 

@@ -23,7 +23,12 @@ function afterNextFrame(run) {                // as preact/hooks schedules them:
 }
 options.requestAnimationFrame = flush => afterNextFrame(() => { effects++; try { flush(); } finally { effects--; } });
 options.debounceRendering = draw => effects ? Promise.resolve().then(draw) : draw();
-export { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "./vendor/hooks.module.js";
+export { useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "./vendor/hooks.module.js";
+export { createContext } from "./vendor/preact.module.js";
+
+/** A class list from its parts: strings kept, false, null and "" left out -- `cx("chip", on && "on")` (not `cls`:
+    the name of many components' class prop). */
+export const cx = (...parts) => parts.filter(Boolean).join(" ");
 
 /** Something that changes and says so (a store's list, the notices, the bell): `subscribe(f)` (returns its own
     undoing), `emit()` telling each. */

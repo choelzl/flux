@@ -2,7 +2,7 @@
 // and models (a tab per tool: its login and Test above its model and variables; the variables every agent of
 // one's gets), the password, desktop notifications.
 
-import { Card, html, useRef, useState } from "../view.js";
+import { Card, html, useState } from "../view.js";
 import { api, toast } from "../ui.js";
 import { dur, fmtTok, plural } from "../format.js";
 import { me } from "../state.js";
@@ -13,6 +13,7 @@ import { EnvEditor, EnvTable } from "../components/Env.js";
 import { PageHead } from "../components/PageHead.js";
 import { SettingsForm } from "../settings/SettingsForm.js";
 import { useLogins } from "./Logins.js";
+import { bound } from "../components/Autosave.js";
 
 function Usage({ mine }) {
   if (!mine?.turns) return null;
@@ -38,22 +39,21 @@ function Agents({ st, myEnv }) {
       : "An empty field takes the server's value. With your own endpoint, only your values are used. Keys are encrypted and never shown."}</p>
     <${SettingsForm} st=${st} server=${st.inherited || {}} save=${save} scope="me" panels=${panels} extraTabs=${[every]}
       agentEnv=${a => { const e = (st.agent_env || {})[a] || { mine: [], server: [] }; return { rows: e.mine, server: e.server, save: async v => { await api(`/agents/${a}/env`, { method: "PUT", body: v }); route(); } }; }} />
-    <div>${rest.map(a => html`<div class="agent-panel"><h4 class="agent-panel-name">${a.label}</h4>${panel(a)}</div>`)}</div>${terminal}<//>`;
+    <div>${rest.map(a => html`<div key=${a.id} class="agent-panel"><h4 class="agent-panel-name">${a.label}</h4>${panel(a)}</div>`)}</div>${terminal}<//>`;
 }
 
 function Password() {
-  const pw = useRef(null);
-  const change = async () => { await api("/password", { method: "POST", body: { text: pw.current.value } }); pw.current.value = ""; toast("Password changed", "ok"); };
-  return html`<${Card} title="Password"><label class="stack">New password (10+)<input type="password" autocomplete="new-password" ref=${pw} /></label>
+  const [pw, setPw] = useState("");
+  const change = async () => { await api("/password", { method: "POST", body: { text: pw } }); setPw(""); toast("Password changed", "ok"); };
+  return html`<${Card} title="Password"><label class="stack">New password (10+)<input type="password" autocomplete="new-password" ...${bound(pw, setPw)} /></label>
     <div class="form-actions"><${Act} onClick=${change}>Change<//></div><//>`;
 }
 
 function Notifications() {
-  const [, redraw] = useState(0);
-  const p = "Notification" in window ? Notification.permission : null;
+  const [p, setP] = useState(() => "Notification" in window ? Notification.permission : null);   // the browser's answer, once asked
   return html`<${Card} title="Notifications">${p === "granted" ? html`<p>Desktop notifications are on.</p>`
     : p === "denied" ? html`<p class="muted">Desktop notifications are blocked in this browser's settings.</p>`
-    : p ? html`<${Act} onClick=${async () => { await Notification.requestPermission(); redraw(n => n + 1); }}>Allow desktop notifications<//>` : ""}<//>`;
+    : p ? html`<${Act} onClick=${async () => setP(await Notification.requestPermission())}>Allow desktop notifications<//>` : ""}<//>`;
 }
 
 export const Account = ({ st, myEnv, mine }) => html`<${PageHead} title="Account" sub=${`Logged in as ${me.name}`} />

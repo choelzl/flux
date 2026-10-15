@@ -35,7 +35,7 @@ function TaskForm({ t, loops }) {
   };
   return html`<div class="mt-edit" ...${box}><p class="muted">${t.what}</p>
     <label class="check"><input type="checkbox" checked=${v.on} onChange=${e => set({ on: e.currentTarget.checked })} />on a schedule</label>
-    <div class="row"><span>every</span><input type="number" min="1" step="1" style="width:80px" aria-label="every" ...${bound(v.n, n => set({ n }))} />
+    <div class="row"><span>every</span><input type="number" min="1" step="1" class="w-80" aria-label="every" ...${bound(v.n, n => set({ n }))} />
       <${Select} aria-label="unit" options=${EVERY_UNITS.map(([k]) => k)} value=${v.unit} onChange=${unit => set({ unit })} /></div>
     ${Object.entries(t.params).map(field)}
     ${t.per_loop && loops.length ? html`<div class="stack"><span class="muted small">Once, on one loop</span><div class="row">

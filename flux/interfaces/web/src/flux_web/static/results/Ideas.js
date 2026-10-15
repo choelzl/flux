@@ -20,12 +20,12 @@ function Failure({ text }) {
   return rest.some(x => x.trim()) ? html`<details class="idea-error"><summary>${first}</summary><pre>${rest.join("\n")}</pre></details>` : html`<div class="idea-error">${first}</div>`;
 }
 const Evaluations = ({ rows }) => html`<details><summary>${plural(rows.length, "evaluation")}</summary>
-  <${Table} heads=${["Pass", "Design", "Stage", "Outcome", "Measurements / feedback"]} cls="idea-evaluations">${rows.map(r => html`<tr>
+  <${Table} heads=${["Pass", "Design", "Stage", "Outcome", "Measurements / feedback"]} cls="idea-evaluations">${rows.map(r => html`<tr key=${`${r.pass}|${r.design}|${r.stage}`}>
     <td>${r.pass ?? "—"}</td><td>${r.design}</td><td>${r.stage || "—"}</td><td>${r.status}</td>
     <td><${Metrics} m=${r.metrics} />${r.error ? html`<${Failure} text=${r.error} />` : ""}<small class="muted">${r.at || ""}</small></td></tr>`)}<//></details>`;
 
 export const Ideas = ({ data, refresh }) => html`<${RefreshCard} title="Ideas" rawTitle="Ideas notebook" said="Measured means evidence is available; it does not mean the idea improved the objectives." refresh=${refresh} raw=${data} cls="ideas-view">
-  ${data.ideas.length ? html`<${Table} heads=${["Idea", "Hypothesis", "State", "Evidence"]} cls="ideas-table">${data.ideas.map(idea => html`<tr>
+  ${data.ideas.length ? html`<${Table} heads=${["Idea", "Hypothesis", "State", "Evidence"]} cls="ideas-table">${data.ideas.map(idea => html`<tr key=${idea.id}>
       <td><strong>${idea.title}</strong><small class="muted">${idea.id}</small>${idea.part ? html`<small class="muted">${`Part: ${idea.part}`}</small>` : ""}</td>
       <td><p>${idea.hypothesis}</p>${idea.test ? html`<p class="muted">${`Test: ${idea.test}`}</p>` : ""}</td>
       <td>${idea.status}</td><td>${idea.evaluations.length ? html`<${Evaluations} rows=${idea.evaluations} />` : "Not tested yet"}</td></tr>`)}<//>`

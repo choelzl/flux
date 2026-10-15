@@ -3,7 +3,7 @@
 // (the header hidden) a strip above the rows -- a column menu and an order button -- sorts the same way.
 // Rows keyed: moved, not rebuilt -- a field being edited and the focus stay.
 
-import { html, useState } from "../view.js";
+import { cx, html, useState } from "../view.js";
 import { readSort, saveSort, sortRows } from "../sorting.js";
 import { Select } from "./Select.js";
 
@@ -16,7 +16,7 @@ export function SortableTable({ memo, cols, rows, row, keyOf, first = 0, cls = "
   const sorted = sortRows(rows, cols[s.col].key, s.desc);
   const head = (c, i) => !c.key ? html`<th class=${c.num ? "num" : ""} title=${c.title || null}>${c.label}</th>`
     : html`<th class=${c.num ? "num" : ""} title=${c.title || null} data-label=${c.label} aria-sort=${i === s.col ? (s.desc ? "descending" : "ascending") : "none"}>
-        <button type="button" class=${`th-sort${i === s.col ? " on" : ""}`} onClick=${() => pick(i, i === s.col ? !s.desc : !c.asc)}>${c.label}<span class="th-arrow" aria-hidden="true">${i === s.col ? (s.desc ? "▾" : "▴") : ""}</span></button></th>`;
+        <button type="button" class=${cx("th-sort", i === s.col && "on")} onClick=${() => pick(i, i === s.col ? !s.desc : !c.asc)}>${c.label}<span class="th-arrow" aria-hidden="true">${i === s.col ? (s.desc ? "▾" : "▴") : ""}</span></button></th>`;
   const table = html`<table class=${`${cls} sortable`}><thead><tr>${cols.map(head)}</tr></thead>
     <tbody>${sorted.map(r => { const tr = row(r); if (tr && keyOf) tr.key = keyOf(r); return tr; })}</tbody>${foot}</table>`;
   return html`<div class="sort-strip"><label class="sort">Sort by <${Select} aria-label="Sort by" value=${s.col} onChange=${v => { const i = Number(v); pick(i, !cols[i].asc); }}

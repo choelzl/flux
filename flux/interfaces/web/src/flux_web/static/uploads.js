@@ -2,7 +2,7 @@
 // the loop is created; its progress: components/Modal.js), and what a drop holds (a folder walked, its own name taken
 // off when it is the only thing dropped).
 
-import { api, enc, offline, owned } from "./ui.js";
+import { api, enc, loopApi, offline, owned } from "./ui.js";
 
 /** Files to a loop (D700): in batches of at most 300 files and 40 MB, a file over 40 MB in
     parts of 32 MB, the document first when the loop is created. `entries`: [{file, path}];
@@ -36,7 +36,7 @@ export async function sendFiles(name, entries, { create = false, folder = "", on
   }
   for (const e of big) {
     for (let off = 0; off < e.file.size; off += PART) {
-      if (signal && signal.aborted && off) await api(`/apps/${enc(name)}/part?path=${enc(e.path)}`, { method: "DELETE" }).catch(() => {});   // its parts go
+      if (signal && signal.aborted && off) await loopApi(name).api(`/part?path=${enc(e.path)}`, { method: "DELETE" }).catch(() => {});   // its parts go
       stopped();
       const chunk = e.file.slice(off, off + PART);
       const final = off + PART >= e.file.size;

@@ -46,7 +46,7 @@ export function UploadForm() {
   };
   const ready = got.files.length;
   return html`<${Card}><div class="upload"><p class="muted">Start empty, or upload a problem.yaml and its files. A ZIP can contain the loop's folder; choose the ZIP on its own.</p>
-    <label class="stack">Name<input placeholder="my_loop" pattern="[A-Za-z0-9_\\-]{1,60}" maxlength="60" style="width:100%" id="up-name" autocomplete="off" ...${bound(name, setName)} /></label>
+    <label class="stack">Name<input placeholder="my_loop" pattern="[A-Za-z0-9_\\-]{1,60}" maxlength="60" class="full" id="up-name" autocomplete="off" ...${bound(name, setName)} /></label>
     <${DropZone} label="Drop the loop's folder, its files or a .zip here" onFiles=${(files, dir) => chose(files, dir)} />
     <div class="row"><div class="muted small">${ready ? `${plural(ready, "file")} ready` : "Without files: a starter problem.yaml, README and empty library/. Opens in the configurator."}${got.dir ? ` from ${got.dir}/` : ""}</div>
       <button type="button" class="small" hidden=${!ready} onClick=${() => chose([])}>Clear files</button></div>

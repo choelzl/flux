@@ -3,13 +3,15 @@
 // wrap, problems only, times, a filter (text or /regex/), Raw, Fullscreen, Download. Only the lines in view are
 // drawn: a row has one height, so the scroll says which; wrapped, the last 3000.
 
-import { Card, html, useEffect, useLayoutEffect, useMemo, useRef, useState } from "../view.js";
-import { NARROW, enc, request } from "../ui.js";
+import { Card, cx, html, useEffect, useLayoutEffect, useMemo, useRef, useState } from "../view.js";
+import { NARROW, enc, loopApi } from "../ui.js";
 import { isProblem, latestStart, lineClass, logAt, logLines, matcher } from "./logmodel.js";
 import { ViewerFrame, ViewerTools, useViewer } from "../viewer.js";
+import { recall, remember } from "../stored.js";
+import { useLoop } from "../loop/context.js";
 
 const WRAPPED = 3000, TAIL = 2 << 20;
-const storedTimes = () => { try { return localStorage.getItem("flux-log-times") !== "off"; } catch (_) { return true; } };
+const storedTimes = () => recall("flux-log-times") !== "off";
 
 const Line = ({ l, times }) => html`<div class=${`ln ${lineClass(l.text)}`} data-n=${String(l.n)}><span class="no">${String(l.n)}</span>
   ${times ? html`<span class="at" title=${l.at || "written before times were kept"}>${l.at ? logAt(l.at) : ""}</span>` : ""}<span class="tx">${l.text || " "}</span></div>`;
@@ -25,7 +27,7 @@ function useLog(store, ctx) {
     model.clear(); setSkipped(null); setCut(false); setFailed(""); setN(k => k + 1);
     if (past) {
       let live = true;
-      request(`/apps/${enc(ctx.name)}/log/raw?run_id=${enc(s.startId)}&download=false&preview=true${ctx.q}`).then(async r => {
+      loopApi(ctx.name).request(`/log/raw?run_id=${enc(s.startId)}&download=false&preview=true`).then(async r => {
         const text = await r.text();
         if (!live) return;
         model.add(text); model.end(); setCut(!!r.headers.get("x-flux-truncated")); bump();
@@ -39,7 +41,8 @@ function useLog(store, ctx) {
   return { lines: model.lines, n, past, skipped, stream, cut, failed, loadAll: () => setAll(k => k + 1) };
 }
 
-export function Log({ store, ctx }) {
+export function Log({ store }) {
+  const ctx = useLoop();
   const L = useLog(store, ctx);
   const [o, setO] = useState(() => ({ follow: true, wrap: NARROW.matches, problems: false, times: storedTimes(), filter: "" }));   // D754: on a phone a line wraps
   const set = patch => setO(x => ({ ...x, ...patch }));
@@ -63,7 +66,7 @@ export function Log({ store, ctx }) {
     if (!atEnd && o.follow) set({ follow: false });
     if (!o.wrap) setScroll(el.scrollTop);
   };
-  const times = on => { try { localStorage.setItem("flux-log-times", on ? "on" : "off"); } catch (_) { /* per browser */ } row.current = 0; set({ times: on }); };
+  const times = on => { remember("flux-log-times", on ? "on" : "off"); row.current = 0; set({ times: on }); };
   const check = (k, label, title, change = v => set({ [k]: v })) => html`<label class="check" title=${title}><input type="checkbox" checked=${o[k]} onChange=${e => change(e.currentTarget.checked)} />${label}</label>`;
   const raw = L.past ? `${ctx.base}/log/raw?run_id=${enc(store.s.startId)}&download=false${ctx.q}` : `${ctx.base}/log/raw${ctx.qs || "?"}${ctx.qs ? "&" : ""}download=false`;
   return html`<${Card} cls="log-card"><${ViewerFrame} v=${view} title="Log"><div onviewerresize=${() => { row.current = 0; setScroll(box.current?.scrollTop || 0); }}>
@@ -75,7 +78,7 @@ export function Log({ store, ctx }) {
       ${L.skipped ? html`<span class="log-earlier small">${`${(L.skipped.bytes / 1048576).toFixed(1)} MiB of earlier lines not loaded · `}<button type="button" class="small" onClick=${L.loadAll}>Load all</button></span>` : ""}
       ${!L.past && L.stream && L.stream !== "live" ? html`<span class="pill stream warn" title="The page's connection to the loop">reconnecting…</span>` : ""}</div>
     ${L.cut ? html`<p class="muted">Preview: first 1 MiB. Raw opens the complete output.</p>` : ""}${L.failed ? html`<p class="bad">${`This start's log is unavailable: ${L.failed}`}</p>` : ""}
-    <div class=${`logview virt${o.wrap ? " wrap" : ""}`} ref=${box} onScroll=${onScroll}>
+    <div class=${cx("logview virt", o.wrap && "wrap")} ref=${box} onScroll=${onScroll}>
       ${o.wrap ? "" : html`<div class="spacer" style=${`height:${shown.length * r}px`} />`}
       <div class="win" style=${o.wrap ? "" : `transform:translateY(${first * r}px)`}>
         ${o.wrap && first ? html`<div class="ln more">${`… ${first} earlier line(s): turn wrap off to scroll through all, or download the log`}</div>` : ""}

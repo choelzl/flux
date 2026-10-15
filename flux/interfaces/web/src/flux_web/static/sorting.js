@@ -3,6 +3,8 @@
 // other (what a cell shows, in its order); ties keep the rows' own order; a missing value (null, "") last either
 // way. A table's choice is kept per table in this browser (for the page's life when it keeps nothing).
 
+import { recallJson, remember } from "./stored.js";
+
 const COLLATE = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
 export const isMissing = v => v == null || v === "" || (typeof v === "number" && isNaN(v))
   || (Array.isArray(v) && v.every(x => x == null || x === ""));
@@ -36,7 +38,7 @@ export function readSort(memo, cols, first = 0) {
   let col = first, desc = !cols[first].asc;
   try {
     let m = memos.get(memo);
-    try { m = JSON.parse(localStorage.getItem(memo) || "null") || m; } catch (_) { /* this page's own */ }
+    m = recallJson(memo, m);
     const at = m ? (m.id != null ? cols.findIndex(c => c.key && idOf(c) === m.id) : m.col) : -1;
     if (at >= 0 && cols[at] && cols[at].key) { col = at; desc = !!m.desc; }
   } catch (_) { /* a default */ }
@@ -45,5 +47,5 @@ export function readSort(memo, cols, first = 0) {
 export function saveSort(memo, cols, col, desc) {
   const m = { id: idOf(cols[col]), desc };
   memos.set(memo, m);
-  try { localStorage.setItem(memo, JSON.stringify(m)); } catch (_) { /* per viewer */ }
+  remember(memo, m);
 }

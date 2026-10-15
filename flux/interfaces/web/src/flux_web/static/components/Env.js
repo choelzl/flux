@@ -9,7 +9,7 @@ import { Act } from "./Act.js";
 export function EnvTable({ rows, shadowed = new Set() }) {
   const mixed = rows.some(x => x.origin !== "server");
   return html`<table class="list compact env"><thead><tr><th>Name</th><th>Value</th><th>${mixed ? "From" : ""}</th></tr></thead>
-    <tbody>${rows.map(x => html`<tr class=${shadowed.has(x.name) ? "shadowed" : ""}><td class="mono">${x.name}</td>
+    <tbody>${rows.map(x => html`<tr key=${x.name} class=${shadowed.has(x.name) ? "shadowed" : ""}><td class="mono">${x.name}</td>
       <td class="mono">${x.origin === "server" ? html`<span class="muted">From Server</span>` : x.secret ? html`<span class="muted">secret · set</span>` : x.value}</td>
       <td class="muted">${x.origin === "server" ? "" : x.from}${shadowed.has(x.name) ? html`<span class="pill small warn">Overridden</span>` : ""}</td></tr>`)}</tbody></table>`;
 }
@@ -18,7 +18,7 @@ const QUIET = { "data-lpignore": "true", "data-1p-ignore": "true", "data-form-ty
 /** `save({name, value, secret})` (value null: removed); `scope` names its fields. Without `save`, the list only. */
 export function EnvEditor({ rows, save, scope }) {
   const [secret, setSecret] = useState(false), [name, setName] = useState(""), [value, setValue] = useState("");
-  const list = rows.length ? html`<table class="list compact env"><tbody>${rows.map(x => html`<tr><td class="mono">${x.name}</td>
+  const list = rows.length ? html`<table class="list compact env"><tbody>${rows.map(x => html`<tr key=${x.name}><td class="mono">${x.name}</td>
       <td class="mono">${x.secret ? html`<span class="muted">secret · set</span>` : x.value}</td>
       <td class="right">${save ? html`<${Act} cls="small" onClick=${async () => { await save({ name: x.name, value: null }); toast(`${x.name} removed`, "ok"); }}>Remove<//>` : ""}</td></tr>`)}</tbody></table>`
     : html`<p class="muted">None yet.</p>`;
@@ -30,8 +30,8 @@ export function EnvEditor({ rows, save, scope }) {
     toast(`${n} saved: from the next start`, "ok");                 // D758: an action says it happened
   };
   return html`<div>${list}<div class="row env-add">
-    <input placeholder="NAME" class="mono" id=${`env-${scope}-name`} style="width:180px" autocomplete="off" ...${QUIET} ...${bound(name, setName)} />
-    <input placeholder="value" class="mono" id=${`env-${scope}-value`} style="flex:1;min-width:160px" type=${secret ? "password" : "text"} autocomplete=${secret ? "new-password" : "off"} ...${QUIET} ...${bound(value, setValue)} />
+    <input placeholder="NAME" class="mono w-180" id=${`env-${scope}-name`} autocomplete="off" ...${QUIET} ...${bound(name, setName)} />
+    <input placeholder="value" class="mono env-value" id=${`env-${scope}-value`} type=${secret ? "password" : "text"} autocomplete=${secret ? "new-password" : "off"} ...${QUIET} ...${bound(value, setValue)} />
     <label class="check"><input type="checkbox" id=${`env-${scope}-secret`} checked=${secret} onChange=${e => setSecret(e.currentTarget.checked)} />secret</label>
     <${Act} cls="primary small" onClick=${add}>Add<//></div></div>`;
 }

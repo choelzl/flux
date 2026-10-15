@@ -22,7 +22,7 @@ export function UsageCard({ u }) {
     </div>
     ${u.by.length > 1 ? html`<table class="list compact">
       <thead><tr>${["Who", "Kind", "Turns", "Time", "Tokens in", "Tokens out", "Cost"].map((x, i) => html`<th class=${i > 1 ? "num" : ""}>${x}</th>`)}</tr></thead>
-      <tbody>${u.by.map(b => html`<tr>
+      <tbody>${u.by.map(b => html`<tr key=${`${b.who}|${b.kind}`}>
         <td class="strong">${b.who}</td><td class="muted">${b.kind}</td>
         <td class="num mono">${String(b.turns)}</td><td class="num mono">${dur(b.seconds)}</td>
         <td class="num mono">${b.counted ? fmtTok(b.tokens_in) : "—"}</td><td class="num mono">${b.counted ? fmtTok(b.tokens_out) : "—"}</td>

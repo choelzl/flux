@@ -1334,3 +1334,16 @@ td.cleared s { color: var(--muted); }
 .alt-dots { display: inline-flex; gap: 2px; margin-left: 6px; vertical-align: middle; } .alt-dots i { width: 7px; height: 7px; border-radius: 2px; background: var(--ok); display: block; }
 .alt-dots i.bad { background: var(--bad); } .alt-dots i.run { background: var(--run); }   /* D1051 */
 .dlg-body { display: contents; }
+
+/* D1095: what a field or a cell was given in place (an inline style), as classes -- as strong as it was */
+.full { width: 100% !important; }
+.grow { flex: 1 !important; }
+.nowrap { white-space: nowrap !important; }
+.w-64 { width: 64px !important; } .w-80 { width: 80px !important; } .w-90 { width: 90px !important; }
+.w-120 { width: 120px !important; } .w-180 { width: 180px !important; } .w-280 { width: 280px !important; }
+.min-w-280 { min-width: 280px !important; }
+.env-value { flex: 1 !important; min-width: 160px !important; }
+.keep-case { text-transform: none !important; }
+.wrap-any { overflow-wrap: anywhere !important; }
+.wrap-normal { white-space: normal !important; }
+.check-saved { margin-bottom: 12px !important; }

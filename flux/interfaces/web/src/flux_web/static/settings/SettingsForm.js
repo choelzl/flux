@@ -8,6 +8,7 @@ import { html, useState } from "../view.js";
 import { Act } from "../components/Act.js";
 import { useAutosave } from "../components/Autosave.js";
 import { EnvEditor, EnvTable } from "../components/Env.js";
+import { recall, remember } from "../stored.js";
 
 const SETTING_LABELS = { FLUX_REMOTE_BASE_URL: "Endpoint URL", FLUX_REMOTE_MODEL: "Model", FLUX_LLM_TIMEOUT_S: "Seconds per request",
   FLUX_REMOTE_AT_ONCE: "Requests at once on its endpoint (every loop; 0: no limit)", FLUX_REMOTE_API_KEY: "Key", FLUX_DEFAULT_AGENT: "Agent" };
@@ -63,8 +64,8 @@ export function SettingsForm({ st, server = null, save, scope, agentEnv = null, 
   // last looked at kept in this browser
   const tabs = [...new Set([...st.groups.map(g => g.tab || g.label), ...extraTabs.map(x => x.tab)])];
   const memo = `flux-models-tab-${scope}`;
-  const [cur, setCur] = useState(() => { let t = null; try { t = localStorage.getItem(memo); } catch (_) { /* per viewer */ } return tabs.includes(t) ? t : tabs[0]; });
-  const pick = t => { setCur(t); try { localStorage.setItem(memo, t); } catch (_) { /* per viewer */ } };
+  const [cur, setCur] = useState(() => { const t = recall(memo); return tabs.includes(t) ? t : tabs[0]; });
+  const pick = t => { setCur(t); remember(memo, t); };
   const groups = st.groups.map(g => {
     const keys = [...g.public, ...g.secret], own = keys.some(k => values[k]), prices = g.prices || [];
     const note = server && values[g.endpoint] ? "your own endpoint: none of the server's values of this group are used"

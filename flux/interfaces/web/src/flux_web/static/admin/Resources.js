@@ -2,7 +2,7 @@
 // disks; the sandbox containers (one left behind killed); each loop's disk, its caches cleared; the caches no
 // loop owns; the machine and every loop's tokens over time.
 
-import { Ago, Card, Empty, Skeleton, html, useState } from "../view.js";
+import { Ago, Card, Empty, Skeleton, cx, html, useState } from "../view.js";
 import { api, appHref, confirmDialog, enc, toast } from "../ui.js";
 import { bytes, dur } from "../format.js";
 import { stopLoop } from "../loops.js";
@@ -55,7 +55,7 @@ function LoopDisk({ loops, reload }) {
   return html`<${Card} title="Disk per loop"><${SortableTable} memo="flux-sort-loop-disk" first=${7} scroll keyOf=${l => `${l.user}/${l.app}`} rows=${loops}
     cols=${[{ label: "Loop", key: l => `${l.user}/${l.app}`, asc: true }, { label: "" }, ...SIZES.map(([k, label]) => ({ label, key: l => l[k] || 0, num: true })), { label: "" }]}
     row=${l => html`<tr><td><${LoopLink} u=${l.user} a=${l.app} /></td><td>${l.running ? html`<span class="pill live">running</span>` : ""}</td>
-      ${SIZES.map(([k]) => html`<td class=${`num mono${k === "total" ? " strong" : ""}`}>${bytes(l[k])}</td>`)}
+      ${SIZES.map(([k]) => html`<td class=${cx("num mono", k === "total" && "strong")}>${bytes(l[k])}</td>`)}
       <td class="right">${l.running || !l.cache ? "" : html`<div class="actions end">
         ${clear(l, "tools", "Clear tools' cache", "The tools' own cache in the sandbox (XDG_CACHE_HOME) is emptied; they rebuild what they need.")}
         ${clear(l, "scratch", "Clear past scratch", "The agents' working folders of past passes go. The journal, the transcript, the record and the workbench stay.")}</div>`}</td></tr>`}
@@ -87,7 +87,7 @@ function OverTime({ n }) {
   // another range, or the machine read again: what was shown stays until the next answer (and when it fails)
   const got = useLoad(() => Promise.all([api(`/admin/history?hours=${hours}`).catch(() => null), api(`/admin/token-rate?hours=${hours}`).catch(() => null)])
     .then(([hx, tr]) => { if (!hx) throw new Error("no history"); return { hx, tr }; }), "history", `${hours}:${n}`).got?.d;
-  const chips = html`<div class="chips">${RANGES.map(([hrs, label]) => html`<button class=${`chip${hours === hrs ? " on" : ""}`} onClick=${() => { historyHours = hrs; setHours(hrs); }}>${label}</button>`)}</div>`;
+  const chips = html`<div class="chips">${RANGES.map(([hrs, label]) => html`<button class=${cx("chip", hours === hrs && "on")} onClick=${() => { historyHours = hrs; setHours(hrs); }}>${label}</button>`)}</div>`;
   if (!got) return html`<${Card} title="Over time" actions=${chips}><${Skeleton} lines=${4} /><//>`;
   const { hx, tr } = got, ts = tr ? tr.samples : [], ss = hx.samples, last = ss.at(-1), cpus = last ? last.cpus : null;
   const rate = v => v >= 1000 ? `${(v / 1000).toFixed(1)}k/s` : `${v > 0 && v < 1 ? Number(v.toPrecision(2)) : v >= 10 ? Math.round(v) : v.toFixed(1)}/s`;

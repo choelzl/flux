@@ -28,7 +28,7 @@ export function TurnRow({ t, picked, onPick }) {
       ${role ? html`<span class="muted">${role} · </span>` : ""}
       <button type="button" class="link strong open-turn" onClick=${(e) => { e.stopPropagation(); onPick(t); }}>${t.agent || t.model || t.kind}</button>
       ${t.session === "resumed" ? html`<span class="muted small"> · resumed</span>` : ""}</td>
-    <td style="white-space:nowrap"><${Ago} t=${t.ts} /></td><td class="muted" style="white-space:nowrap">${dur(t.seconds)}</td>
+    <td class="nowrap"><${Ago} t=${t.ts} /></td><td class="muted nowrap">${dur(t.seconds)}</td>
     <td class="num mono muted"><${Tokens} t=${t} /></td>
     <td class="num mono muted">${t.tool_calls != null ? String(t.tool_calls) : t.hops ? String(t.hops) : ""}</td>
     <td><${Outcome} t=${t} /></td></tr>`;
@@ -65,7 +65,7 @@ export function TurnDetail({ full, k }) {
     full.stderr && html`<details class="blk"><summary>stderr</summary><${Prose} text=${full.stderr} /></details>`,
     full.prompt && html`<details class="blk"><summary>Prompt (${String(full.prompt).length.toLocaleString()} characters)</summary><${Prose} text=${full.prompt} /></details>`,
   ] : [
-    ...["error", "reply", "prompt", "stderr"].filter(f => full[f]).map(f => html`<div class="blk"><h3>${f}</h3><${Prose} text=${full[f]} /></div>`),
+    ...["error", "reply", "prompt", "stderr"].filter(f => full[f]).map(f => html`<div key=${f} class="blk"><h3>${f}</h3><${Prose} text=${full[f]} /></div>`),
     ...((full.hops || []).length ? [html`<h3>Tool calls</h3>`, ...full.hops.map(x => html`<pre class="val">${x}</pre>`)] : []),
   ]).filter(Boolean);
   const prompt = () => showRaw(full.prompt, "Agent prompt");

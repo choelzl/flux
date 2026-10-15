@@ -1,11 +1,12 @@
 // Flux web (D691, D696, D702, D856, D1095): the bar over every page -- the mark, where one can go, the bell and its
 // list, the theme, one's name and Log out (on a phone one menu), and while an admin views as a user, a banner.
 
-import { Ago, html, useChanges, useEffect, useState } from "../view.js";
+import { Ago, cx, html, useChanges, useEffect, useState } from "../view.js";
 import { api, toast } from "../ui.js";
 import { me, setMe } from "../state.js";
 import { Bell as BellIcon } from "../components/Icons.js";
 import { bellChanges, bellState, clearBell, seenAll } from "./bell.js";
+import { recall, remember } from "../stored.js";
 
 /** Where one can go; the tab of the page one is on, marked. */
 export function Nav({ here }) {
@@ -16,25 +17,25 @@ export function Nav({ here }) {
 }
 
 function Bell() {
-  const [, redraw] = useState(0), [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(false), [perm, setPerm] = useState(() => "Notification" in window ? Notification.permission : null);
   useChanges(bellChanges);
   useEffect(() => { const close = () => setOpen(false); document.addEventListener("click", close); return () => document.removeEventListener("click", close); }, []);
-  const b = bellState(), canAsk = "Notification" in window && Notification.permission === "default";
+  const b = bellState(), canAsk = perm === "default";
   return html`<div class="bell-wrap"><button class="bell" title="Notifications" aria-label="Notifications" onClick=${e => { e.stopPropagation(); setOpen(!open); seenAll(); }}>
       <${BellIcon} />${b.unread ? html`<span class="badge">${String(b.unread)}</span>` : ""}</button>
     <div class="bell-menu" hidden=${!open} onClick=${e => e.stopPropagation()}><div class="bell-head"><strong>Notifications</strong>
-        ${canAsk ? html`<button class="link" onClick=${async () => { await Notification.requestPermission(); redraw(n => n + 1); }}>Allow desktop notifications</button>` : ""}
+        ${canAsk ? html`<button class="link" onClick=${async () => setPerm(await Notification.requestPermission())}>Allow desktop notifications</button>` : ""}
         ${b.list.length ? html`<button class="link" onClick=${clearBell}>Clear</button>` : ""}</div>
-      ${b.list.length ? b.list.map(n => html`<a class=${`bell-item ${n.kind}`} href=${n.href || "#/"} onClick=${() => setOpen(false)}><span>${n.text}</span><small><${Ago} t=${n.t} /></small></a>`)
+      ${b.list.length ? b.list.map(n => html`<a key=${`${n.t}|${n.text}`} class=${`bell-item ${n.kind}`} href=${n.href || "#/"} onClick=${() => setOpen(false)}><span>${n.text}</span><small><${Ago} t=${n.t} /></small></a>`)
         : html`<p class="muted">No notifications.</p>`}</div></div>`;
 }
 
 // ---- the theme: system, light or dark, remembered in this browser (D691)
 const THEMES = { system: "◐ System", light: "☀ Light", dark: "☾ Dark" };
-export function theme() { try { return localStorage.getItem("flux-theme") || "system"; } catch (_) { return "system"; } }
+export const theme = () => recall("flux-theme", "system");
 export function applyTheme(t) {
   if (t === "system") delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = t;
-  try { localStorage.setItem("flux-theme", t); } catch (_) { /* per viewer */ }
+  remember("flux-theme", t);
 }
 
 /** D856: on a phone the theme, the name and Log out fold into one menu; the bell stays in the bar. */
@@ -45,7 +46,7 @@ export function Who() {
   const logout = async () => { await api("/logout", { method: "POST" }).catch(() => {}); setMe(null); location.hash = "#/login"; };
   return html`${me ? html`<${Bell} />` : ""}
     <button class="small acct-btn" type="button" aria-label="Account menu" aria-expanded=${String(open)} onClick=${e => { e.stopPropagation(); setOpen(!open); }}>☰</button>
-    <div class=${`who-items${open ? " open" : ""}`} onClick=${e => { if (e.target.closest("a, button")) setOpen(false); }}>
+    <div class=${cx("who-items", open && "open")} onClick=${e => { if (e.target.closest("a, button")) setOpen(false); }}>
       <button class="small theme" title="Theme: system, light or dark" onClick=${next}>${THEMES[t]}</button>
       ${me ? html`<a href="#/account" class="me" title=${me.name}>${me.name}</a><button class="small" onClick=${logout}>Log out</button>` : ""}</div>`;
 }

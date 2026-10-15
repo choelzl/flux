@@ -30,7 +30,7 @@ function Metrics({ n, env, out, metrics }) {
     return [Math.abs(c) < 0.0005 ? "=" : `${c > 0 ? "+" : "−"}${Math.abs(c * 100).toFixed(1)}%`, dir * c > 0 ? "up" : dir * c < 0 ? "down" : ""];
   };
   return html`<div class="alt-table-wrap"><table class="list compact alt-metrics">
-    <thead><tr><th>metric</th><th class="num" title=${me} style="text-transform:none">${me ? env.N.shortAll(me) : "this design"}</th>
+    <thead><tr><th>metric</th><th class="num keep-case" title=${me}>${me ? env.N.shortAll(me) : "this design"}</th>
       ${compares ? html`<th class="num">best so far</th><th class="num">change</th>` : ""}</tr></thead>
     <tbody>${rows.map(([k, v, m]) => { const b = best[k], [said, better] = change(k, m);
       return html`<tr><td>${k}${goals[k] ? ` ${goals[k] > 0 ? "↑" : "↓"}` : ""}</td><td class="num mono">${cell(v)}</td>
@@ -135,9 +135,9 @@ export function CriticBody({ n }) {
 export function StepsBody({ n, a, env }) {
   const kind = phaseKind(n), kids = n.kids.filter(k => phaseKind(k) === kind);
   if (kids.length) return html`<div class="task-inspector"><div class="alt-steps">${kids.map(x => html`<${StepRow} key=${x.id} x=${x} a=${a} N=${env.N} />`)}
-    ${notReached(n, env.tests).map(t => html`<div class="alt-step-row note skipped" title="not run: a check before it failed"><span>${`○ ${t} · not run`}</span></div>`)}</div></div>`;
+    ${notReached(n, env.tests).map(t => html`<div key=${t} class="alt-step-row note skipped" title="not run: a check before it failed"><span>${`○ ${t} · not run`}</span></div>`)}</div></div>`;
   const said = Object.entries(n.output || {}).filter(([k, v]) => !k.startsWith("_") && v != null && v !== "" && typeof v !== "object" && String(v).length <= 160).slice(0, 4);
-  return said.length ? html`<div class="task-inspector">${said.map(([k, v]) => html`<div class="kv"><div class="k">${k}</div><div class="val">${String(v)}</div></div>`)}</div>` : null;
+  return said.length ? html`<div class="task-inspector">${said.map(([k, v]) => html`<div key=${k} class="kv"><div class="k">${k}</div><div class="val">${String(v)}</div></div>`)}</div>` : null;
 }
 
 /** D1047: the quiet steps this task took (a brief, a frontier, the tools' gate) -- what each said, folded. */

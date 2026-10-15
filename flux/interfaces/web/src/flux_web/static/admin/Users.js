@@ -21,7 +21,7 @@ function LinkBox({ name, url, kind }) {
   };
   return html`<div class="stack"><p>${kind === "invite" ? `Send ${name} this link: it lets them choose their password and log in. Until then the account cannot be used.`
       : `Send ${name} this link: it lets them choose a new password; their current one works until then, and their sessions end when it is used.`}</p>
-    <div class="row"><input value=${url} readonly class="mono" style="width:100%" id="invite-url" ref=${field} /><button type="button" class="small" onClick=${copy}>Copy</button></div>
+    <div class="row"><input value=${url} readonly class="mono full" id="invite-url" ref=${field} /><button type="button" class="small" onClick=${copy}>Copy</button></div>
     <p class="muted small">Single use, valid a week, shown once.</p></div>`;
 }
 const linkDialog = (name, token, kind) => dialog(kind === "invite" ? `Invite ${name}` : `${name}: a password reset link`,
@@ -54,7 +54,7 @@ function Limit({ u, limits, def }) {
     await api(`/admin/users/${enc(u.name)}/limit`, { method: "PUT", body: { max_running: n } });
     limits[u.name] = n;
   });
-  return html`<td><span class="inline" ...${box}><input type="number" min="0" max="64" placeholder=${String(def)} style="width:64px"
+  return html`<td><span class="inline" ...${box}><input type="number" min="0" max="64" placeholder=${String(def)} class="w-64"
     aria-label=${`${u.name}'s running limit`} ...${bound(v, setV)} />${mark}</span></td>`;
 }
 
@@ -68,7 +68,7 @@ function AddUser({ groups }) {
     route();
   };
   return html`<div class="row add-user"><input placeholder="name" autocomplete="off" data-lpignore="true" ...${bound(name, setName)} />
-    <input type="password" autocomplete="new-password" placeholder="password (empty: send an invitation link)" style="min-width:280px" ...${bound(pw, setPw)} />
+    <input type="password" autocomplete="new-password" placeholder="password (empty: send an invitation link)" class="min-w-280" ...${bound(pw, setPw)} />
     <${GroupSelect} groups=${groups} value=${group} label="Group of the new user" onChange=${setGroup} />
     <${Act} cls="primary" onClick=${add}>Add user<//></div>`;
 }
@@ -149,7 +149,7 @@ export function Groups({ catalog }) {
     ${catalog.groups.some(g => g.server_access == null) ? html`<p class="muted small">Keep existing access preserves members' current settings until you choose a policy for the group.</p>` : ""}
     <table class="list groups"><thead><tr><th>Group</th><th class="num">Members</th>
       <th title="Inherit server and machine model, agent and environment settings, or use members' own settings only">Server access</th><th>Actions</th></tr></thead>
-      <tbody>${catalog.groups.map(g => html`<tr data-group=${g.id}><td><div class="group-label"><span class="strong">${g.name}</span>
+      <tbody>${catalog.groups.map(g => html`<tr key=${g.id} data-group=${g.id}><td><div class="group-label"><span class="strong">${g.name}</span>
           ${g.admin ? html`<span class="pill small" title="Full server administration powers, retained when this group is renamed">Server admin</span>` : ""}</div></td>
         <td class="num mono">${String(g.members)}</td><td><${GroupAccess} g=${g} /></td>
         <td><${Act} cls="small" title=${`Rename ${g.name}`} onClick=${() => rename(g)}>Rename…<//></td></tr>`)}</tbody></table>

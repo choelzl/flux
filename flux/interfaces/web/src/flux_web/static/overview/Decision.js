@@ -8,13 +8,15 @@ import { dictionaryClasses, designLabels, measurementLabels, measurementText } f
 import { num4 } from "../charts/marks.js";
 import { GroupRow, MeasurementHeader, VerdictBadge, useColumns, useValuesMode } from "../results/columns.js";
 import { MainNumbers } from "./parts.js";
+import { useLoop } from "../loop/context.js";
 
 /** D1093: "#3", as everywhere; D1094: the parts' whole -- its whole name on hover. */
 export const own = (ctx, x) => String(x) === ctx.name ? "whole" : String(x).startsWith(`${ctx.name}#`) ? String(x).slice(ctx.name.length) : String(x);
 
 /** The best designs (D696): the decision, then the others by the loop's own order -- the server's ranking
     (D809), else accepted first, the deepest stage reached, then each objective without a limit in turn. */
-function BestTable({ ctx, r, n, comparison, unit }) {
+function BestTable({ r, n, comparison, unit }) {
+  const ctx = useLoop();
   const objs = r.objective_list || [], order = r.stages || [], groups = r.metric_groups || {};
   const ms = [...new Set([...objs.map(o => o.metric), ...(r.metrics || [])])];
   const columns = useColumns(ctx, ms, groups), values = useValuesMode(ctx);
@@ -41,22 +43,23 @@ function BestTable({ ctx, r, n, comparison, unit }) {
 }
 
 /** The decision (D1092: said "#3"), the closest when none meets every requirement (D900), or why there is none. */
-export function DecisionCard({ a, ctx, r, main, comparison, unit }) {
+export function DecisionCard({ a, r, main, comparison, unit }) {
+  const ctx = useLoop();
   const designs = r.designs || [], dec = designs.find(d => d.decision), c = r.closest;
   const all = html`<button class="small" onClick=${() => ctx.goTab("Results")}>All results</button>`;
-  const best = html`<${BestTable} ctx=${ctx} r=${r} n=${3} comparison=${comparison} unit=${unit} />`;
+  const best = html`<${BestTable} r=${r} n=${3} comparison=${comparison} unit=${unit} />`;
   if (dec) return html`<${Card} ...${a} title="Decision" actions=${all}>
     <div class="decision-head"><span class="mono strong" title=${dec.name}>${own(ctx, dec.name)}</span>
       ${dec.verdict === "accepted" ? html`<span class="pill ok">meets every requirement</span>` : html`<span class="pill bad">misses a requirement</span>`}
       <span class="muted">${`measured at ${dec.shown}`}</span></div>
     ${r.decided_by ? html`<p class="small decided-by"><span class="muted">Decided by: </span>${r.decided_by}</p>` : ""}
-    <${MainNumbers} ctx=${ctx} r=${r} d=${dec} main=${main} unit=${unit} compare=${m => r.decision_measurements?.[m] ? () => r.decision_measurements[m] : comparison} />
+    <${MainNumbers} r=${r} d=${dec} main=${main} unit=${unit} compare=${m => r.decision_measurements?.[m] ? () => r.decision_measurements[m] : comparison} />
     ${dec.why.length ? html`<ul class="misses">${dec.why.map(w => html`<li>${w}</li>`)}</ul>` : ""}${best}<//>`;
   // D900: no design meets every requirement -- the closest, apart, with what it does not meet: what the next pass can refine, not the answer
   if (c) return html`<${Card} ...${a} title="Decision" actions=${all}>
     <p class="decision-head"><strong>No feasible design yet</strong><span class="pill warn">no design meets every requirement</span></p>
     <div class="decision-head"><small class="muted">Closest candidate </small><span class="mono strong" title=${c.name}>${own(ctx, c.name)}</span><span class="muted">${`measured at ${c.shown}`}</span></div>
-    <${MainNumbers} ctx=${ctx} r=${r} d=${designs.find(d => d.closest) || { ...c, stages: { [c.shown]: c.numbers } }} main=${main} unit=${unit} compare=${() => comparison} />
+    <${MainNumbers} r=${r} d=${designs.find(d => d.closest) || { ...c, stages: { [c.shown]: c.numbers } }} main=${main} unit=${unit} compare=${() => comparison} />
     ${c.reasons.length ? html`<ul class="misses">${c.reasons.map(w => html`<li>${w}</li>`)}</ul>` : ""}${best}<//>`;
   // D1093: chosen on its checks (no measure stage) -- said, not "nothing measured" beside a decision
   const chosen = (r.passes || []).map(p => p.conclusion?.decision).filter(Boolean).at(-1);
@@ -72,7 +75,8 @@ function conclusionText(c) {
 
 /** The last pass that decided (D699, D1094): when, how many designs it measured, what it decided in words (D856),
     the record's own fields behind a fold. */
-export function LastPass({ a, ctx, r }) {
+export function LastPass({ a, r }) {
+  const ctx = useLoop();
   const ps = r.passes || [];
   if (!ps.length) return null;
   const p = ps.at(-1), prev = ps.length > 1 ? ps.at(-2).when : 0;

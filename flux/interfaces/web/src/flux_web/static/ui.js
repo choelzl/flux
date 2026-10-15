@@ -73,6 +73,13 @@ function apiUpload(path, form, { onProgress = () => {}, signal } = {}) {
     x.send(form);
   });
 }
+/** A loop's server calls (D701, D1095): `at(path)` its address -- `/apps/<name><path>`, its `owner` named when given,
+    else the page's (`owned`); `api(path, opts)`, `request(path, opts)` as `api` and `request` there; `url(path)` a
+    link to it. */
+function loopApi(name, owner = null) {
+  const at = (path = "") => `/apps/${enc(name)}${path}${owner ? `${path.includes("?") ? "&" : "?"}owner=${enc(owner)}` : ""}`;
+  return { at, api: (path, opts) => api(at(path), opts), request: (path, opts) => request(at(path), opts), url: path => "/api" + owned(at(path)) };
+}
 async function api(path, opts = {}) {
   const r = await request(path, opts);
   return (r.headers.get("content-type") || "").includes("json") ? r.json() : r.text();
@@ -160,4 +167,4 @@ async function createFromText(name, filename, text) {
 // D754: a phone's width -- the tables stack their rows (app.js), the log wraps (live/Log.js)
 const NARROW = window.matchMedia ? window.matchMedia("(max-width: 640px)") : { matches: false };
 
-export { NARROW, money, plural, api, apiUpload, appHref, request, bytes, confirmDialog, createFromText, dialog, dur, enc, fmtTok, loopStream, offline, owned, toast, when, withOwner };
+export { NARROW, money, plural, api, apiUpload, appHref, loopApi, request, bytes, confirmDialog, createFromText, dialog, dur, enc, fmtTok, loopStream, offline, owned, toast, when, withOwner };

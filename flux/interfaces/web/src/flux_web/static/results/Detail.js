@@ -3,13 +3,14 @@
 // hidden too at rest) and Restore.
 
 import { Ago, Skeleton, html, useRef } from "../view.js";
-import { api, dialog, enc, toast } from "../ui.js";
+import { api, dialog, enc, loopApi, toast } from "../ui.js";
 import { Act } from "../components/Act.js";
 import { Code } from "../components/Markdown.js";
 import { ViewerFrame, ViewerTools, useViewer } from "../viewer.js";
 import { Loaded, useLoad } from "../components/Load.js";
 import { VerdictPill, byCritic } from "./columns.js";
 import { Select } from "../components/Select.js";
+import { useLoop } from "../loop/context.js";
 
 /** The reject form (D1043): why, each measurement measured again or cleared, hidden too (at rest). `v` {reason,
     hide, ticked: {"stage metric": "again" | "clear"} for each ticked}. */
@@ -22,7 +23,7 @@ function RejectForm({ d, fmt, live, v, set }) {
     <textarea class="reject-reason" rows="2" placeholder="Why (kept with it; Restore undoes it)" value=${v.reason} onInput=${e => set({ reason: e.currentTarget.value })} />
     ${rows.length ? html`<div class="scroll-x"><table class="list compact reject-measurements">
       <thead><tr><th></th><th>measurement</th><th class="num">value</th><th>do</th></tr></thead>
-      <tbody>${rows.map(x => html`<tr><td><input type="checkbox" checked=${x.k in v.ticked} onChange=${e => tick(x, e.currentTarget.checked)} /></td>
+      <tbody>${rows.map(x => html`<tr key=${x.k}><td><input type="checkbox" checked=${x.k in v.ticked} onChange=${e => tick(x, e.currentTarget.checked)} /></td>
           <td class="mono">${`${x.stage} · ${x.metric}`}</td><td class="mono num">${fmt(x.v)}</td>
           <td><${Select} class="reject-how" aria-label=${`${x.stage} ${x.metric}: measure again or clear`} onChange=${to => choose(x, to)} options=${[["again", "measure again"], ["clear", "clear"]]} /></td></tr>`)}</tbody></table></div>` : ""}
     <p class="muted small">Ticked: measured again (the new number replaces this one) or cleared (struck through). None ticked: the result is only marked.</p>
@@ -42,9 +43,10 @@ function readReject(v) {
 // the last design read, by its address: the same design shown in the other view (D916) is there at once, read again
 let last = { url: null, full: null };
 
-export function DesignDetail({ d, ctx, fmt, reload }) {
-  const { name, q, qs } = ctx;
-  const url = `/apps/${enc(name)}/design?design=${enc(d.base || d.name)}&part=${enc(d.part)}&key=${enc(d.key || "")}${q}`;
+export function DesignDetail({ d, fmt, reload }) {
+  const ctx = useLoop();
+  const { name } = ctx;
+  const url = loopApi(name).at(`/design?design=${enc(d.base || d.name)}&part=${enc(d.part)}&key=${enc(d.key || "")}`);
   const view = useViewer(), read = useLoad(() => api(url).then(f => { last = { url, full: f }; return f; }), url);
   const full = read.got?.d ?? (last.url === url ? last.full : null);
   if (!full) return html`<div class="detail">${read.got?.error ? html`<${Loaded} read=${read} failed="The design could not be read">${() => ""}<//>` : html`<${Skeleton} lines=${6} />`}</div>`;
@@ -55,10 +57,10 @@ export function DesignDetail({ d, ctx, fmt, reload }) {
     const got = await dialog(`Reject ${d.name}?`, ({ v, set }) => html`<${RejectForm} d=${d} fmt=${fmt} live=${running} v=${v} set=${set} />`, [["Cancel", null], ["Reject", readReject, "primary"]],
       { reason: "", hide: false, ticked: {} });
     if (!got) return;
-    toast((await api(`/apps/${enc(name)}/results/reject${qs}`, { method: "POST", body: { key: d.key || "", name: d.base || d.name, ...got } })).ok, "ok");
+    toast((await loopApi(name).api("/results/reject", { method: "POST", body: { key: d.key || "", name: d.base || d.name, ...got } })).ok, "ok");
     reload();
   };
-  const restore = async () => { toast((await api(`/apps/${enc(name)}/results/unreject${qs}`, { method: "POST", body: { id: d.rejected.id } })).ok, "ok"); reload(); };
+  const restore = async () => { toast((await loopApi(name).api("/results/unreject", { method: "POST", body: { id: d.rejected.id } })).ok, "ok"); reload(); };
   return html`<${ViewerFrame} v=${view} title=${d.name}><div class="detail">
     <div class="detail-head"><h2>${d.name}</h2><${VerdictPill} d=${d} />${d.decision ? html`<span class="pill ok">★ decision</span>` : ""}
       ${d.part ? html`<span class="muted">${`part ${d.part}`}</span>` : ""}

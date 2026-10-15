@@ -2,7 +2,7 @@
 // has not run (Start), one with no problem document yet (an agent writes it); the saved document checked.
 
 import { Card, Empty, Skeleton, html, useEffect, useState } from "../view.js";
-import { api, appHref, dialog, enc } from "../ui.js";
+import { api, appHref, dialog, loopApi } from "../ui.js";
 import { Act } from "../components/Act.js";
 
 export const Reading = ({ lines = 7 }) => html`<${Card}><${Skeleton} lines=${lines} /><//>`;
@@ -20,5 +20,5 @@ function CheckOut({ url }) {
   return html`<pre class="log small">${said}</pre>`;
 }
 /** The saved problem and its inputs checked in the sandbox -- as a start checks them. */
-export const CheckButton = ({ name, qs }) => html`<${Act} cls="small" style="margin-bottom:12px" title="Check the saved problem and inputs. Starting the loop also runs this check."
-  onClick=${() => dialog("Check the saved document", html`<${CheckOut} url=${`/apps/${enc(name)}/check${qs}`} />`, [["Close", null]])}>Check<//>`;
+export const CheckButton = ({ name }) => html`<${Act} cls="small check-saved" title="Check the saved problem and inputs. Starting the loop also runs this check."
+  onClick=${() => dialog("Check the saved document", html`<${CheckOut} url=${loopApi(name).at("/check")} />`, [["Close", null]])}>Check<//>`;

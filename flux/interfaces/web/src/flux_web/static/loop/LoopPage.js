@@ -4,7 +4,7 @@
 // running loop is read again once a minute.
 
 import { html, useEffect, useMemo, useRef, useState } from "../view.js";
-import { api, appHref, confirmDialog, enc, toast } from "../ui.js";
+import { api, appHref, confirmDialog, enc, loopApi, toast } from "../ui.js";
 import { me, setPageRefresh } from "../state.js";
 import { startLoop, stopLoop, restartLoop } from "../loops.js";
 import { Configure, ModeTabs, modesOf } from "../configure/Configure.js";
@@ -15,6 +15,7 @@ import { Drawer } from "./Drawer.js";
 import { CheckButton, NotRun } from "./Cards.js";
 import { Composer } from "./Notes.js";
 import { AskBanner, Crumbs, LoopHead, Tabs } from "./Head.js";
+import { LoopContext } from "./context.js";
 import { AgentsBody, FilesBody, IdeasBody, LiveBody, OverviewBody, ResultsBody, SettingsBody } from "./Bodies.js";
 
 // D713: six tabs; the log and the timeline under Live, the workbench under Files, the problem (the configurator,
@@ -64,7 +65,7 @@ export function LoopPage({ name, owner, info, path }) {
     // D917: no state request while one is out; only the latest asked is drawn
     async function refresh() {
       const mine = ++poll.asked, was = now.current.st.running;
-      const p = poll.out = api(`/apps/${enc(name)}/state${qs}`, { signal: leaving.signal });
+      const p = poll.out = loopApi(name).api("/state", { signal: leaving.signal });
       let got;
       try { got = await p; }
       catch (x) { if (x.name === "AbortError") return; throw x; }
@@ -76,7 +77,7 @@ export function LoopPage({ name, owner, info, path }) {
     }
     // D919: a note sent answers the question; a state asked before it is not drawn
     async function sendNote(text) {
-      const r = await api(`/apps/${enc(name)}/notes${qs}`, { method: "POST", body: { text } });
+      const r = await loopApi(name).api("/notes", { method: "POST", body: { text } });
       toast(r.ok, "ok"); setQuestion(null); poll.asked++; setNotesSent(k => k + 1);
     }
     return { name, owner, qs, q, base, info, perm, mine, isOwner, canRun, goTab, refresh, sendNote, leaving, poll,
@@ -112,7 +113,7 @@ export function LoopPage({ name, owner, info, path }) {
   // D702: a shared loop, left by its guest
   const leave = async () => {
     if (!await confirmDialog(`Leave ${info.owner}'s ${name}?`, `${info.owner} is told.`, { ok: "Leave" })) return;
-    toast((await api(`/apps/${enc(name)}/shares/me?owner=${enc(info.owner)}`, { method: "DELETE" })).ok, "ok"); location.hash = "#/";
+    toast((await loopApi(name).api(`/shares/me?owner=${enc(info.owner)}`, { method: "DELETE" })).ok, "ok"); location.hash = "#/";
   };
   const acts = {
     stop: running ? async () => { if (await stopLoop(name, st.stop_requested && !st.restart_requested, owner)) await ctx.refresh(); } : null,
@@ -125,28 +126,28 @@ export function LoopPage({ name, owner, info, path }) {
   const body = () => {
     const k = `${at.tab}:${sub}:${at.n}`;
     switch (at.tab) {
-      case "Overview": return html`<${OverviewBody} key=${k} ctx=${ctx} tick=${tick} notRun=${ran ? "" : notRun} />`;
-      case "Live": return ran ? html`<${LiveBody} key=${`Live:${at.n}`} ctx=${ctx} store=${store} ready=${setLiveReady} />`
+      case "Overview": return html`<${OverviewBody} key=${k} tick=${tick} notRun=${ran ? "" : notRun} />`;
+      case "Live": return ran ? html`<${LiveBody} key=${`Live:${at.n}`} store=${store} ready=${setLiveReady} />`
         : html`<${NotRun} info=${info} name=${name} mine=${mine} start=${start()} />`;
-      case "Results": return sub === "ideas" || sub === "library" ? html`<${IdeasBody} key=${k} ctx=${ctx} library=${sub === "library"} />`
-        : html`<${ResultsBody} key=${`Results:${at.n}`} ctx=${ctx} view=${sub} cache=${results} n=${at.n} />`;
-      case "Agents": return html`<${AgentsBody} key=${k} ctx=${ctx} />`;
-      case "Files": return html`<${FilesBody} key=${k} ctx=${ctx} tick=${tick} workbench=${sub === "workbench"} />`;
+      case "Results": return sub === "ideas" || sub === "library" ? html`<${IdeasBody} key=${k} library=${sub === "library"} />`
+        : html`<${ResultsBody} key=${`Results:${at.n}`} view=${sub} cache=${results} n=${at.n} />`;
+      case "Agents": return html`<${AgentsBody} key=${k} />`;
+      case "Files": return html`<${FilesBody} key=${k} tick=${tick} workbench=${sub === "workbench"} />`;
       default: return sub === "problem" ? html`<${Configure} key=${k} name=${name} owner=${owner} mode=${mode} pick=${pickMode} tabs=${false} />`
-        : html`<${SettingsBody} key=${k} ctx=${ctx} />`;
+        : html`<${SettingsBody} key=${k} />`;
     }
   };
-  const steer = mine && st.running ? { asking: !!question, el: html`<${Composer} name=${name} qs=${qs} mine=${mine} question=${question} send=${ctx.sendNote} n=${notesSent} />` } : null;
+  const steer = mine && st.running ? { asking: !!question, el: html`<${Composer} name=${name} mine=${mine} question=${question} send=${ctx.sendNote} n=${notesSent} />` } : null;
   const toggle = open => setTalk(t => ({ open, opened: t.opened || open }));
-  return html`<div><${Crumbs} parts=${[["Loops", "#/"], owner && owner !== me.name ? [owner, null] : null, [name, appHref(owner, name)], at.tab !== "Overview" ? [at.tab, null] : null,
+  return html`<${LoopContext.Provider} value=${ctx}><div><${Crumbs} parts=${[["Loops", "#/"], owner && owner !== me.name ? [owner, null] : null, [name, appHref(owner, name)], at.tab !== "Overview" ? [at.tab, null] : null,
       sub && sub !== (subs[0] || [""])[0] ? [subs.find(([k]) => k === sub)[1], null] : null]} /></div>
     <div><${LoopHead} name=${name} info=${info} st=${st} perm=${perm} mine=${mine} canRun=${canRun} acts=${acts} /></div>
     <div>${question && st.running ? html`<${AskBanner} key=${`${question.asked}\n${question.question}`} question=${question} mine=${mine} send=${ctx.sendNote} />` : ""}</div>
     <div><${Tabs} items=${TABS.map(t => [t, t])} on=${at.tab} pick=${t => ctx.goTab(t)} /></div>
     <div class="subrow">${subs.length > 1 ? html`<${Tabs} cls="subtabs views" items=${subs} on=${sub} pick=${k => setAt(a => ({ ...a, sub: k, mode: "" }))} />` : ""}
-      ${at.tab === "Live" && liveReady ? html`<${Controls} store=${store} ctx=${ctx} />` : ""}
-      ${mode ? html`<${ModeTabs} name=${name} mode=${mode} pick=${pickMode} small=${true} />${canRun && info.document ? html`<${CheckButton} name=${name} qs=${qs} />` : ""}` : ""}</div>
+      ${at.tab === "Live" && liveReady ? html`<${Controls} store=${store} />` : ""}
+      ${mode ? html`<${ModeTabs} name=${name} mode=${mode} pick=${pickMode} small=${true} />${canRun && info.document ? html`<${CheckButton} name=${name} />` : ""}` : ""}</div>
     <div>${body()}</div>
     <${Drawer} open=${talk.open} asking=${!!(question && st.running)} toggle=${toggle}>
-      ${talk.opened ? html`<${Talk} name=${name} qs=${qs} mine=${mine} canAsk=${canAsk} steer=${steer} steerOpen=${steerOpen} open=${talk.open} />` : ""}<//>`;
+      ${talk.opened ? html`<${Talk} name=${name} mine=${mine} canAsk=${canAsk} steer=${steer} steerOpen=${steerOpen} open=${talk.open} />` : ""}<//><//>`;
 }

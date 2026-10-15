@@ -5,6 +5,7 @@
 import { html, useLayoutEffect, useRef, useState } from "../view.js";
 import { Overview } from "./Overview.js";
 import { Select } from "../components/Select.js";
+import { LoopContext } from "../loop/context.js";
 
 const MOCK_CTX = { name: "sample", owner: "__overview_mock_data__", qs: "", mine: false, tab: "Overview", still: () => () => true, goTab: () => {}, drawBody: () => {} };
 
@@ -68,8 +69,8 @@ export function LayoutEditor({ prefs, example, save, cancel }) {
           <p class="muted small overview-layout-mobile-note">On phones, the left column appears first.</p></section></div>
       <section class="overview-preview-panel" aria-label="Overview preview with mock data"><div class="overview-preview-head"><h3>Preview</h3><span class="pill">Mock Data</span></div>
         <p class="muted small">Sample values illustrate the layout. Your loops are unchanged until you save.</p>
-        <div class="overview-layout-preview" inert><${Overview} ctx=${{ ...MOCK_CTX, st: example.state }} r=${example.results} notes=${example.notes} bench=${example.workbench}
-          use=${example.usage} prefs=${{ layout: draft }} ideas=${example.ideas} /></div></section></div>
+        <div class="overview-layout-preview" inert><${LoopContext.Provider} value=${{ ...MOCK_CTX, st: example.state }}><${Overview} r=${example.results} notes=${example.notes} bench=${example.workbench}
+          use=${example.usage} prefs=${{ layout: draft }} ideas=${example.ideas} /><//></div></section></div>
     <p class="err" role="alert">${error}</p>
     <div class="dlg-actions"><button type="button" disabled=${saving} onClick=${() => { remember(); setDraft(structuredClone(prefs.default)); }}>Defaults</button>
       <button type="button" disabled=${saving} onClick=${cancel}>Cancel</button><button type="button" class="primary" disabled=${saving} onClick=${go}>Save</button></div>`;

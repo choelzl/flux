@@ -5,17 +5,18 @@
 import { api, appHref, toast } from "../ui.js";
 import { me, pageRefresh } from "../state.js";
 import { changes } from "../view.js";
+import { recallJson, remember } from "../stored.js";
 
 const bell = { list: [], seen: new Map(), unread: 0, primed: false, user: null };
 const rung = changes(), emit = rung.emit;
 const key = () => `flux-notes:${bell.user}`;
-const keep = () => { try { localStorage.setItem(key(), JSON.stringify(bell.list)); } catch (_) { /* per viewer */ } };
+const keep = () => remember(key(), bell.list);
 
 /** D702: kept under the user's name, started afresh when another logs in here. */
 export function bellFor(user) {
   if (bell.user === user) return;
   bell.user = user; bell.seen = new Map(); bell.unread = 0; bell.primed = false;
-  try { bell.list = user ? JSON.parse(localStorage.getItem(key()) || "[]") : []; } catch (_) { bell.list = []; }
+  bell.list = user ? recallJson(key(), []) : [];
   emit();
 }
 function notify(text, kind, href) {
@@ -66,4 +67,4 @@ export const bellState = () => bell;
 /** What the bell holds changed: for `useChanges`. */
 export const bellChanges = rung;
 export const seenAll = () => { bell.unread = 0; emit(); };
-export const clearBell = () => { bell.list = []; bell.unread = 0; try { localStorage.removeItem(key()); } catch (_) { /* per viewer */ } emit(); };
+export const clearBell = () => { bell.list = []; bell.unread = 0; remember(key(), null); emit(); };

@@ -2,7 +2,7 @@
 // part at a time: what went wrong (starts, agent Tests), what was used (by user, by agent, the loops that used
 // most; the disk as it is now), how the endpoints did and what the network refused.
 
-import { Ago, Card, Skeleton, html, useState } from "../view.js";
+import { Ago, Card, Skeleton, cx, html, useState } from "../view.js";
 import { api, confirmDialog, enc, toast, when } from "../ui.js";
 import { bytes, dur, fmtTok, plural } from "../format.js";
 import { route } from "../app.js";
@@ -12,20 +12,21 @@ import { Meter } from "../components/Stat.js";
 import { SortableTable } from "../components/SortableTable.js";
 import { Loaded, useLoad } from "../components/Load.js";
 import { Select } from "../components/Select.js";
+import { recall, remember } from "../stored.js";
 
 const PERIODS = [[1, "24 hours"], [7, "7 days"], [30, "30 days"]];
 const TITLE = { failures: "Failures", usage: "Usage", endpoints: "Endpoints and agents" };
 // D920: the period Insights counts over, kept here in memory; the browser only remembers it
 let insightsDays = null;
 const period = () => {
-  if (insightsDays == null) { try { insightsDays = Number(localStorage.getItem("flux-insights-days")) || 7; } catch (_) { insightsDays = 7; } }
+  if (insightsDays == null) insightsDays = Number(recall("flux-insights-days")) || 7;
   if (!PERIODS.some(([v]) => v === insightsDays)) insightsDays = 7;
   return insightsDays;
 };
 const sum = xs => xs.reduce((s, x) => s + x, 0);
 const When = ({ t }) => t ? html`<${Ago} t=${t} />` : "—";
 const LoopLink = ({ u, a }) => html`<a href=${`#/u/${enc(u)}/app/${enc(a)}`}>${`${u}/${a}`}</a>`;
-const Total = ({ label, value, mono = true }) => html`<td class=${`num${mono ? " mono" : ""}`} data-label=${label}>${value}</td>`;
+const Total = ({ label, value, mono = true }) => html`<td class=${cx("num", mono && "mono")} data-label=${label}>${value}</td>`;
 const Totals = ({ label, children }) => html`<tfoot class="usage-total"><tr><td>${label}</td>${children}</tr></tfoot>`;
 /** A bar per bucket, to its row's own scale. */
 function Spark({ xs, label }) {
@@ -35,11 +36,11 @@ function Spark({ xs, label }) {
 }
 function Failures({ f }) {
   return html`${f.starts.length ? html`<table class="list compact"><thead><tr><th>When</th><th>Loop</th><th>Why</th></tr></thead>
-      <tbody>${f.starts.slice(0, 20).map(s => html`<tr><td class="muted"><${When} t=${s.when} /></td><td><${LoopLink} u=${s.user} a=${s.app} /></td>
+      <tbody>${f.starts.slice(0, 20).map(s => html`<tr key=${`${s.when}|${s.user}|${s.app}`}><td class="muted"><${When} t=${s.when} /></td><td><${LoopLink} u=${s.user} a=${s.app} /></td>
         <td class="mono small why-cell">${(s.why || []).slice(-2).join(" · ") || `exit ${s.rc}`}</td></tr>`)}</tbody></table>`
     : html`<p class="muted">No start failed.</p>`}
     ${f.tests.length ? html`<h3>Agent Tests whose latest run failed</h3><table class="list compact"><thead><tr><th>User</th><th>Agent</th><th>Step</th><th>Why</th><th>When</th></tr></thead>
-      <tbody>${f.tests.map(t => html`<tr><td>${t.user}</td><td>${t.agent}</td><td>${t.step}</td><td class="small">${t.why}</td><td class="muted"><${When} t=${t.when} /></td></tr>`)}</tbody></table>` : ""}`;
+      <tbody>${f.tests.map(t => html`<tr key=${`${t.user}|${t.agent}|${t.step}|${t.when}`}><td>${t.user}</td><td>${t.agent}</td><td>${t.step}</td><td class="small">${t.why}</td><td class="muted"><${When} t=${t.when} /></td></tr>`)}</tbody></table>` : ""}`;
 }
 
 /** D841: turns recorded before a price was set, priced once at today's prices. */
@@ -86,7 +87,7 @@ const Endpoints = ({ eps }) => eps.length ? html`<${SortableTable} memo="flux-in
     { label: "Failed", key: e => e.rate * 1e6 + e.turns, num: true }, { label: "Median", key: e => e.p50, num: true }, { label: "Slow (95%)", key: e => e.p95, num: true },
     { label: "Last used", key: e => e.last }, { label: "Last failure", key: e => e.last_error_at || 0 }, { label: "" }]}
   row=${e => html`<tr><td><span class="pill">${e.kind}</span> <span class="mono small">${e.where}</span></td><td class="num">${String(e.turns)}</td>
-    <td class=${`num${e.rate > 0.2 ? " bad" : ""}`}>${`${e.failed} (${Math.round(100 * e.rate)}%)`}</td><td class="num">${dur(e.p50)}</td><td class="num">${dur(e.p95)}</td>
+    <td class=${cx("num", e.rate > 0.2 && "bad")}>${`${e.failed} (${Math.round(100 * e.rate)}%)`}</td><td class="num">${dur(e.p50)}</td><td class="num">${dur(e.p95)}</td>
     <td class="muted"><${When} t=${e.last} /></td><td class="small why-cell" title=${e.last_error || ""}>${e.last_error ? html`<${When} t=${e.last_error_at} />${`: ${e.last_error.slice(0, 140)}`}` : "—"}</td>
     <td class="right"><${Forget} kind="endpoint" k=${e.key} what=${e.where} /></td></tr>`} />` : html`<p class="muted">No turn in this time.</p>`;
 const Network = ({ net }) => html`<${Card} title="Network refused">${net.length ? html`<${SortableTable} memo="flux-insights-net-sort" first=${1} rows=${net} keyOf=${n => n.key}
@@ -119,7 +120,7 @@ function Disk() {
 export function Insights({ part }) {
   const [days, setDays] = useState(period);
   const url = `/admin/insights?days=${days}&part=${part}`, read = useLoad(() => api(url), url), r = read.got?.d;
-  const pick = to => { insightsDays = Number(to); try { localStorage.setItem("flux-insights-days", String(insightsDays)); } catch (_) { /* remembered when it can be */ } setDays(insightsDays); };
+  const pick = to => { insightsDays = Number(to); remember("flux-insights-days", String(insightsDays)); setDays(insightsDays); };
   const range = html`<div class="range-pick"><label for="insights-range">Over the last</label>
     <${Select} id="insights-range" aria-label="Over the last" options=${PERIODS} value=${days} onChange=${pick} /></div>`;
   return html`<${Card} title=${TITLE[part]} actions=${range}><${Loaded} read=${read} failed="Insights could not be read">${r => html`<div>

@@ -44,7 +44,7 @@ function AdvancedForm({ a, sandboxedServer, save }) {
     set({ sandbox: on });
     saveNow();
   };
-  const num = (k, label, ph) => html`<label class="stack">${label}<input id=${`adv-${k}`} placeholder=${ph} style="width:120px" ...${bound(v[k], x => set({ [k]: x }))} /></label>`;
+  const num = (k, label, ph) => html`<label class="stack">${label}<input id=${`adv-${k}`} placeholder=${ph} class="w-120" ...${bound(v[k], x => set({ [k]: x }))} /></label>`;
   const check = (k, id, label) => html`<label class="check"><input type="checkbox" id=${id} checked=${v[k]} onChange=${e => set({ [k]: e.currentTarget.checked })} />${label}</label>`;
   const area = (k, id, label, ph) => html`<label class="stack">${label}<textarea id=${id} rows="2" class="mono" placeholder=${ph} ...${bound(v[k], x => set({ [k]: x }))} /></label>`;
   return html`<div ...${box}><p class="muted">From the next start.</p>

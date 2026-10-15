@@ -11,10 +11,10 @@ import { LoopsBrowser } from "../loops/Table.js";
 import { Select } from "../components/Select.js";
 
 /** A notification to every user, or to those ticked: `v` {text, kind, all, to}. */
-const NotifyForm = ({ users, v, set }) => html`<div class="stack"><textarea rows="3" placeholder="The message" style="width:100%" value=${v.text} onInput=${e => set({ text: e.currentTarget.value })} />
+const NotifyForm = ({ users, v, set }) => html`<div class="stack"><textarea rows="3" placeholder="The message" class="full" value=${v.text} onInput=${e => set({ text: e.currentTarget.value })} />
     <div class="row"><${Select} value=${v.kind} onChange=${kind => set({ kind })} options=${[["info", "information"], ["warn", "warning"], ["bad", "alert"]]} />
       <label class="check"><input type="checkbox" class="notify-all" checked=${v.all} onChange=${e => set({ all: e.currentTarget.checked })} />everyone</label></div>
-    <div class="notify-who" hidden=${v.all}>${users.map(u => html`<label class="check"><input type="checkbox" value=${u} checked=${v.to.includes(u)}
+    <div class="notify-who" hidden=${v.all}>${users.map(u => html`<label key=${u} class="check"><input type="checkbox" value=${u} checked=${v.to.includes(u)}
       onChange=${e => set({ to: e.currentTarget.checked ? [...v.to, u] : v.to.filter(x => x !== u) })} />${u}</label>`)}</div></div>`;
 export async function notifyDialog() {
   const users = (await api("/admin/usage").catch(() => [])).map(u => u.user);
@@ -31,7 +31,7 @@ const restartAll = async loops => {
   const go = await dialog("Restart all active loops?", html`
     <p>${`${plural(loops.length, "active loop")} will finish their current pass, then resume from their records with the same run settings. Files, results and logs are kept.`}</p>
     <p>Completed passes reduce each finite run's remaining budget; run forever stays unlimited. Counts are checked after stopping. Loops with no passes left stay stopped. Only loops still active when the request begins are restarted.</p>
-    <ul>${loops.map(l => html`<li>${`${l.owner}/${l.name}: ${l.options?.passes == null ? "run forever" : `${Math.max(0, l.options.passes - (l.passes || 0))} of ${plural(l.options.passes, "pass", "passes")} remaining`}${l.options?.screen_only ? " · screen only" : ""}`}</li>`)}</ul>`,
+    <ul>${loops.map(l => html`<li key=${`${l.owner}/${l.name}`}>${`${l.owner}/${l.name}: ${l.options?.passes == null ? "run forever" : `${Math.max(0, l.options.passes - (l.passes || 0))} of ${plural(l.options.passes, "pass", "passes")} remaining`}${l.options?.screen_only ? " · screen only" : ""}`}</li>`)}</ul>`,
     [["Cancel", false], ["Restart loops", true, "primary"]]);
   if (!go) return;
   const r = await api("/admin/restart-all", { method: "POST", body: { now: false } });
@@ -74,12 +74,12 @@ function OldDocuments({ r }) {
   const ready = r.loops.filter(l => !l.running && l.documents.some(d => d.status === "would migrate"));
   return html`<${Card} title="Old documents"><p class="muted small">${`${r.loops.length} of ${plural(r.total, "loop")} to migrate. `}Originals kept as <code>${"<file>.orig"}</code>.</p>
     ${ready.length ? html`<div class="toolbar"><${Act} cls="primary" onClick=${() => run({}, "Every loop")}>${`Migrate all (${ready.length})`}<//></div>` : ""}
-    ${r.loops.map(l => html`<div class="mig-loop"><div class="mig-head"><strong>${`${l.user} / `}<a href=${appHref(l.user, l.app)}>${l.app}</a></strong>${l.running ? html`<span class="pill live">running</span>` : ""}
+    ${r.loops.map(l => html`<div key=${`${l.user}/${l.app}`} class="mig-loop"><div class="mig-head"><strong>${`${l.user} / `}<a href=${appHref(l.user, l.app)}>${l.app}</a></strong>${l.running ? html`<span class="pill live">running</span>` : ""}
         <span class="grow" />${l.documents.some(d => d.status === "would migrate") ? (l.running ? html`<span class="muted small">stop it to migrate: its document is in use</span>`
           : html`<${Act} cls="small primary" title="Write the documents that load; keep each original" onClick=${() => run({ user: l.user, app: l.app }, `${l.user}/${l.app}`)}>Migrate<//>`)
           : html`<span class="small bad">${l.documents.some(d => d.status === "needs a hand") ? "not by itself: a part needs rewriting by hand (below)" : "not by itself: its result would not load (below)"}</span>
             <a class="btn small" href=${`${appHref(l.user, l.app)}/settings/problem`}>Edit its document</a>`}</div>
-      ${l.documents.filter(d => d.status !== "current").map(d => html`<div class="mig-doc"><div><span class="mono">${d.file}</span>${d.to !== d.file ? html`<span class="mono muted">${` → ${d.to}`}</span>` : ""} <span class=${`pill ${PILL[d.status] || ""}`}>${d.status}</span></div>
+      ${l.documents.filter(d => d.status !== "current").map(d => html`<div key=${d.file} class="mig-doc"><div><span class="mono">${d.file}</span>${d.to !== d.file ? html`<span class="mono muted">${` → ${d.to}`}</span>` : ""} <span class=${`pill ${PILL[d.status] || ""}`}>${d.status}</span></div>
         ${d.why ? html`<p class="small bad">${d.why}</p>` : ""}${d.manual.length ? html`<ul class="small bad">${d.manual.map(m => html`<li>${m}</li>`)}</ul>` : ""}
         ${d.said.length ? html`<details><summary class="small">${plural(d.said.length, "change")}</summary><ul class="small mono">${d.said.map(x => html`<li>${x}</li>`)}</ul>${d.text ? html`<pre class="log small">${d.text}</pre>` : ""}</details>` : ""}</div>`)}</div>`)}<//>`;
 }

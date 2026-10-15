@@ -2,7 +2,7 @@
 // better), and their sources' difference.
 
 import { html } from "../view.js";
-import { api, dialog, enc } from "../ui.js";
+import { dialog, enc, loopApi } from "../ui.js";
 import { plural } from "../format.js";
 import { directionOf } from "../charts/data.js";
 import { lineDiff } from "../diff.js";
@@ -23,14 +23,14 @@ function Comparison({ a, b, fa, fb, stages, directions, fmt }) {
   const changed = ops ? ops.filter(o => o[0] !== " ").length : 0;
   return html`<div class="compare"><p class="muted">Green: B is better.</p>
     <table class="list compact"><thead><tr><th>stage</th><th>metric</th><th class="num">A <${VerdictPill} d=${a} /></th><th class="num">B <${VerdictPill} d=${b} /></th><th class="num">B − A</th></tr></thead>
-      <tbody>${rows.map(row => html`<tr><td class="muted">${row.st}</td><td>${row.m}</td>${cell(row.va)}${cell(row.vb)}${delta(row)}</tr>`)}</tbody></table>
+      <tbody>${rows.map(row => html`<tr key=${`${row.st}|${row.m}`}><td class="muted">${row.st}</td><td>${row.m}</td>${cell(row.va)}${cell(row.vb)}${delta(row)}</tr>`)}</tbody></table>
     <h3>Source${ops ? html`<span class="muted">${changed ? ` · ${plural(changed, "line")} differ` : " · the same"}</span>` : ""}</h3>
     ${ops ? (changed ? html`<${Diff} ops=${ops} />` : html`<div class="empty"><p>The two sources are the same.</p></div>`) : html`<div class="empty"><p>A source is missing.</p></div>`}</div>`;
 }
 
 /** The two designs ticked, compared in a dialog. */
 export async function compare(ctx, r, [a, b], directions, fmt) {
-  const get = d => api(`/apps/${enc(ctx.name)}/design?design=${enc(d.base || d.name)}&part=${enc(d.part)}&key=${enc(d.key || "")}${ctx.q}`);
+  const get = d => loopApi(ctx.name).api(`/design?design=${enc(d.base || d.name)}&part=${enc(d.part)}&key=${enc(d.key || "")}`);
   const [fa, fb] = await Promise.all([get(a), get(b)]);
   const stages = (r.stages || []).filter(st => a.stages[st] || b.stages[st]).concat(Object.keys({ ...a.stages, ...b.stages }).filter(st => !(r.stages || []).includes(st)));
   await dialog(`${a.name} → ${b.name}`, html`<${Comparison} a=${a} b=${b} fa=${fa} fb=${fb} stages=${stages} directions=${directions} fmt=${fmt} />`, [["Close", null, "primary"]]);

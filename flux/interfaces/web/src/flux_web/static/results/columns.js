@@ -2,15 +2,15 @@
 // its aggregate or unrolled to its tests (D1008, D1014), values absolute or relative -- kept in the loop's
 // shared preferences (preferences.js), and the table's headers and badges.
 
-import { html, useState } from "../view.js";
+import { cx, html, useState } from "../view.js";
 import { mainMeasurements, relativeMeasurement, resultPreferences } from "./preferences.js";
+import { useLoop } from "../loop/context.js";
 
 /** The columns of `metrics` and their controls: `visible()` in the order shown (a dictionary's aggregate first,
     then its tests), `hidden(m)`, `controls` (Hidden N, Tests ▸), `toggle(m, on)` (the picker's). */
 export function useColumns(ctx, metrics, groups = {}) {
   const prefs = resultPreferences(ctx), saved = prefs.read();
-  const [, redraw] = useState(0);
-  const [state] = useState(() => ({
+  const [state, setState] = useState(() => ({
     hidden: new Set(Array.isArray(saved.hiddenMetrics) ? saved.hiddenMetrics.filter(m => typeof m === "string") : []),
     showHidden: saved.showHiddenMetrics === true,
     choices: saved.dictionaryMetrics && typeof saved.dictionaryMetrics === "object" && !Array.isArray(saved.dictionaryMetrics) ? { ...saved.dictionaryMetrics } : {},
@@ -22,10 +22,13 @@ export function useColumns(ctx, metrics, groups = {}) {
     const available = dictionaries[name].filter(m => state.showHidden || !state.hidden.has(m));
     return { selected: available.includes(name) ? name : available[0], expanded: state.choices[name]?.expanded === true };
   };
-  const changed = () => {
-    if (!metrics.some(m => state.hidden.has(m))) state.showHidden = false;
-    prefs.save({ hiddenMetrics: [...state.hidden], showHiddenMetrics: state.showHidden, dictionaryMetrics: state.choices });
-    redraw(n => n + 1);
+  // a change: the next state made from a copy, saved to the loop's preferences, then drawn
+  const update = change => {
+    const next = { hidden: new Set(state.hidden), showHidden: state.showHidden, choices: { ...state.choices } };
+    change(next);
+    if (!metrics.some(m => next.hidden.has(m))) next.showHidden = false;
+    prefs.save({ hiddenMetrics: [...next.hidden], showHiddenMetrics: next.showHidden, dictionaryMetrics: next.choices });
+    setState(next);
   };
   const nHidden = metrics.filter(m => state.hidden.has(m)).length;
   const names = Object.keys(dictionaries).filter(name => dictionaries[name].length > 1);
@@ -33,14 +36,14 @@ export function useColumns(ctx, metrics, groups = {}) {
   const open = names.length > 0 && names.every(name => selection(name).expanded);
   const controls = html`<div class="measurement-columns">
     <button type="button" class="small show-hidden-columns" hidden=${!nHidden} aria-pressed=${String(state.showHidden && !!nHidden)}
-      title=${state.showHidden ? "Hide ignored measurement columns" : "Show ignored measurement columns"} onClick=${() => { state.showHidden = !state.showHidden; changed(); }}>${`Hidden ${nHidden}`}</button>
-    <div class="dictionary-controls">${names.length ? html`<button type="button" class=${`small dictionary-expand${open ? " on" : ""}`} aria-pressed=${String(open)}
+      title=${state.showHidden ? "Hide ignored measurement columns" : "Show ignored measurement columns"} onClick=${() => update(n => { n.showHidden = !n.showHidden; })}>${`Hidden ${nHidden}`}</button>
+    <div class="dictionary-controls">${names.length ? html`<button type="button" class=${cx("small dictionary-expand", open && "on")} aria-pressed=${String(open)}
       title=${open ? "Fold every dictionary to its aggregate" : `Show every dictionary's tests (${tests})`}
-      onClick=${() => { for (const name of names) state.choices[name] = { ...selection(name), expanded: !open }; changed(); }}>${`Tests ${open ? "▾" : "▸"}`}</button>` : ""}</div></div>`;
+      onClick=${() => update(n => { for (const name of names) n.choices[name] = { ...selection(name), expanded: !open }; })}>${`Tests ${open ? "▾" : "▸"}`}</button>` : ""}</div></div>`;
   return {
     controls,
     hidden: m => state.hidden.has(m),
-    toggle(m, on) { if (on) state.hidden.delete(m); else state.hidden.add(m); changed(); },
+    toggle(m, on) { update(n => { if (on) n.hidden.delete(m); else n.hidden.add(m); }); },
     visible() {
       const shown = metrics.filter(m => {
         if (!state.showHidden && state.hidden.has(m)) return false;
@@ -106,7 +109,8 @@ const CheckBox = ({ checked, onChange, off, ...rest }) => html`<input type="chec
 
 /** Settings › Measurements (D1001, D1008, D1013): each metric's column shown or not, main or not, said as a
     percent change or not -- a dictionary's tests folded under its row, its aggregate said beside it. */
-export function MeasurementOptions({ ctx, metrics, groups = {}, defaults = metrics.slice(0, 1) }) {
+export function MeasurementOptions({ metrics, groups = {}, defaults = metrics.slice(0, 1) }) {
+  const ctx = useLoop();
   const prefs = resultPreferences(ctx), columns = useColumns(ctx, metrics, groups);
   const [main, setMain] = useState(() => new Set(mainMeasurements(ctx, metrics, defaults)));
   const [relative, setRelative] = useState(() => new Set(metrics.filter(m => relativeMeasurement(ctx, m))));

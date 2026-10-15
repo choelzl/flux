@@ -67,9 +67,9 @@ function AgentLogin({ a, test, login }) {
         ${v.state === "changed" ? html`<span class="muted small">its endpoint, model or credential is not what was tested</span>` : ""}</dd></dl>
     ${(a.conflicts || []).length || (a.unused || []).length ? html`<ul class="small hint-line agent-notes">${[...(a.conflicts || []), ...(a.unused || [])].map(x => html`<li>${x}</li>`)}</ul>` : ""}
     <div class="actions">${a.testing ? html`<span class="muted small">testing…</span>` : html`<${Act} cls="primary small" title="Ask it one short question, as your loops run it" onClick=${() => test(a)}>Test connection<//>`}</div>
-    ${(a.loops || []).length ? html`<div class="small"><span class="muted">Loops whose variables set it otherwise:</span><ul class="agent-loops">${a.loops.map(x => html`<li><span class="mono">${x.loop}</span>
+    ${(a.loops || []).length ? html`<div class="small"><span class="muted">Loops whose variables set it otherwise:</span><ul class="agent-loops">${a.loops.map(x => html`<li key=${x.loop}><span class="mono">${x.loop}</span>
       <span class=${`pill ${pill(x.state)[0]}`}>${pill(x.state)[1]}</span>${a.testing ? "" : html` <${Act} cls="small" title="Its variables give this agent another configuration there" onClick=${() => test(a, x.loop)}>Test for this loop<//>`}</li>`)}</ul></div>` : ""}
-    ${a.tested?.steps?.length ? html`<details key="tested" class="set-fold"><summary>Last test's steps</summary><ul class="agent-steps small">${a.tested.steps.map(s => html`<li class=${s.ok ? "" : "bad"}>
+    ${a.tested?.steps?.length ? html`<details key="tested" class="set-fold"><summary>Last test's steps</summary><ul class="agent-steps small">${a.tested.steps.map(s => html`<li key=${s.step} class=${s.ok ? "" : "bad"}>
       <span class="mono">${s.ok ? "✓ " : "✗ "}</span><strong>${s.step}</strong> ${s.said}</li>`)}</ul></details>` : ""}
     <details class="set-fold agent-login-fold"><summary>Interactive login<span class="muted small">${a.logged_in ? " · logged in" : " · optional"}</span></summary>
       <p class="muted small">One way to connect: its own login, kept in your Flux home. Not needed with a key or a provider configuration.</p>

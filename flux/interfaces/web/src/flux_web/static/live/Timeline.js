@@ -2,7 +2,7 @@
 // kind's lane, a quiet band per pass (D978), the agents' activity over the work; work side by side offered
 // to choose from.
 
-import { html } from "../view.js";
+import { cx, html } from "../view.js";
 import { dur } from "../format.js";
 import { WORK_COLORS as COLORS, AGENT_COLOR, ownSpans, phaseKind, workLabel } from "./work_style.js";
 import { taskState as state } from "./model.js";
@@ -59,9 +59,9 @@ export function Timeline({ v, a }) {
         <line x1=${L} x2=${W - R} y1=${T + (i + 1) * lane} y2=${T + (i + 1) * lane} class="grid" />`)}
       ${TICKS.map(f => html`<line x1=${X(t0 + f * (t1 - t0))} x2=${X(t0 + f * (t1 - t0))} y1=${T} y2=${H - B} class="grid" />
         <text x=${X(t0 + f * (t1 - t0))} y=${H - 8} class="tick" text-anchor=${f === 0 ? "start" : f === 1 ? "end" : "middle"}>${`+${dur(f * (t1 - t0)) || "0s"}`}</text>`)}
-      ${bands.length > 1 ? bands.map(([p, [s0, s1]], i) => html`<rect x=${X(s0)} y="2" width=${Math.max(1, X(s1) - X(s0))} height=${H - B - 2} class=${`alt-band${i % 2 ? " odd" : ""}`} />
+      ${bands.length > 1 ? bands.map(([p, [s0, s1]], i) => html`<rect x=${X(s0)} y="2" width=${Math.max(1, X(s1) - X(s0))} height=${H - B - 2} class=${cx("alt-band", i % 2 && "odd")} />
         <text x=${(X(s0) + X(s1)) / 2} y="12" class="tick alt-band-label" text-anchor="middle">${passShort(p)}</text>`) : ""}
-      ${order.map(({ n, kind, t0: s0, t1: s1 }) => html`<g class=${`alt-time-task${n.id === v.selected ? " sel" : ""}`} data-kind=${kind} aria-pressed=${String(n.id === v.selected)}
+      ${order.map(({ n, kind, t0: s0, t1: s1 }) => html`<g class=${cx("alt-time-task", n.id === v.selected && "sel")} data-kind=${kind} aria-pressed=${String(n.id === v.selected)}
           data-task=${String(n.id)} tabindex="0" role="button" aria-label=${`${n.name} · ${state(n)}`} onClick=${e => press(e, n, kind)} onKeyDown=${e => key(e, n)}>
         <title>${`${taskLabel(n)} · ${dur(n.seconds ?? now - n.t0)}${n.t1 == null ? " so far" : n.failed ? " · failed" : ""}`}</title>
         <rect x=${X(s0)} y=${T + lanes.indexOf(kind) * lane + 3} width=${Math.max(3, X(s1) - X(s0))} height=${lane - 6} rx="2" fill=${COLORS[kind]} class=${`bar ${state(n)}`} /></g>`)}

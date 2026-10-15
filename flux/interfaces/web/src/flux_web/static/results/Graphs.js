@@ -2,16 +2,18 @@
 // Pareto front of two metrics at a stage (focused on it or not), the improvement by design of the metrics
 // chosen (a dictionary as its aggregate or a chart per test, D1014); the choices kept in the loop's preferences.
 
-import { Card, Empty, html, useState } from "../view.js";
+import { Card, Empty, cx, html, useState } from "../view.js";
 import { defaultMainMeasurements, mainMeasurements, resultPreferences } from "./preferences.js";
 import { designPoints, directionOf, groupList, groupStyles, scopesOf } from "../charts/data.js";
 import { Legend } from "../charts/marks.js";
 import { BestChart } from "../charts/BestChart.js";
 import { ParetoChart } from "../charts/ParetoChart.js";
 import { Select } from "../components/Select.js";
+import { useLoop } from "../loop/context.js";
 
 
-export function Graphs({ ctx, r, directions, onPick, detail }) {
+export function Graphs({ r, directions, onPick, detail }) {
+  const ctx = useLoop();
   const prefs = resultPreferences(ctx), groups = groupList(r.designs), styles = groupStyles(groups);   // D915: one colour map, built once
   const nums = r.metrics.filter(m => r.designs.some(d => Object.values(d.stages).some(n => n[m] != null)));
   const stageNames = (r.stages && r.stages.length ? r.stages : [...new Set(r.designs.flatMap(d => Object.keys(d.stages)))])
@@ -41,7 +43,7 @@ export function Graphs({ ctx, r, directions, onPick, detail }) {
   const best = (m, each = false) => html`<${BestChart} rows=${designPoints(r.designs, objFor(m))} obj=${objFor(m)} passes=${r.passes} styles=${styles} scope=${g.scope} legend=${false} cls=${each ? "small-multiple" : ""} />`;
   return html`<div class="graphs">
     <${Card} cls="graphs-ctl"><div>${groups.length ? html`<div class="chips scope" role="group" aria-label="Scope"><span class="muted">Compare within</span>
-        ${scopesOf(groups).map(([k, label]) => html`<button class=${`chip${g.scope === k ? " on" : ""}`} type="button" aria-pressed=${g.scope === k ? "true" : "false"} onClick=${() => set({ scope: k })}>${label}</button>`)}</div>` : ""}</div>
+        ${scopesOf(groups).map(([k, label]) => html`<button class=${cx("chip", g.scope === k && "on")} type="button" aria-pressed=${g.scope === k ? "true" : "false"} onClick=${() => set({ scope: k })}>${label}</button>`)}</div>` : ""}</div>
       <p class="muted small graphs-note">${`Measured search designs are drawn (${r.designs.filter(d => !d.baseline).length}); baseline measurements are gray reference lines. The table's filter does not apply. `}
         The best so far and the front count only designs that meet every requirement${groups.length ? ", within the scope" : ""}.</p>
       <${Legend} S=${styles} front rejected=${r.designs.some(d => d.verdict === "rejected")} pending=${r.designs.some(d => d.verdict === "pending")} baseline=${r.designs.some(d => d.baseline)} /><//>
@@ -49,7 +51,7 @@ export function Graphs({ ctx, r, directions, onPick, detail }) {
       <${Card} title="Pareto front"><div><div class="chart-ctl">
           <label>x ${metricSelect(g.x, v => set({ x: v }))}</label><label>y ${metricSelect(g.y, v => set({ y: v }))}</label>
           <label>stage <${Select} options=${stageOpts} value=${g.paretoStage} onChange=${v => set({ paretoStage: v })} /></label>
-          <button type="button" class=${`small chip pareto-focus${g.paretoFocus ? " on" : ""}`} aria-pressed=${String(g.paretoFocus)} disabled=${nums.length < 2}
+          <button type="button" class=${cx("small chip pareto-focus", g.paretoFocus && "on")} aria-pressed=${String(g.paretoFocus)} disabled=${nums.length < 2}
             title=${g.paretoFocus ? "Show the full measurement range" : "Fit axes to the feasible Pareto front; distant points may be outside the view"}
             onClick=${() => set({ paretoFocus: !g.paretoFocus })}>Focus</button></div>
         ${nums.length < 2 ? html`<${Empty} text="A front needs two measured metrics." />`
@@ -59,7 +61,7 @@ export function Graphs({ ctx, r, directions, onPick, detail }) {
             // D1014: one chip per dictionary; charted, a switch between its aggregate and one small chart per test
             const tests = ms.filter(m => m !== k), on = charted.has(k) || tests.some(m => charted.has(m));
             const toggle = () => set({ metrics: on ? g.metrics.filter(m => m !== k && !tests.includes(m)) : [...g.metrics, ms.includes(k) ? k : tests[0]] });
-            const chip = html`<button class=${`chip${on ? " on" : ""}`} title=${k} onClick=${toggle}>${k}</button>`;
+            const chip = html`<button class=${cx("chip", on && "on")} title=${k} onClick=${toggle}>${k}</button>`;
             if (!tests.length || !on) return chip;
             const each = perTest.has(k) || !ms.includes(k);
             return html`${chip}<span class="seg dict-view" data-dict=${k}>${(ms.includes(k) ? [["agg", metricGroups[k]?.aggregate || "aggregate"], ["each", "per test"]] : [["each", "per test"]]).map(([v, label]) =>

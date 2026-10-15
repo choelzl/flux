@@ -3,7 +3,7 @@
 // picked), a failing one turning Start into "Start anyway".
 
 import { html, useEffect, useState } from "../view.js";
-import { api, dialog, enc, toast, when, withOwner } from "../ui.js";
+import { dialog, enc, loopApi, toast, when, withOwner } from "../ui.js";
 import { pageOwner } from "../state.js";
 import { Select } from "../components/Select.js";
 
@@ -19,7 +19,7 @@ function StartForm({ name, pre, v, set }) {
     setSaid({ ok: null, text: why });
     set({ checking: true, failing: false });
     const q = docs.length > 1 ? `?document=${enc(doc)}` : "";
-    api(`/apps/${enc(name)}/check${q}`, { method: "POST" }).then(r => verdict(r.ok, r.output), x => setSaid({ ok: false, text: "The check could not run: " + x.message }))
+    loopApi(name).api(`/check${q}`, { method: "POST" }).then(r => verdict(r.ok, r.output), x => setSaid({ ok: false, text: "The check could not run: " + x.message }))
       .finally(() => set({ checking: false }));
   };
   useEffect(() => {
@@ -31,7 +31,7 @@ function StartForm({ name, pre, v, set }) {
       options=${docs.map(d => [d.path, `${d.path} — record ${d.record}`])} /></label>` : ""}
     <div class="preflight">${said ? html`<div class=${`callout ${said.ok === true ? "good" : said.ok === false ? "bad" : ""}`}><strong>${said.text}</strong>
       ${said.output ? html`<details><summary>Check output</summary><pre class="log small">${said.output}</pre></details>` : ""}</div>` : ""}</div>
-    <div class="row"><label class="stack">Passes<input type="number" class="start-passes" min="1" value=${v.passes} style="width:90px" disabled=${v.forever} onInput=${e => set({ passes: e.currentTarget.value })} /></label>
+    <div class="row"><label class="stack">Passes<input type="number" class="start-passes w-90" min="1" value=${v.passes} disabled=${v.forever} onInput=${e => set({ passes: e.currentTarget.value })} /></label>
       <label class="check"><input type="checkbox" class="start-forever" checked=${v.forever} onChange=${e => set({ forever: e.currentTarget.checked })} />until I stop it</label></div>
     <label class="check"><input type="checkbox" class="start-screen" checked=${v.screen} onChange=${e => set({ screen: e.currentTarget.checked })} />screen only (skip the costly stages)</label>`;
 }
@@ -40,7 +40,7 @@ function StartForm({ name, pre, v, set }) {
 export async function startLoop(name, owner) {
   return withOwner(owner || pageOwner, async () => {
     // D693: the last start's options, and the check when the inputs changed since it was run
-    const pre = await api(`/apps/${enc(name)}/preflight`).catch(() => ({}));
+    const pre = await loopApi(name).api("/preflight").catch(() => ({}));
     if (pre.paused) { toast(`New starts are paused by an admin: ${pre.paused}`, "warn", { timeout: 8000 }); return false; }
     const last = pre.options || {}, many = (pre.documents || []).filter(d => d.ok).length > 1;
     const read = v => ({ passes: v.forever ? null : (Number(v.passes) || 1), screen_only: v.screen, document: many ? v.document : null });
@@ -48,7 +48,7 @@ export async function startLoop(name, owner) {
       v => [["Cancel", false], v.failing ? ["Start anyway", read, "danger solid", v.checking] : ["Start", read, "primary", v.checking]],
       { document: pre.document, passes: last.passes || 1, forever: last.passes === null, screen: !!last.screen_only, checking: false, failing: false });
     if (!options) return false;
-    const r = await api(`/apps/${enc(name)}/start`, { method: "POST", body: options });
+    const r = await loopApi(name).api("/start", { method: "POST", body: options });
     toast(r.ok, "ok");
     return true;
   });

@@ -3,7 +3,7 @@
 // to say; the account's layout picks and orders them (overview/layout.js).
 
 import { Ago, Card, Empty, html } from "../view.js";
-import { api, enc, toast } from "../ui.js";
+import { enc, loopApi, toast } from "../ui.js";
 import { dur, fmtTok, plural } from "../format.js";
 import { designLabels, measurementText, relativeMeasurement, resultPreferences } from "../results/preferences.js";
 import { designPoints, groupList } from "../charts/data.js";
@@ -64,15 +64,15 @@ export function overviewCards(o) {
       sub=${notebook ? ["proposed", "measured", "failed", "interrupted", "checked"].map(s => { const n = notebook.filter(i => i.status === s).length; return n ? `${n} ${s}` : ""; }).filter(Boolean).join(" · ") || "No ideas recorded" : "Ideas unavailable"} />`,
   };
   const cards = {
-    decision: a => html`<${DecisionCard} a=${a} ctx=${ctx} r=${r} main=${main} comparison=${comparison} unit=${unit} />`,
+    decision: a => html`<${DecisionCard} a=${a} r=${r} main=${main} comparison=${comparison} unit=${unit} />`,
     best: a => html`<${Card} ...${a} title="Best so far">${objs.length ? objs.map(ob => html`<${BestChart} rows=${designPoints(designs, ob)} obj=${ob} passes=${r.passes} groups=${groupList(designs)} />`)
       : html`<${Empty} text="Select a main metric in Settings → Measurements to chart." />`}<//>`,
-    last_pass: a => html`<${LastPass} a=${a} ctx=${ctx} r=${r} />`,
-    notes: a => notes.length ? html`<${Card} ...${a} title="Latest notes"><div class="notes">${notes.slice(-5).reverse().map(n => html`<div class="note has-bin">
+    last_pass: a => html`<${LastPass} a=${a} r=${r} />`,
+    notes: a => notes.length ? html`<${Card} ...${a} title="Latest notes"><div class="notes">${notes.slice(-5).reverse().map(n => html`<div key=${n.id} class="note has-bin">
         <small class="muted">${n.by} · <${Ago} t=${n.t} /></small><div>${n.text}</div>
         ${ctx.mine ? html`<${Bin} what="note" title="Remove this note?" said="It goes from the page, and from the loop if it has not read it yet; what the loop read already stays in its record."
-          remove=${async () => { await api(`/apps/${enc(ctx.name)}/notes/${enc(n.id)}${ctx.qs}`, { method: "DELETE" }); toast("The note is removed", "ok"); ctx.drawBody(); }} />` : ""}</div>`)}</div><//>` : null,
-    workbench: a => bench.length ? html`<${Card} ...${a} title="Agents' workbench"><ul class="bench">${bench.slice(0, 5).map(b => html`<li>
+          remove=${async () => { await loopApi(ctx.name).api(`/notes/${enc(n.id)}`, { method: "DELETE" }); toast("The note is removed", "ok"); ctx.drawBody(); }} />` : ""}</div>`)}</div><//>` : null,
+    workbench: a => bench.length ? html`<${Card} ...${a} title="Agents' workbench"><ul class="bench">${bench.slice(0, 5).map(b => html`<li key=${b.path}>
         <a href="javascript:void 0" onClick=${go("Files", "workbench")}>${b.path.split("/").pop()}</a><small class="muted"> <${Ago} t=${b.mtime} /></small>
         ${b.first ? html`<div class="first">${b.first}</div>` : ""}</li>`)}</ul><//>` : null,
     usage: a => html`<${Card} ...${a} title="Models and agents" actions=${button("Agents", "Agents")}>${total ? html`
@@ -116,7 +116,7 @@ export function overviewCards(o) {
           <${ValueCell} v=${percent(ref?.percent)} title=${source ? `Percent change from ${source.kind}; baseline first, percentile fallback` : "No reference"} /></tr>`; })}<//>`
       : html`<${Empty} text=${dec ? "Select main metrics in Settings → Measurements." : "No selected design to compare."} />`}<//>`,
     goals: a => html`<${Card} ...${a} title="Goal status" actions=${button("Results", "Results")}>${limits.length
-      ? html`<${SummaryTable} heads=${["Metric", "Goal", "Selected", "Status"]}>${limits.map(l => html`<tr>
+      ? html`<${SummaryTable} heads=${["Metric", "Goal", "Selected", "Status"]}>${limits.map(l => html`<tr key=${`${l.metric}|${l.stage}`}>
           <td title=${l.stage ? `Judged at ${l.stage}` : ""}>${l.metric}${unit[l.metric] ? html`<small class="muted">${` · ${unit[l.metric]}`}</small>` : ""}</td>
           <${ValueCell} v=${`${l.direction === "maximize" ? "≥" : "≤"} ${measured(l.goal)}`} /><${ValueCell} v=${measured(l.value)} />
           <td class="num"><span class=${`pill ${l.met === true ? "ok" : l.met === false ? "bad" : "warn"}`}>${l.met === true ? "met" : l.met === false ? "missed" : "unmeasured"}</span></td></tr>`)}<//>`
@@ -127,7 +127,7 @@ export function overviewCards(o) {
           || (Date.parse(b.first || "") || 0) - (Date.parse(a.first || "") || 0)).slice(0, 5);
       const labels = designLabels(designs, ctx.name);
       return html`<${Card} ...${a} title="Recent designs" actions=${button("All results", "Results")}>${recent.length
-        ? html`<${SummaryTable} heads=${["Design", "Status", ...main]}>${recent.map(d => html`<tr>
+        ? html`<${SummaryTable} heads=${["Design", "Status", ...main]}>${recent.map(d => html`<tr key=${d.name}>
             <td><button type="button" class="link mono" title=${`${d.name} · ${d.shown}`} onClick=${go("Results")}>${labels.get(d)}</button></td>
             <td class="num"><${VerdictBadge} verdict=${d.verdict} reason=${(d.why || []).join("; ")} /></td>
             ${main.map(m => { const v = measurementText(d, m, comparison, num4, relativeMeasurement(ctx, m)); return html`<${ValueCell} v=${v.text || "—"} title=${v.title} />`; })}</tr>`)}<//>`
@@ -139,7 +139,7 @@ export function overviewCards(o) {
         return html`<li><small class="muted"><${Ago} t=${p.when} /></small><div>${said ? own(ctx, said) : "No decision"}</div>${c?.decided_by ? html`<small class="muted">${c.decided_by}</small>` : ""}</li>`; })}</ol>`
       : html`<${Empty} text="No completed passes on record." />`}<//>`,
     usage_breakdown: a => html`<${Card} ...${a} title="Usage by model and agent" actions=${button("Agents", "Agents")}>${use?.by?.length
-      ? html`<${SummaryTable} heads=${["Who", "Turns", "Time", "Tokens in", "Tokens out", "Cost"]}>${use.by.map(b => html`<tr>
+      ? html`<${SummaryTable} heads=${["Who", "Turns", "Time", "Tokens in", "Tokens out", "Cost"]}>${use.by.map(b => html`<tr key=${`${b.who}|${b.kind}`}>
           <td>${b.who}<div class="muted small">${b.kind}${b.partial ? " · partial usage" : ""}</div></td><${ValueCell} v=${String(b.turns)} /><${ValueCell} v=${dur(b.seconds) || "0s"} />
           <${ValueCell} v=${b.counted ? fmtTok(b.tokens_in) : "—"} /><${ValueCell} v=${b.counted ? fmtTok(b.tokens_out) : "—"} /><${ValueCell} v=${b.cost_usd != null ? `$${b.cost_usd.toFixed(2)}` : "—"} /></tr>`)}<//>`
       : html`<${Empty} text="No model or agent usage recorded." />`}<//>`,

@@ -1,18 +1,20 @@
 // Flux web, Agents tab (D1095): the turns' cost, the turns, the one picked.
 
-import { api, enc } from "../ui.js";
+import { loopApi } from "../ui.js";
 import { Card, Empty, Skeleton, html, useState } from "../view.js";
 import { Loaded, useLoad } from "../components/Load.js";
 import { UsageCard } from "./usage.js";
 import { TurnDetail, TurnRow } from "./turns.js";
+import { useLoop } from "../loop/context.js";
 
 /** The Agents tab: the turns' cost, the turns newest first, the one picked in detail (D1094: the newest, at once). */
-export function AgentsTab({ ctx, turns, use }) {
-  const { name, q } = ctx;
+export function AgentsTab({ turns, use }) {
+  const ctx = useLoop();
+  const { name } = ctx;
   const newest = turns.length ? turns[turns.length - 1] : null;
   const [picked, setPicked] = useState(newest);
   // D919: the turn picked last is the one shown
-  const read = useLoad(() => picked ? api(`/apps/${enc(name)}/turns?k=${picked.k}${q}`).then(r => r.turns[0] || {}) : null, picked?.k ?? "");
+  const read = useLoad(() => picked ? loopApi(name).api(`/turns?k=${picked.k}`).then(r => r.turns[0] || {}) : null, picked?.k ?? "");
   return html`
     ${use ? html`<${UsageCard} u=${use} />` : ""}
     <div class="split">

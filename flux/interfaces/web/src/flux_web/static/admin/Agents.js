@@ -12,6 +12,7 @@ import { bound, useAutosave } from "../components/Autosave.js";
 import { EnvEditor } from "../components/Env.js";
 import { SettingsForm } from "../settings/SettingsForm.js";
 import { Select } from "../components/Select.js";
+import { remember } from "../stored.js";
 
 /** D924: how an agent connects, and whether that was verified -- the words the Account and the authoring picker say. */
 export const MECHANISM = { key: "API key", provider: "provider configuration", login: "interactive login", endpoint: "endpoint without a key", none: "not detected" };
@@ -114,7 +115,7 @@ function AddAgent({ kinds }) {
   const field = k => bound(v[k], x => setV(o => ({ ...o, [k]: x })));
   const add = async () => {
     await api("/admin/agents", { method: "POST", body: { name: v.name.trim(), kind: v.kind, label: v.label, bin: v.bin } });
-    try { localStorage.setItem("flux-models-tab-server", v.label.trim() || v.name.trim()); } catch (_) { /* per viewer */ }
+    remember("flux-models-tab-server", v.label.trim() || v.name.trim());
     toast(`${v.name.trim()} added`, "ok"); route();
   };
   return html`<fieldset class="set-group"><legend>Add an agent</legend><p class="muted small">Another build of a kind under its own name (<code>generate: nga</code>).</p>

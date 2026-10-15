@@ -36,7 +36,7 @@ export function Audit({ audit }) {
       <input placeholder="search the details" class="filter" value=${find} onInput=${e => setFind(e.currentTarget.value)} />
       <span class="muted">${got.length === audit.length ? `${audit.length} entries` : `${got.length} of ${audit.length} entries`}</span></div>
     <table class="list"><thead><tr><th>When</th><th>Who</th><th>What</th><th>Detail</th></tr></thead>
-      <tbody>${got.length ? got.map(x => html`<tr><td class="muted"><${Ago} t=${x.t} /></td><td>${x.user || ""}</td>
+      <tbody>${got.length ? got.map(x => html`<tr key=${`${x.t}|${x.action}|${x.user}`}><td class="muted"><${Ago} t=${x.t} /></td><td>${x.user || ""}</td>
         <td class=${x.action === "network refused" || x.action === "login refused" ? "bad" : ""}>${x.action}</td><td class="mono muted">${x.detail}</td></tr>`)
         : html`<tr><td colspan="4"><${Empty} text="Nothing matches." /></td></tr>`}</tbody></table><//>`;
 }

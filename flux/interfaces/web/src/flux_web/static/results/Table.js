@@ -2,7 +2,7 @@
 // (D929: a real button that says its order), grown by pages (D694), two ticked to compare; a row opens its
 // design. The decision (★) and the newest first, unless a column is chosen.
 
-import { html, useLayoutEffect, useRef, useState } from "../view.js";
+import { cx, html, useLayoutEffect, useRef, useState } from "../view.js";
 import { dictionaryClasses, measurementLabels, measurementText } from "./preferences.js";
 import { GroupRow, MeasurementHeader, VerdictBadge } from "./columns.js";
 
@@ -31,7 +31,7 @@ export function ResultsTable({ t, selected, onOpen, onCompare }) {
   const shown = all.slice(0, pageN);
   useLayoutEffect(() => { if (focus.current) { box.current?.querySelector(`button.th-sort[data-key="${CSS.escape(focus.current)}"]`)?.focus(); focus.current = null; } });
   const by = key => { focus.current = key; setSort(s => s.key === key ? { key, dir: -s.dir } : { key, dir: ["name", "verdict", "stage"].includes(key) ? 1 : -1 }); };
-  const sortButton = (k, label) => html`<button type="button" class=${`th-sort${sortKey === k ? " on" : ""}`} data-key=${k} aria-label=${label} onClick=${() => by(k)}>
+  const sortButton = (k, label) => html`<button type="button" class=${cx("th-sort", sortKey === k && "on")} data-key=${k} aria-label=${label} onClick=${() => by(k)}>
     ${labels.get(k) || label}${k === "name" || k === "verdict" ? html`<span class="th-arrow" aria-hidden="true">${sortKey === k ? (sort.dir > 0 ? "▴" : "▾") : ""}</span>` : ""}</button>`;
   const th = (k, label, cls = "", title = null, extra = null) => html`<th class=${`sortable ${cls}${sortKey === k ? " sorted" : ""}`} aria-sort=${sortKey === k ? (sort.dir > 0 ? "ascending" : "descending") : "none"} data-label=${label} title=${title}>
     ${cls.includes("measurement-head") ? html`<${MeasurementHeader} text=${labels.get(k)} button=${sortButton(k, label)}
@@ -39,7 +39,7 @@ export function ResultsTable({ t, selected, onOpen, onCompare }) {
       : html`${sortButton(k, label)}${extra}`}</th>`;
   // D694: two ticked to compare -- a third ticked lets the oldest go
   const tick = (d, on) => setPicked(p => on ? [...p.filter(x => keyOf(x) !== keyOf(d)), d].slice(-2) : p.filter(x => keyOf(x) !== keyOf(d)));
-  const chip = (key, label) => html`<button class=${`chip${filter === key ? " on" : ""}`} onClick=${() => { setFilter(key); setPage(PAGE); }}>${label}</button>`;
+  const chip = (key, label) => html`<button class=${cx("chip", filter === key && "on")} onClick=${() => { setFilter(key); setPage(PAGE); }}>${label}</button>`;
   const limitOf = m => (r.limits || []).find(l => l.metric === m);
   const cell = (d, m) => {
     const ok = d.meets[m], hid = columns.hidden(m) ? " hidden-measurement" : "", gone = (d.cleared || []).find(c => c.stage === d.shown && c.metric === m);   // D1043: struck through

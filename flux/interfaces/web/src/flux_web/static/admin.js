@@ -17,6 +17,7 @@ import { Audit } from "./admin/Audit.js";
 import { Insights } from "./admin/Insights.js";
 import { Groups, Users } from "./admin/Users.js";
 import { Agents } from "./admin/Agents.js";
+import { recall, remember } from "./stored.js";
 
 /** The admin's pages (D695): every loop and the controls over all of them, what the machine holds up (containers,
     disk, caches), users with their limits and usage, the audit trail. */
@@ -31,10 +32,10 @@ function Read({ load, k, children }) {
 /** A tab of parts (D819, D920): a sub-tab each, the last looked at kept in this browser (`memo`). */
 function Parts({ parts, memo, first = null, aria = null, id = null, partId, children }) {
   const [cur, setCur] = useState(() => {
-    const c = first || (() => { try { return localStorage.getItem(memo); } catch (_) { return null; } })();
+    const c = first || recall(memo);
     return parts.some(([k]) => k === c) ? c : parts[0][0];
   });
-  const pick = k => { setCur(k); try { localStorage.setItem(memo, k); } catch (_) { /* per viewer */ } };
+  const pick = k => { setCur(k); remember(memo, k); };
   return html`<${Tabs} cls="subtabs" id=${id} aria-label=${aria} items=${parts} on=${cur} pick=${pick} /><div id=${partId}>${children(cur)}</div>`;
 }
 

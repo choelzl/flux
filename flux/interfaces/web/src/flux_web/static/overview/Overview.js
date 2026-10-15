@@ -6,8 +6,10 @@ import { defaultMainMeasurements, mainMeasurements, measurementUnitsFor } from "
 import { measurementComparison } from "../results/measurements.js";
 import { directionOf } from "../charts/data.js";
 import { overviewCards } from "./cards.js";
+import { useLoop } from "../loop/context.js";
 
-export function Overview({ ctx, r, notes, bench, use, prefs, ideas = null }) {
+export function Overview({ r, notes, bench, use, prefs, ideas = null }) {
+  const ctx = useLoop();
   const { st, goTab } = ctx, designs = r.designs || [];
   const directions = [...(r.objective_list || []), ...Object.entries(r.metric_info || {}).map(([metric, info]) => ({ metric, ...info }))];
   const main = mainMeasurements(ctx, r.metrics || [], defaultMainMeasurements(r));

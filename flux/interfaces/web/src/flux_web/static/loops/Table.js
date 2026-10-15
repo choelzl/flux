@@ -2,7 +2,7 @@
 // state, its last activity, its designs (this run / every run), the decision's main measurements; Start, Stop
 // and Restart where one may -- and the list with its search and its state chips.
 
-import { Empty, html, useState } from "../view.js";
+import { Empty, cx, html, useState } from "../view.js";
 import { enc } from "../ui.js";
 import { can, me, pageRefresh } from "../state.js";
 import { num4 } from "../charts/marks.js";
@@ -73,12 +73,12 @@ export function LoopsTable({ loops, who = false, memo = "flux-sort-loops" }) {
 const view = { q: "", state: "all" };     // the list's search and filter (D693), kept while the page is; its order is the table's (D926)
 const stateOf = l => l.running ? "running" : l.failed ? "failed" : "idle";
 export function LoopsBrowser({ loops, who = false, memo }) {
-  const [, redraw] = useState(0);
-  const set = patch => { Object.assign(view, patch); redraw(n => n + 1); };
+  const [, setView] = useState(view);
+  const set = patch => { Object.assign(view, patch); setView({ ...view }); };   // kept while the page is: the next list starts as this one was
   const q = view.q.trim().toLowerCase();
   const list = loops.filter(l => (view.state === "all" || stateOf(l) === view.state) && (!q || [l.name, l.document, l.owner].some(x => String(x || "").toLowerCase().includes(q))));
   const count = k => loops.filter(l => k === "all" || stateOf(l) === k).length;
   return html`<div>${loops.length ? html`<div key="bar" class="list-bar"><input type="search" placeholder="Search loops" value=${view.q} class="search" onInput=${e => set({ q: e.currentTarget.value })} />
-      <div class="chips">${["all", "running", "idle", "failed"].map(k => html`<button class=${`chip${view.state === k ? " on" : ""}`} onClick=${() => set({ state: k })}>${`${k[0].toUpperCase() + k.slice(1)} ${count(k)}`}</button>`)}</div></div>` : ""}
+      <div class="chips">${["all", "running", "idle", "failed"].map(k => html`<button class=${cx("chip", view.state === k && "on")} onClick=${() => set({ state: k })}>${`${k[0].toUpperCase() + k.slice(1)} ${count(k)}`}</button>`)}</div></div>` : ""}
     <div>${loops.length && !list.length ? html`<${Empty} text="No loop matches." />` : html`<${LoopsTable} loops=${list} who=${who} memo=${memo} />`}</div></div>`;
 }
