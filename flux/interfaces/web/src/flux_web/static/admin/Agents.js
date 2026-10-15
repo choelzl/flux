@@ -1,0 +1,148 @@
+// Flux web, admin (D756, D807, D814, D816, D896, D921, D924, D935, D945, D1025, D1095): Admin › Agents and models --
+// one tab per tool: Flux's own model and each agent -- its program found or not (its version once probed), its
+// server connection and Test, its login and files, whether Ask may use it -- with its model settings and its own
+// variables under it; the variables every agent and run gets; adding an agent.
+
+import { Card, html, useEffect, useRef, useState } from "../view.js";
+import { api, confirmDialog, dialog, h, toast, when } from "../ui.js";
+import { plural } from "../format.js";
+import { route } from "../app.js";
+import { Act } from "../components/Act.js";
+import { bound, useAutosave } from "../components/Autosave.js";
+import { EnvEditor } from "../components/Env.js";
+import { SettingsForm } from "../settings/SettingsForm.js";
+
+/** D924: how an agent connects, and whether that was verified -- the words the Account and the authoring picker say. */
+export const MECHANISM = { key: "API key", provider: "provider configuration", login: "interactive login", endpoint: "endpoint without a key", none: "not detected" };
+export const VERIFIED = { untested: ["", "untested"], ready: ["ok", "ready"], failed: ["bad", "failed"], changed: ["warn", "changed since test"] };
+const HOME_PH = { opencode: ".config/opencode", claude: ".claude/settings.json", codex: ".codex/config.toml" };
+const lines = a => (a || []).join("\n");
+const list = text => text.split(/[\n,]/).map(x => x.trim()).filter(Boolean);
+
+/** D1025: whether Ask may use it -- saved at once. */
+function AskBox({ who, name, off }) {
+  const change = async e => {
+    const on = e.currentTarget.checked;
+    await api(`/admin/ask/${encodeURIComponent(who)}`, { method: "PUT", body: { on } });
+    toast(on ? `${name} answers Ask` : `${name} is no longer offered for Ask`, "ok");
+  };
+  return html`<label class="check ask-on" title="Offered in a loop's Ask, to answer questions about it"><input type="checkbox" checked=${!off.includes(who)} id=${`ask-on-${who}`} onChange=${change} />Can be used for Ask</label>`;
+}
+
+/** D945: an added agent's name may change -- the loops that name it said first, as they break. */
+function RenameForm({ a }) {
+  const [v, setV] = useState(a.id), [warn, setWarn] = useState(null);
+  const look = async () => {
+    const name = v.trim();
+    if (!name || name === a.id) { setWarn(null); return; }
+    try {
+      const r = await api(`/admin/agents/${a.id}/rename`, { method: "POST", body: { name, dry_run: true } });
+      setWarn(r.loops.length ? html`<p class="callout bad">${`${plural(r.loops.length, "loop")} name ${a.id} and will not start until their documents say ${name}: `}<span class="mono">${r.loops.join(", ")}</span></p>`
+        : html`<p class="muted">${`No loop names ${a.id}.`}</p>`);
+    } catch (x) { setWarn(html`<p class="bad">${x.message}</p>`); }
+  };
+  return html`<div class="stack"><label class="stack">Its name in a document (lower case)<input class="mono" autocomplete="off" aria-label="New name" ...${bound(v, setV)}
+      onChange=${e => { setV(e.currentTarget.value); setTimeout(look); }} onKeyUp=${e => { if (e.key === "Enter") look(); }} /></label>
+    <p class="muted small">Its settings, variables and tests move with it. Documents are not rewritten.</p><div class="small">${warn}</div></div>`;
+}
+const rename = async a => {
+  const box = h("div", {}, html`<${RenameForm} a=${a} />`);
+  if (!await dialog(`Rename ${a.label}`, box, [["Cancel", false], ["Rename", true, "danger"]])) return;
+  const r = await api(`/admin/agents/${a.id}/rename`, { method: "POST", body: { name: box.querySelector("input").value.trim() } });
+  toast(r.ok + (r.loops.length ? ` -- ${plural(r.loops.length, "loop")} still name ${a.id}` : ""), r.loops.length ? "warn" : "ok");
+  route();
+};
+const test = async a => {
+  toast(`Testing ${a.label}'s server configuration: it is asked one short question…`, "info");
+  const got = await api(`/admin/agents/${a.id}/test`, { method: "POST" });
+  toast(got.ok ? `${a.label} is ready${got.shared ? " for everyone who inherits it" : ""}` : `${a.label} is not ready: ${((got.steps || []).find(x => !x.ok) || {}).said || "see its steps"}`, got.ok ? "ok" : "warn");
+  route();
+};
+const remove = async a => {
+  if (!await confirmDialog(`Remove ${a.label}?`, "Its settings and variables go with it, the server's and every user's; a loop that names it no longer starts.", { ok: "Remove", danger: true })) return;
+  await api(`/admin/agents/${a.id}`, { method: "DELETE" }); toast(`${a.label} removed`, "ok"); route();
+};
+
+/** An agent: D896 one status line -- found or not, its kind, what a document says, its program, who it failed for;
+    D924 the server's own connection for it, D935 its Test (counting for everyone who inherits it); its program and
+    name; D816 its login and files folded; Remove (an added one). Saved as it changes (D833); a new name or program
+    draws the page again. */
+function AgentPanel({ a, version, askOff }) {
+  const [v, setV] = useState({ label: a.label, bin: a.bin, login: a.login, args: a.args, home: lines(a.home), hosts: lines(a.hosts), login_files: lines(a.login_files) });
+  const body = () => ({ label: v.label, bin: v.bin, login: v.login, args: v.args, home: list(v.home), hosts: list(v.hosts), login_files: list(v.login_files) });
+  const saved = useRef(null);
+  if (saved.current == null) saved.current = JSON.stringify(body());
+  const put = async () => { const b = JSON.stringify(body()); if (b === saved.current) return false; await api(`/admin/agents/${a.id}`, { method: "PUT", body: body() }); saved.current = b; return true; };
+  const rest = useAutosave(put);                                                   // D833
+  const named = useAutosave(async () => { if (await put()) route(); }, { typing: false, mark: rest.markNode });     // a new name or program: the page again
+  const set = k => bound(v[k], x => setV(o => ({ ...o, [k]: x })));
+  const failed = a.users.filter(u => u.state === "failed").map(u => u.user), changed = a.users.filter(u => u.state === "changed since its test").map(u => u.user);
+  const c = a.connection || { mechanism: "none", said: "" }, st = a.server_test || { state: "untested" }, ver = VERIFIED[st.state] || VERIFIED.untested;
+  const nMore = [a.login, a.args, a.login_files.length, a.home.length, a.hosts.length].filter(Boolean).length;
+  const field = (k, ph, mono = true) => html`<input id=${`ag-${a.id}-${k}`} placeholder=${ph} class=${mono ? "mono" : null} autocomplete="off" ...${set(k)} />`;
+  const area = (k, rows, ph) => html`<textarea id=${`ag-${a.id}-${k === "login_files" ? "creds" : k}`} rows=${rows} class="mono" placeholder=${ph} ...${set(k)} />`;
+  return html`<div class="agent-panel" data-agent=${a.id} data-label=${a.label}>
+    <div class="agent-found small"><span class=${`pill ${a.found ? "ok" : "bad"}`}>${a.found ? "found" : "not found"}</span><span class="pill">${a.builtin ? "built in" : `a ${a.kind}`}</span>
+      <span class="muted">in a document: <code>${a.id}</code>${a.builtin ? "" : html` <${Act} cls="small" onClick=${() => rename(a)}>Rename<//>`}</span>
+      <span class="mono muted">${a.found ? html`${a.found}<span class="agent-version">${version ? " · " + version : ""}</span>`
+        : a.builtin ? `${a.bin || a.id} is not on the runs' PATH: not offered to users` : `${a.bin ? a.bin + " is not there or not runnable" : "no program yet"}: not offered to users`}</span>
+      ${failed.length ? html`<span class="bad">${`test failed for ${failed.join(", ")}`}</span>` : ""}${changed.length ? html`<span class="warn">${`changed since the test for ${changed.join(", ")}`}</span>` : ""}
+      ${rest.mark}</div>
+    <dl class="agent-states"><dt>Connection</dt><dd><span class=${`pill ${c.mechanism === "none" ? "" : "ok"}`}>${c.mechanism === "none" ? "each user's own" : MECHANISM[c.mechanism] || c.mechanism}</span>
+        <span class="muted small">${c.mechanism === "none" ? "no key or provider for every user: each logs in or sets a key on their Account" : c.said}</span></dd>
+      ${c.mechanism === "none" || !a.found ? "" : html`<dt>Verification</dt><dd class="agent-server-test"><span class=${`pill ${ver[0]}`}>${ver[1]}</span>
+        <span class="muted small">${!st.shared ? "each user's own login: each tests it on their Account" : st.state === "ready" ? `for everyone without settings of their own · ${when(st.when)}` : "a passed Test counts for everyone without settings of their own"}</span>
+        ${st.state === "failed" && st.said ? html`<span class="bad small">${st.said}</span>` : ""}
+        <${Act} cls="small" title="Ask it one short question with the server's configuration -- no one's own settings" onClick=${() => test(a)}>Test connection<//></dd>`}
+      ${(a.conflicts || []).length || (a.unused || []).length ? html`<dt>Said</dt><dd><ul class="small hint-line agent-notes">${[...(a.conflicts || []), ...(a.unused || [])].map(x => html`<li>${x}</li>`)}</ul></dd>` : ""}</dl>
+    <div class="grid-2 set-fields" ref=${named.box}><label class="stack">${a.builtin ? "Program (a path, or a name on PATH)" : "Program (a path)"}${field("bin", a.builtin ? a.id : "/path/to/its/program")}</label>
+      <label class="stack">Name shown${field("label", a.id, false)}</label></div>
+    <${AskBox} who=${a.id} name=${a.label} off=${askOff} />
+    <details class="set-fold"><summary>Login and files<span class="muted small">${nMore ? ` · ${nMore} set` : " · none"}</span></summary>
+      <div class="grid-2 set-fields" ref=${rest.box}><label class="stack">Login command${field("login", a.login_default)}</label>
+        <label class="stack">Extra arguments, every run${field("args", "none")}</label>
+        <label class="stack" title="The file in a user's home that says they are logged in">Login files (when not its usual)${area("login_files", 1, "its usual; e.g. .local/share/nga/auth.json")}</label>
+        <label class="stack">Every home starts with (paths in this server account's home)${area("home", 2, HOME_PH[a.kind] || "")}</label>
+        <label class="stack">Hosts it needs, under a network allowlist${area("hosts", 2, "auth.example.com")}</label></div></details>
+    ${a.builtin ? "" : html`<div class="form-actions"><${Act} cls="danger small" onClick=${() => remove(a)}>Remove<//></div>`}</div>`;
+}
+
+function AddAgent({ kinds }) {
+  const box = useRef(null);
+  // the fields read when Add is pressed
+  const add = async () => {
+    const f = id => box.current.querySelector(`#ag-new-${id}`).value, v = { name: f("name"), kind: f("kind"), label: f("label"), bin: f("bin") };
+    await api("/admin/agents", { method: "POST", body: { name: v.name.trim(), kind: v.kind, label: v.label, bin: v.bin } });
+    try { localStorage.setItem("flux-models-tab-server", v.label.trim() || v.name.trim()); } catch (_) { /* per viewer */ }
+    toast(`${v.name.trim()} added`, "ok"); route();
+  };
+  return html`<fieldset class="set-group" ref=${box}><legend>Add an agent</legend><p class="muted small">Another build of a kind under its own name (<code>generate: nga</code>).</p>
+    <div class="grid-2"><label class="stack">Name (lower case)<input id="ag-new-name" placeholder="nga" class="mono" autocomplete="off" /></label>
+      <label class="stack">Kind<select id="ag-new-kind" aria-label="Its kind">${kinds.map(k => html`<option value=${k.id}>${k.label}</option>`)}</select></label>
+      <label class="stack">Name shown<input id="ag-new-label" placeholder="NGA (our OpenCode)" autocomplete="off" /></label>
+      <label class="stack">Program (a path)<input id="ag-new-bin" placeholder="/opt/nga/bin/nga" class="mono" autocomplete="off" /></label></div>
+    <div class="form-actions"><${Act} cls="primary" onClick=${add}>Add<//></div></fieldset>`;
+}
+
+/** D921: drawn at once, each version not known yet filled in when its probe answers. */
+export function Agents({ r, st, genv, askOff }) {
+  const [versions, setVersions] = useState(() => Object.fromEntries(r.agents.map(a => [a.id, a.version])));
+  useEffect(() => {
+    if (r.agents.some(a => a.found && a.version == null)) api("/admin/agents/versions").then(vs => setVersions(x => ({ ...x, ...vs }))).catch(() => { /* the versions only */ });
+  }, []);
+  const offered = new Set(st.groups.filter(g => g.agent).map(g => g.agent));
+  const panels = { model: html`<div class="agent-panel"><${AskBox} who="model" name="Flux's model" off=${askOff} /></div>` }, extraTabs = [];
+  for (const a of r.agents) {
+    const panel = html`<${AgentPanel} key=${a.id} a=${a} version=${versions[a.id]} askOff=${askOff} />`;
+    if (offered.has(a.id)) panels[a.id] = panel;
+    else extraTabs.push({ tab: a.label, el: html`<fieldset class="set-group with-panel"><legend>${a.label}</legend>${panel}<p class="muted small">Program not found.</p></fieldset>` });
+  }
+  extraTabs.push({ tab: "Every agent", el: html`<fieldset class="set-group"><legend>Variables for every run and every agent</legend>
+    <p class="muted small">Every run and agent gets these; a user's and a loop's own win.</p>
+    <${EnvEditor} rows=${genv} save=${async x => { await api("/admin/env", { method: "PUT", body: x }); route(); }} scope="server" /></fieldset>` });
+  extraTabs.push({ tab: "+ Add an agent", el: html`<${AddAgent} kinds=${r.kinds} />` });
+  const save = async values => { if (Object.keys(values).length) await api("/admin/settings", { method: "PUT", body: { values } }); };   // D833: quiet, field by field
+  return html`<${Card} title="Agents and models"><p class="muted small">Defaults for every user. Keys are encrypted and never shown.</p>
+    <${SettingsForm} st=${st} save=${save} scope="server" panels=${panels} extraTabs=${extraTabs}
+      agentEnv=${a => ({ rows: (st.agent_env || {})[a] || [], save: async x => { await api(`/admin/agents/${a}/env`, { method: "PUT", body: x }); route(); } })} /><//>`;
+}

@@ -6,11 +6,12 @@ import { codeEditor } from "./highlight.js";
 import { html, mount, node } from "./view.js";
 import { LastSaid } from "./components/StatePill.js";
 import { LoopsPage } from "./loops/Page.js";
+import { Advanced } from "./settings/Advanced.js";
 import { Markdown } from "./components/Markdown.js";
 import { Conversation } from "./components/Conversation.js";
 import { Bin } from "./components/Bin.js";
 import { can, me, pageOwner, setPageRefresh } from "./state.js";
-import { act, ago, api, on, autosave, bytes, card, confirmDialog, createFromText, dialog, dur, empty, enc, h, head, offline, owned, pageShow, saveMark, toast, toasts, when, withOwner, plural } from "./ui.js";
+import { act, ago, api, on, bytes, card, confirmDialog, createFromText, dialog, dur, empty, enc, h, head, offline, owned, pageShow, toast, toasts, when, withOwner, plural } from "./ui.js";
 import { flushResultPreferences } from "./result_table.js";
 import { diffView, lineDiff } from "./configure.js";
 
@@ -354,93 +355,10 @@ async function newPage() {
       }, { cls: "primary" }))]));
 }
 
-/** Environment variables (D697): a table, and for whoever may change them a row to add one. */
 /** D808: a bin at a card's top right that removes it once confirmed (components/Bin.js). */
 const binButton = (what, title, said, remove) => h("span", { style: "display:contents" }, html`<${Bin} what=${what} title=${title} said=${said} remove=${remove} />`);
-function envTable(rows, shadowed = new Set()) {
-  const mixed = rows.some(x => x.origin !== "server");
-  return h("table", { class: "list compact env" }, h("thead", {}, h("tr", {}, h("th", {}, "Name"), h("th", {}, "Value"), h("th", {}, mixed ? "From" : ""))),
-    // D925: a server-origin row says From Server, never its value; Overridden a badge of its own
-    h("tbody", {}, rows.map(x => h("tr", { class: shadowed.has(x.name) ? "shadowed" : "" }, h("td", { class: "mono" }, x.name),
-      h("td", { class: "mono" }, x.origin === "server" ? h("span", { class: "muted" }, "From Server") : x.secret ? h("span", { class: "muted" }, "secret · set") : x.value),
-      h("td", { class: "muted" }, x.origin === "server" ? "" : x.from, shadowed.has(x.name) ? h("span", { class: "pill small warn" }, "Overridden") : "")))));
-}
-function envEditor(rows, save, scope) {
-  const quiet = { "data-lpignore": "true", "data-1p-ignore": "true", "data-form-type": "other" };     // D820: no password manager here
-  const nameIn = h("input", { placeholder: "NAME", class: "mono", id: `env-${scope}-name`, style: "width:180px", autocomplete: "off", ...quiet });
-  const valIn = h("input", { placeholder: "value", class: "mono", id: `env-${scope}-value`, style: "flex:1;min-width:160px", autocomplete: "off", ...quiet });
-  const secret = h("input", { type: "checkbox", id: `env-${scope}-secret` });
-  secret.addEventListener("change", () => { valIn.type = secret.checked ? "password" : "text"; valIn.autocomplete = secret.checked ? "new-password" : "off"; });
-  const list = rows.length ? h("table", { class: "list compact env" }, h("tbody", {}, rows.map(x => h("tr", {}, h("td", { class: "mono" }, x.name),
-      h("td", { class: "mono" }, x.secret ? h("span", { class: "muted" }, "secret · set") : x.value),
-      h("td", { class: "right" }, save ? act("Remove", async () => { await save({ name: x.name, value: null }); toast(`${x.name} removed`, "ok"); }, { cls: "small" }) : "")))))
-    : h("p", { class: "muted" }, "None yet.");
-  if (!save) return list;
-  return h("div", {}, list, h("div", { class: "row env-add" }, nameIn, valIn, h("label", { class: "check" }, secret, "secret"),
-    act("Add", async () => {
-      if (!nameIn.value.trim()) { toast("Name the variable.", "warn"); return; }
-      const n = nameIn.value.trim();
-      await save({ name: n, value: valIn.value, secret: secret.checked });
-      toast(`${n} saved: from the next start`, "ok");                 // D758: an action says it happened
-    }, { cls: "primary small" })));
-}
-/** A loop's advanced settings (D697): only an admin changes them; everyone sees them. */
-function advancedCard(e, save, saveLabel = "Save") {
-  const a = e.advanced || {};
-  const said = [a.sandbox === false ? "runs on the host, without the sandbox" : "runs in the sandbox",
-    ...["memory", "cpus", "pids", "tmp_size"].filter(k => a[k] != null).map(k => `${e.advanced_said[k].split(" (")[0]}: ${a[k]}`),
-    ...(a.allow && a.allow.length ? [`may reach ${a.allow.join(", ")}`] : []),
-    a.raw_network ? "raw TCP/UDP allowed under an allowlist" : "HTTP(S) proxy only under an allowlist",
-    ...(a.mounts || []).map(m => `${m.host} in it at ${m.inside} (${m.mode === "rw" ? "read-write" : "read-only"})`),   // D936
-    ...(a.nix_packages?.length ? [`Nixpkgs packages: ${a.nix_packages.join(", ")}`] : []),
-    ...(a.nixchip_packages?.length ? [`Nixchip packages: ${a.nixchip_packages.join(", ")}`] : []),
-    a.parallel ? "parallel work allowed" : "one at a time"].join(" · ");
-  if (!e.can_advance) return card("Advanced", h("p", { class: "muted" }, said, " (admin only)."));
-  const sb = h("input", { type: "checkbox", checked: a.sandbox !== false, id: "adv-sandbox" });
-  const f = (k, ph) => h("input", { id: `adv-${k}`, value: a[k] ?? "", placeholder: ph, style: "width:120px" });
-  const mem = f("memory", "no limit"), cpus = f("cpus", "no limit"), pids = f("pids", "4096"), tmp = f("tmp_size", "no limit");
-  const par = h("input", { type: "checkbox", checked: !!a.parallel, id: "adv-parallel" });
-  const raw = h("input", { type: "checkbox", checked: !!a.raw_network, id: "adv-raw-network" });
-  const hosts = h("textarea", { id: "adv-allow", rows: 2, class: "mono", placeholder: "e.g. huggingface.co\n10.1.2.0/24", value: (a.allow || []).join("\n") });
-  const nix = h("textarea", { id: "adv-nix-packages", rows: 2, class: "mono", placeholder: "e.g. jq\nripgrep", value: (a.nix_packages || []).join("\n") });
-  const chip = h("textarea", { id: "adv-nixchip-packages", rows: 2, class: "mono", placeholder: "e.g. verilator\nsystemc", value: (a.nixchip_packages || []).join("\n") });
-  const packageNames = (input) => [...new Set(input.value.split(/[\n,]/).map(x => x.trim()).filter(Boolean))];
-  // D936: host folders in the sandbox, one per line: host path:path inside:ro|rw
-  const mounts = h("textarea", { id: "adv-mounts", rows: 2, class: "mono", placeholder: "e.g. /srv/datasets:/mnt/datasets:ro\n/srv/scratch:/mnt/scratch:rw",
-    value: (a.mounts || []).map(m => `${m.host}:${m.inside}:${m.mode}`).join("\n") });
-  const mountsOf = () => mounts.value.split("\n").map(x => x.trim()).filter(Boolean).map(x => {
-    const [host, inside, mode] = x.split(":").map(y => (y || "").trim());
-    return { host, inside: inside || "", mode: mode === "rw" ? "rw" : "ro" };
-  });
-  // D833: saved as they change; turning the sandbox off asks first
-  const mark = saveMark();
-  const collect = () => ({ sandbox: sb.checked, memory: mem.value.trim() || null, cpus: cpus.value.trim() || null,
-    pids: pids.value.trim() ? Number(pids.value) : null, tmp_size: tmp.value.trim() || null, parallel: par.checked,
-    allow: hosts.value.split(/[\n,]/).map(x => x.trim()).filter(Boolean), raw_network: raw.checked, mounts: mountsOf(),
-    nix_packages: packageNames(nix), nixchip_packages: packageNames(chip) });
-  const go = autosave([mem, cpus, pids, tmp, par, hosts, raw, mounts, nix, chip], () => save(collect()), mark);
-  sb.addEventListener("change", async () => {
-    if (!sb.checked && !await confirmDialog("Run this loop on the host?", "Its document's commands and its agents run on this machine, outside the sandbox, as the server's user.", { ok: "Run on the host", danger: true })) {
-      sb.checked = true; return;
-    }
-    go();
-  });
-  return card("Advanced (admins)", [h("p", { class: "muted" }, "From the next start."),
-    h("label", { class: "check" }, sb, "Run in the sandbox (off: trusted code only)"),
-    // D1094: the server's word beside the loop's choice, not above it as if it contradicted it
-    e.sandboxed_server ? "" : h("p", { class: "callout warn small" }, "This server runs every loop without a sandbox: this choice and the settings below apply once it runs with one."),
-    h("div", { class: "row" }, h("label", { class: "stack" }, "Memory", mem), h("label", { class: "stack" }, "CPUs", cpus),
-      h("label", { class: "stack" }, "Processes", pids), h("label", { class: "stack" }, "Scratch /tmp", tmp)),
-    h("label", { class: "check" }, par, "Allow parallel work"),
-    h("label", { class: "stack" }, "Hosts this loop may reach as well, under a network allowlist (one per line)", hosts),
-    h("label", { class: "check" }, raw, "Allow raw TCP/UDP"),
-    h("p", { class: "muted small" }, "Under an allowlist, enable for protocols that need direct TCP/UDP. Off: HTTP(S) uses the proxy without an extra network container. Open networks keep their existing access."),
-    h("label", { class: "stack" }, "Host folders in its sandbox, for its runs, Check and agent Tests (host path:path inside:ro or rw, one per line)", mounts),
-    h("label", { class: "stack" }, "Nixpkgs packages (attribute names, one per line)", nix),
-    h("label", { class: "stack" }, "Nixchip packages (attribute names, one per line)", chip),
-    h("p", { class: "muted small" }, "Uses Flux's locked package versions. Packages are fetched or built before the next sandbox start and cached. Available to runs, Check and agents; applies while sandboxing is enabled."),
-    h("div", { class: "form-actions" }, mark)]);                                 // D939/D945: the check says it
-}
+/** A loop's advanced settings (D697), for the configurator: settings/Advanced.js. */
+const advancedCard = (e, save) => node(html`<${Advanced} e=${e} save=${save} />`);
 
 /** Explicit admin choice when a clone or transfer would otherwise lose execution permissions. */
 function permissionChoice(settings = {}, id = "keep-permissions") {
@@ -459,5 +377,5 @@ function permissionChoice(settings = {}, id = "keep-permissions") {
 }
 
 export { advancedCard, agentSelect, appsPage, attachBox, authoringCard, binButton, conversation, dropZone,
-  envEditor, envTable, lastSaid, markdown, newPage, progressDialog, sendFiles, startLoop, stopLoop, restartLoop,
+  lastSaid, markdown, newPage, progressDialog, sendFiles, startLoop, stopLoop, restartLoop,
   uploadForm, permissionChoice };
