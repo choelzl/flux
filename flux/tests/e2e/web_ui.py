@@ -214,7 +214,7 @@ if (!window.__e2e) {
   addEventListener('unhandledrejection', e => window.__e2e.errors.push('unhandled: ' + (e.reason && e.reason.message || e.reason)));
   const ce = console.error; console.error = (...a) => { window.__e2e.errors.push('console: ' + a.join(' ')); ce.apply(console, a); };
   new MutationObserver(ms => { for (const m of ms) for (const n of m.addedNodes)
-    if (n.nodeType === 1 && n.classList.contains('toast') && n.classList.contains('bad')) window.__e2e.bad.push(n.textContent.replace('×', '').trim()); })
+    if (n.nodeType === 1 && n.classList.contains('toast') && n.classList.contains('t-bad')) window.__e2e.bad.push(n.textContent.replace('×', '').trim()); })
     .observe(document.body, { childList: true, subtree: true });
 }
 return true;

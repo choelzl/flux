@@ -244,11 +244,9 @@ pre.question { white-space: pre-wrap; background: var(--panel); border: 1px soli
 
 /* ---- notices, dialogs, the bell */
 .toasts { position: fixed; right: 18px; bottom: 18px; display: flex; flex-direction: column; gap: 8px; z-index: 50; max-width: min(420px, calc(100vw - 36px)); }
-.toast { display: flex; align-items: flex-start; gap: 10px; background: var(--panel); border: 1px solid var(--line); border-left: 4px solid var(--accent);
-         border-radius: 8px; padding: 10px 12px; box-shadow: 0 6px 22px rgba(0, 0, 0, .14); animation: rise .18s ease-out; }
-.toast.ok { border-left-color: var(--ok); } .toast.bad { border-left-color: var(--bad); } .toast.warn { border-left-color: var(--warn); }
-.toast > :first-child { flex: 1; }
-.toast .x { border: none; background: none; padding: 0 2px; color: var(--muted); font-size: 16px; line-height: 1; }
+.toast.notice { margin: 0; background: color-mix(in srgb, var(--t, var(--muted)) 7%, var(--panel)); box-shadow: 0 6px 22px rgba(0, 0, 0, .14); animation: rise .18s ease-out; }
+.toast.t-none { border-color: var(--line); }
+.toast .x { margin: -2px -4px 0 0; flex-shrink: 0; border: none; background: none; padding: 0 2px; color: var(--muted); font-size: 16px; line-height: 1; }
 @keyframes rise { from { transform: translateY(8px); opacity: 0; } }
 dialog.dlg { border: 1px solid var(--line); border-radius: 12px; background: var(--panel); color: var(--ink); padding: 20px; width: min(440px, calc(100vw - 32px));
              box-shadow: 0 18px 60px rgba(0, 0, 0, .25); }

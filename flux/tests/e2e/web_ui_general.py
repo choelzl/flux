@@ -1019,9 +1019,9 @@ def general_flows(r, watch):
                 r.button("Close", "dialog.fullscreen-view")
                 b.js("window.__sharedIdeasFail=true; return 1")
                 r.button("Refresh")
-                b.wait("[...document.querySelectorAll('.toast.bad')].some(t=>t.textContent.includes('Temporary notebook error'))", what="failed notebook refresh")
+                b.wait("[...document.querySelectorAll('.toast.t-bad')].some(t=>t.textContent.includes('Temporary notebook error'))", what="failed notebook refresh")
                 r.check("a failed refresh keeps the current notebook and allows retry", b.js("return document.querySelector('.ideas-table').textContent.includes('Owner hypothesis') && [...document.querySelectorAll('#main button')].some(b=>b.textContent==='Refresh'&&!b.disabled)"))
-                expected = b.js("""const bad=window.__e2e.bad.splice(0); document.querySelectorAll('.toast.bad .x').forEach(x=>x.click());
+                expected = b.js("""const bad=window.__e2e.bad.splice(0); document.querySelectorAll('.toast.t-bad .x').forEach(x=>x.click());
                   window.__sharedIdeasFail=false; window.__sharedIdeasData.ideas[0].title='Updated owner hypothesis'; return bad;""")
                 r.check("the failed refresh produces one clear error notice", expected == ["Temporary notebook error"], expected)
                 r.button("Refresh")
@@ -1238,7 +1238,7 @@ objectives: [{metric: timings.fast, goal: 15, direction: minimize},
                 b.click(".ask-send")
                 b.wait("window.__e2e.bad.some(t => t.includes('Try again shortly'))", what="failed send explained")
                 r.check("a failed send keeps the unsent message", b.js("return document.querySelector('#ask-q').value") == "Keep this draft")
-                b.js("window.__askFail = false; window.__e2e.bad.splice(0); document.querySelectorAll('.toast.bad .x').forEach(x => x.click()); return 1")
+                b.js("window.__askFail = false; window.__e2e.bad.splice(0); document.querySelectorAll('.toast.t-bad .x').forEach(x => x.click()); return 1")
                 b.click(".steer-card > summary")
                 note = "long/path/" * 80
                 b.js("const t = document.querySelector('.composer-in'); t.value = arguments[0]; t.dispatchEvent(new Event('input')); return 1", note)

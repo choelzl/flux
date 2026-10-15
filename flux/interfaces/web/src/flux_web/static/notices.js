@@ -3,7 +3,7 @@
 // the server is out of reach. `Toasts` is drawn by the page and by every open modal dialog: the topmost shows them
 // (the top layer -- a notice under a modal dialog was never seen), the others nothing.
 
-import { changes, html, useChanges, useLayoutEffect, useMemo } from "./view.js";
+import { Glyph, changes, html, useChanges, useLayoutEffect, useMemo } from "./view.js";
 
 let list = [], seq = 0, out = false, layers = [];
 const said = changes(), emit = said.emit;
@@ -20,11 +20,15 @@ export function useLayer(open = true) {
   return id;
 }
 
+/** D1102: a toast is a notice that floats -- its kind's tone and glyph. */
+const TONE = { info: "none", ok: "ok", warn: "warn", bad: "bad" };
+
 /** The notices, where `at` (a layer's id; null the page) is the topmost open layer. */
 export function Toasts({ at = null }) {
   useChanges(said);
   const here = (layers.length ? layers[layers.length - 1] : null) === at;
-  return html`<div class="toasts" role="status" aria-live="polite">${here ? list.map(t => html`<div key=${t.id} class=${`toast ${t.kind}`}>${t.href ? html`<a href=${t.href}>${t.text}</a>` : t.text}
+  return html`<div class="toasts" role="status" aria-live="polite">${here ? list.map(t => html`<div key=${t.id} class=${`toast notice t-${TONE[t.kind] || "none"}`}>
+    <${Glyph} tone=${TONE[t.kind] || "none"} /><span class="notice-text">${t.href ? html`<a href=${t.href}>${t.text}</a>` : t.text}</span>
     <button class="x" aria-label="dismiss" onClick=${() => drop(t.id)}>×</button></div>`) : ""}</div>`;
 }
 /** The banner while the server is out of reach (D694). */
