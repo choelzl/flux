@@ -1696,9 +1696,9 @@ objectives: [{metric: timings.fast, goal: 15, direction: minimize},
             r.check("file markup and Unicode paths render literally", b.js(f"return document.querySelector('{EDITOR}').value") == text
                     and b.js("return document.querySelector('.viewer-head .path-crumbs').innerText").endswith(path))
             markdown = "| unfinished\ncontinued **bold**\n# Heading\n" + text + "\n```text\n<script>literal code</script>\n```"
-            # D1095: markdown() gives a component -- a page built with h() holds it
-            rendered = b.ajs("""const [text, done] = arguments; Promise.all([import('/static/loops.js'), import('/static/ui.js')]).then(([{markdown}, {h}]) => {
-                const el = h('div', {}, markdown(text)); el.id = 'general-markdown'; document.querySelector('#main').append(el);
+            # D1095: Markdown is a component, drawn into a node of its own
+            rendered = b.ajs("""const [text, done] = arguments; Promise.all([import('/static/components/Markdown.js'), import('/static/view.js')]).then(([{Markdown}, {html, node}]) => {
+                const el = node(html`<${Markdown} text=${text} />`); el.id = 'general-markdown'; document.querySelector('#main').append(el);
                 requestAnimationFrame(() => done({text: el.textContent, bold: !!el.querySelector('strong'),
                   code: !!el.querySelector('pre'), active: !!el.querySelector('img, script, iframe, [onerror]'),
                   injected: !!window.__uiInjected}));

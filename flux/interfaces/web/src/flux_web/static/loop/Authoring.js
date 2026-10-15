@@ -1,0 +1,62 @@
+// Flux web, a loop's page (D704, D1095): the agent writing (or revising) a loop's problem -- its state, what it is
+// doing, its conversation as it goes, its stderr, what it was asked, its creation log, a revision's diff; Stop.
+
+import { Ago, Card, html, useEffect, useState } from "../view.js";
+import { api, enc, toast } from "../ui.js";
+import { dur } from "../format.js";
+import { lineDiff } from "../diff.js";
+import { Act } from "../components/Act.js";
+import { Diff } from "../components/Diff.js";
+import { Conversation } from "../components/Conversation.js";
+
+/** `st` what /author said (null or never: nothing); `onStop` for whoever may stop it. */
+export function AuthoringCard({ name, st, onStop = null }) {
+  if (!st || !st.ever) return null;
+  const running = st.running, progress = st.progress, f = progress?.fields || {};
+  const elapsed = st.elapsed_s ?? Math.max(0, (st.ended || Date.now() / 1000) - (st.started || Date.now() / 1000));
+  const steps = f.steps || [f["thinking (live tail)"] ? { k: "think", text: f["thinking (live tail)"] } : null, f["reply (live tail)"] ? { k: "text", text: f["reply (live tail)"] } : null].filter(Boolean);
+  return html`<${Card} title=${`Agent ${st.revise ? "revising" : "writing"} the problem`} cls="authoring" data-author-finished=${!st.connection_error && !running && st.ok ? "true" : null}>
+    <div class="row">${st.connection_error ? html`<span class="pill warn">status unavailable</span>` : running ? html`<span class="pill live"><i class="dot" />running</span>`
+        : st.ok ? html`<span class="pill ok">done</span>` : html`<span class="pill bad">failed</span>`}
+      <span class="muted">${st.author || "Agent"}${st.by ? ` · by ${st.by}` : ""}${st.started ? html` · started <${Ago} t=${st.started} />` : ""}${st.ended ? html` · ended <${Ago} t=${st.ended} />` : ""}</span></div>
+    <div class="author-activity"><strong>${st.connection_error ? "Reconnecting to agent status…" : running ? progress?.phase || "Starting the agent" : st.ok ? "Document checked and saved" : "Agent ended"}</strong>
+      <span class="mono muted">${dur(elapsed) || "0s"}</span></div>
+    ${st.connection_error ? html`<p class="callout warn author-connection">${`Cannot refresh the agent's status: ${st.connection_error}. Retrying…`}</p>`
+      : running ? html`<p class="muted small author-heartbeat">Agent process is alive · status checked <${Ago} t=${st.observed || Date.now() / 1000} /></p>` : ""}
+    ${running ? html`<p class="muted small author-output-age">${f.output ? `Agent output: ${f.output}` : st.log_at ? html`Log last updated <${Ago} t=${st.log_at} />. Waiting for streamed agent output.` : "Waiting for the first agent output."}</p>` : ""}
+    ${f.status ? html`<p class="callout author-agent-status">${f.status}</p>` : ""}${f["rate limit"] ? html`<p class="callout warn">Rate limit: ${f["rate limit"]}</p>` : ""}
+    ${f.agent || f["tokens (reported)"] ? html`<p class="muted small">${[f.agent, f["tokens (reported)"]].filter(Boolean).join(" · ")}</p>` : ""}
+    ${steps.length ? html`<${Conversation} steps=${steps} k=${`author-${name}-${st.started}`} offset=${Math.max(0, (f["steps total"] || steps.length) - steps.length)} live=${running} scroll />`
+      : f["tool calls"] ? html`<pre class="val small">${f["tool calls"]}</pre>` : ""}
+    ${f.stderr ? html`<details data-author-section="stderr"><summary>Agent stderr</summary><pre class="log small" data-k="author-stderr">${f.stderr}</pre></details>` : ""}
+    ${st.prompt ? html`<details data-author-section="prompt"><summary class="muted">What it was asked</summary><pre class="val small">${st.prompt}</pre></details>` : ""}
+    <details data-author-section="log" open=${!progress}><summary>Creation log</summary><pre class="log small author-log" data-k="author-log">${(st.log || []).join("\n") || "No log output received yet."}</pre></details>
+    ${!running && st.revise && st.before && st.after && st.before !== st.after ? html`<details class="blk" open><summary>${`What it changed in ${st.revise}`}</summary><${Diff} ops=${lineDiff(st.before, st.after)} /></details>` : ""}
+    ${!running && !st.ok && !st.connection_error ? html`<p class="callout bad">The agent did not leave a document that passes its checks: read its log above, then try again or write the document yourself.</p>` : ""}
+    ${running && onStop ? html`<div class="form-actions"><${Act} cls="danger" onClick=${onStop}>Stop the agent<//></div>` : ""}<//>`;
+}
+
+/** D704: an agent writing (or revising) the problem, on the Overview -- followed every 3 s while it runs (or the
+    status could not be read: what was read stays, said to be reconnecting); a document written long ago, no card;
+    the problem written, the page read again. `first` what /author said when the page was drawn. */
+export function AuthorBox({ name, qs, mine, first, still }) {
+  const [st, setSt] = useState(first);
+  useEffect(() => {
+    let timer = null, live = true, last = first;
+    const poll = async () => {
+      let got;
+      try { got = await api(`/apps/${enc(name)}/author${qs}`); } catch (e) { got = { ...(last || { ever: true }), connection_error: e.message }; }
+      if (!live || !still()) return;
+      if (!got.connection_error) last = got;
+      setSt(got);
+      if (got.running || got.connection_error) timer = setTimeout(poll, 3000);
+      else if (got.ok && !got.connection_error) { const fresh = await api(`/apps/${enc(name)}${qs}`).catch(() => null); if (live && still() && fresh?.document && (first.running || first.connection_error)) location.reload(); }
+    };
+    if (first.running || first.connection_error) timer = setTimeout(poll, 3000);
+    return () => { live = false; clearTimeout(timer); };
+  }, []);
+  // a document written long ago: no card
+  if (!st?.ever || (!st.running && st.ended && Date.now() / 1000 - st.ended > 3600 * 6)) return null;
+  const stop = mine ? async () => { toast((await api(`/apps/${enc(name)}/author/stop${qs}`, { method: "POST" })).ok, "ok"); } : null;
+  return html`<${AuthoringCard} name=${name} st=${st} onStop=${stop} />`;
+}

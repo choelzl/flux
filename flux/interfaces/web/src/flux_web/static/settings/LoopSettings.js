@@ -6,7 +6,7 @@ import { Ago, Card, html, useRef, useState } from "../view.js";
 import { api, confirmDialog, dialog, enc, h, toast } from "../ui.js";
 import { me } from "../state.js";
 import { route } from "../app.js";
-import { permissionChoice } from "../loops.js";
+import { PermissionChoice, hasPermissions } from "../components/PermissionChoice.js";
 import { defaultMainMeasurements } from "../result_table.js";
 import { Act } from "../components/Act.js";
 import { EnvEditor, EnvTable } from "../components/Env.js";
@@ -61,15 +61,15 @@ function Ownership({ ctx, plan }) {
   };
   const transfer = async () => {
     const current = me.role === "admin" ? await api(`/apps/${enc(name)}/ownership${qs}`) : plan;
-    const keep = permissionChoice(current.permissions, "transfer-keep-permissions");
+    const keep = hasPermissions(current.permissions);
     const who = h("select", { id: "loop-transfer-user", "aria-label": "New owner" }, h("option", { value: "" }, "Choose a user…"), current.users.map(u => h("option", { value: u }, u)));
     const input = h("input", { id: "loop-transfer-to", value: name, maxlength: 60, autocomplete: "off", required: true });
     const got = await dialog(`Transfer ${name}`, h("div", { class: "stack" },
       h("label", { class: "stack" }, "New owner", who), h("label", { class: "stack" }, "Loop name for the new owner", input),
       h("p", {}, "Files, results, full run history, caches and loop variables (including secrets) move to the new owner. Your account's model keys and agent logins stay with your account."),
-      h("p", {}, keep.input ? "Sharing and other admin settings are cleared. Choose below whether to keep the mount, sandbox and network overrides. The recipient uses their own account settings; the former owner loses access unless it is shared back. Admins retain access."
-        : "Sharing and admin overrides are cleared, including special mounts and sandbox exemptions. The new owner uses their own account settings and the server's sandbox defaults. You lose access unless they share it back; admins retain access."), keep.el),
-      [["Cancel", null], ["Transfer", () => ({ user: who.value, to: input.value.trim(), keep_permissions: !!keep.input?.checked }), "primary"]]);
+      h("p", {}, keep ? "Sharing and other admin settings are cleared. Choose below whether to keep the mount, sandbox and network overrides. The recipient uses their own account settings; the former owner loses access unless it is shared back. Admins retain access."
+        : "Sharing and admin overrides are cleared, including special mounts and sandbox exemptions. The new owner uses their own account settings and the server's sandbox defaults. You lose access unless they share it back; admins retain access."), html`<${PermissionChoice} settings=${current.permissions} id="transfer-keep-permissions" />`),
+      [["Cancel", null], ["Transfer", () => ({ user: who.value, to: input.value.trim(), keep_permissions: !!document.querySelector("#transfer-keep-permissions")?.checked }), "primary"]]);
     if (!got) return;
     if (!got.user || !got.to) { toast("Choose a user and a loop name.", "warn"); return; }
     const moved = await api(`/apps/${enc(name)}/transfer${qs}`, { method: "POST", body: got });

@@ -2,11 +2,12 @@
 // one viewer for the selected item: a folder's entries, a text file in the editor (saved over the version it
 // was read as), a binary one to download; Rename, Move and Delete on its head; files added by drop or by hand.
 
-import { Ago, Card, Dom, Empty, Skeleton, html, useEffect, useMemo, useRef, useState } from "../view.js";
+import { Ago, Card, Empty, Skeleton, html, useEffect, useRef, useState } from "../view.js";
 import { api, dialog, enc, h, request, toast } from "../ui.js";
 import { bytes, plural } from "../format.js";
 import { langOf } from "../highlight.js";
-import { dropZone, progressDialog, sendFiles } from "../loops.js";
+import { progressDialog, sendFiles } from "../uploads.js";
+import { DropZone } from "../components/DropZone.js";
 import { Act } from "../components/Act.js";
 import { CodeEditor } from "../components/CodeEditor.js";
 import { ViewerTools } from "../components/ViewerTools.js";
@@ -173,20 +174,20 @@ function Viewer({ ctx, f, showIgnored }) {
 function Adder({ ctx }) {
   const { name, drawBody } = ctx, folder = useRef(null), files = useRef(null);
   const into = () => folder.current.value.trim();
-  const zone = useMemo(() => dropZone("Drop files or folders to add them", async got => {
+  const drop = async got => {
     const pd = progressDialog("Adding files", `${plural(got.length, "file")}${into() ? " into " + into() : ""}`);
     try {
       const n = await sendFiles(name, got, { folder: into(), onProgress: pd.set, signal: pd.signal });
       toast(`Added ${plural(n, "file")}${into() ? " into " + into() : ""}`, "ok");
     } catch (x) { toast(pd.signal.aborted ? `The upload was cancelled: ${x.message}.` : `The upload failed: ${x.message}`, pd.signal.aborted ? "warn" : "bad", { timeout: 12000 }); }
     finally { pd.close(); drawBody(); }
-  }), []);
+  };
   const add = async () => {
     if (!files.current.files.length) { toast("Choose files or a .zip.", "warn"); return; }
     const n = await sendFiles(name, [...files.current.files].map(f => ({ file: f, path: f.name })), { folder: into() });
     toast(`Added ${plural(n, "file")}`, "ok"); drawBody();
   };
-  return html`<div><${Dom} node=${zone} /><details class="adder"><summary>Add files</summary>
+  return html`<div><${DropZone} label="Drop files or folders to add them" onFiles=${drop} /><details class="adder"><summary>Add files</summary>
     <label class="stack">Files or a .zip<input type="file" multiple ref=${files} /></label><label class="stack">Into folder<input placeholder="folder (optional)" ref=${folder} /></label>
     <${Act} cls="small primary" onClick=${add}>Add<//></details></div>`;
 }

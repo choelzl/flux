@@ -3,11 +3,11 @@
 // older ones folded unless chosen), an answer's thinking and commands, Reply, a new chat; while the loop runs, a
 // note to it (the agent's open question answered there).
 
-import { Ago, Card, Dom, Empty, Skeleton, html, useEffect, useLayoutEffect, useRef, useState } from "../view.js";
+import { Ago, Card, Empty, Skeleton, html, useEffect, useLayoutEffect, useRef, useState } from "../view.js";
 import { api, dialog, enc, h, toast } from "../ui.js";
 import { dur, plural } from "../format.js";
 import { me } from "../state.js";
-import { agentSelect } from "../loops.js";
+import { AgentPick } from "../components/AgentPick.js";
 import { restoreScroll, scrollState } from "../scroll.js";
 import { Act } from "../components/Act.js";
 import { Bin } from "../components/Bin.js";
@@ -69,7 +69,7 @@ function Thread({ turns, folded, t, open }) {
     above the conversations; `steerOpen` -- {get, set}: whether it is unfolded, kept by the page. */
 export function Talk({ name, qs, mine, canAsk, steer, steerOpen, open: shown = true }) {
   const [list, setList] = useState(null), [offline, setOffline] = useState(false), [reply, setReply] = useState(null), [sending, setSending] = useState(false);
-  const [folds, setFolds] = useState({ collapsed: new Set(), expanded: new Set() }), [who, setWho] = useState(null);
+  const [folds, setFolds] = useState({ collapsed: new Set(), expanded: new Set() }), [who, setWho] = useState(""), [replyAuthor, setReplyAuthor] = useState(null);
   const history = useRef(null), q = useRef(null), open = useRef(new Map()).current, timer = useRef(null), alive = useRef(true);
   const read = async () => {
     clearTimeout(timer.current);
@@ -80,9 +80,6 @@ export function Talk({ name, qs, mine, canAsk, steer, steerOpen, open: shown = t
     setOffline(false); setList(got);
     if (got.some(a => a.running)) timer.current = setTimeout(read, 3000);
   };
-  useEffect(() => {
-    if (canAsk) agentSelect("ask-who", { ask: true }).then(sel => setWho(sel));
-  }, []);
   // read while the drawer is open; closed, what was read stays for its next opening
   useEffect(() => {
     alive.current = shown;
@@ -103,10 +100,10 @@ export function Talk({ name, qs, mine, canAsk, steer, steerOpen, open: shown = t
     const text = q.current.value.trim();
     if (!canAsk || busy || sending) return;
     if (!text) { q.current.focus(); return; }
-    if (!who?.value) { toast("No agent or model is offered for Ask on this server: an admin sets it in Admin › Agents and models", "warn"); return; }   // D1025
+    if (!who) { toast("No agent or model is offered for Ask on this server: an admin sets it in Admin › Agents and models", "warn"); return; }   // D1025
     setSending(true);
     try {
-      const sent = await api(`/apps/${enc(name)}/asks${qs}`, { method: "POST", body: { question: text, author: who.value, parent_id: current?.id || null } });
+      const sent = await api(`/apps/${enc(name)}/asks${qs}`, { method: "POST", body: { question: text, author: who, parent_id: current?.id || null } });
       if (q.current.value.trim() === text) q.current.value = "";
       setReply(sent.id);
       await read();
@@ -114,7 +111,7 @@ export function Talk({ name, qs, mine, canAsk, steer, steerOpen, open: shown = t
     } catch (x) { toast(x.message, "bad"); } finally { setSending(false); }
   };
   const t = { mine, canAsk, reply: current?.id, busy: busy || sending,
-    replyTo: a => { setReply(a.id); if (who && [...who.querySelectorAll("option")].some(o => o.value === a.author)) who.value = a.author; requestAnimationFrame(() => q.current?.focus()); },
+    replyTo: a => { setReply(a.id); setReplyAuthor(a.author); requestAnimationFrame(() => q.current?.focus()); },
     fold: (id, on) => setFolds(f => { const c = new Set(f.collapsed), e = new Set(f.expanded); c.delete(id); e.delete(id); (on ? c : e).add(id); return { collapsed: c, expanded: e }; }),
     stop: async a => { toast((await api(`/apps/${enc(name)}/asks/${a.id}/stop${qs}`, { method: "POST" })).ok, "ok"); read(); },
     remove: async a => { await api(`/apps/${enc(name)}/asks/${a.id}${qs}`, { method: "DELETE" }); read(); },
@@ -131,6 +128,6 @@ export function Talk({ name, qs, mine, canAsk, steer, steerOpen, open: shown = t
     ${canAsk ? html`<div class="ask-compose"><div class="ask-compose-head"><span class="ask-reply-context" title=${current?.question}>${current ? `Reply to: ${current.question}` : "New conversation"}</span>
         ${current ? html`<button type="button" class="small ask-new" disabled=${sending} onClick=${() => { setReply(null); requestAnimationFrame(() => q.current?.focus()); }}>New chat</button>` : ""}</div>
       <textarea rows="2" id="ask-q" aria-label="Message" placeholder="Ask about this loop…" ref=${q} onKeyDown=${e => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && !e.isComposing) { e.preventDefault(); send(); } }} />
-      <div class="ask-compose-actions"><label class="ask-agent-picker">Agent${who ? html`<${Dom} node=${who} />` : ""}</label>
+      <div class="ask-compose-actions"><label class="ask-agent-picker">Agent<${AgentPick} id="ask-who" ask value=${replyAuthor} onPick=${setWho} /></label>
         <${Act} cls="primary ask-send" title="Ctrl+Enter or ⌘+Enter to send" disabled=${busy} onClick=${send}>${busy ? "Answering…" : "Send"}<//></div></div>` : ""}`;
 }
