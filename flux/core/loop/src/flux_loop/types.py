@@ -177,10 +177,10 @@ class LoopRequest:
     repair_attempts: int = 3        # inner-loop attempts per generation
     explore_every: int = 4          # 1 in N generations starts fresh, not from best
     explore_after: int = 2          # D845: passes the decision stands before a pass explores (then in turn)
-    agent_continues: int = 3        # D1026: a design agent's session continued this many times past its time limit,
-                                    # then the pass gives up: no design, its notes on the record
-    agent_grace_s: float | None = None   # D1088: after the continues, one short turn to hand in a design -- this long
-                                    # (None: a fifth of its time limit, 1 to 5 minutes; 0: no such turn)
+    agent_continues: int = 3        # D1026, D1100: a design agent's full turns that may run past its time limit (its first,
+                                    # then its session continued); the last says it is the last, then one short turn
+    agent_grace_s: float | None = None   # D1088: that short turn, to hand in the design as it stands -- this long
+                                    # (None: a quarter of its time limit, 5 to 10 minutes; 0: none, the pass gives up)
     exploration_quota: float = 0.0  # minimum share of attempted improvements devoted to new approaches
     cooldown_after: int = 3         # consecutive no-builds before a subgoal yields
     structured: bool = True         # schema-constrained decoding when the proposer allows

@@ -132,7 +132,7 @@ class DraftMixin:
             message = (f"YOUR LAST TURN RAN PAST ITS TIME LIMIT before the design was finished. Continue where you "
                        f"stopped: finish the design in `{path}` (what you already wrote there is kept), "
                        "without starting over. Then reply with one line saying the file is written.\n")
-            if sess.timeouts >= max(0, int(getattr(state.request, "agent_continues", 3))):
+            if sess.timeouts >= max(0, int(getattr(state.request, "agent_continues", 3))) - 1:     # the last of its full turns
                 # D1088: said -- after this turn only a short one is left, to hand in what there is
                 message += ("THIS IS YOUR LAST FULL TURN. Stop exploring alternatives: bring the design to a state that "
                             "builds and passes the checks, and write it. After this turn you only get a few minutes to hand it in.\n")
@@ -176,7 +176,7 @@ class DraftMixin:
             state.agent_broken = f"{agent.tool}: {broken}"
             state.say(f"  {agent.tool} cannot start ({broken}); the pass stops instead of trying again")
             return None, state.agent_broken
-        if sess.timeouts > max(0, int(getattr(state.request, "agent_continues", 3))):
+        if sess.timeouts >= max(1, int(getattr(state.request, "agent_continues", 3))):            # its full turns all ran out of time
             graced = self._grace(state, sess, agent, path, subs, prompt_file, safe)
             if graced is None:                         # no final turn, or it wrote nothing: what was left is not a design
                 return None, self._out_of_time(state, sess, turn, path, agent)
@@ -184,7 +184,7 @@ class DraftMixin:
             sess.timed_out, sess.timeouts = False, 0          # D1088: it handed one in -- judged as any draft
         if sess.timed_out:                        # D1026: cut off mid-design -- not judged; its session continues it
             return None, (f"the coding agent {agent.tool} ran past its time limit ({agent.timeout_s:g} s) before it finished; "
-                          f"its session continues ({sess.timeouts} of {1 + int(getattr(state.request, 'agent_continues', 3))} turns)")
+                          f"its session continues ({sess.timeouts} of {int(getattr(state.request, 'agent_continues', 3))} turns)")
         knobs = {"task": self.task.id, "part": sg or "", "generator": f"agent:{agent.tool}"}
         meta = {"questions": [asdict(e) for e in asked]} if asked else {}
         notes = sidecar(path)
@@ -217,7 +217,7 @@ class DraftMixin:
         from .ideas import instructions
 
         want = getattr(state.request, "agent_grace_s", None)
-        grace = min(300.0, max(60.0, agent.timeout_s / 5)) if want is None else float(want)
+        grace = min(600.0, max(300.0, agent.timeout_s / 4)) if want is None else float(want)    # 5 to 10 minutes
         if grace <= 0 or not (agent.resume and sess.id):
             return None
         message = (f"TIME IS UP. This is your final turn, and it is short ({grace:.0f} s). Do not experiment, test or explore "
@@ -245,7 +245,7 @@ class DraftMixin:
         words = " ".join((turn.text or "").split())[-800:]
         left = path.read_text(errors="replace") if path.is_file() else ""
         why = (f"OUT OF TIME: the design agent {agent.tool} ran past its time limit ({agent.timeout_s:g} s) {n} turns in a "
-               f"row -- its first and {plural(n - 1, 'continue')} (budget.agent_continues) -- and the pass gave up without a design."
+               f"row (budget.agent_continues) -- and the pass gave up without a design."
                + (f" What it said last: {words}" if words else "")
                + (f" It left a partial design of {len(left.splitlines())} lines ({path.name}, in its session folder"
                   f" {path.parent}): a next design may read it, or avoid what made it slow." if left else ""))

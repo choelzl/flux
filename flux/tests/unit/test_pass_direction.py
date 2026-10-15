@@ -71,7 +71,7 @@ time.sleep(30)''')
 
 
 def test_a_design_agent_out_of_time_on_every_continue_ends_the_pass_with_its_notes(tmp_path):
-    """D1026: continued `budget.agent_continues` times past its limit, then the pass gives up -- no
+    """D1026, D1100: `budget.agent_continues` full turns past its limit, then the pass gives up -- no
     design built from what it left, no other turn; why, its last words and its partial file on the record."""
     assert NEVER != SLOW
     slow = tmp_path / "slow.py"
@@ -81,11 +81,11 @@ def test_a_design_agent_out_of_time_on_every_continue_ends_the_pass_with_its_not
         "command": [sys.executable, str(slow), "first", "{prompt_file}", "{artifact}"],
         "resume": [sys.executable, str(slow), "resume", "{session}", "{answer}", "{artifact}"],
         "output": "opencode", "timeout_s": 3}}}           # D1070: a loaded machine starts Python in over a second
-    d["budget"] = {"steps": 9, "repair_attempts": 9, "prototype": False, "agent_continues": 2, "agent_grace_s": 0}   # D1088: no final turn
+    d["budget"] = {"steps": 9, "repair_attempts": 9, "prototype": False, "agent_continues": 3, "agent_grace_s": 0}   # D1088: no final turn
     task = TaskSpec.from_dict(d)
     said: list[str] = []
     out = run_loop(PromptProblem(task), request_for(task, db=str(tmp_path / "d.db")), proposer=None, log=said.append)
-    assert [t["mode"] for t in _turns(tmp_path)] == ["first", "resume", "resume"], "its first turn and two continues"
+    assert [t["mode"] for t in _turns(tmp_path)] == ["first", "resume", "resume"], "three full turns: its first and two continues"
     assert "THIS IS YOUR LAST FULL TURN" in _turns(tmp_path)[2]["text"], "the last continue says so (D1088)"
     assert out.decision is None and out.stopped.startswith("out of time"), out.stopped
     why = " ".join(r for _n, r in out.refused)
@@ -103,7 +103,7 @@ def test_a_design_agent_out_of_time_gets_a_final_turn_to_hand_in_its_design(tmp_
         "command": [sys.executable, str(slow), "first", "{prompt_file}", "{artifact}"],
         "resume": [sys.executable, str(slow), "resume", "{session}", "{answer}", "{artifact}"],
         "output": "opencode", "timeout_s": 3}}}
-    d["budget"] = {"steps": 3, "repair_attempts": 2, "prototype": False, "agent_continues": 1, "agent_grace_s": 3}
+    d["budget"] = {"steps": 3, "repair_attempts": 2, "prototype": False, "agent_continues": 2, "agent_grace_s": 3}
     task = TaskSpec.from_dict(d)
     said: list[str] = []
     out = run_loop(PromptProblem(task), request_for(task, db=str(tmp_path / "d.db")), proposer=None, log=said.append)
