@@ -39,18 +39,18 @@ export function AuthoringCard({ name, st, onStop = null }) {
 /** D704: an agent writing (or revising) the problem, on the Overview -- followed every 3 s while it runs (or the
     status could not be read: what was read stays, said to be reconnecting); a document written long ago, no card;
     the problem written, the page read again. `first` what /author said when the page was drawn. */
-export function AuthorBox({ name, qs, mine, first, still }) {
+export function AuthorBox({ name, qs, mine, first }) {
   const [st, setSt] = useState(first);
   useEffect(() => {
     let timer = null, live = true, last = first;
     const poll = async () => {
       let got;
       try { got = await api(`/apps/${enc(name)}/author${qs}`); } catch (e) { got = { ...(last || { ever: true }), connection_error: e.message }; }
-      if (!live || !still()) return;
+      if (!live) return;
       if (!got.connection_error) last = got;
       setSt(got);
       if (got.running || got.connection_error) timer = setTimeout(poll, 3000);
-      else if (got.ok && !got.connection_error) { const fresh = await api(`/apps/${enc(name)}${qs}`).catch(() => null); if (live && still() && fresh?.document && (first.running || first.connection_error)) location.reload(); }
+      else if (got.ok && !got.connection_error) { const fresh = await api(`/apps/${enc(name)}${qs}`).catch(() => null); if (live && fresh?.document && (first.running || first.connection_error)) location.reload(); }
     };
     if (first.running || first.connection_error) timer = setTimeout(poll, 3000);
     return () => { live = false; clearTimeout(timer); };

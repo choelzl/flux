@@ -54,10 +54,16 @@ while True:
         yield app, tmp_path
     finally:
         app.state.actions.close()
-        for run in app.state.store.runs():
-            if not run.get("ended"):
-                app.state.runs.stop(run, now=True)
-        _wait(lambda: all(r.get("ended") for r in app.state.store.runs()))
+        stopped = set()
+
+        def ended():                        # a restart scheduled before the close may start a run after the first sweep
+            open_ = [r for r in app.state.store.runs() if not r.get("ended")]
+            for run in open_:
+                if run["id"] not in stopped:
+                    stopped.add(run["id"])
+                    app.state.runs.stop(run, now=True)
+            return not open_
+        _wait(ended)
 
 
 def _ready(app, user, name):

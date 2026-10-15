@@ -4,7 +4,8 @@
 
 import { can, setPageRefresh } from "./state.js";
 import { api, confirmDialog, enc, pageShow, toast } from "./ui.js";
-import { Card, html, mount, node } from "./view.js";
+import { Card, html, node, useEffect } from "./view.js";
+import { Loaded, useLoad } from "./components/Load.js";
 import { flushResultPreferences } from "./result_table.js";
 import { LoopsPage } from "./loops/Page.js";
 import { NewPage } from "./loops/Create.js";
@@ -24,14 +25,16 @@ async function restartLoop(name, now = false, owner) {
   return true;
 }
 
+/** The Loops page: one's loops, those shared with one, one's groups' -- read again when a loop changes state (D688). */
+function Loops() {
+  const read = useLoad(() => Promise.all([api("/apps"), api("/shared").catch(() => []), api("/group-loops")]), "loops");
+  useEffect(() => { setPageRefresh(async () => read.reload()); }, []);
+  return html`<${Loaded} read=${read}>${([loops, shared, group]) => html`<${LoopsPage} loops=${loops} shared=${shared} group=${group} />`}<//>`;
+}
 async function appsPage() {
   const show = pageShow();
   await flushResultPreferences();
-  const load = () => Promise.all([api("/apps"), api("/shared").catch(() => []), api("/group-loops")]);
-  const host = node(null), draw = ([loops, shared, group]) => mount(host, html`<${LoopsPage} loops=${loops} shared=${shared} group=${group} />`);
-  draw(await load());
-  show(host);
-  setPageRefresh(async () => draw(await load()));
+  show(node(html`<${Loops} />`));
 }
 
 async function newPage() {

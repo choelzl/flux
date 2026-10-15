@@ -2,7 +2,7 @@
 // part at a time: what went wrong (starts, agent Tests), what was used (by user, by agent, the loops that used
 // most; the disk as it is now), how the endpoints did and what the network refused.
 
-import { Ago, Card, Skeleton, html, useEffect, useState } from "../view.js";
+import { Ago, Card, Skeleton, html, useState } from "../view.js";
 import { api, confirmDialog, enc, toast, when } from "../ui.js";
 import { bytes, dur, fmtTok, plural } from "../format.js";
 import { route } from "../app.js";
@@ -10,6 +10,7 @@ import { Act } from "../components/Act.js";
 import { Bin } from "../components/Bin.js";
 import { Meter } from "../components/Stat.js";
 import { SortableTable } from "../components/SortableTable.js";
+import { Loaded, useLoad } from "../components/Load.js";
 
 const PERIODS = [[1, "24 hours"], [7, "7 days"], [30, "30 days"]];
 const TITLE = { failures: "Failures", usage: "Usage", endpoints: "Endpoints and agents" };
@@ -31,22 +32,6 @@ function Spark({ xs, label }) {
   return html`<span class="spark" title=${label} aria-label=${label}>${xs.map(x => html`<i class=${x > 0 ? "" : "z"}
     style=${`height:${x > 0 ? Math.max(2, Math.round(16 * x / max)) : 1}px;width:6px;margin-right:2px`} />`)}</span>`;
 }
-/** What `url` answers, read when shown and again when it changes: {d} once read, {error} when it failed (`retry()`
-    asks again), null meanwhile. */
-function useRead(url) {
-  const [got, setGot] = useState(null), [n, setN] = useState(0);
-  useEffect(() => {
-    let live = true;
-    setGot(null);
-    api(url).then(d => live && setGot({ url, d }), x => live && x.message !== "log in" && setGot({ url, error: x.message }));
-    return () => { live = false; };
-  }, [url, n]);
-  return { got: got && got.url === url ? got : null, retry: () => setN(k => k + 1) };      // another address's answer is not this one's
-}
-/** Meanwhile lines, a failure with a Retry, or what was read. */
-const Shown = ({ read, lines = 6, failed, children }) => !read.got ? html`<${Skeleton} lines=${lines} />`
-  : read.got.error ? html`<div class="empty"><p>${`${failed}: ${read.got.error}`}</p><${Act} cls="small" onClick=${read.retry}>Retry<//></div>` : children(read.got.d);
-
 function Failures({ f }) {
   return html`${f.starts.length ? html`<table class="list compact"><thead><tr><th>When</th><th>Loop</th><th>Why</th></tr></thead>
       <tbody>${f.starts.slice(0, 20).map(s => html`<tr><td class="muted"><${When} t=${s.when} /></td><td><${LoopLink} u=${s.user} a=${s.app} /></td>
@@ -112,9 +97,9 @@ const Network = ({ net }) => html`<${Card} title="Network refused">${net.length 
 
 /** D920: the disk as it is now -- not historical, so no period; when it was measured said. */
 function Disk() {
-  const read = useRead("/admin/insights/disk"), at = read.got?.d?.at;
+  const read = useLoad(() => api("/admin/insights/disk"), "disk"), at = read.got?.d?.at;
   return html`<${Card} title="Current disk usage" actions=${html`<span class="muted small">${at ? html`<span>measured <${Ago} t=${at} /></span>` : ""}</span>`}>
-    <${Shown} read=${read} lines=${4} failed="The disk could not be measured">${d => {
+    <${Loaded} read=${read} wait=${html`<${Skeleton} lines=${4} />`} failed="The disk could not be measured">${d => {
       const max = Math.max(...d.disk.map(x => x.total), 1);
       return html`<${SortableTable} memo="flux-sort-user-disk" first=${4} scroll rows=${d.disk} keyOf=${x => x.user}
         cols=${[{ label: "User", key: x => x.user, asc: true }, { label: "Home", key: x => x.home, num: true }, { label: "Loops", key: x => x.loops, num: true },
@@ -132,11 +117,11 @@ function Disk() {
     server reads every loop's past turns into its usage log once -- the numbers fill in meanwhile. */
 export function Insights({ part }) {
   const [days, setDays] = useState(period);
-  const read = useRead(`/admin/insights?days=${days}&part=${part}`), r = read.got?.d;
+  const url = `/admin/insights?days=${days}&part=${part}`, read = useLoad(() => api(url), url), r = read.got?.d;
   const pick = e => { insightsDays = Number(e.currentTarget.value); try { localStorage.setItem("flux-insights-days", String(insightsDays)); } catch (_) { /* remembered when it can be */ } setDays(insightsDays); };
   const range = html`<div class="range-pick"><label for="insights-range">Over the last</label>
     <select id="insights-range" aria-label="Over the last" onChange=${pick}>${PERIODS.map(([v, t]) => html`<option value=${v} selected=${v === days}>${t}</option>`)}</select></div>`;
-  return html`<${Card} title=${TITLE[part]} actions=${range}><${Shown} read=${read} failed="Insights could not be read">${r => html`<div>
+  return html`<${Card} title=${TITLE[part]} actions=${range}><${Loaded} read=${read} failed="Insights could not be read">${r => html`<div>
       <p class="muted small range-said">${`${when(r.range.start)} – ${when(r.range.end)}`}${r.catching_up ? " · counting past turns after the update: the numbers fill in within minutes" : ""}</p>
       ${part === "failures" ? html`<${Failures} f=${r.failures} />` : part === "usage" ? html`<${Usage} u=${r.usage} />` : html`<${Endpoints} eps=${r.endpoints} />`}</div>`}<//><//>
     ${part === "endpoints" && r ? html`<${Network} net=${r.network} />` : ""}${part === "usage" ? html`<${Disk} />` : ""}`;
