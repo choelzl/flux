@@ -2,7 +2,10 @@
 // share (D889: split out of app.js; the log and the live tree are in live.js, the configurator in
 // configure.js; D892: a loop's page in loop_page.js, each of its tabs in a loop_*.js).
 
-import { codeBlock, codeEditor } from "./highlight.js";
+import { codeEditor } from "./highlight.js";
+import { html } from "./view.js";
+import { Markdown } from "./components/Markdown.js";
+import { Conversation } from "./components/Conversation.js";
 import { can, me, pageOwner, pageRefresh, setPageRefresh } from "./state.js";
 import { act, ago, api, on, autosave, bytes, card, confirmDialog, createFromText, dialog, dur, empty, enc, h, head, offline, owned, pageShow, saveMark, sortableTable, statePill, toast, toasts, when, withOwner, plural } from "./ui.js";
 import { num4, sv } from "./charts.js";
@@ -308,122 +311,11 @@ function uploadForm() {
     h("div", { class: "form-actions" }, go)));
 }
 
-/** An answer's Markdown (D705), built node by node -- never HTML: headings, lists, tables, code
-    blocks, quotes, paragraphs with **bold**, *italics* and `code`. */
-function markdown(text) {
-  const inline = (t) => {
-    const out = [];
-    const re = /(`[^`]+`|\*\*[^*]+\*\*|\*[^*\s][^*]*\*)/g;
-    let at = 0, m;
-    while ((m = re.exec(t))) {
-      if (m.index > at) out.push(t.slice(at, m.index));
-      const x = m[0];
-      out.push(x.startsWith("`") ? h("code", {}, x.slice(1, -1)) : x.startsWith("**") ? h("strong", {}, x.slice(2, -2)) : h("em", {}, x.slice(1, -1)));
-      at = m.index + x.length;
-    }
-    if (at < t.length) out.push(t.slice(at));
-    return out;
-  };
-  const lines = String(text || "").split("\n"), out = [];
-  for (let i = 0; i < lines.length;) {
-    const l = lines[i];
-    if (/^```/.test(l)) {
-      const lang = l.slice(3).trim(), body = [];
-      for (i++; i < lines.length && !/^```/.test(lines[i]); i++) body.push(lines[i]);
-      i++; out.push(codeBlock(body.join("\n"), lang === "systemverilog" || lang === "verilog" ? "sv" : lang, "val code"));
-    } else if (/^#{1,6}\s/.test(l)) {
-      const n = l.match(/^#+/)[0].length; out.push(h(n <= 2 ? "h3" : "h4", {}, inline(l.replace(/^#+\s*/, "")))); i++;
-    } else if (/^\s*\|.*\|\s*$/.test(l)) {
-      const rows = [];
-      for (; i < lines.length && /^\s*\|.*\|\s*$/.test(lines[i]); i++) rows.push(lines[i].trim().slice(1, -1).split("|").map(c => c.trim()));
-      const body = rows.filter(r => !r.every(c => /^:?-{2,}:?$/.test(c)));
-      out.push(h("div", { class: "scroll-x" }, h("table", { class: "list compact md" }, h("thead", {}, h("tr", {}, body[0].map(c => h("th", {}, inline(c))))),
-        h("tbody", {}, body.slice(1).map(r => h("tr", {}, r.map(c => h("td", {}, inline(c)))))))));
-    } else if (/^\s*([-*+]|\d+\.)\s+/.test(l)) {
-      const ordered = /^\s*\d+\./.test(l), items = [];
-      for (; i < lines.length && /^\s*([-*+]|\d+\.)\s+/.test(lines[i]); i++) items.push(lines[i].replace(/^\s*([-*+]|\d+\.)\s+/, ""));
-      out.push(h(ordered ? "ol" : "ul", {}, items.map(x => h("li", {}, inline(x)))));
-    } else if (/^>\s?/.test(l)) {
-      const q = [];
-      for (; i < lines.length && /^>\s?/.test(lines[i]); i++) q.push(lines[i].replace(/^>\s?/, ""));
-      out.push(h("blockquote", {}, inline(q.join(" "))));
-    } else if (!l.trim()) { i++; } else {
-      // Consume the fallback line even if it resembles an unfinished block (e.g. "| ...").
-      const para = [l]; i++;
-      for (; i < lines.length && lines[i].trim() && !/^(```|#{1,6}\s|\s*\||\s*([-*+]|\d+\.)\s|>)/.test(lines[i]); i++) para.push(lines[i]);
-      out.push(h("p", {}, inline(para.join(" "))));
-    }
-  }
-  return h("div", { class: "md" }, out);
-}
-
-/** An agent's conversation (D712): what it did, in order -- its words as text, its thinking and
-    each tool call (input and output) folded, opened on a click and kept open across the redraws.
-    D1030: the work between two answers -- its thinking and commands -- is one dashed line ("5 steps ·
-    3 commands · 1m 20s"), opened on a click to its steps; the answers stay in view.
-    `offset`: how many earlier steps are not in `steps` (a live row sends its latest). */
-const convOpen = new Set();
-function conversation(steps, { key = "", offset = 0, live = false, scroll = false } = {}) {
-  const items = [];
-  if (offset > 0) items.push(h("p", { class: "muted small" }, `${offset} earlier step${offset === 1 ? "" : "s"} hidden`));
-  const preview = (t, n = 140) => { const x = String(t || "").replace(/\s+/g, " ").trim(); return x.length > n ? x.slice(0, n) + "…" : x; };
-  const kept = (det, id) => {
-    if (convOpen.has(id)) det.open = true;
-    on(det, "toggle", e => { if (e.currentTarget.open) convOpen.add(id); else convOpen.delete(id); });   // D1035: carried by a morph
-    return det;
-  };
-  const stepOf = (st, i) => {
-    const id = `${key}:${offset + i}`, last = i === steps.length - 1;
-    const det = kept(h("details", { class: `cv-step cv-${st.k}${st.error ? " bad" : ""}` }), id);
-    if (st.k === "think") {
-      const t = String(st.text || "").trim();
-      det.append(h("summary", {}, h("span", { class: "cv-kind" }, "Thinking"),
-        h("span", { class: "cv-sum muted" }, t ? preview(t) : `redacted, about ${Number(st.redacted || 0).toLocaleString()} tokens`),
-        live && last ? h("span", { class: "cv-live" }, "…") : ""),
-        t ? h("pre", { class: "cv-body cv-thought", "data-k": `${id}:thinking` }, t) : "");
-    } else {
-      const state = st.out != null ? (st.error ? "failed" : "") : live && last ? "running" : "";
-      det.append(h("summary", {}, h("span", { class: "cv-kind" }, st.name || "tool"),
-        h("code", { class: "cv-sum" }, preview(String(st.call || "").replace(/^[^:]*:\s*/, ""), 160)),
-        state ? h("span", { class: `cv-state ${state === "failed" ? "bad" : "live"}` }, state) : ""),
-        ...Object.entries(st.input && typeof st.input === "object" ? st.input : st.input ? { input: String(st.input) } : {}).map(([k, v]) => {
-          const t = String(v ?? "");
-          return h("div", { class: "cv-io" }, h("small", {}, k || "input"),
-            t.includes("\n") || t.length > 90 ? h("pre", { class: "cv-body", "data-k": `${id}:input:${k}` }, t) : h("div", {}, h("code", { class: "cv-arg" }, t)));
-        }),
-        st.out != null ? h("div", { class: "cv-io" }, h("small", {}, st.error ? "error" : "output"),
-          h("pre", { class: `cv-body${st.error ? " err" : ""}`, "data-k": `${id}:output` }, String(st.out).trim() || "(nothing)")) : "");
-    }
-    return det;
-  };
-  const took = s => { s = Math.max(0, Math.round(s)); return s >= 60 ? `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, "0")}s` : `${s}s`; };
-  for (let i = 0; i < steps.length;) {
-    const st = steps[i];
-    if (st.k === "text") {
-      if (String(st.text || "").trim()) items.push(h("div", { class: "cv-text" }, markdown(String(st.text).trim())));
-      i += 1;
-      continue;
-    }
-    let j = i;
-    while (j < steps.length && steps[j].k !== "text") j += 1;
-    const work = steps.slice(i, j), now = live && j === steps.length;          // the stretch it is working on
-    const cmds = work.filter(x => x.k !== "think").length, failed = work.filter(x => x.error).length;
-    const end = now ? Date.now() / 1000 : (steps[j]?.at ?? work[work.length - 1].at);
-    const secs = work[0].at != null && end != null ? end - work[0].at : null;
-    const said = [`${work.length} step${work.length === 1 ? "" : "s"}${now ? " so far" : ""}`,
-      cmds ? `${cmds} command${cmds === 1 ? "" : "s"}` : "", failed ? `${failed} failed` : "", secs != null ? took(secs) : ""].filter(Boolean).join(" · ");
-    const first = i;
-    const box = kept(h("details", { class: `cv-work${now ? " live" : ""}${failed ? " bad" : ""}` }), `${key}:w${offset + i}`);
-    // open while a step in it is open: a live tail rolls its first steps away, and with them the line's own key
-    if (work.some((_x, k) => convOpen.has(`${key}:${offset + first + k}`))) box.open = true;
-    box.append(h("summary", { title: "Its thinking and commands: click to open" },
-      h("span", { class: "cv-work-said" }, now ? h("span", { class: "alt-spin", "aria-hidden": "true" }) : "", now ? `working · ${said}` : said)),
-      h("div", { class: "cv-work-steps" }, work.map((x, k) => stepOf(x, first + k))));
-    items.push(box);
-    i = j;
-  }
-  return h("div", { class: `cv${scroll ? " cv-live-box" : ""}`, "data-k": `cv-${key}` }, items.length ? items : h("p", { class: "muted" }, "Nothing yet."));
-}
+/** An answer's Markdown (D705) and an agent's conversation (D712) -- components (components/Markdown.js,
+    Conversation.js, D1095), a page built with h() holds them as it holds a node. */
+const markdown = (text) => html`<${Markdown} text=${text} />`;
+const conversation = (steps, { key = "", offset = 0, live = false, scroll = false } = {}) =>
+  html`<${Conversation} steps=${steps} k=${key} offset=${offset} live=${live} scroll=${scroll} />`;
 
 /** The agents that can write a problem here (D704), as a select; the unavailable say why. `ask`: only
     those the admin offers for Ask (D1025). */

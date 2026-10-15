@@ -1,10 +1,10 @@
 // LiveAlt (D1095): the inspector's panels this page draws itself -- a box of a pass (its runs, its notes,
-// what it is set to until it runs) and a pass at a glance. A task's own panel is the inspector's (live.js).
+// what it is set to until it runs), a pass at a glance, and where a task's panel (inspector/) is kept.
 
-import { Dom, html, useLayoutEffect, useMemo, useRef } from "../view.js";
+import { html, useLayoutEffect, useRef } from "../view.js";
 import { WORK_COLORS as COLORS, workLabel } from "../work_style.js";
 import { passName, taskLabel } from "../live_alt_views.js";
-import { passSummary } from "../live_alt_inspector.js";
+import { PassSummary } from "./inspector/Inspector.js";
 import { asYaml, noteName, noteSaid } from "./notes.js";
 
 const said = v => typeof v === "object" ? JSON.stringify(v) : String(v);
@@ -24,23 +24,14 @@ export function BoxPanel({ v, a, box }) {
       : b?.notes?.length ? html`<div class="alt-steps">${b.notes.map(n => html`<div class="alt-step-row note"><span>${noteName(n)}</span>
           ${Object.keys(n.output || {}).length ? html`<span class="mono muted small">${Object.entries(n.output).map(([k, x]) => `${k} ${said(x)}`).join(" · ")}</span>` : ""}</div>`)}</div>`
       : html`<p class="muted">${b?.done ? "Baseline stored as a reference." : later ? "Nothing was recorded for it in this pass." : "Not started yet."}</p>`}
-    ${v.boxView.key === "record" && b?.done ? html`<${PassSteps} p=${v.boxView.p} nodes=${box.nodes} a=${a} />` : ""}
+    ${v.boxView.key === "record" && b?.done ? html`<${PassSummary} p=${v.boxView.p} nodes=${box.nodes} a=${a} N=${v.N} head=${false} />` : ""}
     ${config != null && !b?.runs.length && !b?.notes?.length ? html`<section><div class="alt-label">${`Set to · ${v.problem?.document || "problem.yaml"}`}</div>
         <pre class="val tall" data-k="configuration">${typeof config === "string" ? config : asYaml(config)}</pre></section>`
       : v.notes[v.boxView.key] ? html`<p class="mono">${v.notes[v.boxView.key]}</p>` : ""}</div>`;
 }
 
-/** A pass's steps and where its time went, as the inspector's pass summary draws them (its head left out). */
-function PassSteps({ p, nodes, a }) {
-  const parts = useMemo(() => passSummary(p, nodes, { pick: id => a.select(id) }).slice(1), [p, nodes]);
-  return html`<${Dom} node=${parts} />`;
-}
-
 /** D982: a pass in the inspector -- its steps, where its time went. */
-export function PassPanel({ p, nodes, a, drawn }) {
-  const parts = useMemo(() => passSummary(p, nodes, { pick: id => a.select(id) }), [p, nodes, drawn]);
-  return html`<div class="detail alt-detail alt-pass-detail" data-pass=${String(p ?? "setup")}><${Dom} node=${parts} /></div>`;
-}
+export const PassPanel = ({ p, nodes, a, N }) => html`<div class="detail alt-detail alt-pass-detail" data-pass=${String(p ?? "setup")}><${PassSummary} p=${p} nodes=${nodes} a=${a} N=${N} /></div>`;
 
 /** The inspector's own panel (a task's), kept where it is drawn -- not taken back from Fullscreen (D987). */
 export function TaskPanel({ detail }) {

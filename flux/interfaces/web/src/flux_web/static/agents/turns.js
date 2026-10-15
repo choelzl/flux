@@ -2,7 +2,7 @@
 
 import { proseBlock } from "../highlight.js";
 import { dur, fmtTok, h, money } from "../ui.js";
-import { conversation } from "../loops.js";
+import { Conversation } from "../components/Conversation.js";
 import { fullscreen, viewerTools } from "../viewer.js";
 import { Ago, Dom, html, useMemo, useRef } from "../view.js";
 
@@ -58,12 +58,12 @@ const Prose = ({ text }) => html`<${Dom} node=${useMemo(() => proseBlock(String(
 export function TurnDetail({ full, k }) {
   const box = useRef(null);
   const facts = factsOf(full), more = facts.filter(([f]) => !MAIN.has(f));
-  const talk = useMemo(() => Array.isArray(full.steps) && full.steps.length ? conversation(full.steps, { key: `turn${k}` }) : null, [full, k]);
+  const talk = Array.isArray(full.steps) && full.steps.length ? html`<${Conversation} steps=${full.steps} k=${`turn${k}`} />` : null;
   const tools = useMemo(() => viewerTools(() => box.current, { title: "Agent turn", rawText: JSON.stringify(full, null, 2) }), [full]);
   // its conversation (or, a turn without one, its text), one flat list
   const tail = (talk ? [
     full.error && html`<div class="blk"><h3>error</h3><${Prose} text=${full.error} /></div>`,
-    html`<${Dom} node=${talk} />`,
+    talk,
     full.stderr && html`<details class="blk"><summary>stderr</summary><${Prose} text=${full.stderr} /></details>`,
     full.prompt && html`<details class="blk"><summary>Prompt (${String(full.prompt).length.toLocaleString()} characters)</summary><${Prose} text=${full.prompt} /></details>`,
   ] : [

@@ -1,7 +1,7 @@
 // LiveAlt (D1095): the page -- the toolbar (Follow, Earlier passes, the start and the pass), the list (Tree,
 // Graph or Timeline) and the inspector beside it. Both read the store; a change in it redraws them.
 
-import { Dom, html, useEffect, useLayoutEffect, useMemo, useRef, useState } from "../view.js";
+import { Dom, html, render, useEffect, useLayoutEffect, useMemo, useRef, useState } from "../view.js";
 import { appHref, streamPill, when } from "../ui.js";
 import { scrollState, restoreScroll } from "../scroll.js";
 import { phaseKind } from "../work_style.js";
@@ -13,6 +13,7 @@ import { Lines } from "./Lines.js";
 import { Graph } from "./Graph.js";
 import { Timeline } from "./Timeline.js";
 import { BoxPanel, PassPanel, TaskPanel } from "./Panels.js";
+import { Inspector } from "./inspector/Inspector.js";
 
 /** Redrawn with the store. */
 function useStore(store) {
@@ -25,13 +26,13 @@ const narrowScreen = () => window.matchMedia("(max-width: 960px)").matches;
 /** The toolbar under the tabs (D975): Follow, Earlier passes, the start and the pass. */
 export function Controls({ store, ctx }) {
   useStore(store);
-  const { s, a } = store, scope = s.scopeRows && s.inspector ? s.lastScope : null;
+  const { s, a } = store, scope = s.scopeRows && s.journal ? s.lastScope : null;
   if (!s.history) return null;
   const passes = scope?.passes || [], current = scope?.current || [];
   return html`<div class="alt-controls">
     <button type="button" class=${`small${s.following ? " on" : ""}`} hidden=${!ctx.st.running} aria-pressed=${String(s.following)}
       title=${s.following ? "Pause automatic task selection" : "Follow the latest task in the current pass"} onClick=${a.follow}>${s.following ? "Following" : "Follow"}</button>
-    <button type="button" class="small" hidden=${!(s.inspector?.model.before || s.inspector?.model.cut) || s.startId !== "current"} title="Load every pass of this start" onClick=${a.earlier}>Earlier passes</button>
+    <button type="button" class="small" hidden=${!(s.journal?.model.before || s.journal?.model.cut) || s.startId !== "current"} title="Load every pass of this start" onClick=${a.earlier}>Earlier passes</button>
     <div class="alt-selectors">
       <label>Start <select aria-label="LiveAlt start" value=${s.startId} onChange=${e => a.setStart(e.currentTarget.value)}>
         <option value="current">Current start</option>
@@ -56,10 +57,10 @@ function Summary({ v, s }) {
       .map(([st, n]) => html`<span class=${`alt-count ${st}`} title=${`All tasks in this scope: ${n} ${st}`}>${`${n} ${st === "timeout" ? "out of time" : st}`}</span>`)}</div>`;
 }
 
-/** The page once its journal is open (an inspector to read). */
+/** The page once its journal is open (a model to read). */
 export function Page({ store, ctx }) {
   useStore(store);
-  return store.s.inspector ? html`<${Body} store=${store} ctx=${ctx} />` : html`<section class="card"><${Empty} text="Loading…" /></section>`;
+  return store.s.journal ? html`<${Body} store=${store} ctx=${ctx} />` : html`<section class="card"><${Empty} text="Loading…" /></section>`;
 }
 function Body({ store, ctx }) {
   const { s, a } = store, panel = useRef(null), host = useRef(null), places = useRef({ mode: "", saved: new Map() });
@@ -73,9 +74,16 @@ function Body({ store, ctx }) {
   const switched = places.current.mode !== mode;
   if (switched && places.current.mode && panel.current) places.current.saved.set(places.current.mode, scrollState(panel.current));
   // the lines first: a try's number and how it ended are learned drawing them, and the inspector says them (D1084)
-  const sel = v.model.nodes.get(v.selected), tryWas = sel ? `${sel.tryNo}|${sel.tryFailed}` : "";
   const treeLines = mode === "tree" && v.rows.length ? lines(v.rows, v).tree() : null;
-  if (sel && `${sel.tryNo}|${sel.tryFailed}` !== tryWas) s.inspector.inspect(v.selected);
+  // the inspector's panel -- drawn into the element the page keeps, wherever it is (in Fullscreen too, D987)
+  const sel = v.model.nodes.get(v.selected) || null;
+  useLayoutEffect(() => {
+    const d = s.detail;
+    if (sel) { d.dataset.task = String(sel.id); d.dataset.view = `${sel.id}:inspector`; } else { delete d.dataset.task; delete d.dataset.view; }
+    d.dataset.drawn = String(s.drawn);
+    render(html`<${Inspector} n=${sel} env=${{ now: Date.now() / 1000, nodes: v.model.nodes, goals: s.goals, record: s.record, N: v.N, tests: s.tests, redraw: store.emit, ...store.sources }}
+      a=${a} panel=${() => s.detail} />`, d);
+  });
   useLayoutEffect(() => {
     const el = panel.current;
     if (!el) return;
@@ -138,7 +146,7 @@ function Body({ store, ctx }) {
           <a class="btn small alt-log-link" title="Full output and retained run data" href=${logHref}>${s.startId === "current" ? "Full log" : "History"}</a></div>
         <div class="alt-inspector-host" tabindex="-1" ref=${host}>
           ${s.boxView && v.box ? html`<${BoxPanel} v=${v} a=${a} box=${v.box} />`
-            : s.passView !== NO_PASS ? html`<${PassPanel} p=${s.passView} nodes=${v.passNodes} a=${a} drawn=${s.drawn} />`
-            : html`<${TaskPanel} detail=${s.inspector.detail} />`}</div></section>
+            : s.passView !== NO_PASS ? html`<${PassPanel} p=${s.passView} nodes=${v.passNodes} a=${a} N=${v.N} />`
+            : html`<${TaskPanel} detail=${s.detail} />`}</div></section>
     </div></div>`;
 }

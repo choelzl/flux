@@ -14,6 +14,7 @@ import { filesTab } from "./loop_files.js";
 import { settingsView } from "./loop_settings.js";
 import { historyTab } from "./loop_history.js";
 import { liveAltTab } from "./loop_live_alt.js";
+import { liveWork } from "./components/Conversation.js";
 import { ideasView } from "./loop_ideas.js";
 import { libraryView } from "./loop_library.js";
 import { restoreScroll, scrollState } from "./scroll.js";
@@ -354,10 +355,10 @@ const canAsk = info.can_ask ?? (mine && canRun);          // D991: a group membe
         const conv = steps.length ? conversation(steps, { key: `ask${a.id}`, offset: total - steps.length, live: !!got.running }) : null;
         box.replaceChildren(stats.length ? h("p", { class: "muted small" }, stats.join(" · ")) : "",
           total > steps.length ? h("p", { class: "muted small" }, `${plural(total - steps.length, "earlier step")} not shown`) : "",
-          conv ? conv
+          conv ? h("div", { class: "ask-conversation" }, conv)   // D1095: a component, held by h()
             : think ? h("details", { class: "cv-step cv-think", open: true }, h("summary", {}, "Thinking"), h("pre", { class: "cv-body cv-thought" }, think))
             : h("p", { class: "muted" }, got.error || (got.running ? "Nothing recorded yet." : "No thinking or commands were recorded for this answer.")),
-          got.running && !conv?.querySelector(".cv-work.live") ? h("div", { class: "alt-chat-now" }, h("span", { class: "alt-spin" }), `${got.status || "working"}…`) : "",   // D1033: one working line
+          got.running && !liveWork(steps, got.running) ? h("div", { class: "alt-chat-now" }, h("span", { class: "alt-spin" }), `${got.status || "working"}…`) : "",   // D1033: one working line
           got.stderr ? h("details", { class: "ask-output" }, h("summary", {}, "stderr"), h("pre", { class: "log small" }, got.stderr)) : "");
         if (got.running) timer = setTimeout(draw, 2000);
         else box.scrollTop = box.scrollHeight;

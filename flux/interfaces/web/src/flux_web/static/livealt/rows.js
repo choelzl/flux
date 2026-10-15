@@ -13,7 +13,7 @@
 import { dur } from "../format.js";
 import { WORK_COLORS as COLORS, AGENT_COLOR, kindOf, workLabel, phaseKind } from "../work_style.js";
 import { boxKind, candidateOf, flowBoxes, isDraft, ownView, passName, taskLabel, taskNote } from "../live_alt_views.js";
-import { notReached } from "../live_alt_inspector.js";
+import { notReached as unreached } from "./inspector/parts.js";
 import { taskState as state } from "../live_alt_model.js";
 import { AI, STAGE, checkWord, ended, firstFailing, isCritique, madeOf, numbersOf, rejectedBy, rest, soleOf } from "./rules.js";
 
@@ -31,7 +31,7 @@ const markOf = (n, J) => n.t1 == null ? "spin"
     selected, model, membership, J (rules.js judge), N (namer), goals, isFolded, opened, allTries,
     pass, passView, passNotes, noteShort, scopeRows (every task of the scope, for the boxes still to come). */
 export function lines(rows, v) {
-  const { selected, J, N, goals } = v, out = [];
+  const { selected, J, N, goals } = v, out = [], notReached = n => unreached(n, v.tests);
   const ids = new Set(rows.map(r => r.node.id)), kids = new Map();
   for (const r of rows) if (r.parent != null && ids.has(r.parent)) (kids.get(r.parent) || kids.set(r.parent, []).get(r.parent)).push(r);
   // D1012: a task whose one child is of its own kind and has children of its own is one line;

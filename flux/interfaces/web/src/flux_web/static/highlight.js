@@ -56,13 +56,14 @@ export function guessLang(text) {
 
 export const MAX_CHARS = 400000;
 
-export function highlight(text, lang) {
-  const frag = document.createDocumentFragment();
-  const rules = RULES[lang];
+/** D1095: the text as tokens -- [class, text] each, class "" for plain text -- for a highlighted view drawn as
+    nodes (highlight) or as components (components/Markdown.js Code). */
+export function tokens(text, lang) {
+  const rules = RULES[lang], out = [];
   text = String(text ?? "");
-  if (!rules || text.length > MAX_CHARS) { frag.append(text); return frag; }
+  if (!rules || text.length > MAX_CHARS) return text ? [["", text]] : [];
   let i = 0, plain = "";
-  const flush = () => { if (plain) { frag.append(plain); plain = ""; } };
+  const flush = () => { if (plain) { out.push(["", plain]); plain = ""; } };
   while (i < text.length) {
     let hit = null;
     for (const [cls, re] of rules) {
@@ -70,14 +71,8 @@ export function highlight(text, lang) {
       const m = re.exec(text);
       if (m && m[0].length) { hit = [cls, m[0]]; break; }
     }
-    if (hit) {
-      flush();
-      const span = document.createElement("span");
-      span.className = "tk-" + hit[0];
-      span.textContent = hit[1];
-      frag.append(span);
-      i += hit[1].length;
-    } else {
+    if (hit) { flush(); out.push(hit); i += hit[1].length; }
+    else {
       // plain text up to the next character a rule could start on
       const ch = text[i];
       plain += ch; i++;
@@ -85,6 +80,18 @@ export function highlight(text, lang) {
     }
   }
   flush();
+  return out;
+}
+
+export function highlight(text, lang) {
+  const frag = document.createDocumentFragment();
+  for (const [cls, t] of tokens(text, lang)) {
+    if (!cls) { frag.append(t); continue; }
+    const span = document.createElement("span");
+    span.className = "tk-" + cls;
+    span.textContent = t;
+    frag.append(span);
+  }
   return frag;
 }
 

@@ -102,12 +102,10 @@ def test_what_each_box_is_set_to_comes_from_the_document():
 
 
 def run_inspector(js):
+    """D1095: the inspector's readers, livealt/inspector/parts.js -- plain functions, under node."""
     uri = lambda f: "data:text/javascript;base64," + base64.b64encode(  # noqa: E731
         (STATIC / f).read_text().replace('"./work_style.js"', json.dumps(WS)).replace('"./live_alt_model.js"', json.dumps(MODEL)).encode()).decode()
-    views = uri("live_alt_views.js")
-    ui = "data:text/javascript;base64," + base64.b64encode(b"export const dur = s => s + 's'; export const h = () => null;").decode()
-    loops = "data:text/javascript;base64," + base64.b64encode(b"export const conversation = () => null; export const markdown = () => null;").decode()
-    src = (STATIC / "live_alt_inspector.js").read_text().replace('"./ui.js"', json.dumps(ui)).replace('"./loops.js"', json.dumps(loops)).replace('"./work_style.js"', json.dumps(WS)).replace('"./live_alt_views.js"', json.dumps(views))
+    src = (STATIC / "livealt/inspector/parts.js").read_text().replace('"../../work_style.js"', json.dumps(WS)).replace('"../../live_alt_views.js"', json.dumps(uri("live_alt_views.js")))
     mod = "data:text/javascript;base64," + base64.b64encode(src.encode()).decode()
     r = subprocess.run(["node", "-e", f"import({json.dumps(mod)}).then(m => process.stdout.write(JSON.stringify(({js})(m))));"], capture_output=True, text=True, timeout=30)
     assert r.returncode == 0, r.stderr

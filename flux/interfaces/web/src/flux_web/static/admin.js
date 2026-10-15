@@ -501,7 +501,7 @@ async function adminInsights(body, part = "failures", ok = () => true) {   // D8
       try { d = await api("/admin/insights/disk"); }
       catch (x) { if (ok() && x.message !== "log in") dbox.replaceChildren(empty(`The disk could not be measured: ${x.message}`, act("Retry", fill, { cls: "small" }))); return; }
       if (!ok()) return;
-      at.replaceChildren("measured ", ago(d.at));
+      at.replaceChildren(h("span", {}, "measured ", ago(d.at)));   // D1095: ago() is a component, held by h()
       const maxDisk = Math.max(...d.disk.map(x => x.total), 1);
       dbox.replaceChildren(...sortedTable("flux-sort-user-disk", [{ label: "User", key: x => x.user, asc: true }, { label: "Home", key: x => x.home, num: true },
         { label: "Loops", key: x => x.loops, num: true }, { label: "Largest loop", key: x => x.largest ? x.largest.size : null },

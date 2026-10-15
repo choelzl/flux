@@ -1,11 +1,10 @@
 // Flux web: a loop's log and its live task tree (D889: split out of app.js).
 
 import { crafterCatalog, setCrafterCatalog } from "./state.js";
-import { NARROW, api, dur, empty, h, morph, skeleton, streamPill } from "./ui.js";
+import { NARROW, dur, empty, h, skeleton, streamPill } from "./ui.js";
 import { conversation, markdown } from "./loops.js";
 import { viewerTools } from "./viewer.js";
 import { restoreScroll, scrollState } from "./scroll.js";
-import { altInspector } from "./live_alt_inspector.js";
 
 /** The log: follow, wrap, a filter (text or /regex/), problems only, download; the loop's starts to
     pick one from (D692). */
@@ -165,7 +164,7 @@ function logView(base, qs, stream) {
 
 /** The live task tree: follow the running task, collapse what finished, search; as a tree or as a
     graph (D723), the same tasks, selection and collapse either way. */
-function liveTree(base, qs, onQuestion, stream, { unifiedDetail = false, inspectorOnly = false, pick = null, goals = null, record = null } = {}) {
+function liveTree(base, qs, onQuestion, stream) {
   const LT = window.FluxLoopTree;                   // D752: the tree's building, in looptree.js
   let loadAll = () => {};                           // D759: the passes a window left out
   const mdl = LT.model(), nodes = mdl.nodes, roots = mdl.roots, standings = mdl.standings;
@@ -503,7 +502,7 @@ function liveTree(base, qs, onQuestion, stream, { unifiedDetail = false, inspect
     const f = { ...(running(n) ? {} : (n.output || {})), ...(n.fields || {}) };
     const stderrClass = n.failed || (f.exit != null && f.exit !== 0 && !n.timedOut) ? "err" : "";
     const facts = [["model", f.agent], ["status", f.status], ["output", f.output], ["rate limit", f["rate limit"]],
-      ["exit", f.exit], ["took", dur(running(n) ? now - n.t0 : n.seconds)]].filter(([k, v]) => v != null && v !== "" && !(unifiedDetail && k === "took"));
+      ["exit", f.exit], ["took", dur(running(n) ? now - n.t0 : n.seconds)]].filter(([, v]) => v != null && v !== "");
     const stream = (key, title, text, cls = "") => text ? h("section", { class: `astream ${cls}` }, h("h3", {}, title),
       h("pre", { class: "val astream-body", "data-k": key }, text)) : "";
     const tools = String(f["tool calls"] || "").split("\n").filter(Boolean);
@@ -515,13 +514,13 @@ function liveTree(base, qs, onQuestion, stream, { unifiedDetail = false, inspect
       // the conversation below without that last text, and without a scroll of its own
       const lastText = [...steps].reverse().find(st => st.k === "text" && String(st.text || "").trim());
       const ends = lastText && steps[steps.length - 1] === lastText;
-      const said = lastText && !unifiedDetail ? h("section", { class: "agent-reply" }, h("h3", {}, running(n) ? "Its latest words" : "Its reply"),
+      const said = lastText ? h("section", { class: "agent-reply" }, h("h3", {}, running(n) ? "Its latest words" : "Its reply"),
         h("div", { class: "cv-text" }, markdown(String(lastText.text).trim()))) : "";
       return h("div", { class: "agent-view" },
         h("div", { class: "facts" }, facts.map(([k, v]) => h("div", { class: "fact" }, h("small", {}, k), h("span", { class: "mono" }, String(v))))),
         said,
         h("h3", { class: "cv-title" }, "What it did"),
-        conversation(ends && !unifiedDetail ? steps.slice(0, -1) : steps, { key: `task${n.id}`, offset: Math.max(0, total - steps.length), live: running(n) }),
+        conversation(ends ? steps.slice(0, -1) : steps, { key: `task${n.id}`, offset: Math.max(0, total - steps.length), live: running(n) }),
         stream("stderr", "stderr", f.stderr, stderrClass));
     }
     return h("div", { class: "agent-view" },
@@ -541,25 +540,15 @@ function liveTree(base, qs, onQuestion, stream, { unifiedDetail = false, inspect
     const out = f.stdout ?? f["stdout (live tail)"] ?? "", err = f.stderr ?? f["stderr (live tail)"] ?? "";
     const exit = running(n) ? null : f.exit;
     const facts = [["exit", exit], ["took", dur(running(n) ? now - n.t0 : n.seconds)], ["folder", p.folder]]
-      .filter(([k, v]) => v != null && v !== "" && !(unifiedDetail && ["took", "folder"].includes(k)));
+      .filter(([, v]) => v != null && v !== "");
     const stream = (key, title, text, cls = "") => text ? h("section", { class: `astream ${cls}` }, h("h3", {}, title),
       h("pre", { class: "val astream-body", "data-k": key }, text)) : "";
     return h("div", { class: "agent-view" },
       h("div", { class: "facts" }, facts.map(([k, v]) => h("div", { class: `fact${k === "exit" && v !== 0 ? (n.timedOut ? " warn" : " bad") : ""}` }, h("small", {}, k), h("span", { class: "mono" }, String(v))))),
-      p.command && !unifiedDetail ? h("section", { class: "astream" }, h("h3", {}, "Command"), h("pre", { class: "val mono", "data-k": "command" }, p.command)) : "",
+      p.command ? h("section", { class: "astream" }, h("h3", {}, "Command"), h("pre", { class: "val mono", "data-k": "command" }, p.command)) : "",
       stream("stdout", running(n) ? "stdout, so far" : "stdout", out),
       stream("stderr", running(n) ? "stderr, so far" : "stderr", err, n.failed ? "err" : ""),
       !out && !err ? h("p", { class: "muted" }, running(n) ? "Nothing printed yet." : p.command ? "It printed nothing." : "No output recorded.") : "");
-  }
-  /** A command as a person reads it (D976): Flux's own interpreter path gone, `python -m
-      flux_presets` as the `fluxpreset` the document said, and paths under its folder relative. */
-  function tidyCommand(cmd, folder) {
-    let text = cmd.replace(/\/nix\/store\/[a-z0-9]{32}-[^/\s]+\/bin\//g, "")
-      .replace(/(^|\s)\S*python3?(?:\.\d+)?(?: -W ignore)? -m flux_presets(?:\.(\w+))?(?=\s|$)/g, (_, pre, sub) => `${pre}fluxpreset${sub ? " " + sub : ""}`)
-      .replace(/(^|\s)\S*python3?(?:\.\d+)?(?: -W ignore)? -m flux_cli(?=\s|$)/g, "$1flux");
-    if (folder && folder.length > 1) text = text.split(folder.replace(/\/$/, "") + "/").join("");
-    text = text.replace(/(^|[\s=])\/\S*?\/users\/[^/\s]+\/apps\/[^/\s]+\//g, "$1");   // D1094: a path in the loop's folder, from there
-    return text;
   }
   let detailTab = "";
   function drawDetail(now) {
@@ -582,9 +571,8 @@ function liveTree(base, qs, onQuestion, stream, { unifiedDetail = false, inspect
     detail.dataset.task = String(n.id);
     const block = (title, obj) => obj && Object.keys(obj).length ? h("div", { class: "blk" }, h("h3", {}, title), Object.entries(obj).map(([k, v]) => {
       let text = typeof v === "string" ? v : JSON.stringify(v, null, 1);
-      if (unifiedDetail && title === "Input" && k === "command" && typeof v === "string") text = tidyCommand(v, obj.folder);   // D976; Raw keeps it whole
       const long = text.length > 120 || text.includes("\n");
-      return h("div", { class: "kv" }, h("div", { class: "k" }, k), long ? h("pre", { class: "val", "data-k": unifiedDetail && k === "prompt" && title === "Input" ? "prompt" : `field:${title}:${k}` }, text) : h("div", { class: "val mono" }, text));
+      return h("div", { class: "kv" }, h("div", { class: "k" }, k), long ? h("pre", { class: "val", "data-k": `field:${title}:${k}` }, text) : h("div", { class: "val mono" }, text));
     })) : "";
     const path = []; for (let p = n.parent; p; p = p.parent) path.unshift(p.name);
     // D739: what a task was given, what it gave, its log, and what it does now -- each a tab,
@@ -607,9 +595,8 @@ function liveTree(base, qs, onQuestion, stream, { unifiedDetail = false, inspect
     if ((isAgent || isTool) && (has(n.fields) || has(n.output))) tabs.push(["Every field", () => h("div", {}, block("Fields", n.fields), block("Output", n.output))]);
     const want = tabs.find(([t]) => t === detailTab) || tabs.find(([t]) => (detailTab === "Live" && t === "Output") || (detailTab === "Output" && t === "Live") || (detailTab === "Conversation" && t === "Live")) || tabs[0];
     // Live output becoming a completed conversation/output is the same view of the same task.
-    const view = `${n.id}:${unifiedDetail ? "inspector" : ["Live", "Conversation", "Output"].includes(want?.[0]) ? "output" : want?.[0] || "empty"}`;
+    const view = `${n.id}:${["Live", "Conversation", "Output"].includes(want?.[0]) ? "output" : want?.[0] || "empty"}`;
     const place = detailPlaces.get(view);
-    const same = detail.dataset.view === view && !!detail.firstChild;     // D1035: the same view again is a morph
     detail.dataset.view = view;
     detail.dataset.drawn = String(Number(detail.dataset.drawn || 0) + 1);    // how many times drawn: a morph keeps the nodes
     const tabBar = tabs.length > 1 ? h("div", { class: "dtabs", role: "tablist" }, tabs.map(([t]) => h("button", { type: "button", class: `small${want && t === want[0] ? " on" : ""}`, role: "tab",
@@ -630,17 +617,6 @@ function liveTree(base, qs, onQuestion, stream, { unifiedDetail = false, inspect
       const walk = (it) => { if (it.leaf) { if (!hit && v && it.tasks.includes(v)) hit = it; if (!near && itemHas(it, n)) near = it; } else it.kids.forEach(walk); };
       shownItems.forEach(walk); return hit || near;
     })();
-    // D982: LiveAlt draws its own inspector (the task as the tree names it, what it gave first);
-    // Live keeps this one
-    if (unifiedDetail) {
-      (same ? kids => morph(detail, kids) : kids => detail.replaceChildren(...kids))(altInspector(n, {
-        now, nodes, place, goals, record, tidy: tidyCommand, block, redraw: () => drawDetail(Date.now() / 1000),
-        steps: (file, start, count) => api(`${base.replace(/^\/api/, "")}/steps?file=${encodeURIComponent(file)}&start=${start}&count=${count}`),   // D1036
-        turnSteps: (t0, t1, agent) => api(`${base.replace(/^\/api/, "")}/turn-steps?t0=${t0}&t1=${t1}&agent=${encodeURIComponent(agent)}`),   // D1039
-        pick: id => { if (pick) pick(id); },
-        tools: () => viewerTools(detail, { title: n.name, rawText: () => JSON.stringify({ name: n.name, input: n.params, fields: n.fields, output: n.output }, null, 2) }),
-      }));
-    } else
     detail.replaceChildren(
       h("div", { class: "detail-head" }, h("h2", {}, step ? boxName(step) : n.name), step ? h("span", { class: "mono muted small" }, n.name) : "",
         n.pseudo ? "" : h("span", { class: `pill ${running(n) ? "live" : n.interrupted || n.timedOut ? "warn" : n.failed ? "bad" : "ok"}` }, running(n) ? "running" : n.interrupted ? "interrupted" : n.failed ? "failed" : n.timedOut ? "time limit" : "done"),   // D928
@@ -649,15 +625,7 @@ function liveTree(base, qs, onQuestion, stream, { unifiedDetail = false, inspect
         rawText: () => JSON.stringify({ name: n.name, input: n.params, fields: n.fields, output: n.output }, null, 2) })),
       path.length ? h("p", { class: "crumbs" }, path.join(" › ")) : "",
       n.why ? h("p", { class: "muted" }, n.why) : "",
-      ...(unifiedDetail ? [h("div", { class: "task-inspector" },
-        !isAgent ? block("Input", n.params) : "",
-        isAgent ? agentView(n, now) : isTool ? toolView(n, now) : h("div", {}, block("Live output", n.fields), block("Output", n.output)),
-        isAgent && (f.stdout ?? f["stdout (live tail)"]) ? h("section", { class: "astream" }, h("h3", {}, "stdout"),
-          h("pre", { class: "val astream-body", "data-k": "stdout" }, f.stdout ?? f["stdout (live tail)"])) : "",
-        isAgent && has(n.params) ? h("details", { class: "inspector-input", "data-fold": "input", open: place?.folds?.get("input") || false },
-          h("summary", {}, "Prompt & input"), block("Input", n.params)) : "",
-        !has(n.params) && !has(n.fields) && !has(n.output) ? h("p", { class: "muted" }, running(n) ? "Nothing from it yet." : "No additional task data recorded.") : "")]
-        : [leafRows, tabBar, want ? want[1]() : h("p", { class: "muted" }, running(n) ? "Nothing from it yet." : "It recorded nothing more.")]));
+      ...[leafRows, tabBar, want ? want[1]() : h("p", { class: "muted" }, running(n) ? "Nothing from it yet." : "It recorded nothing more.")]);
     for (const el of detail.querySelectorAll("[data-k]")) {
       const saved = place?.blocks.get(el.dataset.k);
       const restore = () => {
@@ -689,12 +657,12 @@ function liveTree(base, qs, onQuestion, stream, { unifiedDetail = false, inspect
     stream.restart("events", { window: 0 });
   };
   // D918: a view not shown is not drawn -- drawn again when it is (drawBody)
-  const tick = inspectorOnly ? null : setInterval(() => { if (treeBox.isConnected && (dirty || [...nodes.values()].some(running))) draw(); }, 1000);
+  const tick = setInterval(() => { if (treeBox.isConnected && (dirty || [...nodes.values()].some(running))) draw(); }, 1000);
   const collapseLbl = h("label", { class: "check" }, collapse, "collapse finished");
   const bar = h("div", { class: "toolbar" }, h("div", { class: "seg", role: "group", "aria-label": "View" }, modeBtns.tree, modeBtns.graph),
     h("label", { class: "check" }, follow, "follow the running task"),
     collapseLbl, search, pill.el);
-  if (!inspectorOnly) setMode(mode);
+  setMode(mode);
   /** D928: the page's word on the run -- `t` its end once it no longer runs, null while it runs. */
   const ended = (t) => { if ((t ?? null) !== endedAt) { endedAt = t ?? null; dirty = true; } };
   return { tree: h("div", {}, bar, treeBox, graphBox), detail, stand, draw, ended,

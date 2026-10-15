@@ -2,11 +2,10 @@
 // selected, followed, folded, opened -- and the task journal it reads (the live stream, or a past start's
 // retained one). The toolbar and the page are its two views: a change redraws both, once a frame.
 
-import { api, enc, loopStream, request } from "../ui.js";
-import { liveTree } from "../live.js";
+import { api, enc, h, loopStream, request } from "../ui.js";
+import { journal } from "./journal.js";
 import { campaignForStart, currentTask, notePass, taskScope, taskWindow } from "../live_alt_model.js";
 import { docNotes, flowBoxes } from "../live_alt_views.js";
-import { nameLoop, nameTests } from "../live_alt_inspector.js";
 import { judge, namer } from "./rules.js";
 import { noteShort, scopeOf } from "./notes.js";
 
@@ -17,8 +16,10 @@ export function createStore(ctx) {
     startId: "current", pass: "current", following: true, limit: 200,
     boxView: null, passView: NO_PASS, choice: null, chainPass: undefined, openBox: null,
     folded: new Set(), opened: new Set(), allTries: new Set(),
-    history: null, problem: null, notes: {}, goals: [], record: [], names: [ctx.name],
-    loadMessage: "", failure: null, inspector: null, transport: null, stream: "",
+    history: null, problem: null, notes: {}, goals: [], record: [], names: [ctx.name], tests: [],
+    loadMessage: "", failure: null, journal: null, selected: null, transport: null, stream: "",
+    // the inspector's panel: one element the page keeps -- Fullscreen moves it, a task is drawn into it wherever it is (D987)
+    detail: h("div", { class: "detail alt-detail" }),
     reveal: false, located: null, drawn: 0, width: 380, earlierReady: false,
   };
   const subs = new Set();
@@ -27,7 +28,7 @@ export function createStore(ctx) {
   const now = () => { s.drawn++; for (const f of subs) f(); };
 
   // ---- what is shown
-  const membershipAll = () => taskScope(s.inspector.model, "all").membership;
+  const membershipAll = () => taskScope(s.journal.model, "all").membership;
   const pinPass = id => {
     if (s.pass !== "current" || id == null) return;
     const n = membershipAll().get(id);
@@ -35,14 +36,14 @@ export function createStore(ctx) {
   };
   // D1045: every fold that hides a task -- its ancestors', and the box and try lines that hold them
   const unfoldTo = id => {
-    for (let p = s.inspector.model.nodes.get(id)?.parent; p; p = p.parent) for (const k of [p.id, `box:${p.id}`, `try:${p.id}`]) s.folded.delete(k);
+    for (let p = s.journal.model.nodes.get(id)?.parent; p; p = p.parent) for (const k of [p.id, `box:${p.id}`, `try:${p.id}`]) s.folded.delete(k);
     for (const k of [...s.folded]) if (/^(box|try):/.test(String(k))) s.folded.delete(k);   // a box of its run's siblings is keyed by the first
   };
   const a = {
     select(id, locate = false) {
       s.following = false; s.boxView = null; s.passView = NO_PASS; s.choice = null;
       pinPass(id); unfoldTo(id); s.reveal = locate;
-      s.inspector.inspect(id); s.revealDetails = true; now();
+      s.selected = id; s.revealDetails = true; now();
     },
     showPass(p) { s.boxView = null; s.passView = p; s.following = false; now(); },
     showBox(p, key) {
@@ -58,21 +59,21 @@ export function createStore(ctx) {
       s.focusFold = key; now();
     },
     toggleTries(key) { if (s.allTries.has(key)) s.allTries.delete(key); else s.allTries.add(key); now(); },
-    choose(ids, kind) { s.following = false; pinPass(s.inspector.taskId()); s.choice = { ids, kind }; s.focusChoice = true; now(); },
+    choose(ids, kind) { s.following = false; pinPass(s.selected); s.choice = { ids, kind }; s.focusChoice = true; now(); },
     closeChoice(reveal) { s.choice = null; s.reveal = reveal; now(); },
     setPass(p) { s.boxView = null; s.passView = NO_PASS; s.choice = null; s.pass = p; s.following = true; s.limit = 200; s.folded.clear(); s.reveal = true; now(); },
     setStart(id) { s.choice = null; s.startId = id; s.pass = id === "current" ? "current" : "all"; load(); },
     follow() {
       s.choice = null;
-      if (s.following) { s.following = false; pinPass(s.inspector.taskId()); now(); return; }
+      if (s.following) { s.following = false; pinPass(s.selected); now(); return; }
       s.boxView = null; s.pass = "current"; s.following = true; s.passView = NO_PASS; s.folded.clear(); s.reveal = true; now();
     },
-    locate() { unfoldTo(s.inspector.taskId()); s.reveal = true; now(); },
+    locate() { unfoldTo(s.selected); s.reveal = true; now(); },
     more() { s.limit += 200; now(); },
     earlier() { listeners.events?.onData({ ev: "hello" }); s.transport?.restart("events", { window: 0 }); emit(); },
     // the arrow keys: the next or the previous task of the scope, located
     step(by) {
-      const rows = s.scopeRows || [], i = rows.findIndex(r => r.node.id === s.inspector.taskId()), n = rows[i + by]?.node;
+      const rows = s.scopeRows || [], i = rows.findIndex(r => r.node.id === s.selected), n = rows[i + by]?.node;
       if (n) a.select(n.id, true);
     },
     retry() { load(); },
@@ -83,17 +84,15 @@ export function createStore(ctx) {
       follows the work when following (or when the selected task left the scope); a box opened while it waited
       opens its run once it has one (D1064). */
   function view() {
-    const ins = s.inspector;
+    const ins = s.journal;
     if (!ins) return null;
     if (s.startId === "current") ins.ended(ctx.st.running ? null : ctx.st.last_active || null);
-    ins.inspect(ins.taskId());                      // settle a cut-short journal before its current pass and status
+    ins.settle();                                   // a cut-short journal settled before its current pass and status
     const scope = taskScope(ins.model, s.pass);
-    if (s.following || !scope.rows.some(r => r.node.id === ins.taskId())) {
-      const next = currentTask(scope.rows)?.id;
-      if (next !== ins.taskId()) ins.inspect(next);
-    }
+    if (s.following || !scope.rows.some(r => r.node.id === s.selected)) s.selected = currentTask(scope.rows)?.id ?? null;
+    if (!ins.model.nodes.has(s.selected)) s.selected = null;
     if (s.startId !== "current" && s.pass === "current") s.pass = "all";       // D994: a past start has no current pass
-    const selected = ins.taskId();
+    const selected = s.selected;
     if (s.reveal) {                                 // D1067: the task (or box) located flashes for a moment
       s.located = s.boxView ? "box" : selected; clearTimeout(locateTimer);
       locateTimer = setTimeout(() => { s.located = null; emit(); }, 1600);
@@ -103,7 +102,7 @@ export function createStore(ctx) {
     const v = { model: ins.model, membership: all.membership, scope, scopeRows: scope.rows, rows: taskWindow(scope.rows, s.limit, selected), selected,
       J: judge(ins.model, all.membership), N: namer(s.names), goals: s.goals, pass: s.pass, passView: s.passView, boxView: s.boxView,
       openBox: s.openBox, chainPass: s.chainPass, choice: s.choice && s.choice.ids.some(id => ins.model.nodes.has(id)) ? s.choice : null,
-      notes: s.notes, problem: s.problem, opened: s.opened, allTries: s.allTries, located: s.located, width: s.width, drawn: s.drawn,
+      notes: s.notes, problem: s.problem, tests: s.tests, record: s.record, opened: s.opened, allTries: s.allTries, located: s.located, width: s.width, drawn: s.drawn,
       passNotes, noteShort: (n, p) => noteShort(n, scopeOf(ins.model, all.membership, p)),
       isFolded: (key, finished, holdsSelected) => !s.opened.has(key) && (s.folded.has(key) || (finished && !holdsSelected)) };
     s.scopeRows = scope.rows;
@@ -130,7 +129,7 @@ export function createStore(ctx) {
     cancelAnimationFrame(frame); frame = 0;
     abort?.abort(); abort = null;
     s.transport?.close(); s.transport = null;
-    s.inspector?.close(); s.inspector = null;
+    s.journal = null;
     clearTimeout(locateTimer); s.choice = null; s.located = null;
   }
   async function load() {
@@ -150,8 +149,7 @@ export function createStore(ctx) {
       }, options);
     }, restart: () => load() };
     if (s.startId === "current") s.transport = loopStream(ctx.base, ctx.qs);
-    s.inspector = liveTree(ctx.base, ctx.qs, () => {}, port, { unifiedDetail: true, inspectorOnly: true, pick: id => a.select(id), goals: () => s.goals, record: () => s.record });
-    s.inspector.detail.classList.add("alt-detail");
+    s.journal = journal(port); s.selected = null;
     let observedRunning = ctx.st.running;
     if (s.transport) {
       timer = setInterval(() => {                 // the clock of what runs: its durations, its spinner
@@ -166,7 +164,7 @@ export function createStore(ctx) {
     if (!campaign) { s.loadMessage = "No task journal retained for this start. Its text output is in Live › History › Log."; now(); return; }
     s.loadMessage = "Loading retained tasks…"; now();
     const next = s.history.starts.slice().reverse().find(x => x.id > start.id);
-    s.inspector.ended(start.ended || (start.running ? null : next?.started || Date.now() / 1000));
+    s.journal.ended(start.ended || (start.running ? null : next?.started || Date.now() / 1000));
     const query = new URLSearchParams({ run_id: String(start.record_id), campaign: campaign.campaign_id, start_id: String(start.id), kind: "events" });
     if (ctx.owner) query.set("owner", ctx.owner);
     try {
@@ -199,8 +197,8 @@ export function createStore(ctx) {
     api(`/apps/${enc(ctx.name)}/document${ctx.qs}`).then(d => {
       const id = String(d.raw?.id || "");
       s.problem = d; s.notes = docNotes(d.raw, d.document); s.names = [ctx.name, id, id.split("/").pop()].filter(Boolean);
-      nameLoop(ctx.name, d.raw?.id, id.split("/").pop());                             // D1065: the panels name designs as the lines do
-      nameTests(d.raw?.flow?.test && typeof d.raw.flow.test === "object" && !Array.isArray(d.raw.flow.test) ? Object.keys(d.raw.flow.test).filter(k => k !== "critic") : []);
+      // D1065: the document's checks, in order -- a check stopped at a failure lists those it never reached
+      s.tests = d.raw?.flow?.test && typeof d.raw.flow.test === "object" && !Array.isArray(d.raw.flow.test) ? Object.keys(d.raw.flow.test).filter(k => k !== "critic") : [];
       // D1055: "score" is a goal too; D1058: maximized unless said, as the loop does
       s.goals = Array.isArray(d.raw?.objectives) ? d.raw.objectives.map(o => typeof o === "string" ? { metric: o } : o).filter(o => o && o.metric).map(o => ({ ...o, direction: o.direction || "maximize" })) : [];
       emit();
@@ -208,5 +206,11 @@ export function createStore(ctx) {
     if (!s.history.starts.some(x => !x.running && String(x.id) === s.startId)) s.startId = "current";
     if (s.startId !== "current" && s.pass === "current") s.pass = "all";       // D994
   }
-  return { s, a, view, prepare, load, close, emit, redraw: now, revalidate: v => { valid = v; }, subscribe: f => { subs.add(f); return () => subs.delete(f); } };
+  const path = ctx.base.replace(/^\/api/, "");
+  /** What the inspector reads besides the model: a turn's earlier steps from its file, or its transcript. */
+  const sources = {
+    steps: (file, start, count) => api(`${path}/steps?file=${encodeURIComponent(file)}&start=${start}&count=${count}`),
+    turnSteps: (t0, t1, agent) => api(`${path}/turn-steps?t0=${t0}&t1=${t1}&agent=${encodeURIComponent(agent)}`),
+  };
+  return { s, a, view, sources, prepare, load, close, emit, redraw: now, revalidate: v => { valid = v; }, subscribe: f => { subs.add(f); return () => subs.delete(f); } };
 }

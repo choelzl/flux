@@ -16,9 +16,12 @@ function on(el, type, fn) {
   table[type] = fn;
 }
 const isVnode = (x) => typeof x === "object" && x !== null && "type" in x && "props" in x && !(x instanceof Node);
+/** D1095: a component in a page built with h() -- mounted in a span not laid out; the span remembers it, so a
+    redraw (morph) draws the new one into the span it keeps, or into the copy it inserts. */
 function mountHere(vnode) {
   const span = document.createElement("span");
   span.style.display = "contents";
+  span.__vnode = vnode;
   render(vnode, span);
   return span;
 }
@@ -61,6 +64,7 @@ function morph(target, kids) {
   const adding = [];
   const carry = (from, to) => {
     if (from.nodeType !== 1 || to.nodeType !== 1) return;
+    if (from.__vnode) { to.__vnode = from.__vnode; render(from.__vnode, to); return; }   // D1095: a component, drawn into the copy
     for (const type of Object.keys(from.__on || {})) on(to, type, from.__on[type]);
     if ("value" in from && from.value !== to.value && /^(INPUT|TEXTAREA|SELECT)$/.test(from.tagName)) to.value = from.value;
     if (from.tagName === "INPUT" && to.checked !== from.checked) to.checked = from.checked;
@@ -70,6 +74,8 @@ function morph(target, kids) {
     beforeNodeAdded(node) { adding.push(node); return true; },
     afterNodeAdded(node) { const from = adding.pop(); if (from && from !== node) carry(from, node); },
     beforeNodeMorphed(old, now) {
+      // D1095: a component's span kept -- the new render's component drawn into it, its insides Preact's to change
+      if (old.__vnode && now.__vnode) { old.__vnode = now.__vnode; render(now.__vnode, old); return false; }
       if (old.nodeType === 1 && now.__on) {
         for (const type of Object.keys(now.__on)) on(old, type, now.__on[type]);
         for (const type of Object.keys(old.__on || {})) if (!(type in now.__on)) delete old.__on[type];

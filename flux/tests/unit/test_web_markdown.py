@@ -10,24 +10,28 @@ from pathlib import Path
 import pytest
 
 
-LOOPS = Path(__file__).parents[2] / "interfaces/web/src/flux_web/static/loops.js"
+STATIC = Path(__file__).parents[2] / "interfaces/web/src/flux_web/static"
 pytestmark = pytest.mark.skipif(shutil.which("node") is None, reason="node is not on PATH")
 
+# D1095: the Markdown component (components/Markdown.js) drawn with the real htm onto plain objects -- a
+# component called, an element {tag, attrs, children} -- so what it builds is read without a page
 JS = r"""
 const fs = require('fs'), vm = require('vm');
-const source = fs.readFileSync(process.argv[1], 'utf8');
+const [markdownPath, htmPath] = process.argv.slice(1);
 const context = vm.createContext({ inputs: JSON.parse(fs.readFileSync(0, 'utf8')) });
-const h = (tag, attrs, ...children) => ({ tag, attrs, children: children.flat(Infinity) });
-const mocks = { h, codeBlock: (text, lang, cls) => h('pre', { lang, class: cls }, text) };
-const imports = new Map([...source.matchAll(/^import \{([^}]+)\} from "([^"]+)";/gm)]
-  .map(m => [m[2], m[1].split(',').map(n => n.trim())]));
+const h = (tag, attrs, ...children) => typeof tag === 'function' ? tag({ ...(attrs || {}), children })
+  : { tag, attrs, children: children.flat(Infinity).filter(c => c != null && c !== false && c !== '') };
 (async () => {
-  const mod = new vm.SourceTextModule(source, { context });
-  await mod.link(specifier => new vm.SyntheticModule(imports.get(specifier), function () {
-    for (const name of imports.get(specifier)) this.setExport(name, mocks[name]);
+  const htm = new vm.SourceTextModule(fs.readFileSync(htmPath, 'utf8'), { context });
+  await htm.link(() => { throw new Error('htm imports nothing'); }); await htm.evaluate();
+  const html = htm.namespace.default.bind(h);
+  const mocks = { '../view.js': { html }, '../highlight.js': { guessLang: () => '', tokens: t => t ? [['', t]] : [] } };
+  const mod = new vm.SourceTextModule(fs.readFileSync(markdownPath, 'utf8'), { context });
+  await mod.link(specifier => new vm.SyntheticModule(Object.keys(mocks[specifier]), function () {
+    for (const [name, value] of Object.entries(mocks[specifier])) this.setExport(name, value);
   }, { context }));
   await mod.evaluate();
-  context.render = mod.namespace.markdown;
+  context.render = text => mod.namespace.Markdown({ text });
   const result = vm.runInContext('inputs.map(render)', context, { timeout: 1000 });
   process.stdout.write(JSON.stringify(result));
 })().catch(error => { console.error(error); process.exitCode = 1; });
@@ -36,7 +40,7 @@ const imports = new Map([...source.matchAll(/^import \{([^}]+)\} from "([^"]+)";
 
 def render(*inputs: str) -> list[dict]:
     result = subprocess.run(
-        ["node", "--experimental-vm-modules", "-e", JS, str(LOOPS)],
+        ["node", "--experimental-vm-modules", "-e", JS, str(STATIC / "components/Markdown.js"), str(STATIC / "vendor/htm.module.js")],
         input=json.dumps(inputs), capture_output=True, text=True, timeout=5,
     )
     assert result.returncode == 0, result.stderr
