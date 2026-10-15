@@ -658,6 +658,8 @@ figure.tchart .sw.s2 { background: var(--ok); } figure.tchart .sw.s3 { backgroun
 progress.upload-bar { width: 100%; height: 10px; }
 td.app-what { max-width: 520px; }
 dialog.dlg .toasts { position: fixed; }
+/* D1095: a view's frame -- inline while closed (as if it were not there), modal for Fullscreen */
+dialog.viewer-frame, .viewer-frame-body { display: contents; }
 dialog.dlg.fullscreen-view { width: calc(100vw - 24px); max-width: none; height: calc(100dvh - 24px); max-height: none;
   padding: 14px; display: flex; flex-direction: column; box-sizing: border-box; }
 .fullscreen-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex: none; }

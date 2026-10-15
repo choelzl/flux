@@ -14,7 +14,7 @@ import { Lines } from "./Lines.js";
 import { Graph } from "./Graph.js";
 import { Timeline } from "./Timeline.js";
 import { BoxPanel, PassPanel } from "./Panels.js";
-import { FullscreenView, Modal } from "../components/Modal.js";
+import { ViewerFrame } from "../viewer.js";
 import { Inspector } from "./inspector/Inspector.js";
 import { Log } from "./Log.js";
 
@@ -79,7 +79,7 @@ function Body({ store, ctx }) {
   if (switched && places.current.mode && panel.current) places.current.saved.set(places.current.mode, scrollState(panel.current));
   // the lines first: a try's number and how it ended are learned drawing them, and the inspector says them (D1084)
   const treeLines = mode === "tree" && v.rows.length ? lines(v.rows, v).tree() : null;
-  // the inspector's panel: in its card, or alone in Fullscreen (D987) -- drawn again with the page wherever it is
+  // the inspector's panel, in its frame: Fullscreen shows it as it is, nothing drawn anew (D987)
   const sel = v.model.nodes.get(v.selected) || null;
   const detail = html`<div class="detail alt-detail" ref=${detailRef} data-task=${sel ? String(sel.id) : null} data-view=${sel ? `${sel.id}:inspector` : null} data-drawn=${String(s.drawn)}>
     <${Inspector} n=${sel} env=${{ now: Date.now() / 1000, nodes: v.model.nodes, goals: s.goals, record: s.record, N: v.N, tests: s.tests, redraw: store.emit, ...store.sources }}
@@ -146,7 +146,6 @@ function Body({ store, ctx }) {
         <div class="alt-inspector-host" tabindex="-1" ref=${host}>
           ${s.boxView && v.box ? html`<${BoxPanel} v=${v} a=${a} box=${v.box} />`
             : s.passView !== NO_PASS ? html`<${PassPanel} p=${s.passView} nodes=${v.passNodes} a=${a} N=${v.N} />`
-            : full ? html`<div class="empty"><p>Shown fullscreen.</p></div>` : detail}</div></section>
-      ${full ? html`<${Modal} cls="dlg fullscreen-view" label=${s.full} onClose=${() => a.fullscreen(null)}><${FullscreenView} title=${s.full} content=${detail} close=${() => a.fullscreen(null)} /><//>` : ""}
+            : html`<${ViewerFrame} v=${{ full, close: () => a.fullscreen(null) }} title=${s.full || ""}>${detail}<//>`}</div></section>
     </div></div>`;
 }

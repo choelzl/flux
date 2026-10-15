@@ -1,7 +1,6 @@
 // Flux web: pages as Preact components (D1095) -- written with htm's tagged templates, no build step.
 // Preact and htm are vendored (static/vendor), their imports made relative.
-// Every page is a component; a node made elsewhere (a view moved fullscreen, what the crafter draws) sits
-// inside one through `Dom`, and a component goes where a node is wanted through `node`.
+// Every page is a component; a component goes where a node is wanted (the configurator's crafter) through `node`.
 
 import { html, render } from "./vendor/htm-preact.module.js";
 import { options } from "./vendor/preact.module.js";
@@ -26,16 +25,7 @@ options.requestAnimationFrame = flush => afterNextFrame(() => { effects++; try {
 options.debounceRendering = draw => effects ? Promise.resolve().then(draw) : draw();
 export { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "./vendor/hooks.module.js";
 
-/** A node (or nodes) made elsewhere (an editor, a view moved fullscreen), inside a component: placed as it is, the
-    wrapper not laid out.
-    Never a DOM node as a component's child itself -- Preact draws it once and throws on the redraw. */
-export function Dom({ node }) {
-  const ref = useRef(null);
-  useLayoutEffect(() => { ref.current.replaceChildren(...[node].flat().filter(x => x != null && x !== "")); }, [node]);
-  return html`<span ref=${ref} style="display:contents"></span>`;
-}
-
-/** A card, as ui.js `card()` draws one: its head when it has a title or actions, then what it holds. */
+/** A card: its head when it has a title or actions, then what it holds. */
 export function Card({ title, actions, cls = "", children, ...rest }) {
   return html`<section ...${rest} class=${"card " + cls}>
     ${title || actions ? html`<div class="card-head">${title ? html`<h2>${title}</h2>` : ""}${actions ? html`<div class="actions">${actions}</div>` : ""}</div>` : ""}

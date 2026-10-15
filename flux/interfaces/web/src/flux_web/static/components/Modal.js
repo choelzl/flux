@@ -1,38 +1,44 @@
-// Flux web (D700, D702, D1095): dialogs -- no alert, confirm or prompt. A modal <dialog> with a component drawn in
-// it (`openModal`); a question with its buttons (`dialog`, `confirmDialog`); an upload's progress with Cancel.
+// Flux web (D700, D702, D1095): dialogs -- no alert, confirm or prompt. Every dialog is a `Modal`: a <dialog> drawn
+// where it stands in a component's tree, open while drawn. Those an action opens (`openModal`: a question with its
+// buttons, an upload's progress, a raw text, the layout editor) are one stack, drawn by `Dialogs` in a host of its own.
 
-import { Dom, html, render, useLayoutEffect, useRef, useState } from "../view.js";
+import { html, render, useLayoutEffect, useRef, useState } from "../view.js";
 import { noticesOut } from "../notices.js";
 import { bytes } from "../format.js";
 
-/** A modal dialog drawing `vnode`; `cls` its classes, `label` its name; `onCancel()` for Escape (the default:
-    nothing -- the caller says what Escape does). Returns `close()`. */
-export function openModal(vnode, { cls = "dlg", label = null, labelledby = null, onCancel = null } = {}) {
-  const d = Object.assign(document.createElement("dialog"), { className: cls });
-  if (label) d.setAttribute("aria-label", label);
-  if (labelledby) d.setAttribute("aria-labelledby", labelledby);
-  d.addEventListener("cancel", e => { e.preventDefault(); onCancel?.(); });
-  document.body.append(d);
-  render(vnode, d);
-  d.showModal();
-  return { el: d, draw: next => render(next, d),
-    close: () => { if (!d.isConnected) return; render(null, d); d.close(); noticesOut(d); d.remove(); } };
-}
-
-/** A modal dialog drawn where it stands in a component's tree (its top layer above the page): open while drawn,
-    closed when it goes; Escape calls `onClose()`. */
-export function Modal({ cls = "dlg", label = null, onClose, children }) {
+/** A modal dialog (its top layer above the page): open while drawn, closed when it goes; Escape calls `onClose()`
+    (none: Escape does nothing -- the caller says what it does). `at(el)` is handed the element once open. */
+export function Modal({ cls = "dlg", label = null, labelledby = null, onClose = null, at = null, children }) {
   const ref = useRef(null);
   useLayoutEffect(() => {
     const d = ref.current;
     d.showModal();
-    return () => { if (d.open) d.close(); noticesOut(d); };
+    at?.(d);
+    return () => { noticesOut(d); if (d.open) d.close(); };
   }, []);
-  return html`<dialog class=${cls} aria-label=${label} ref=${ref} onCancel=${e => { e.preventDefault(); onClose(); }}>${children}</dialog>`;
+  return html`<dialog class=${cls} aria-label=${label} aria-labelledby=${labelledby} ref=${ref} onCancel=${e => { e.preventDefault(); onClose?.(); }}>${children}</dialog>`;
 }
 
-/** A question: its title, its body (a component, or several), its buttons -- [label, value, class]; a
-    value that is a function is called with the body's node (what a form in it says). */
+// ---- the dialogs an action opens: a stack, the latest on top
+let stack = [], seq = 0;
+const host = document.createElement("div");
+host.style.display = "contents";
+document.body.append(host);
+const Dialogs = ({ list }) => list.map(e => html`<${Modal} key=${e.id} cls=${e.cls} label=${e.label} labelledby=${e.labelledby} onClose=${e.onCancel} at=${d => { e.el = d; }}>${e.vnode}<//>`);
+const draw = () => render(html`<${Dialogs} list=${stack} />`, host);
+
+/** `vnode` in a modal dialog of the stack; `cls` its classes, `label` its name; `onCancel()` for Escape. Returns
+    {el, draw(next), close()}. */
+export function openModal(vnode, { cls = "dlg", label = null, labelledby = null, onCancel = null } = {}) {
+  const e = { id: ++seq, vnode, cls, label, labelledby, onCancel, el: null };
+  stack = [...stack, e];
+  draw();
+  return { get el() { return e.el; }, draw: next => { e.vnode = next; stack = [...stack]; draw(); },
+    close: () => { if (!stack.includes(e)) return; stack = stack.filter(x => x !== e); draw(); } };
+}
+
+/** A question: its title, its body (a component, or several), its buttons -- [label, value, class]; a value that is
+    a function is called with the body's node (what a form in it says). */
 function Question({ title, body, buttons, done }) {
   const box = useRef(null);
   useLayoutEffect(() => {
@@ -54,22 +60,22 @@ export function dialog(title, body, buttons) {
 export const confirmDialog = (title, text, { ok = "OK", danger = false } = {}) =>
   dialog(title, html`<p>${text}</p>`, [["Cancel", false], [ok, true, danger ? "danger solid" : "primary"]]);
 
+const Progress = ({ title, said, at, stopping, stop }) => html`<h2>${title}</h2><p>${said}</p><progress max="1" value=${at[1] ? at[0] / at[1] : 0} class="upload-bar" />
+  <span class="muted small">${at[1] ? ` ${bytes(at[0])} of ${bytes(at[1])}` : ""}</span>
+  <div class="dlg-actions"><button type="button" disabled=${stopping} onClick=${stop}>${stopping ? "Stopping…" : "Cancel"}</button></div>`;
 /** An upload's progress (D702): a dialog Escape does not close -- Cancel stops the upload between batches and parts,
     and says what was already written. `set(sent, total)`; `close()`. */
 export function progressDialog(title, said) {
   const ctl = new AbortController();
-  let at = [0, 0], stopping = false;
-  const draw = () => m.draw(html`<h2>${title}</h2><p>${said}</p><progress max="1" value=${at[1] ? at[0] / at[1] : 0} class="upload-bar" />
-    <span class="muted small">${at[1] ? ` ${bytes(at[0])} of ${bytes(at[1])}` : ""}</span>
-    <div class="dlg-actions"><button type="button" disabled=${stopping} onClick=${() => { ctl.abort(); stopping = true; draw(); }}>${stopping ? "Stopping…" : "Cancel"}</button></div>`);
-  const m = openModal(null);                      // Escape: the upload goes on, the dialog stays
-  draw();
-  return { signal: ctl.signal, set: (a, b) => { at = [a, b]; draw(); }, close: m.close };
+  let at = [0, 0], stopping = false, m = null;
+  const view = () => html`<${Progress} title=${title} said=${said} at=${at} stopping=${stopping} stop=${() => { ctl.abort(); stopping = true; m.draw(view()); }} />`;
+  m = openModal(view());                          // Escape: the upload goes on, the dialog stays
+  return { signal: ctl.signal, set: (a, b) => { at = [a, b]; m.draw(view()); }, close: m.close };
 }
 
-/** A view shown fullscreen: `content` drawn in it -- a component, or a node moved there as it is (kept live). */
-export function FullscreenView({ title, content, close }) {
+/** A view shown fullscreen: its head (the title, Close) and `children`. */
+export function FullscreenView({ title, close, children }) {
   const [, redraw] = useState(0);
   return html`<div class="fullscreen-head"><h2>${title}</h2><button class="small" type="button" onClick=${() => { close(); redraw(n => n + 1); }}>Close</button></div>
-    <div class="fullscreen-content">${content instanceof Node ? html`<${Dom} node=${content} />` : content}</div>`;
+    <div class="fullscreen-content">${children}</div>`;
 }

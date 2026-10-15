@@ -2,11 +2,11 @@
 // does not meet, its numbers at each stage, its source; Reject (with why, each number measured again or cleared,
 // hidden too at rest) and Restore.
 
-import { Ago, Skeleton, html, useEffect, useRef, useState } from "../view.js";
+import { Ago, Skeleton, html, useEffect, useState } from "../view.js";
 import { api, dialog, enc, toast } from "../ui.js";
 import { Act } from "../components/Act.js";
 import { Code } from "../components/Markdown.js";
-import { ViewerTools } from "../viewer.js";
+import { ViewerFrame, ViewerTools, useViewer } from "../viewer.js";
 import { VerdictPill, byCritic } from "./columns.js";
 
 /** The reject form (D1043): why, each measurement measured again or cleared, hidden too (at rest) -- read from
@@ -41,7 +41,7 @@ let last = { url: null, full: null };
 export function DesignDetail({ d, ctx, fmt, reload }) {
   const { name, q, qs } = ctx;
   const url = `/apps/${enc(name)}/design?design=${enc(d.base || d.name)}&part=${enc(d.part)}&key=${enc(d.key || "")}${q}`;
-  const [full, setFull] = useState(() => last.url === url ? last.full : null), box = useRef(null);
+  const [full, setFull] = useState(() => last.url === url ? last.full : null), view = useViewer();
   useEffect(() => {
     let live = true;
     if (last.url !== url) setFull(null);
@@ -60,7 +60,7 @@ export function DesignDetail({ d, ctx, fmt, reload }) {
     reload();
   };
   const restore = async () => { toast((await api(`/apps/${enc(name)}/results/unreject${qs}`, { method: "POST", body: { id: d.rejected.id } })).ok, "ok"); reload(); };
-  return html`<div class="detail" ref=${box}>
+  return html`<${ViewerFrame} v=${view} title=${d.name}><div class="detail">
     <div class="detail-head"><h2>${d.name}</h2><${VerdictPill} d=${d} />${d.decision ? html`<span class="pill ok">★ decision</span>` : ""}
       ${d.part ? html`<span class="muted">${`part ${d.part}`}</span>` : ""}
       ${mine && !d.reference_only && !d.rejected ? html`<${Act} cls="small reject-design" title="Mark this result rejected, with why: it stays shown and is never chosen" onClick=${reject}>Reject…<//>` : ""}</div>
@@ -71,6 +71,6 @@ export function DesignDetail({ d, ctx, fmt, reload }) {
     ${d.why.length ? html`<div class="blk"><h3>${d.verdict === "pending" ? "Waiting for" : "Not met"}</h3><ul class="misses">${d.why.map(w => html`<li>${w}</li>`)}</ul></div>` : ""}
     ${stages.length ? html`<div class="blk"><h3>Measurements</h3><table class="list compact"><thead><tr><th>stage</th>${metrics.map(m => html`<th class="num">${m}</th>`)}</tr></thead>
       <tbody>${stages.map(([st, m]) => html`<tr><td>${st}</td>${metrics.map(k => html`<td class="mono num">${fmt(m[k])}</td>`)}</tr>`)}</tbody></table></div>` : ""}
-    <div class="actions"><${ViewerTools} box=${box} title=${d.name} rawText=${JSON.stringify(full, null, 2)} /></div>
-    ${full.artifact ? html`<div class="blk"><h3>Design</h3><${Code} text=${full.artifact} lang="" /></div>` : ""}</div>`;
+    <div class="actions"><${ViewerTools} v=${view} title=${d.name} rawText=${JSON.stringify(full, null, 2)} /></div>
+    ${full.artifact ? html`<div class="blk"><h3>Design</h3><${Code} text=${full.artifact} lang="" /></div>` : ""}</div><//>`;
 }

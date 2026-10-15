@@ -11,7 +11,7 @@ import { progressDialog } from "../components/Modal.js";
 import { DropZone } from "../components/DropZone.js";
 import { Act } from "../components/Act.js";
 import { CodeEditor } from "../components/CodeEditor.js";
-import { ViewerTools } from "../viewer.js";
+import { ViewerFrame, ViewerTools, useViewer } from "../viewer.js";
 import { ActionsMenu, FileList, MetaLine, PathCrumbs, baseOf, joinP, parentOf } from "./parts.js";
 
 // D908: an open Actions menu closes on a click elsewhere or Escape
@@ -126,7 +126,7 @@ function useFiles(ctx, refreshList = async () => {}) {
 /** The selected item: its head (path, actions, what it is), then a folder's entries, a text in the editor
     (D907: a bounded preview said, never saved back), a binary file to download -- or why it could not be read. */
 function Viewer({ ctx, f, showIgnored }) {
-  const { name, q, mine } = ctx, { sel } = f, box = useRef(null);
+  const { name, q, mine } = ctx, { sel } = f, view = useViewer();
   const [got, setGot] = useState(null), [it, setIt] = useState(null);
   const fileUrl = (path, dl) => `/api/apps/${enc(name)}/file?path=${enc(path)}${dl ? "&download=1" : ""}${q}`;
   useEffect(() => {
@@ -156,18 +156,18 @@ function Viewer({ ctx, f, showIgnored }) {
   const download = html`<a class="btn small" href=${fileUrl(path, true)}>Download</a>`;
   const editable = mine && got?.text != null && !got.cut;
   const tools = got?.text != null ? html`${editable ? html`<${Act} cls="small" onClick=${() => f.save()}>Save<//>` : ""}
-      <${ViewerTools} box=${box} title=${path} rawUrl=${fileUrl(path, false) + "&raw=true"} />${download}` : got?.binary ? download : "";
+      <${ViewerTools} v=${view} title=${path} rawUrl=${fileUrl(path, false) + "&raw=true"} />${download}` : got?.binary ? download : "";
   const head = html`<div class="viewer-head"><${PathCrumbs} name=${name} path=${path} open=${f.open} />
     <div class="actions">${tools}${here && mine ? html`<${ActionsMenu} label=${path || name} it=${here} acts=${f.acts} />` : ""}</div>
     ${here ? html`<${MetaLine} it=${here} sizeUrl=${dir ? f.itemUrl(path, "/size") : null} />` : ""}</div>`;
   const onEditor = ed => { f.draft.current = ed && editable ? { path, ed, saved: got.text, rev: got.rev || here?.revision || "" } : null; };
-  return html`<div class="viewer" ref=${box}>${got === null ? html`<${Skeleton} lines=${8} />` : html`${head}${
+  return html`<${ViewerFrame} v=${view} title=${path}><div class="viewer">${got === null ? html`<${Skeleton} lines=${8} />` : html`${head}${
     got.error ? html`<div class="empty"><p>${`${path || (dir ? name : path)} could not be opened: ${got.error}`}</p><${Act} cls="small" onClick=${() => f.open(path, dir, true)}>Retry<//></div>`
     : got.list ? (got.list.length ? html`<${FileList} list=${got.list} open=${f.open} />` : html`<${Empty} text="An empty folder." />`)
     : got.binary ? html`<div class="empty"><p>A binary file.</p><a class="btn" href=${fileUrl(path, true)}>Download</a></div>`
     : html`${got.cut ? html`<div class="callout warn truncated">${`Showing the first ${bytes(new TextEncoder().encode(got.text).length)} of ${bytes(got.size)}: `
           + "too large to show or edit here whole. Download has all of it."}</div>` : ""}
-        <${CodeEditor} key=${`${path}#${sel.n}`} text=${got.text} lang=${langOf(path)} readonly=${!editable} onEditor=${onEditor} />`}`}</div>`;
+        <${CodeEditor} key=${`${path}#${sel.n}`} text=${got.text} lang=${langOf(path)} readonly=${!editable} onEditor=${onEditor} />`}`}</div><//>`;
 }
 
 /** Files added: dropped (a folder keeps its paths), or chosen -- into a folder if one is named. */

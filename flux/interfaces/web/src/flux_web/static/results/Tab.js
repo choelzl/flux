@@ -7,7 +7,7 @@ import { api, enc, toast } from "../ui.js";
 import { measurementComparison } from "../measurementdata.js";
 import { defaultMainMeasurements, designLabels, mainMeasurements, measurementText, measurementUnitsFor, relativeMeasurement } from "../result_table.js";
 import { Act } from "../components/Act.js";
-import { ViewerTools } from "../viewer.js";
+import { ViewerFrame, ViewerTools, useViewer } from "../viewer.js";
 import { useColumns, useValuesMode } from "./columns.js";
 import { ResultsTable, keyOf } from "./Table.js";
 import { DesignDetail } from "./Detail.js";
@@ -63,7 +63,7 @@ function DecisionLine({ ctx, r, names, comparison, onPick }) {
 
 export function ResultsTab({ ctx, r, view }) {
   const { name, q, base, qs } = ctx;
-  const root = useRef(null), [open, setOpen] = useState(null);
+  const root = useRef(null), [open, setOpen] = useState(null), full = useViewer();
   const seen = useRef(new Set()).current;      // D916: a view once shown stays drawn, hidden, kept for the way back
   seen.add(view);
   const unit = useMemo(() => measurementUnitsFor(r), [r]), names = useMemo(() => designLabels(r.designs, name), [r]);
@@ -80,13 +80,13 @@ export function ResultsTab({ ctx, r, view }) {
     });
   };
   const detail = open ? html`<${DesignDetail} key=${keyOf(open)} d=${open} ctx=${ctx} fmt=${fmt} reload=${reload} />` : html`<div class="detail"><${Empty} text="Select a design." /></div>`;
-  return html`<div ref=${root}>
+  return html`<${ViewerFrame} v=${full} title="Results"><div ref=${root}>
     <${Card}><div class="results-head"><div><h2>Objective</h2><p class="muted">${r.objectives}${r.total > r.designs.length ? ` · the newest ${r.designs.length} of ${r.total} designs` : ""}</p></div>
-        <div class="actions"><${ViewerTools} box=${root} title="Results" rawUrl=${`${base}/results${qs}${qs ? "&" : "?"}raw=true`} />${r.answer ? html`<a class="btn small" href=${`/api/apps/${enc(name)}/file?path=runs/answer.json&download=1${q}`}>Answer (JSON)</a>` : ""}
+        <div class="actions"><${ViewerTools} v=${full} title="Results" rawUrl=${`${base}/results${qs}${qs ? "&" : "?"}raw=true`} />${r.answer ? html`<a class="btn small" href=${`/api/apps/${enc(name)}/file?path=runs/answer.json&download=1${q}`}>Answer (JSON)</a>` : ""}
           <a class="btn small" href=${`${base}/report${qs}`} target="_blank" rel="noopener">Report</a></div></div>
       <${DecisionLine} ctx=${ctx} r=${r} names=${names} comparison=${comparison} onPick=${pick} /><${Invalidated} ctx=${ctx} r=${r} reload=${reload} /><//>
     ${seen.has("results") ? html`<div key="results" hidden=${view === "graphs"}><div class="split results"><${Card}><${ResultsTable} t=${{ r, names, unit, fmt, comparison, columns, values }} selected=${open && keyOf(open)}
             onOpen=${setOpen} onCompare=${pair => compare(ctx, r, pair, directions, fmt)} /><//><${Card} cls="detail-card">${detail}<//></div>
         <${Checked} ctx=${ctx} r=${r} /></div>` : null}
-    ${seen.has("graphs") ? html`<div key="graphs" hidden=${view !== "graphs"}><${Graphs} ctx=${ctx} r=${r} directions=${directions} onPick=${pick} detail=${detail} /></div>` : null}</div>`;
+    ${seen.has("graphs") ? html`<div key="graphs" hidden=${view !== "graphs"}><${Graphs} ctx=${ctx} r=${r} directions=${directions} onPick=${pick} detail=${detail} /></div>` : null}</div><//>`;
 }

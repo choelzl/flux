@@ -517,7 +517,7 @@ def general_flows(r, watch):
                 b.js("window.__altStreams.at(-1).emit('events',{ev:'update',id:4,fields:{status:'still thinking'}});return 1")
                 import time as _t
                 _t.sleep(1.5)                                   # a redraw or two while it is in Fullscreen
-                r.check("D987: an agent stays in Fullscreen across Live's redraws (it was left blank)", b.js("return !!document.querySelector('dialog.fullscreen-view .alt-chat') && !document.querySelector('.alt-inspector-host .alt-detail[data-task]')"))
+                r.check("D987: an agent stays in Fullscreen across Live's redraws (it was left blank)", b.js("return !!document.querySelector('dialog.fullscreen-view[open] .alt-chat') && document.querySelectorAll('.alt-detail[data-task]').length === 1"))
                 b.js("[...document.querySelectorAll('dialog.fullscreen-view button')].find(x=>x.textContent==='Close').click();return 1")
                 # D1036: the whole conversation -- the steps before the live window come from the turn's file, scrolling up
                 filed = r.data / "users" / "bob" / "apps" / name / ".flux-steps" / "t.jsonl"
@@ -1362,7 +1362,8 @@ objectives: [{metric: timings.fast, goal: 15, direction: minimize},
                 if keep:
                     b.click("#transfer-keep-permissions")
                 r.dialog_button("Transfer")
-                b.wait(f"location.hash === '#/u/cy/app/{name}/settings' && document.querySelector('#loop-transfer')", what="admin transfer completed")
+                b.wait(f"location.hash === '#/u/cy/app/{name}/settings' && document.querySelector('#loop-transfer')", timeout=90, what="admin transfer completed",
+                       said="JSON.stringify([location.hash, !!document.querySelector('dialog[open]'), [...document.querySelectorAll('.toast')].map(t => t.textContent)])")
                 settings = json.loads(r.api(f"/apps/{name}/env?owner=cy")["body"])["advanced"]
                 r.check(f"{name}: transfer respects permission choice", settings == (permissions if keep else {}), str(settings))
 

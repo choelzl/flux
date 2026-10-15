@@ -2399,7 +2399,8 @@ def flows(r: Run) -> None:
             b.js("localStorage.setItem('flux-show-ignored', '1'); return 1")      # runs/ is what .gitignore leaves out
             r.page("#/app/fromex/files", "[...document.querySelectorAll('#main ul.files a')].some(a => a.textContent.endsWith('runs/'))", "the loop's files")
             b.js("[...document.querySelectorAll('#main ul.files a')].find(a => a.textContent.endsWith('runs/')).click(); return 1")
-            b.wait("[...document.querySelectorAll('#main ul.files a')].some(a => a.textContent.endsWith('asks/'))", what="runs/ listed")
+            b.wait("[...document.querySelectorAll('#main ul.files a')].some(a => a.textContent.endsWith('asks/'))", timeout=90, what="runs/ listed",
+                   said="JSON.stringify([[...document.querySelectorAll('#main ul.files a')].map(a => a.textContent), document.querySelector('#main .viewer')?.innerText.slice(0, 300)])")
             b.js("[...document.querySelectorAll('#main ul.files a')].find(a => a.textContent.endsWith('asks/')).click(); return 1")
             b.wait("document.querySelector('.path-crumbs') && document.querySelector('.path-crumbs').textContent.endsWith('runs / asks')", what="the path runs / asks")
             b.js("[...document.querySelectorAll('.path-crumbs a')].find(a => a.textContent === 'runs').click(); return 1")

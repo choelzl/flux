@@ -6,7 +6,7 @@
 import { Card, html, useEffect, useLayoutEffect, useMemo, useRef, useState } from "../view.js";
 import { NARROW, enc, request } from "../ui.js";
 import { isProblem, latestStart, lineClass, logAt, logLines, matcher } from "../logmodel.js";
-import { ViewerTools } from "../viewer.js";
+import { ViewerFrame, ViewerTools, useViewer } from "../viewer.js";
 
 const WRAPPED = 3000, TAIL = 2 << 20;
 const storedTimes = () => { try { return localStorage.getItem("flux-log-times") !== "off"; } catch (_) { return true; } };
@@ -43,7 +43,7 @@ export function Log({ store, ctx }) {
   const L = useLog(store, ctx);
   const [o, setO] = useState(() => ({ follow: true, wrap: NARROW.matches, problems: false, times: storedTimes(), filter: "" }));   // D754: on a phone a line wraps
   const set = patch => setO(x => ({ ...x, ...patch }));
-  const [scroll, setScroll] = useState(0), box = useRef(null), root = useRef(null), row = useRef(0);
+  const [scroll, setScroll] = useState(0), box = useRef(null), row = useRef(0), view = useViewer();
   const m = useMemo(() => matcher(o.filter), [o.filter]);
   // the current start's lines (earlier starts are picked above, as past starts); a past start's are its own
   const shown = useMemo(() => (L.past ? L.lines : latestStart(L.lines)).filter(l => (!o.problems || isProblem(l.text)) && (!m || m.test(l.text))), [L.n, o.problems, m]);
@@ -66,11 +66,11 @@ export function Log({ store, ctx }) {
   const times = on => { try { localStorage.setItem("flux-log-times", on ? "on" : "off"); } catch (_) { /* per browser */ } row.current = 0; set({ times: on }); };
   const check = (k, label, title, change = v => set({ [k]: v })) => html`<label class="check" title=${title}><input type="checkbox" checked=${o[k]} onChange=${e => change(e.currentTarget.checked)} />${label}</label>`;
   const raw = L.past ? `${ctx.base}/log/raw?run_id=${enc(store.s.startId)}&download=false${ctx.q}` : `${ctx.base}/log/raw${ctx.qs || "?"}${ctx.qs ? "&" : ""}download=false`;
-  return html`<${Card} cls="log-card"><div ref=${root} onviewerresize=${() => { row.current = 0; setScroll(box.current?.scrollTop || 0); }}>
+  return html`<${Card} cls="log-card"><${ViewerFrame} v=${view} title="Log"><div onviewerresize=${() => { row.current = 0; setScroll(box.current?.scrollTop || 0); }}>
     <div class="toolbar">${check("follow", "follow", null, v => { set({ follow: v }); })}${check("wrap", "wrap")}${check("problems", "problems only")}${check("times", "times", "Each line's time", times)}
       <input placeholder="filter (text or /regex/)" class=${`filter${m?.bad ? " bad" : ""}`} value=${o.filter} onInput=${e => set({ filter: e.currentTarget.value })} />
       <span class="muted">${`${shown.length === total ? total : `${shown.length} of ${total}`} line(s)`}</span>
-      <${ViewerTools} box=${root} title="Log" rawUrl=${raw} />
+      <${ViewerTools} v=${view} title="Log" rawUrl=${raw} />
       ${L.past ? "" : html`<a class="btn small" href=${`${ctx.base}/log/raw${ctx.qs}`}>Download</a>`}
       ${L.skipped ? html`<span class="log-earlier small">${`${(L.skipped.bytes / 1048576).toFixed(1)} MiB of earlier lines not loaded · `}<button type="button" class="small" onClick=${L.loadAll}>Load all</button></span>` : ""}
       ${!L.past && L.stream && L.stream !== "live" ? html`<span class="pill stream warn" title="The page's connection to the loop">reconnecting…</span>` : ""}</div>
@@ -79,5 +79,5 @@ export function Log({ store, ctx }) {
       ${o.wrap ? "" : html`<div class="spacer" style=${`height:${shown.length * r}px`} />`}
       <div class="win" style=${o.wrap ? "" : `transform:translateY(${first * r}px)`}>
         ${o.wrap && first ? html`<div class="ln more">${`… ${first} earlier line(s): turn wrap off to scroll through all, or download the log`}</div>` : ""}
-        ${shown.slice(first, last).map(l => html`<${Line} key=${l.n} l=${l} times=${o.times} />`)}</div></div></div><//>`;
+        ${shown.slice(first, last).map(l => html`<${Line} key=${l.n} l=${l} times=${o.times} />`)}</div></div></div><//><//>`;
 }

@@ -3,8 +3,8 @@
 import { dur, fmtTok, money } from "../ui.js";
 import { Conversation } from "../components/Conversation.js";
 import { Prose } from "../components/Markdown.js";
-import { ViewerTools, showRaw } from "../viewer.js";
-import { Ago, html, useRef } from "../view.js";
+import { ViewerFrame, ViewerTools, showRaw, useViewer } from "../viewer.js";
+import { Ago, html } from "../view.js";
 
 const ROLES = { generate: "design", critique: "critic" };
 /** D1092: what the turn was for (design, critic, prototype, plan); D1094: a role or nothing -- "model" is its kind. */
@@ -55,7 +55,7 @@ const Fact = ({ k, v }) => html`<div class=${"fact" + (k === "exit" && v !== 0 &
 
 /** One turn's detail: its head, the prompt and the viewer's tools, its facts, its conversation (or its text). */
 export function TurnDetail({ full, k }) {
-  const box = useRef(null);
+  const view = useViewer();
   const facts = factsOf(full), more = facts.filter(([f]) => !MAIN.has(f));
   const talk = Array.isArray(full.steps) && full.steps.length ? html`<${Conversation} steps=${full.steps} k=${`turn${k}`} />` : null;
   // its conversation (or, a turn without one, its text), one flat list
@@ -69,14 +69,14 @@ export function TurnDetail({ full, k }) {
     ...((full.hops || []).length ? [html`<h3>Tool calls</h3>`, ...full.hops.map(x => html`<pre class="val">${x}</pre>`)] : []),
   ]).filter(Boolean);
   const prompt = () => showRaw(full.prompt, "Agent prompt");
-  return html`<div class="detail" ref=${box}>
+  return html`<${ViewerFrame} v=${view} title="Agent turn"><div class="detail">
     <div class="detail-head"><h2>${full.agent || full.model || full.kind}</h2><span class="muted"><${Ago} t=${full.ts} /> · ${dur(full.seconds)}</span></div>
     <div class="actions">
       ${full.prompt ? html`<button type="button" class="small agent-prompt-button" onClick=${prompt}>Prompt</button>` : ""}
-      <${ViewerTools} box=${box} title="Agent turn" rawText=${JSON.stringify(full, null, 2)} /></div>
+      <${ViewerTools} v=${view} title="Agent turn" rawText=${JSON.stringify(full, null, 2)} /></div>
     <div class="facts">${facts.filter(([f]) => MAIN.has(f)).map(([f, v]) => html`<${Fact} k=${f} v=${v} />`)}</div>
     ${more.length ? html`<details class="facts-more"><summary>More: ${more.map(([f]) => f).join(", ")}</summary>
       <div class="facts">${more.map(([f, v]) => html`<${Fact} k=${f} v=${v} />`)}</div></details>` : ""}
     ${tail}
-  </div>`;
+  </div><//>`;
 }
