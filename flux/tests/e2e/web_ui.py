@@ -2659,6 +2659,7 @@ def flows(r: Run) -> None:
             r.check("a loop's own parts are bold: its documents, out/ runs/ workbench/ library/ (D829)",
                     "problem.yaml" in bold and "runs/" in bold and "check.py" not in bold, str(bold))
             b.click(".ask-fab")
+            b.wait("getComputedStyle(document.querySelector('.drawer')).transform === 'none'", what="the drawer open")
             b.wait("document.querySelector('.ask-card .bin')", timeout=30, what="the question's bin")
             b.click(".ask-card .bin")
             b.wait("[...document.querySelectorAll('dialog[open] button')].some(x => x.textContent === 'Remove')", what="the confirmation")

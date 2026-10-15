@@ -4,12 +4,10 @@
 
 import { codeEditor } from "./highlight.js";
 import { html, mount, node } from "./view.js";
-import { LastSaid } from "./components/StatePill.js";
 import { LoopsPage } from "./loops/Page.js";
 import { Advanced } from "./settings/Advanced.js";
 import { Markdown } from "./components/Markdown.js";
 import { Conversation } from "./components/Conversation.js";
-import { Bin } from "./components/Bin.js";
 import { can, me, pageOwner, setPageRefresh } from "./state.js";
 import { act, ago, api, on, bytes, card, confirmDialog, createFromText, dialog, dur, empty, enc, h, head, offline, owned, pageShow, toast, toasts, when, withOwner, plural } from "./ui.js";
 import { flushResultPreferences } from "./result_table.js";
@@ -82,7 +80,6 @@ async function restartLoop(name, now = false, owner) {
   toast(r.ok, now ? "warn" : "info");
   return true;
 }
-const lastSaid = st => html`<${LastSaid} st=${st} />`;
 
 /** An upload's progress (D702): a dialog Escape does not close -- a Cancel stops the upload
     between batches and parts, and says what was already written. */
@@ -355,8 +352,6 @@ async function newPage() {
       }, { cls: "primary" }))]));
 }
 
-/** D808: a bin at a card's top right that removes it once confirmed (components/Bin.js). */
-const binButton = (what, title, said, remove) => h("span", { style: "display:contents" }, html`<${Bin} what=${what} title=${title} said=${said} remove=${remove} />`);
 /** A loop's advanced settings (D697), for the configurator: settings/Advanced.js. */
 const advancedCard = (e, save) => node(html`<${Advanced} e=${e} save=${save} />`);
 
@@ -376,6 +371,6 @@ function permissionChoice(settings = {}, id = "keep-permissions") {
     h("p", { class: "muted small" }, "If checked, these overrides also apply to the new owner or clone. Other admin settings reset.")) };
 }
 
-export { advancedCard, agentSelect, appsPage, attachBox, authoringCard, binButton, conversation, dropZone,
-  lastSaid, markdown, newPage, progressDialog, sendFiles, startLoop, stopLoop, restartLoop,
+export { advancedCard, agentSelect, appsPage, attachBox, authoringCard, conversation, dropZone,
+  markdown, newPage, progressDialog, sendFiles, startLoop, stopLoop, restartLoop,
   uploadForm, permissionChoice };

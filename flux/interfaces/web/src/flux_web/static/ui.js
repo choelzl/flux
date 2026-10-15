@@ -5,7 +5,6 @@ import { me, navSeq, pageOwner, sessionGen, setMe, setPageOwner } from "./state.
 import { agoText, bytes, dur, fmtTok, money, plural, when } from "./format.js";
 import { Ago, html, render } from "./view.js";
 import { readSort, saveSort, sortRows } from "./sorting.js";
-import { StatePill } from "./components/StatePill.js";
 
 const main = document.getElementById("main");
 
@@ -254,8 +253,6 @@ function streamPill() {
 const enc = encodeURIComponent;
 /** When, said as a component (D1095): kept current while it is on the page -- in a page built with h() too. */
 function ago(t) { return t ? html`<${Ago} t=${t} />` : ""; }
-/** A loop's state: running (since), idle, or how its last start ended. */
-const statePill = st => html`<${StatePill} st=${st} />`;
 function show(...nodes) { main.replaceChildren(...nodes); window.scrollTo(0, 0); }
 /** D719: each navigation's number; a page shows itself only while it is the latest -- a slow page
     (waiting on the server) must not draw over the one the user went to since. A page function's
@@ -462,4 +459,4 @@ const NARROW = window.matchMedia ? window.matchMedia("(max-width: 640px)") : { m
 
 export { NARROW, act, money, plural, ago, agoText, morph, on, promptDialog, api, apiUpload, appHref, request, autosave, bytes, card, confirmDialog, createFromText, crumbs, dialog, dur, empty,
   enc, fmtTok, followStream, h, head, loopStream, markSaved, offline, owned, pageShow, saveMark, show, skeleton, sortableTable,
-  statePill, streamPill, toast, toasts, when, withOwner };
+  streamPill, toast, toasts, when, withOwner };
