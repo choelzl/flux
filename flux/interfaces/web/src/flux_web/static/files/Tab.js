@@ -98,7 +98,7 @@ function useFiles(ctx, refreshList = async () => {}) {
       const ok = await dialog(`Delete ${baseOf(it.path)}?`, html`<p class="mono path-preview">${`${name}/${it.path}`}</p>
         ${folder ? html`<p>${`The folder and everything in it${s ? `: ${s.partial ? "at least " : ""}${plural(s.files, "file")}, ${plural(s.folders, "folder")}, ${bytes(s.bytes)}.` : "."}`}</p>`
           : it.kind === "link" ? html`<p>${`The link only: what it points to (${it.target}) stays.`}</p>` : ""}
-        <p class="muted small">It cannot be undone.</p>`, [["Cancel", false], [folder ? "Delete the folder" : "Delete", true, "danger solid"]]);
+        <${Notice} tone="bad" what="It cannot be undone" />`, [["Cancel", false], [folder ? "Delete the folder" : "Delete", true, "danger solid"]]);
       if (!ok) return;
       try {
         await loopApi(name).api(`/file?path=${enc(it.path)}${folder ? "&recursive=true" : ""}&revision=${enc(it.revision)}`, { method: "DELETE" });

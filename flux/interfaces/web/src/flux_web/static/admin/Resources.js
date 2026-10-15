@@ -30,7 +30,7 @@ function Containers({ r, reload }) {
   const cs = r.containers || [];
   const state = c => c.orphan && c.state === "running" ? "left behind" : c.activity && c.activity !== "loop" ? c.activity : c.state;
   const kill = async c => {
-    if (!await confirmDialog(`Kill ${c.name}?`, "No active task owns it; it is removed.", { ok: "Kill", danger: true })) return;
+    if (!await confirmDialog(`Kill ${c.name}?`, ["It is removed", "no active task owns it"], { ok: "Kill", danger: true })) return;
     toast((await api(`/admin/containers/${enc(c.name)}/kill`, { method: "POST" })).ok, "ok"); reload();
   };
   // D921: a sample, said with its time
@@ -66,7 +66,7 @@ function LoopDisk({ loops, reload }) {
 function OtherCaches({ caches, reload }) {
   if (!caches.length) return null;
   const remove = async c => {
-    if (!await confirmDialog(`Delete the cache ${c.key}?`, `${bytes(c.size)}: its scratch, the agents' sessions and the tools' cache.`, { ok: "Delete", danger: true })) return;
+    if (!await confirmDialog(`Delete the cache ${c.key}?`, [`${bytes(c.size)} go`, "its scratch, the agents' sessions and the tools' cache"], { ok: "Delete", danger: true })) return;
     await clean(c.key, "all"); reload();
   };
   return html`<${Card} title="Caches no loop owns"><p class="muted">Deleting one frees its space; it is rebuilt when needed.</p>

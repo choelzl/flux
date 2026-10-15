@@ -63,7 +63,7 @@ const test = async a => {
   route();
 };
 const remove = async a => {
-  if (!await confirmDialog(`Remove ${a.label}?`, "Its settings and variables go with it, the server's and every user's; a loop that names it no longer starts.", { ok: "Remove", danger: true })) return;
+  if (!await confirmDialog(`Remove ${a.label}?`, ["A loop that names it no longer starts", "its settings and variables go with it, the server's and every user's"], { ok: "Remove", danger: true })) return;
   await api(`/admin/agents/${a.id}`, { method: "DELETE" }); toast(`${a.label} removed`, "ok"); route();
 };
 

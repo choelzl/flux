@@ -102,13 +102,13 @@ function LoopMaintenance({ mt }) {
 function ResetForm({ plan, v, set }) {
   const keep = v.keep;
   const removed = plan.folders.filter(f => !keep.includes(f.key));
-  return html`<div><p><strong>This cannot be undone.</strong> Data listed below will be permanently removed.</p>
+  return html`<div class="stack"><${Notice} tone="bad" what="It cannot be undone" why="the folders listed below are removed for good" />
     <h3>Keep</h3><div class="stack">${plan.keep_options.map(o => html`<label key=${o.key} class="check"><input type="checkbox" data-reset-keep=${o.key}
       checked=${keep.includes(o.key)} onChange=${e => set({ keep: e.currentTarget.checked ? [...keep, o.key] : keep.filter(x => x !== o.key) })} />${o.label}</label>`)}</div>
     <p>These folders and everything inside them will be removed:</p>
     <ul class="reset-folders">${removed.length ? removed.map(f => html`<li key=${f.path}><code>${f.path}</code><div class="muted small">${f.what}</div></li>`) : html`<li class="muted">No folders will be removed.</li>`}</ul>
     <p>${keep.includes("history") ? "Results, logs and saved run history stay. The last check status will be cleared." : plan.history + " will also be cleared."}</p>
-    <p>Your problem document, source files, library, settings and sharing stay. Stop any running agents first.</p></div>`;
+    <p class="hint">Your problem document, source files, library, settings and sharing stay. Stop any running agents first.</p></div>`;
 }
 function Danger() {
   const ctx = useLoop();
@@ -121,7 +121,7 @@ function Danger() {
     toast(`${name} reset`, "ok"); route();
   };
   const remove = async () => {
-    if (!await confirmDialog(`Delete ${name}?`, "Its document, files, record and log go. This cannot be undone.", { ok: "Delete", danger: true })) return;
+    if (!await confirmDialog(`Delete ${name}?`, ["It cannot be undone", "its document, files, record and log go"], { ok: "Delete", danger: true })) return;
     await loopApi(name).api("", { method: "DELETE" }); toast(`${name} deleted`, "ok"); location.hash = "#/";
   };
   return html`<${Card} title="Reset or delete this loop" cls="danger-card"><p class="muted">Reset clears generated data; choose what to keep in the confirmation. Source files, settings and sharing stay. Delete removes the entire loop. Both are permanent.</p>

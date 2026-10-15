@@ -45,9 +45,9 @@ function Failures({ f }) {
 
 /** D841: turns recorded before a price was set, priced once at today's prices. */
 const reprice = async () => {
-  if (!await confirmDialog("Price past turns?", "Every turn recorded without a price set is priced at today's prices "
-    + "(the admin's; a user's own only with their own endpoint). A turn is priced once: one priced here, or when it was recorded, is never priced again. "
-    + "Running loops are skipped: price them once they stop.", { ok: "Price them" })) return;
+  if (!await confirmDialog("Price past turns?", ["A turn is priced once", "one priced here, or when it was recorded, is never priced again"], { ok: "Price them",
+    hint: "Every turn recorded without a price set is priced at today's prices (the admin's; a user's own only with their own endpoint). "
+      + "Running loops are skipped: price them once they stop." })) return;
   const got = await api("/admin/reprice", { method: "POST" });
   toast(`${plural(got.turns, "turn")} in ${plural(got.loops, "loop")} priced: $${got.usd.toFixed(2)}`
     + (got.skipped.length ? `; skipped, running: ${got.skipped.join(", ")}` : ""), got.skipped.length ? "warn" : "ok");

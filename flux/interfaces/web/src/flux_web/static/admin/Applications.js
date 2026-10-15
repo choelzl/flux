@@ -7,7 +7,7 @@ import { bytes } from "../format.js";
 import { Act } from "../components/Act.js";
 
 const use = async (a, refresh) => {
-  if (refresh && !await confirmDialog(`Refresh ${a.name}?`, "Edits to its files in the loop are lost; its record and log stay.", { ok: "Refresh" })) return;
+  if (refresh && !await confirmDialog(`Refresh ${a.name}?`, ["Edits to its files in the loop are lost", "its record and log stay"], { ok: "Refresh" })) return;
   await api(`/admin/applications/${enc(a.name)}/use${refresh ? "?refresh=true" : ""}`, { method: "POST" });
   toast(refresh ? `${a.name}: its files taken again` : `${a.name} is one of your loops`, "ok");
   location.hash = `#/app/${enc(a.name)}`;

@@ -3,7 +3,7 @@
 // action opens (`openModal`: a question with its buttons, an upload's progress, a raw text, the layout editor) are
 // one stack, drawn by `Dialogs` (the app draws it).
 
-import { changes, html, useChanges, useLayoutEffect, useRef, useState } from "../view.js";
+import { Notice, changes, html, useChanges, useLayoutEffect, useRef, useState } from "../view.js";
 import { Toasts, useLayer } from "../notices.js";
 import { bytes } from "../format.js";
 
@@ -77,8 +77,15 @@ export const askText = (title, { label, value = "", hint = null, Consequence = n
       ${hint ? html`<p class="hint">${typeof hint === "function" ? hint(t) : hint}</p>` : ""}
       ${Consequence ? html`<${Consequence} text=${t} bad=${b => { if (b !== v.bad) set({ bad: b }); }} />` : ""}</div>`;
   }, v => [["Cancel", null], [ok, x => x.text.trim(), v.bad ? "danger" : "primary"]], { text: value, bad: false });
-export const confirmDialog = (title, text, { ok = "OK", danger = false } = {}) =>
-  dialog(title, html`<p>${text}</p>`, [["Cancel", false], [ok, true, danger ? "danger solid" : "primary"]]);
+/** D1102: a question in the one dialog shape -- the title asks it, `hint` says what it means, then its consequence
+    `said` as a notice: bad when `danger` (the button red exactly then), warn otherwise; `said` [what, why] or a
+    sentence. True once confirmed. */
+export const confirmDialog = (title, said, { ok = "OK", danger = false, hint = null } = {}) => {
+  const [what, why] = Array.isArray(said) ? said : [null, null];
+  return dialog(title, html`<div class="stack">${hint ? html`<p class="hint">${hint}</p>` : ""}${said
+    ? html`<${Notice} tone=${danger ? "bad" : "warn"} what=${what} why=${why}>${Array.isArray(said) ? "" : said}<//>` : ""}</div>`,
+    [["Cancel", false], [ok, true, danger ? "danger solid" : "primary"]]);
+};
 
 const Progress = ({ title, said, at, stopping, stop }) => html`<h2>${title}</h2><p>${said}</p><progress max="1" value=${at[1] ? at[0] / at[1] : 0} class="upload-bar" />
   <span class="muted small">${at[1] ? ` ${bytes(at[0])} of ${bytes(at[1])}` : ""}</span>

@@ -112,7 +112,7 @@ export function LoopPage({ name, owner, info, path }) {
   const start = after => canRun ? async () => { if (await startLoop(name, owner)) { await ctx.refresh(); after?.(); } } : null;
   // D702: a shared loop, left by its guest
   const leave = async () => {
-    if (!await confirmDialog(`Leave ${info.owner}'s ${name}?`, `${info.owner} is told.`, { ok: "Leave" })) return;
+    if (!await confirmDialog(`Leave ${info.owner}'s ${name}?`, ["You lose your access", `${info.owner} is told`], { ok: "Leave" })) return;
     toast((await loopApi(name).api(`/shares/me?owner=${enc(info.owner)}`, { method: "DELETE" })).ok, "ok"); location.hash = "#/";
   };
   const acts = {

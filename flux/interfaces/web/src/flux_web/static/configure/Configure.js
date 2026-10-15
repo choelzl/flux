@@ -176,7 +176,7 @@ export function Configure({ name, owner, mode, pick, tabs = true }) {
   const draft = name ? null : currentDraft(), [gen, setGen] = useState(0), [, redraw] = useState(0);
   const onDraft = () => redraw(n => n + 1);
   const discard = async () => {
-    if (!await confirmDialog("Discard the draft?", "Its name, statement, checks, measurements and staged files go.", { ok: "Discard", danger: true })) return;
+    if (!await confirmDialog("Discard the draft?", ["The draft goes", "its name, statement, checks, measurements and staged files"], { ok: "Discard", danger: true })) return;
     Object.assign(draft, newDraft()); forgetDraft(); setGen(g => g + 1);
   };
   const view = mode === "configurator" ? (name ? html`<${CrafterOf} key=${`of:${name}`} name=${name} owner=${owner} />` : html`<${CrafterNew} key=${`new:${gen}`} draft=${draft} onDraft=${onDraft} />`)

@@ -49,7 +49,7 @@ function Controls({ loops, paused }) {
   const line = (label, kids) => html`<div class="ctl-line"><span class="ctl-label">${label}</span><div class="ctl-acts">${kids}</div></div>`;
   const pause = async why => { await api("/admin/paused", { method: "PUT", body: { reason: why } }); toast(why ? "New starts paused" : "Starts resumed", "ok"); route(); };
   const stopAll = async () => {
-    if (!await confirmDialog("Stop every loop?", `${plural(running.length, "loop")} stop at the end of their pass.`, { ok: "Stop after the pass" })) return;
+    if (!await confirmDialog("Stop every loop?", [`${plural(running.length, "loop")} stop`, "at the end of their pass"], { ok: "Stop after the pass" })) return;
     const r = await api("/admin/stop-all", { method: "POST", body: { now: false } }); toast(`${plural(Object.keys(r.stopped).length, "loop")} asked to stop`, "ok"); route();
   };
   return html`<${Card} title="Controls"><div class="ctl-grid">

@@ -84,7 +84,7 @@ export function Users({ users, use, res, catalog }) {
   };
   const viewAs = async u => { await api(`/users/${enc(u.name)}/impersonate`, { method: "POST" }); location.hash = "#/"; location.reload(); };
   const able = async u => {
-    if (!u.disabled && !await confirmDialog(`Disable ${u.name}?`, "They are logged out and cannot log in; their loops stay.", { ok: "Disable", danger: true })) return;
+    if (!u.disabled && !await confirmDialog(`Disable ${u.name}?`, ["They are logged out and cannot log in", "their loops stay"], { ok: "Disable", danger: true })) return;
     await api(`/users/${enc(u.name)}`, { method: "PATCH", body: { disabled: !u.disabled } }); toast(`${u.name} ${u.disabled ? "enabled" : "disabled"}`, "ok"); route();
   };
   const link = async u => { const got = await api(`/users/${enc(u.name)}/link`, { method: "POST" }); await linkDialog(u.name, got.token, got.kind); };

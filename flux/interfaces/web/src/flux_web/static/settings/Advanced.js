@@ -38,7 +38,7 @@ function AdvancedForm({ a, sandboxedServer, save }) {
   // turning the sandbox off asks first
   const sandbox = async e => {
     const on = e.currentTarget.checked;
-    if (!on && !await confirmDialog("Run this loop on the host?", "Its document's commands and its agents run on this machine, outside the sandbox, as the server's user.", { ok: "Run on the host", danger: true })) {
+    if (!on && !await confirmDialog("Run this loop on the host?", ["Outside the sandbox", "its document's commands and its agents run on this machine, as the server's user"], { ok: "Run on the host", danger: true })) {
       e.currentTarget.checked = true; return;
     }
     set({ sandbox: on });

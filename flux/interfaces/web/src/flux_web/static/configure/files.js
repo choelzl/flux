@@ -50,7 +50,7 @@ export function filesStore(name, yamlOf, { staged = new Map(), namedOf = null, o
   }
   async function remove(f) {
     if (!name) { staged.delete(f.path); draw(); return; }
-    if (!await confirmDialog(`Delete ${f.path}?`, "The document may still name it.", { ok: "Delete", danger: true })) return;
+    if (!await confirmDialog(`Delete ${f.path}?`, ["It cannot be undone", "the document may still name it"], { ok: "Delete", danger: true })) return;
     await loopApi(name).api(`/file?path=${enc(f.path)}`, { method: "DELETE" }); toast(`${f.path} deleted`, "ok"); draw();
   }
   /** Files dropped, into `folder` when one is named. */

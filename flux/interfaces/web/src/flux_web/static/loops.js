@@ -13,13 +13,13 @@ export { startLoop } from "./loops/Start.js";
 
 /** Stop or restart a loop: after its pass, or now (abandoning it), confirmed. */
 async function stopLoop(name, now, owner) {
-  if (now && !await confirmDialog(`Stop ${name} now?`, "This abandons the current pass. What was already measured is kept.", { ok: "Stop", danger: true })) return false;
+  if (now && !await confirmDialog(`Stop ${name} now?`, ["This abandons the current pass", "what was already measured is kept"], { ok: "Stop", danger: true })) return false;
   const r = await loopApi(name, owner).api("/stop", { method: "POST", body: { now } });
   toast(r.ok, now ? "warn" : "info");
   return true;
 }
 async function restartLoop(name, now = false, owner) {
-  if (now && !await confirmDialog(`Restart ${name} now?`, "This abandons the current pass, then resumes with the same run settings and remaining pass budget. Files, results and logs are kept.", { ok: "Restart", danger: true })) return false;
+  if (now && !await confirmDialog(`Restart ${name} now?`, ["This abandons the current pass", "then resumes with the same run settings and remaining pass budget; files, results and logs are kept"], { ok: "Restart", danger: true })) return false;
   const r = await loopApi(name, owner).api("/restart", { method: "POST", body: { now } });
   toast(r.ok, now ? "warn" : "info");
   return true;

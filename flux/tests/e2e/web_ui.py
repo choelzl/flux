@@ -1565,7 +1565,8 @@ def flows(r: Run) -> None:
         r.check("the graphs are not built while Results shows (D916)", b.js("return !document.querySelector('#main svg.chart') && !!document.querySelector('#main .decision-line')"))
         r.button("Graphs", ".subrow .subtabs")
         b.wait("document.querySelector('#main svg.chart.pareto, #main svg.best-chart')", timeout=10, what="the graphs")
-        r.check("Graphs has its address (D916)", b.js("return location.hash") == "#/app/sw/results/graphs")
+        h = b.wait("location.hash.endsWith('/results/graphs') && location.hash", timeout=10, what="the Graphs address")   # set as the view settles
+        r.check("Graphs has its address (D916)", h == "#/app/sw/results/graphs", h)
         r.check("the decision line shows in Graphs too (D916)", b.js("const t = document.querySelector('#main table.designs'); return !!document.querySelector('#main .decision-line') && !(t && t.checkVisibility())"))
         # D849: the chart by design has one point per design, not one per measurement
         got = json.loads(r.api("/apps/sw/results")["body"])
