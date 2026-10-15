@@ -42,24 +42,29 @@ export function openModal(vnode, { cls = "dlg", label = null, labelledby = null,
     close: () => { if (!stack.includes(e)) return; stack = stack.filter(x => x !== e); emit(); } };
 }
 
-/** A question: its title, its body (a component, or several), its buttons -- [label, value, class]; a value that is
-    a function is called with the body's node (what a form in it says). */
-function Question({ title, body, buttons, done }) {
-  const box = useRef(null);
+/** A question: its title, its body, its buttons -- [label, value, class, disabled], or `v => buttons`. The body is
+    what it shows, or a form `({ v, set, submit }) => vnodes`: its fields drawn from `v` (starting as `init`),
+    `set(patch)` changing it, `submit()` pressing the main button (Enter in a field). A button's value that is a
+    function is called with `v` (what the form says). */
+function Question({ title, body, buttons, init, done }) {
+  const box = useRef(null), at = useRef(init), [v, setV] = useState(init);
+  const set = patch => { at.current = { ...at.current, ...patch }; setV(at.current); };
+  const list = typeof buttons === "function" ? buttons(v) : buttons;
+  const press = b => { if (!b[3]) done(typeof b[1] === "function" ? b[1](at.current) : b[1]); };
+  const main = list.find(b => /primary|danger/.test(b[2] || "")) || list[list.length - 1];
   useLayoutEffect(() => {
     const d = box.current.closest("dialog"), f = d.querySelector("input, textarea");
     (f || d.querySelector("button.primary, button.danger") || d).focus();
   }, []);
-  return html`<h2>${title}</h2><div class="dlg-body" ref=${box}>${body}</div>
-    <div class="dlg-actions">${buttons.map(([label, value, cls]) => html`<button class=${cls || ""} type="button"
-      onClick=${() => done(typeof value === "function" ? value(box.current) : value)}>${label}</button>`)}</div>`;
+  return html`<h2>${title}</h2><div class="dlg-body" ref=${box}>${typeof body === "function" ? body({ v, set, submit: () => press(main) }) : body}</div>
+    <div class="dlg-actions">${list.map(b => html`<button class=${b[2] || ""} type="button" disabled=${!!b[3]} onClick=${() => press(b)}>${b[0]}</button>`)}</div>`;
 }
-/** The answer: a button's value, or null for Escape. */
-export function dialog(title, body, buttons) {
+/** The answer: a button's value, or null for Escape. `init` a form's first value. */
+export function dialog(title, body, buttons, init = {}) {
   return new Promise(resolve => {
     let m = null;
     const done = v => { m.close(); resolve(v); };
-    m = openModal(html`<${Question} title=${title} body=${body} buttons=${buttons} done=${done} />`, { onCancel: () => done(null) });
+    m = openModal(html`<${Question} title=${title} body=${body} buttons=${buttons} init=${init} done=${done} />`, { onCancel: () => done(null) });
   });
 }
 export const confirmDialog = (title, text, { ok = "OK", danger = false } = {}) =>

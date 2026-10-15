@@ -2,28 +2,29 @@
 // Shift+Enter breaks the line; when the agent asks, the line says so and answers it -- and the notes sent so far
 // under it, each removable by whoever may edit the loop.
 
-import { Ago, html, useEffect, useRef, useState } from "../view.js";
+import { Ago, html, useEffect, useLayoutEffect, useRef, useState } from "../view.js";
 import { api, enc, toast } from "../ui.js";
 import { dur } from "../format.js";
 import { Bin } from "../components/Bin.js";
 
 /** `question` the agent's open one (or null); `send(text)` sends a note or an answer; `n` changes when one was sent. */
 export function Composer({ name, qs, mine, question, send, n }) {
-  const [notes, setNotes] = useState([]), [busy, setBusy] = useState(false), ta = useRef(null);
+  const [notes, setNotes] = useState([]), [busy, setBusy] = useState(false), [text, setText] = useState(""), ta = useRef(null);
   const read = () => api(`/apps/${enc(name)}/notes${qs}`).then(setNotes).catch(() => {});
   useEffect(() => { read(); }, [n]);
-  const grow = () => { const t = ta.current; t.style.height = "auto"; t.style.height = Math.min(t.scrollHeight, 180) + "px"; };
+  // the box grows with what is written, up to 180 px
+  useLayoutEffect(() => { const t = ta.current; if (!t) return; t.style.height = "auto"; t.style.height = Math.min(t.scrollHeight, 180) + "px"; }, [text]);
   const go = async () => {
-    const text = ta.current.value.trim();
-    if (!text) return;
+    const said = text.trim();
+    if (!said) return;
     setBusy(true);
-    try { await send(text); ta.current.value = ""; grow(); read(); } catch (x) { toast(x.message, "bad"); } finally { setBusy(false); }
+    try { await send(said); setText(""); read(); } catch (x) { toast(x.message, "bad"); } finally { setBusy(false); }
   };
   const remove = async x => { await api(`/apps/${enc(name)}/notes/${enc(x.id)}${qs}`, { method: "DELETE" }); toast("The note is removed", "ok"); read(); };
   const left = question ? Math.max(0, Math.round(question.asked + question.wait_s - Date.now() / 1000)) : 0;
   return html`<div class=${`composer${question ? " asking" : ""}`}>
     <div class="composer-ask">${question ? html`<strong>Agent asks</strong><span class="muted">${left ? ` · ${dur(left)} left` : " · timed out"}</span><pre class="question">${question.question}</pre>` : ""}</div>
-    <div class="composer-row"><textarea rows="1" class="composer-in" aria-label="A note to the loop" ref=${ta} onInput=${grow}
+    <div class="composer-row"><textarea rows="1" class="composer-in" aria-label="A note to the loop" ref=${ta} value=${text} onInput=${e => setText(e.currentTarget.value)}
         placeholder=${question ? "Your answer to the agent (Enter sends)" : "A note to the loop: it joins the next prompt (Enter sends, Shift+Enter for a new line)"}
         onKeyDown=${e => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); go(); } }} />
       <button class="primary" type="button" disabled=${busy} onClick=${go}>${question ? "Answer" : "Send"}</button></div>

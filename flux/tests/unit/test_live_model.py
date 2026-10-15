@@ -13,14 +13,13 @@ pytestmark = pytest.mark.skipif(shutil.which("node") is None, reason="node is no
 
 
 def evaluate(events, expression):
-    uri = "data:text/javascript;base64," + base64.b64encode((STATIC / "live_model.js").read_bytes()).decode()
-    script = """const LT = require(process.argv[1]);
+    uri = lambda p: "data:text/javascript;base64," + base64.b64encode((STATIC / p).read_bytes()).decode()   # noqa: E731
+    script = """Promise.all([import(process.argv[1]), import(process.argv[2])]).then(([LT, {taskScope, currentTask, taskPass, campaignForStart, taskState, taskWindow}]) => {
 const events = JSON.parse(require('fs').readFileSync(0, 'utf8')), model=LT.model();
 for (const event of events) LT.apply(model, event);
-import(process.argv[2]).then(({taskScope, currentTask, taskPass, campaignForStart, taskState, taskWindow}) => {
   process.stdout.write(JSON.stringify(EXPRESSION));
 });""".replace("EXPRESSION", expression)
-    result = subprocess.run(["node", "-e", script, str(STATIC / "looptree.js"), uri],
+    result = subprocess.run(["node", "-e", script, uri("live/events.js"), uri("live_model.js")],
                             input=json.dumps(events), capture_output=True, text=True, timeout=30)
     assert result.returncode == 0, result.stderr
     return json.loads(result.stdout)

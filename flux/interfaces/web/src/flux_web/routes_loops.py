@@ -6,6 +6,7 @@ the preflight (D693), a new, an empty (D825) or a cloned (D824) loop, start and 
 from __future__ import annotations
 
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -499,6 +500,32 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
             except ValueError:
                 rows.append({"k": "text", "text": "(a step that could not be read)"})
         return {"total": len(lines), "start": start, "steps": rows}
+
+    @app.get("/api/apps/{name}/output")
+    def tool_output(name: str, file: str, start: int = -1, size: int = 65536, owner: str | None = None,
+                    user: User = Depends(user_of)) -> dict[str, Any]:
+        """D1098: a slice of a tool's whole output, from the file its run wrote (`stdout file`, `stderr file`):
+        `size` bytes from `start` (-1: the last), widened to whole lines; where a task's row carries its end.
+        Only a file in a run's `outputs/` folder, in the loop's own folder or its sandbox cache, is read."""
+        from .admin import _key, cache_root
+        from .confine import Escape, open_read
+
+        _w, whose, d, _run = loop_of(name, user, owner)
+        if "/outputs/" not in file or not file.endswith((".stdout", ".stderr")):
+            raise HTTPException(404, "no such output")
+        size = min(max(1024, size), 1 << 20)
+        try:
+            with open_read(file, cache_root() / _key(whose.name, name), d) as fh:
+                total = os.fstat(fh.fileno()).st_size
+                at = max(0, total - size) if start < 0 else min(start, total)
+                fh.seek(at)
+                data = fh.read(min(size, total - at))
+        except (OSError, Escape):
+            raise HTTPException(404, "no such output") from None
+        if at > 0 and b"\n" in data:              # begin at a whole line (what comes before is the next slice up)
+            cut = data.index(b"\n") + 1
+            at, data = at + cut, data[cut:]
+        return {"total": total, "start": at, "end": at + len(data), "text": data.decode("utf-8", "replace")}
 
     @app.post("/api/apps/{name}/asks/{ident}/stop")
     def stop_ask(name: str, ident: str, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, str]:

@@ -1117,9 +1117,10 @@ def flows(r: Run) -> None:
             r.check("the dialog lists each measurement with measure again or clear, and Also hide at rest", b.js(
                 "const d = document.querySelector('dialog[open]'); return d.querySelectorAll('.reject-measurements tbody tr').length === 2"
                 " && [...d.querySelectorAll('.reject-how option')].map(o => o.value).slice(0, 2).join() === 'again,clear' && !d.querySelector('.reject-hide').disabled"))
-            b.js("const d = document.querySelector('dialog[open]'); d.querySelector('.reject-reason').value = 'area read from the wrong corner';"
+            b.js("const d = document.querySelector('dialog[open]'), r = d.querySelector('.reject-reason'); r.value = 'area read from the wrong corner'; r.dispatchEvent(new Event('input', {bubbles: true}));"
                  " const row = [...d.querySelectorAll('.reject-measurements tbody tr')].find(t => t.textContent.includes('area_um2'));"
-                 " row.querySelector('input').checked = true; row.querySelector('select').value = 'clear'; d.querySelector('.dlg-actions .primary').click(); return 1")
+                 " row.querySelector('input').click(); const s = row.querySelector('select'); s.value = 'clear'; s.dispatchEvent(new Event('change', {bubbles: true}));"
+                 " d.querySelector('.dlg-actions .primary').click(); return 1")
             b.wait("window.__rejSent", what="the rejection sent")
             r.check("Reject sends why, the value to clear and nothing to measure again", b.js("return JSON.stringify(window.__rejSent)") ==
                     json.dumps({"key": "k-w-good", "name": "w-good", "reason": "area read from the wrong corner", "hide": False,
@@ -1470,8 +1471,8 @@ def flows(r: Run) -> None:
         said = b.wait("window.__e2e.bad.length && window.__e2e.bad.join(' ')", what="the refusal said")
         r.check("the sandbox's own variable is refused, and said", "cannot be set" in said, said)
         b.js("window.__e2e.bad.splice(0); window.__e2e.errors.splice(0); return true;")
-        b.js("const s = document.querySelector('#share-user'); s.value = 'cy'; return true;")
-        b.js("const s = document.querySelector('#share-perm'); s.value = 'watch'; return true;")
+        b.js("const s = document.querySelector('#share-user'); s.value = 'cy'; s.dispatchEvent(new Event('change', {bubbles: true})); return true;")
+        b.js("const s = document.querySelector('#share-perm'); s.value = 'watch'; s.dispatchEvent(new Event('change', {bubbles: true})); return true;")
         r.button("Share")
         b.wait("location.hash.includes('settings') && [...document.querySelectorAll('#main .share-grid .strong')].some(t => t.textContent === 'cy')", what="cy listed")
         r.check("shared with cy to watch", True)
@@ -2293,8 +2294,9 @@ def flows(r: Run) -> None:
         r.check("ticked again", b.js("return document.querySelector('#ask-on-codex').checked"))
         r.clean("Admin › Agents")
         # D807: an agent added under a name of its own, of a kind, by its program -- offered once found
-        b.js("document.querySelector('#ag-new-name').value = 'corp'; document.querySelector('#ag-new-kind').value = 'codex';"
-             f"document.querySelector('#ag-new-bin').value = {json.dumps(str(fake))}; return 1")
+        b.js("const [n, k, p] = ['#ag-new-name', '#ag-new-kind', '#ag-new-bin'].map(s => document.querySelector(s));"
+             " n.value = 'corp'; n.dispatchEvent(new Event('input', {bubbles: true})); k.value = 'codex'; k.dispatchEvent(new Event('change', {bubbles: true}));"
+             f" p.value = {json.dumps(str(fake))}; p.dispatchEvent(new Event('input', {{bubbles: true}})); return 1")
         b.js("[...document.querySelector('#ag-new-name').closest('fieldset').querySelectorAll('button')].find(x => x.textContent.trim() === 'Add').click(); return 1")
         b.wait("[...document.querySelectorAll('#main .agent-panel')].some(x => x.dataset.label === 'corp')", timeout=30, what="corp added")
         r.check("an added agent is found by its program", "a codex" in b.js("return [...document.querySelectorAll('#main .agent-panel')].find(c => c.dataset.label === 'corp').textContent"))
@@ -2306,7 +2308,7 @@ def flows(r: Run) -> None:
                 "corp" in b.js("return [...document.querySelectorAll('.set-tabs [role=tab]')].map(t => t.textContent).join(' ')")
                 and b.js("return !!document.querySelector('#env-server-corp-name')"))
         add_var = """const [scope, name, value] = arguments;
-            document.querySelector(`#env-${scope}-name`).value = name; document.querySelector(`#env-${scope}-value`).value = value;
+            for (const [k, v] of [['name', name], ['value', value]]) { const i = document.querySelector(`#env-${scope}-${k}`); i.value = v; i.dispatchEvent(new Event('input', {bubbles: true})); }
             [...document.querySelector(`#env-${scope}-name`).closest('.env-add').querySelectorAll('button')].find(x => x.textContent.trim() === 'Add').click();
             return 1"""
         r.button("corp", ".set-tabs")
@@ -2463,7 +2465,7 @@ def flows(r: Run) -> None:
         r.check("the controls say no more than their buttons (D846)", "nobody can start one" not in r.text())
         r.button("Send a notification…", "#main")                              # D846
         b.wait("document.querySelector('dialog.dlg[open] textarea')", timeout=10, what="the notification dialog")
-        b.js("const d = document.querySelector('dialog.dlg[open]'); d.querySelector('textarea').value = 'Maintenance at noon'; return 1")
+        b.js("const t = document.querySelector('dialog.dlg[open] textarea'); t.value = 'Maintenance at noon'; t.dispatchEvent(new Event('input', {bubbles: true})); return 1")
         r.dialog_button("Send")
         b.wait("[...document.querySelectorAll('.toast')].some(t => t.textContent.startsWith('Sent to'))", timeout=10, what="the notification sent")
         r.check("the admin sends a notification to everyone", True)
@@ -2523,7 +2525,7 @@ def flows(r: Run) -> None:
         """D818: a user added without a password gets a link; it sets the password and logs them in."""
         r.login("ada")
         r.page("#/admin/users", "document.querySelector('.add-user')", "Admin › Users")
-        b.js("const r = document.querySelector('.add-user'); r.querySelector('input').value = 'newbie'; return 1")
+        b.js("const i = document.querySelector('.add-user input'); i.value = 'newbie'; i.dispatchEvent(new Event('input', {bubbles: true})); return 1")
         r.button("Add user", ".add-user")
         b.wait("document.querySelector('#invite-url')", timeout=20, what="the invitation link")
         url = b.js("return document.querySelector('#invite-url').value")
@@ -2553,7 +2555,7 @@ def flows(r: Run) -> None:
         b.js("const s = document.querySelector('#clone-from'); s.value = JSON.stringify(['', 'sw']); return 1")
         r.button("Clone…", "#main")
         b.wait("document.querySelector('#clone-to')", timeout=10, what="the clone dialog")
-        b.js("document.querySelector('#clone-to').value = 'sw-copy'; return 1")
+        b.js("const i = document.querySelector('#clone-to'); i.value = 'sw-copy'; i.dispatchEvent(new Event('input', {bubbles: true})); return 1")
         b.js("[...document.querySelectorAll('dialog[open] button')].find(x => x.textContent === 'Clone').click(); return 1")
         b.wait("location.hash === '#/app/sw-copy'", timeout=20, what="the clone's page")
         files = [f["path"] for f in json.loads(r.api("/apps/sw-copy/files?ignored=true")["body"])]

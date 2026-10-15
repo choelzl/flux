@@ -17,7 +17,7 @@ export function FilesPanel({ store }) {
         <a href="javascript:void 0" onClick=${() => store.open(f)}><span class="ic">·</span>${f.path}</a>
         <small class="muted">${bytes(f.size)}${f.staged ? " · with the new loop" : ""}</small>
         <button class="link danger-link" title=${`Delete ${f.path}`} onClick=${() => store.remove(f)}>×</button></li>`)}</ul>` : html`<p class="muted">No files.</p>`}
-      ${missing.length ? html`<div class="callout bad"><strong>The document names these, and the loop does not have them: </strong>
+      ${missing.length ? html`<div key="missing" class="callout bad"><strong>The document names these, and the loop does not have them: </strong>
         ${missing.map((p, i) => html`${i ? ", " : ""}<a href="javascript:void 0" title="Write it here" onClick=${() => store.editor(p, "")}>${p}</a>`)}</div>` : ""}
       <div class="row"><button class="small" type="button" onClick=${() => store.editor("", "")}>New file</button><input placeholder="folder (optional)" class="narrow-in" ref=${into} /></div>
       <${DropZone} label="Drop scripts, models or folders here" onFiles=${got => store.add(got, into.current?.value || "")} /></div></details>`;

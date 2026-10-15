@@ -435,13 +435,18 @@ def general_flows(r, watch):
             def end(id, t, **output):
                 return {"ev": "end", "id": id, "t": t, "seconds": 1, "output": output}
 
+            # D1098: a check's stdout longer than the journal keeps -- written whole beside the run, read in slices
+            whole = "".join(f"sim line {i}\n" for i in range(8000)) + "CHECK OK\n"
+            kept = r.data / "users" / "bob" / "apps" / name / "runs" / "outputs" / "1-python3.stdout"
+            kept.parent.mkdir(parents=True, exist_ok=True)
+            kept.write_text(whole)
             events = [{"ev": "hello", "t": now - 30},
                       {"ev": "mark", "name": "pass", "t": now - 29, "why": '{"n":0}'},
                       task(10, now - 28, "test: baseline"), end(10, now - 27, verdict="passed"),
                       {"ev": "mark", "name": "pass", "t": now - 26, "why": '{"n":1}'},
                       task(1, now - 25, "generation: first", **{"pass": 1}),
                       task(2, now - 24, "tool:python3", 1, command="python3 check.py", stdin="case one", folder="/sandbox"),
-                      end(2, now - 23, exit=0, stdout="CHECK OK", stderr="DEBUG diagnostic"), end(1, now - 22),
+                      end(2, now - 23, exit=0, stdout=whole[-4000:], stderr="DEBUG diagnostic", **{"stdout file": str(kept), "stdout bytes": len(whole)}), end(1, now - 22),
                       {"ev": "mark", "name": "pass", "t": now - 21, "why": '{"n":2}'},
                       task(3, now - 20, "generation: current", **{"pass": 2}),
                       task(4, now - 19, "agent: claude", 3, prompt="FULL live prompt\n" + "\n".join(f"Prompt line {i}" for i in range(180)), command="claude --print", stdin="The prompt above (sent on stdin)"),
@@ -575,6 +580,15 @@ def general_flows(r, watch):
                 r.check("D982: a pass's row shows the pass in the inspector: its steps and where its time went", b.js("const d=document.querySelector('.alt-pass-detail');return !!d && d.querySelector('h2').textContent==='Pass 1' && !!d.querySelector('.alt-bar.tall') && [...d.querySelectorAll('.alt-step-row .alt-task-name')].some(n=>n.textContent.startsWith('Design · first'))"))
                 b.click('.alt-tree [data-task="1"]')     # D1055: a task and its one command -- its panel is the command's
                 r.check("a tool inspector shows command, stdin, stdout and neutral debug stderr together", b.js("const d=document.querySelector('.alt-detail');return ['python3 check.py','case one','CHECK OK','DEBUG diagnostic'].every(t=>d.textContent.includes(t)) && !d.querySelector('.err')"))
+                b.js("document.querySelector('.alt-detail details[data-fold=stdout] summary').click(); return 1")
+                b.wait("(p => !!p.querySelector('.stream-earlier') && p.scrollHeight - p.scrollTop - p.clientHeight < 30)(document.querySelector('.alt-detail pre[data-k=stdout]'))",
+                       what="a long stdout read from its file, at its end")
+                r.check("D1098: a long stdout opens at its end, read from the file its run wrote, saying what is above",
+                        b.js("const p=document.querySelector('.alt-detail pre[data-k=stdout]');return p.textContent.trim().endsWith('CHECK OK') && p.textContent.includes('earlier of')"))
+                b.wait("(p => { p.scrollTop = 0; p.dispatchEvent(new Event('scroll')); return p.textContent.startsWith('sim line 0\\n'); })(document.querySelector('.alt-detail pre[data-k=stdout]'))",
+                       timeout=30, what="the earlier output as it scrolls up", said="document.querySelector('.alt-detail pre[data-k=stdout]').textContent.slice(0, 200)")
+                r.check("D1098: scrolling up reads the earlier output slice by slice, to its first line, nothing lost or twice",
+                        b.js("const t=document.querySelector('.alt-detail pre[data-k=stdout]').textContent.split('\\n').filter(Boolean);return t.length===8001 && new Set(t).size===8001 && !document.querySelector('.alt-detail .stream-earlier')"))
                 if os.environ.get("FLUX_E2E_SHOTS"):
                     Path(os.environ["FLUX_E2E_SHOTS"]).mkdir(parents=True, exist_ok=True)
                     b.shot(Path(os.environ["FLUX_E2E_SHOTS"]) / "live-alt-tree.png")
@@ -1220,7 +1234,7 @@ objectives: [{metric: timings.fast, goal: 15, direction: minimize},
                 b.click(".ask-new")
                 b.wait("document.querySelector('.ask-compose-head').textContent === 'New conversation'", what="new chat composer")
                 r.check("New chat clears the reply context", b.js("return document.querySelector('.ask-compose-head').textContent") == "New conversation")
-                b.js("window.__askFail = true; document.querySelector('#ask-q').value = 'Keep this draft'; return 1")
+                b.js("window.__askFail = true; const q = document.querySelector('#ask-q'); q.value = 'Keep this draft'; q.dispatchEvent(new Event('input')); return 1")
                 b.click(".ask-send")
                 b.wait("window.__e2e.bad.some(t => t.includes('Try again shortly'))", what="failed send explained")
                 r.check("a failed send keeps the unsent message", b.js("return document.querySelector('#ask-q').value") == "Keep this draft")
@@ -1245,7 +1259,7 @@ objectives: [{metric: timings.fast, goal: 15, direction: minimize},
                     r.check(f"chat and long notes fit at {width}px; the composer stays visible", all(bounds[k] for k in ("drawer", "history", "note", "footer", "input")) and bounds["historyHeight"] > 200, bounds)
                 b.shot(r.shots / "ask-chat-mobile.png", full=True)
                 b.cmd("WebDriver:SetWindowRect", {"width": 1200, "height": 900})
-                b.js("window.__askData[0].running = false; window.__askData[0].ended = 210; document.querySelector('.steer-card').open = false; document.querySelector('#ask-q').value = ''; return 1")
+                b.js("window.__askData[0].running = false; window.__askData[0].ended = 210; document.querySelector('.steer-card').open = false; const q = document.querySelector('#ask-q'); q.value = ''; q.dispatchEvent(new Event('input')); return 1")
                 b.click(".drawer-head button"); b.click(".ask-fab")
                 b.wait("document.querySelector('.ask-reply') && getComputedStyle(document.querySelector('.drawer')).transform === 'none'", what="finished conversation")
                 b.click(f'.ask-reply[data-reply-to="{root}"]')
@@ -1358,7 +1372,7 @@ objectives: [{metric: timings.fast, goal: 15, direction: minimize},
                 b.click("#loop-transfer")
                 b.wait("document.querySelector('dialog[open] #transfer-keep-permissions')", what="admin transfer permissions")
                 r.check(f"{name}: admin transfer asks with default unchecked", b.js("return !document.querySelector('#transfer-keep-permissions').checked"))
-                b.js("document.querySelector('#loop-transfer-user').value = 'cy'; return 1")
+                b.js("const s = document.querySelector('#loop-transfer-user'); s.value = 'cy'; s.dispatchEvent(new Event('change', {bubbles: true})); return 1")
                 if keep:
                     b.click("#transfer-keep-permissions")
                 r.dialog_button("Transfer")
@@ -1403,7 +1417,7 @@ objectives: [{metric: timings.fast, goal: 15, direction: minimize},
 
                 settings()
                 r.check("admin sees the owner's shares and can choose recipients", b.js("return ![...document.querySelector('#share-user').options].some(o => o.value === 'bob') && [...document.querySelector('#share-user').options].some(o => o.value === 'cy')"))
-                b.js("document.querySelector('#share-user').value = 'cy'; return 1")
+                b.js("const s = document.querySelector('#share-user'); s.value = 'cy'; s.dispatchEvent(new Event('change', {bubbles: true})); return 1")
                 r.button("Share", ".loop-sharing")
                 b.wait("document.querySelector('.loop-sharing select[aria-label=\"What cy may do\"]')", what="watch share saved")
                 shared = json.loads(r.api(f"/apps/{name}/shares?owner=bob")["body"])

@@ -485,4 +485,4 @@ are ordinary variables here.
   errors or red notices; screenshots in `~/snap/firefox/common/flux-e2e/shots/` (`FLUX_E2E_HOME`).
   `FLUX_E2E_SANDBOX=1` sandboxes the loops; `FLUX_E2E_STEPS="login refused,login,invitation,insights"`
   runs a few steps (the first two log in).
-- The task tree builder (`static/looptree.js`) is tested under node: `tests/unit/test_looptree.py`.
+- Live's task model (`static/live/events.js`, a journal replayed) is tested under node: `tests/unit/test_live_events.py`.

@@ -78,7 +78,7 @@ export function LoopsBrowser({ loops, who = false, memo }) {
   const q = view.q.trim().toLowerCase();
   const list = loops.filter(l => (view.state === "all" || stateOf(l) === view.state) && (!q || [l.name, l.document, l.owner].some(x => String(x || "").toLowerCase().includes(q))));
   const count = k => loops.filter(l => k === "all" || stateOf(l) === k).length;
-  return html`<div>${loops.length ? html`<div class="list-bar"><input type="search" placeholder="Search loops" value=${view.q} class="search" onInput=${e => set({ q: e.currentTarget.value })} />
+  return html`<div>${loops.length ? html`<div key="bar" class="list-bar"><input type="search" placeholder="Search loops" value=${view.q} class="search" onInput=${e => set({ q: e.currentTarget.value })} />
       <div class="chips">${["all", "running", "idle", "failed"].map(k => html`<button class=${`chip${view.state === k ? " on" : ""}`} onClick=${() => set({ state: k })}>${`${k[0].toUpperCase() + k.slice(1)} ${count(k)}`}</button>`)}</div></div>` : ""}
     <div>${loops.length && !list.length ? html`<${Empty} text="No loop matches." />` : html`<${LoopsTable} loops=${list} who=${who} memo=${memo} />`}</div></div>`;
 }

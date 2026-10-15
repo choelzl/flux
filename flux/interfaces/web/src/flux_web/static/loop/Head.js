@@ -2,7 +2,7 @@
 // whose it is, its document and last activity, Start, Stop and Restart, Leave a shared one -- its tabs and sub-tabs,
 // and the agent's open question with the time left to answer it.
 
-import { html, useRef } from "../view.js";
+import { html, useState } from "../view.js";
 import { dur } from "../format.js";
 import { Act } from "../components/Act.js";
 import { Crumbs } from "../components/Crumbs.js";
@@ -31,10 +31,10 @@ export function LoopHead({ name, info, st, perm, mine, canRun, acts }) {
 /** D919: the agent's question, kept across the polls while it is the same -- an unsent answer stays until sent;
     only the time left is said again. */
 export function AskBanner({ question, mine, send }) {
-  const ans = useRef(null);
+  const [ans, setAns] = useState("");
   const left = Math.max(0, Math.round(question.asked + question.wait_s - Date.now() / 1000));
   return html`<section class="card ask"><div class="card-head"><h2>Agent asks</h2><span class="muted">${left ? `${dur(left)} left` : "timed out"}</span></div>
     <pre class="question">${question.question}</pre>
-    ${mine ? html`<textarea rows="3" placeholder="Your answer" ref=${ans} /><div class="form-actions">
-      <${Act} cls="primary" onClick=${async () => { const v = ans.current.value.trim(); if (v) await send(v); }}>Answer<//></div>` : ""}</section>`;
+    ${mine ? html`<textarea rows="3" placeholder="Your answer" value=${ans} onInput=${e => setAns(e.currentTarget.value)} /><div class="form-actions">
+      <${Act} cls="primary" onClick=${async () => { const v = ans.trim(); if (v) await send(v); }}>Answer<//></div>` : ""}</section>`;
 }

@@ -1,8 +1,8 @@
 // Live's inspector (D1095): its building blocks -- the state pill, a step's row, a fold that stays as the
 // person left it, a block of fields, a text that keeps its place (and follows its end while it grows).
 
-import { html, useLayoutEffect, useRef } from "../../view.js";
-import { dur } from "../../format.js";
+import { html, useEffect, useLayoutEffect, useRef, useState } from "../../view.js";
+import { bytes, dur } from "../../format.js";
 import { restoreScroll, scrollState } from "../../scroll.js";
 import { colorOf, running, stateOf, summaryOf, taskLabel, tidyCommand } from "./parts.js";
 
@@ -48,6 +48,38 @@ export function Pre({ k, text, cls = "val", mem, follow = true }) {
   }, []);
   useLayoutEffect(() => { if (follow && end.current && visible(ref.current)) ref.current.scrollTop = ref.current.scrollHeight; });
   return html`<pre class=${cls} data-k=${k} ref=${ref}>${text}</pre>`;
+}
+
+const SLICE = 65536;
+/** D1098: a tool's stdout or stderr -- the end its task kept (`text`), or, when its run wrote it whole (`file`,
+    `size` bytes), read from that file: its last part first, each earlier part as one scrolls to the top, the
+    place kept as it comes. `read(file, start, size)` reads a slice (env.output). */
+export function Stream({ k, text, file, size, read, mem, cls = "val astream-body" }) {
+  const ref = useRef(null), [got, setGot] = useState(null), busy = useRef(false), grew = useRef(null);
+  useEffect(() => {
+    if (!file || !read) return;
+    let live = true;
+    read(file, -1, SLICE).then(g => { if (live) setGot({ start: g.start, text: g.text }); }, () => {});
+    return () => { live = false; };
+  }, [file]);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    if (grew.current != null) { el.scrollTop += el.scrollHeight - grew.current; grew.current = null; return; }   // what came above: the place kept
+    const saved = mem?.scroll.get(k), place = () => { if (saved) restoreScroll(el, saved, { follow: true }); else el.scrollTop = el.scrollHeight; };   // read at its end: at the new end
+    if (visible(el)) place(); else el.closest("details")?.addEventListener("toggle", () => { if (visible(el)) place(); }, { once: true });   // in a closed fold: once opened
+  }, [got]);
+  const scrolled = e => {
+    const el = e.currentTarget;
+    if (mem) mem.scroll.set(k, scrollState(el));
+    if (!got || got.start <= 0 || busy.current || el.scrollTop > 40) return;
+    busy.current = true;
+    const from = Math.max(0, got.start - SLICE);
+    read(file, from, got.start - from).then(g => { grew.current = el.scrollHeight; setGot(x => ({ start: g.start, text: g.text + x.text })); }, () => {})
+      .finally(() => { busy.current = false; });
+  };
+  if (!file || !read) return html`<${Pre} k=${k} cls=${cls} text=${text} mem=${mem} />`;
+  return html`<pre class=${cls} data-k=${k} ref=${ref} onScroll=${scrolled}>${got && got.start > 0 ? html`<span class="muted stream-earlier">${`… ${bytes(got.start)} earlier of ${bytes(size)}: scroll up for more\n`}</span>` : ""}${got ? got.text : text}</pre>`;
 }
 
 /** A task's fields as name and value -- a long value its own text; the Input's command as a person reads it (D976). */

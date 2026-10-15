@@ -220,6 +220,14 @@ def attach(run_dir: str) -> Journal:
     return j
 
 
+def outputs_dir() -> str | None:
+    """D1098: where this process's run keeps the whole output of its tools (`outputs/` beside its journal), the
+    journal holding only each one's end; None when no run is attached."""
+    with _ATTACHING:
+        j = next(iter(_ATTACHED.values()), None)
+    return os.path.join(os.path.dirname(j.path), "outputs") if j else None
+
+
 def read_events(path: str, offset: int = 0, limit: int | None = None) -> tuple[list[dict[str, Any]], int]:
     """The events from byte `offset` on (at most `limit` bytes of them, D759: a day's journal is
     read in slices, not whole) and the offset after the last whole line (a follower calls again

@@ -1,12 +1,14 @@
-// Live (D1095): the task model it reads -- the journal's events and the live state, applied as looptree.js
-// builds them (D752), from the loop's one stream (D917) or a past start's retained journal.
+// Live (D1095): the task model it reads -- the journal's events and the live state, applied by events.js (D752),
+// from the loop's one stream (D917) or a past start's retained journal.
+
+import * as LT from "./events.js";
 
 const WINDOW = 30;                 // D759: a day-long start opens on its last passes; "Earlier passes" loads the rest
 
 /** `port.on(kind, callbacks, options)`: the stream's (store.js). Returns the model, the run's end as the page
     knows it (D928: a journal cut short has its open tasks interrupted), and the earlier passes to load. */
 export function journal(port) {
-  const LT = window.FluxLoopTree, model = LT.model();
+  const model = LT.model();
   let lastLive = null, endedAt = null;
   const onEvent = e => {
     LT.apply(model, e);

@@ -2,9 +2,9 @@
 // choice (P9), a critic (P10), any other task's steps -- and the quiet steps it took (D1047).
 
 import { html } from "../../view.js";
-import { dur } from "../../format.js";
+import { bytes, dur } from "../../format.js";
 import { WORK_COLORS as COLORS, phaseKind } from "../../work_style.js";
-import { Block, Fold, Pre, StepRow } from "./bits.js";
+import { Block, Fold, Pre, StepRow, Stream } from "./bits.js";
 import { bestOf, candidateOf, cell, colorOf, dictsOf, failingOf, fieldsOf, fmt, isTool, linesOf, meanOf, measured, metricsOf, notReached,
   running, stdoutOf, taskLabel, tidyCommand, usualOf } from "./parts.js";
 
@@ -63,8 +63,10 @@ export function ToolBody({ n, env, mem }) {
   }
   return html`<div class="task-inspector alt-tool">${top}
     <${Fold} k="input" title="Input" summary=${tidyCommand(String(p.command || ""), p.folder).split("\n")[0]} mem=${mem}><${Block} title="Input" obj=${p} mem=${mem} /><//>
-    ${out && !running(n) ? html`<${Fold} k="stdout" title="stdout" summary=${lineCount(out)} mem=${mem}><${Pre} k="stdout" cls="val astream-body" text=${out} mem=${mem} /><//>` : ""}
-    ${err ? html`<${Fold} k="stderr" title="stderr" summary=${lineCount(err)} mem=${mem}><section class=${`astream ${n.failed ? "err" : ""}`}><${Pre} k="stderr" cls="val astream-body" text=${err} mem=${mem} /></section><//>` : ""}</div>`;
+    ${out && !running(n) ? html`<${Fold} k="stdout" title="stdout" summary=${f["stdout file"] ? `${bytes(f["stdout bytes"])} in all` : lineCount(out)} mem=${mem}>
+      <${Stream} k="stdout" text=${out} file=${f["stdout file"]} size=${f["stdout bytes"]} read=${env.output} mem=${mem} /><//>` : ""}
+    ${err ? html`<${Fold} k="stderr" title="stderr" summary=${f["stderr file"] ? `${bytes(f["stderr bytes"])} in all` : lineCount(err)} mem=${mem}><section class=${`astream ${n.failed ? "err" : ""}`}>
+      <${Stream} k="stderr" text=${err} file=${f["stderr file"]} size=${f["stderr bytes"]} read=${env.output} mem=${mem} /></section><//>` : ""}</div>`;
 }
 
 /** A search: the point it proposed (D1094: how much of the space -- "point 1 of 4") and that candidate's way through the pass. */

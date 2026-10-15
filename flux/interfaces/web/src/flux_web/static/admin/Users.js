@@ -14,30 +14,32 @@ import { SortableTable } from "../components/SortableTable.js";
 
 /** D818: a one-time link to choose a password -- an invitation, or a reset; copied, or selected to copy. */
 function LinkBox({ name, url, kind }) {
-  const copy = async e => {
-    try { await navigator.clipboard.writeText(url); toast("Copied", "ok"); } catch (_) { e.currentTarget.closest(".row").querySelector("input").select(); toast("Selected: copy it", "info"); }
+  const field = useRef(null);
+  const copy = async () => {
+    try { await navigator.clipboard.writeText(url); toast("Copied", "ok"); } catch (_) { field.current.select(); toast("Selected: copy it", "info"); }
   };
   return html`<div class="stack"><p>${kind === "invite" ? `Send ${name} this link: it lets them choose their password and log in. Until then the account cannot be used.`
       : `Send ${name} this link: it lets them choose a new password; their current one works until then, and their sessions end when it is used.`}</p>
-    <div class="row"><input value=${url} readonly class="mono" style="width:100%" id="invite-url" /><button type="button" class="small" onClick=${copy}>Copy</button></div>
+    <div class="row"><input value=${url} readonly class="mono" style="width:100%" id="invite-url" ref=${field} /><button type="button" class="small" onClick=${copy}>Copy</button></div>
     <p class="muted small">Single use, valid a week, shown once.</p></div>`;
 }
 const linkDialog = (name, token, kind) => dialog(kind === "invite" ? `Invite ${name}` : `${name}: a password reset link`,
   html`<${LinkBox} name=${name} url=${`${location.origin}${location.pathname}#/invite/${token}`} kind=${kind} />`, [["Done", true, "primary"]]);
 
 const GroupSelect = ({ groups, value, label, onChange = null }) => html`<select aria-label=${label} onChange=${onChange}>${groups.map(g =>
-  html`<option value=${g.id} selected=${g.id === value}>${g.name + (g.admin ? " (server admin)" : "")}</option>`)}</select>`;
+  html`<option value=${g.id} selected=${String(g.id) === String(value)}>${g.name + (g.admin ? " (server admin)" : "")}</option>`)}</select>`;
 
 /** A user's permissions, in a dialog: theirs to have (a server admin's group has them all). */
-function Permissions({ u, catalog }) {
+function Permissions({ u, catalog, v, set }) {
   return html`<div class="stack"><p>${u.role === "admin" ? `Members of ${u.group} have full server administration permissions.`
       : "These permissions belong to this user. Access to other people's loops applies within their group; individual sharing also grants access across groups."}</p>
-    ${Object.entries(catalog.permissions).map(([key, label]) => html`<label class="check"><input type="checkbox" data-permission=${key} checked=${u.permissions[key]} disabled=${u.role === "admin"} />${label}</label>`)}
+    ${Object.entries(catalog.permissions).map(([key, label]) => html`<label class="check"><input type="checkbox" data-permission=${key} checked=${!!v[key]} disabled=${u.role === "admin"}
+      onChange=${e => set({ [key]: e.currentTarget.checked })} />${label}</label>`)}
     <p class="muted small">Editing does not grant permission to run, share, delete or transfer other members' loops. Running uses the loop owner's credentials and limits.</p></div>`;
 }
 const editPermissions = async (u, catalog) => {
-  const choice = await dialog(`${u.name}'s permissions`, html`<${Permissions} u=${u} catalog=${catalog} />`, [["Cancel", null],
-    ...(u.role === "admin" ? [] : [["Save", f => Object.fromEntries([...f.querySelectorAll("[data-permission]")].map(i => [i.dataset.permission, i.checked])), "primary"]])]);
+  const choice = await dialog(`${u.name}'s permissions`, ({ v, set }) => html`<${Permissions} u=${u} catalog=${catalog} v=${v} set=${set} />`, [["Cancel", null],
+    ...(u.role === "admin" ? [] : [["Save", v => Object.fromEntries(Object.keys(catalog.permissions).map(k => [k, !!v[k]])), "primary"]])], { ...u.permissions });
   if (!choice) return;
   await api(`/users/${enc(u.name)}`, { method: "PATCH", body: { permissions: choice } });
   u.permissions = choice; toast(`${u.name}'s permissions saved`, "ok");
@@ -55,19 +57,18 @@ function Limit({ u, limits, def }) {
     aria-label=${`${u.name}'s running limit`} ...${bound(v, setV)} />${mark}</span></td>`;
 }
 
-/** A user added: read from its fields when Add is pressed. */
+/** A user added. */
 function AddUser({ groups }) {
-  const initial = groups.find(g => g.builtin === "internal"), row = useRef(null);
+  const [name, setName] = useState(""), [pw, setPw] = useState(""), [group, setGroup] = useState(() => groups.find(g => g.builtin === "internal")?.id ?? groups[0]?.id);
   const add = async () => {
-    const [name, pw] = [...row.current.querySelectorAll("input")].map(x => x.value), group = row.current.querySelector("select").value;
     const got = await api("/users", { method: "POST", body: { name, password: pw || null, group_id: +group } });
     if (got.token) await linkDialog(got.ok, got.token, got.kind);           // D818: an invitation to send
     else toast(`${name} added`, "ok");
     route();
   };
-  return html`<div class="row add-user" ref=${row}><input placeholder="name" autocomplete="off" data-lpignore="true" />
-    <input type="password" autocomplete="new-password" placeholder="password (empty: send an invitation link)" style="min-width:280px" />
-    <${GroupSelect} groups=${groups} value=${initial?.id} label="Group of the new user" />
+  return html`<div class="row add-user"><input placeholder="name" autocomplete="off" data-lpignore="true" ...${bound(name, setName)} />
+    <input type="password" autocomplete="new-password" placeholder="password (empty: send an invitation link)" style="min-width:280px" ...${bound(pw, setPw)} />
+    <${GroupSelect} groups=${groups} value=${group} label="Group of the new user" onChange=${e => setGroup(e.currentTarget.value)} />
     <${Act} cls="primary" onClick=${add}>Add user<//></div>`;
 }
 
@@ -112,22 +113,28 @@ export function Users({ users, use, res, catalog }) {
     <p class="muted small">Server access is set for the whole group on the Groups tab. Loop creation, execution and sharing are controlled by Permissions.</p><//>`;
 }
 
-const AccessSelect = ({ value, label, id = null, onChange = null }) => html`<select aria-label=${label} id=${id} onChange=${onChange}>
+const AccessSelect = ({ value, label, id = null, disabled = false, onChange = null }) => html`<select aria-label=${label} id=${id} disabled=${disabled} onChange=${onChange}>
   <option value="" selected=${value == null} disabled>${value == null && !id ? "Keep existing access" : "Choose server access…"}</option>
   <option value="server" selected=${value === true}>Use server settings</option><option value="own" selected=${value === false}>Own settings only</option></select>`;
 
+/** A group's server access, saved as it is chosen; a refusal puts the choice back. */
+function GroupAccess({ g }) {
+  const [v, setV] = useState(g.server_access), [busy, setBusy] = useState(false);
+  const change = async e => {
+    const to = e.currentTarget.value === "server";
+    setV(to); setBusy(true);
+    try { await api(`/groups/${g.id}`, { method: "PATCH", body: { server_access: to } }); toast(`Server access saved for ${g.name}`, "ok"); route(); }
+    catch (x) { setV(g.server_access); toast(x.message, "bad"); }
+    finally { setBusy(false); }
+  };
+  return html`<${AccessSelect} value=${v} label=${`Server access for ${g.name}`} disabled=${busy} onChange=${change} />`;
+}
+
 export function Groups({ catalog }) {
   const [name, setName] = useState(""), [access, setAccess] = useState("");
-  const setServer = async (g, e) => {
-    const select = e.currentTarget;
-    select.disabled = true;
-    try { await api(`/groups/${g.id}`, { method: "PATCH", body: { server_access: select.value === "server" } }); toast(`Server access saved for ${g.name}`, "ok"); route(); }
-    catch (x) { select.value = g.server_access == null ? "" : g.server_access ? "server" : "own"; toast(x.message, "bad"); }
-    finally { select.disabled = false; }
-  };
   const rename = async g => {
-    const renamed = await dialog("Rename group", html`<label class="stack">Group name<input id="group-rename" value=${g.name} maxlength="60" /></label>`,
-      [["Cancel", null], ["Rename", f => f.querySelector("input").value.trim(), "primary"]]);
+    const renamed = await dialog("Rename group", ({ v, set }) => html`<label class="stack">Group name<input id="group-rename" value=${v.name} maxlength="60" onInput=${e => set({ name: e.currentTarget.value })} /></label>`,
+      [["Cancel", null], ["Rename", v => v.name.trim(), "primary"]], { name: g.name });
     if (!renamed) return;
     await api(`/groups/${g.id}`, { method: "PATCH", body: { name: renamed } }); route();
   };
@@ -142,7 +149,7 @@ export function Groups({ catalog }) {
       <th title="Inherit server and machine model, agent and environment settings, or use members' own settings only">Server access</th><th>Actions</th></tr></thead>
       <tbody>${catalog.groups.map(g => html`<tr data-group=${g.id}><td><div class="group-label"><span class="strong">${g.name}</span>
           ${g.admin ? html`<span class="pill small" title="Full server administration powers, retained when this group is renamed">Server admin</span>` : ""}</div></td>
-        <td class="num mono">${String(g.members)}</td><td><${AccessSelect} value=${g.server_access} label=${`Server access for ${g.name}`} onChange=${e => setServer(g, e)} /></td>
+        <td class="num mono">${String(g.members)}</td><td><${GroupAccess} g=${g} /></td>
         <td><${Act} cls="small" title=${`Rename ${g.name}`} onClick=${() => rename(g)}>Rename…<//></td></tr>`)}</tbody></table>
     <div class="group-create"><h3>New group</h3><div class="row">
       <label class="stack" for="group-name">Group name<input id="group-name" placeholder="Group name" maxlength="60" autocomplete="off" ...${bound(name, setName)} /></label>

@@ -71,6 +71,7 @@ export function Talk({ name, qs, mine, canAsk, steer, steerOpen, open: shown = t
   const [list, setList] = useState(null), [offline, setOffline] = useState(false), [reply, setReply] = useState(null), [sending, setSending] = useState(false);
   const [folds, setFolds] = useState({ collapsed: new Set(), expanded: new Set() }), [who, setWho] = useState(""), [replyAuthor, setReplyAuthor] = useState(null);
   const history = useRef(null), q = useRef(null), open = useRef(new Map()).current, timer = useRef(null), alive = useRef(true);
+  const [draft, setDraft] = useState("");                     // what is being written, kept while the drawer is closed
   const read = async () => {
     clearTimeout(timer.current);
     let got;
@@ -97,14 +98,14 @@ export function Talk({ name, qs, mine, canAsk, steer, steerOpen, open: shown = t
   if (!list) return html`${offline ? html`<p class="ask-offline muted small">Reconnecting to the server…</p>` : ""}<${Skeleton} lines=${4} />`;
   const busy = list.some(a => a.running), current = list.find(a => a.id === reply) || null;
   const send = async () => {
-    const text = q.current.value.trim();
+    const text = draft.trim();
     if (!canAsk || busy || sending) return;
     if (!text) { q.current.focus(); return; }
     if (!who) { toast("No agent or model is offered for Ask on this server: an admin sets it in Admin › Agents and models", "warn"); return; }   // D1025
     setSending(true);
     try {
       const sent = await api(`/apps/${enc(name)}/asks${qs}`, { method: "POST", body: { question: text, author: who, parent_id: current?.id || null } });
-      if (q.current.value.trim() === text) q.current.value = "";
+      setDraft(d => d.trim() === text ? "" : d);
       setReply(sent.id);
       await read();
       history.current?.querySelector(`[data-ask-turn="${sent.id}"]`)?.scrollIntoView({ block: "nearest" });
@@ -127,7 +128,7 @@ export function Talk({ name, qs, mine, canAsk, steer, steerOpen, open: shown = t
       ${ordered.length ? ordered.map((turns, i) => html`<${Thread} key=${turns[0].thread_id || turns[0].id} turns=${turns} folded=${folded(turns, i)} t=${t} open=${open} />`) : html`<${Card}><${Empty} text="No conversations yet." /><//>`}</div>
     ${canAsk ? html`<div class="ask-compose"><div class="ask-compose-head"><span class="ask-reply-context" title=${current?.question}>${current ? `Reply to: ${current.question}` : "New conversation"}</span>
         ${current ? html`<button type="button" class="small ask-new" disabled=${sending} onClick=${() => { setReply(null); requestAnimationFrame(() => q.current?.focus()); }}>New chat</button>` : ""}</div>
-      <textarea rows="2" id="ask-q" aria-label="Message" placeholder="Ask about this loop…" ref=${q} onKeyDown=${e => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && !e.isComposing) { e.preventDefault(); send(); } }} />
+      <textarea rows="2" id="ask-q" aria-label="Message" placeholder="Ask about this loop…" ref=${q} value=${draft} onInput=${e => setDraft(e.currentTarget.value)} onKeyDown=${e => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && !e.isComposing) { e.preventDefault(); send(); } }} />
       <div class="ask-compose-actions"><label class="ask-agent-picker">Agent<${AgentPick} id="ask-who" ask value=${replyAuthor} onPick=${setWho} /></label>
         <${Act} cls="primary ask-send" title="Ctrl+Enter or ⌘+Enter to send" disabled=${busy} onClick=${send}>${busy ? "Answering…" : "Send"}<//></div></div>` : ""}`;
 }

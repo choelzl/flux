@@ -15,16 +15,12 @@ import { ViewerFrame, ViewerTools, useViewer } from "../viewer.js";
 import { ActionsMenu, FileList, MetaLine, PathCrumbs, baseOf, joinP, parentOf } from "./parts.js";
 
 
-/** A name or a folder asked for, the path it makes shown as it is typed. */
-function AskPath({ name, label, value, pathOf }) {
-  const [v, setV] = useState(value);
-  return html`<div><label class="stack">${label}<input value=${v} autocomplete="off" spellcheck="false" class="mono" style="width:100%"
-      onInput=${e => setV(e.currentTarget.value)} onKeyDown=${e => { if (e.key === "Enter") e.currentTarget.closest("dialog").querySelector("button.primary").click(); }} /></label>
-    <p class="small muted path-preview">It becomes <span class="mono">${`${name}/${pathOf(v.trim())}`}</span></p></div>`;
-}
-const askPath = (name, title, label, value, ok, pathOf) => {
-  return dialog(title, html`<${AskPath} name=${name} label=${label} value=${value} pathOf=${pathOf} />`, [["Cancel", null], [ok, f => f.querySelector("input").value.trim(), "primary"]]);
-};
+/** A name or a folder asked for, the path it makes shown as it is typed; Enter asks. */
+const askPath = (name, title, label, value, ok, pathOf) => dialog(title, ({ v, set, submit }) => html`<div><label class="stack">${label}
+    <input value=${v.path} autocomplete="off" spellcheck="false" class="mono" style="width:100%"
+      onInput=${e => set({ path: e.currentTarget.value })} onKeyDown=${e => { if (e.key === "Enter") submit(); }} /></label>
+    <p class="small muted path-preview">It becomes <span class="mono">${`${name}/${pathOf(v.path.trim())}`}</span></p></div>`,
+  [["Cancel", null], [ok, v => v.path.trim(), "primary"]], { path: value });
 
 /** The selected item and what may be done with it: `open(path, dir)`, the item's actions, the open text's draft. */
 function useFiles(ctx, refreshList = async () => {}) {

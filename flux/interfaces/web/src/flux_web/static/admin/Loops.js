@@ -9,19 +9,16 @@ import { route } from "../app.js";
 import { Act } from "../components/Act.js";
 import { LoopsBrowser } from "../loops/Table.js";
 
-/** A notification to every user, or to those ticked. */
-function NotifyForm({ users }) {
-  const [all, setAll] = useState(true);
-  return html`<div class="stack"><textarea rows="3" placeholder="The message" style="width:100%" />
-    <div class="row"><select>${["info", "warn", "bad"].map(k => html`<option value=${k}>${k === "info" ? "information" : k === "warn" ? "warning" : "alert"}</option>`)}</select>
-      <label class="check"><input type="checkbox" class="notify-all" checked=${all} onChange=${e => setAll(e.currentTarget.checked)} />everyone</label></div>
-    <div class="notify-who" hidden=${all}>${users.map(u => html`<label class="check"><input type="checkbox" value=${u} />${u}</label>`)}</div></div>`;
-}
+/** A notification to every user, or to those ticked: `v` {text, kind, all, to}. */
+const NotifyForm = ({ users, v, set }) => html`<div class="stack"><textarea rows="3" placeholder="The message" style="width:100%" value=${v.text} onInput=${e => set({ text: e.currentTarget.value })} />
+    <div class="row"><select value=${v.kind} onChange=${e => set({ kind: e.currentTarget.value })}>${["info", "warn", "bad"].map(k => html`<option value=${k}>${k === "info" ? "information" : k === "warn" ? "warning" : "alert"}</option>`)}</select>
+      <label class="check"><input type="checkbox" class="notify-all" checked=${v.all} onChange=${e => set({ all: e.currentTarget.checked })} />everyone</label></div>
+    <div class="notify-who" hidden=${v.all}>${users.map(u => html`<label class="check"><input type="checkbox" value=${u} checked=${v.to.includes(u)}
+      onChange=${e => set({ to: e.currentTarget.checked ? [...v.to, u] : v.to.filter(x => x !== u) })} />${u}</label>`)}</div></div>`;
 export async function notifyDialog() {
   const users = (await api("/admin/usage").catch(() => [])).map(u => u.user);
-  const read = f => { const all = f.querySelector(".notify-all").checked;
-    return { text: f.querySelector("textarea").value, to: all ? [] : [...f.querySelectorAll(".notify-who input:checked")].map(i => i.value), kind: f.querySelector("select").value, all }; };
-  const got = await dialog("Send a notification", html`<${NotifyForm} users=${users} />`, [["Cancel", null], ["Send", read, "primary"]]);
+  const got = await dialog("Send a notification", ({ v, set }) => html`<${NotifyForm} users=${users} v=${v} set=${set} />`,
+    [["Cancel", null], ["Send", v => ({ ...v, to: v.all ? [] : v.to }), "primary"]], { text: "", kind: "info", all: true, to: [] });
   if (!got) return;
   const { text, to, kind, all } = got;
   if (!text.trim() || (!all && !to.length)) { toast("Nothing sent: a message and someone to send it to", "warn"); return; }

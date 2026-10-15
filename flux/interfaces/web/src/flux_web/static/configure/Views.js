@@ -68,13 +68,13 @@ export async function cloneDialog(name, owner) {
   const qs = owner ? `?owner=${enc(owner)}` : "";
   const permissions = me.role === "admin" ? (await api(`/apps/${enc(name)}/env${qs}`)).advanced : {};
   const keep = hasPermissions(permissions);
-  const body = html`<div class="stack"><label class="stack">New loop name<input value=${`${name}-2`} class="mono" id="clone-to" autocomplete="off" /></label>
-    <label class="check"><input type="checkbox" id="clone-wb" />with its workbench (the agents' notes and tools)</label>
+  const body = ({ v, set }) => html`<div class="stack"><label class="stack">New loop name<input value=${v.to} class="mono" id="clone-to" autocomplete="off" onInput=${e => set({ to: e.currentTarget.value })} /></label>
+    <label class="check"><input type="checkbox" id="clone-wb" checked=${v.workbench} onChange=${e => set({ workbench: e.currentTarget.checked })} />with its workbench (the agents' notes and tools)</label>
     <p class="muted small">${"Copies the problem, not its runs, sharing or environment variables. " + (keep ? "Special permissions reset unless you keep them below. "
       : "Admin overrides (mounts, sandbox exemptions and network settings) are not copied. ") + "The clone uses your account and server defaults, with any permissions you choose to keep."}</p>
-    <${PermissionChoice} settings=${permissions} id="clone-keep-permissions" /></div>`;
+    <${PermissionChoice} settings=${permissions} id="clone-keep-permissions" keep=${v.keep_permissions} set=${on => set({ keep_permissions: on })} /></div>`;
   const go = await dialog(`Clone ${owner && owner !== me.name ? owner + "'s " : ""}${name}`, body, [["Cancel", null],
-    ["Clone", f => ({ to: f.querySelector("#clone-to").value.trim(), workbench: f.querySelector("#clone-wb").checked, keep_permissions: !!f.querySelector("#clone-keep-permissions")?.checked }), "primary"]]);
+    ["Clone", v => ({ ...v, to: v.to.trim() }), "primary"]], { to: `${name}-2`, workbench: false, keep_permissions: false });
   if (!go || !go.to) return;
   const got = await api(`/apps/${enc(name)}/clone${qs}`, { method: "POST", body: go });
   toast(`${got.name}: cloned`, "ok");
@@ -103,23 +103,24 @@ async function withFiles(url, fd, items) {
 /** A new loop whose problem an agent writes (D704): a name, what it should do, the files to read. D912: the one draft
     -- its name and statement are what the agent is told, its staged files what it reads. */
 export function NewByAgent({ draft = null, onDraft = () => {}, done }) {
-  const box = useRef(null), who = useRef("");
-  const state = draft ? (draft.state = draft.state || window.FluxCrafter?.base() || {}) : {};
+  const who = useRef(""), own = useRef({}), nameField = useRef(null), askField = useRef(null), [, redraw] = useState(0);
+  const state = draft ? (draft.state = draft.state || window.FluxCrafter?.base() || {}) : own.current;     // its name and statement: the draft's
   const items = useMemo(() => draft ? [...draft.staged].map(([path, x]) => ({ path, src: x, file: x.file || new File([x.text], path.split("/").pop(), { type: "text/plain" }) })) : [], []);
   const keep = () => { if (!draft) return; draft.staged.clear(); for (const g of items) draft.staged.set(g.path, g.src || { file: g.file }); onDraft(); };
   const write = async () => {
-    const name = box.current.querySelector("#ag-name"), ask = box.current.querySelector("#ag-ask");
-    if (!name.value.trim()) { toast("Name the loop.", "warn"); name.focus(); return; }
-    if (!ask.value.trim()) { toast("Say what the loop should do.", "warn"); ask.focus(); return; }
-    const fd = new FormData(); fd.append("name", name.value.trim()); fd.append("prompt", ask.value); fd.append("author", who.current);
+    const name = (state.id || "").trim(), ask = state.statement || "";
+    if (!name) { toast("Name the loop.", "warn"); nameField.current.focus(); return; }
+    if (!ask.trim()) { toast("Say what the loop should do.", "warn"); askField.current.focus(); return; }
+    const fd = new FormData(); fd.append("name", name); fd.append("prompt", ask); fd.append("author", who.current);
     const r = await withFiles("/apps/new-by-agent", fd, items);
     done();                                                      // D912: the agent writes the loop the draft was
-    toast(r.ok, "ok"); location.hash = `#/app/${enc(name.value.trim())}`;
+    toast(r.ok, "ok"); location.hash = `#/app/${enc(name)}`;
   };
-  return html`<${Card}><div ref=${box}><p class="muted">An agent writes the problem and its files; nothing runs until you start it.</p>
-    <div class="row"><label class="stack" style="flex:1">Name<input placeholder="my_adder" style="width:100%" id="ag-name" value=${state.id || ""} onInput=${e => { state.id = e.currentTarget.value; onDraft(); }} /></label>
+  const edit = k => e => { state[k] = e.currentTarget.value; onDraft(); redraw(n => n + 1); };
+  return html`<${Card}><div><p class="muted">An agent writes the problem and its files; nothing runs until you start it.</p>
+    <div class="row"><label class="stack" style="flex:1">Name<input placeholder="my_adder" style="width:100%" id="ag-name" value=${state.id || ""} ref=${nameField} onInput=${edit("id")} /></label>
       <label class="stack">Agent<${AgentPick} id="ag-who" onPick=${v => { who.current = v; }} /></label></div>
-    <label class="stack">What should the loop do?<textarea rows="6" id="ag-ask" value=${state.statement || ""} onInput=${e => { state.statement = e.currentTarget.value; onDraft(); }}
+    <label class="stack">What should the loop do?<textarea rows="6" id="ag-ask" value=${state.statement || ""} ref=${askField} onInput=${edit("statement")}
       placeholder="What the loop should make, and what matters: e.g. a signed 8x8 multiplier in SystemVerilog, the smallest that makes 1 GHz placed on ASAP7, exact for every input." /></label>
     <h3>Files it should read</h3><${AttachBox} items=${items} onChange=${keep} />
     <div class="form-actions"><${Act} cls="primary" onClick=${write}>Write the problem<//></div></div><//>`;
@@ -127,7 +128,7 @@ export function NewByAgent({ draft = null, onDraft = () => {}, done }) {
 
 /** An agent revising an existing loop's problem as told (D704); its progress, then the diff. */
 export function ReviseByAgent({ name }) {
-  const ask = useRef(null), who = useRef(""), items = useMemo(() => [], []), [st, setSt] = useState(null), [n, setN] = useState(0);
+  const ask = useRef(null), who = useRef(""), items = useMemo(() => [], []), [st, setSt] = useState(null), [n, setN] = useState(0), [text, setText] = useState("");
   useEffect(() => {
     let timer = null, live = true;
     const poll = async () => {
@@ -140,8 +141,8 @@ export function ReviseByAgent({ name }) {
     return () => { live = false; clearTimeout(timer); };
   }, [n]);
   const revise = async () => {
-    if (!ask.current.value.trim()) { toast("Say what should change.", "warn"); ask.current.focus(); return; }
-    const fd = new FormData(); fd.append("prompt", ask.current.value); fd.append("author", who.current);
+    if (!text.trim()) { toast("Say what should change.", "warn"); ask.current.focus(); return; }
+    const fd = new FormData(); fd.append("prompt", text); fd.append("author", who.current);
     for (const g of items) fd.append("files", g.file, g.path);
     toast((await api(`/apps/${enc(name)}/author`, { method: "POST", form: fd })).ok, "ok");
     setN(k => k + 1);
@@ -149,7 +150,7 @@ export function ReviseByAgent({ name }) {
   const stop = async () => { toast((await api(`/apps/${enc(name)}/author/stop`, { method: "POST" })).ok, "ok"); };
   return html`<${Card}><p class="muted">An agent edits the problem as you say; the record stays. The changes show below.</p>
       <div class="row"><label class="stack">Agent<${AgentPick} id="ag-who" onPick=${v => { who.current = v; }} /></label></div>
-      <label class="stack">What should change?<textarea rows="5" id="ag-ask" ref=${ask} placeholder="What should change: e.g. measure at 1.2 GHz too, add a check for the carry out, keep everything else." /></label>
+      <label class="stack">What should change?<textarea rows="5" id="ag-ask" ref=${ask} value=${text} onInput=${e => setText(e.currentTarget.value)} placeholder="What should change: e.g. measure at 1.2 GHz too, add a check for the carry out, keep everything else." /></label>
       <h3>Files it should read</h3><${AttachBox} items=${items} />
       <div class="form-actions"><${Act} cls="primary" onClick=${revise}>Revise the problem<//></div><//>
     <div><${AuthoringCard} name=${name} st=${st} onStop=${stop} /></div>`;

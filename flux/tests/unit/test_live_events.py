@@ -1,0 +1,95 @@
+"""D752, D1095: Live's task model (live/events.js) replayed from journals under node, as the page replays them --
+a recorded sweep, a new start, a question, a tool's exit, an agent's time limit, a journal cut short."""
+
+import base64
+import json
+import shutil
+import subprocess
+from pathlib import Path
+
+import pytest
+
+HERE = Path(__file__).parent
+EVENTS = HERE.parents[1] / "interfaces/web/src/flux_web/static/live/events.js"
+FIX = HERE / "fixtures/looptree"
+pytestmark = pytest.mark.skipif(shutil.which("node") is None, reason="node is not on PATH")
+
+
+def replay(events: str, body: str):
+    """`body` (JS, with `LT` the module and `m` the model the journal on stdin was applied to) writes its answer."""
+    uri = "data:text/javascript;base64," + base64.b64encode(EVENTS.read_bytes()).decode()
+    js = ("import(process.argv[1]).then(LT => { const m = LT.model(), said = [];\n"
+          "for (const l of require('fs').readFileSync(0, 'utf8').split('\\n')) if (l.trim()) { const r = LT.apply(m, JSON.parse(l)); if (r.question) said.push(r.question); }\n"
+          + body + "\n});")
+    r = subprocess.run(["node", "-e", js, uri], input=events, capture_output=True, text=True, timeout=60)
+    assert r.returncode == 0, r.stderr
+    return json.loads(r.stdout)
+
+
+def lines(ev: list[dict]) -> str:
+    return "".join(json.dumps(e) + "\n" for e in ev)
+
+
+def test_a_recorded_sweep_replays_pass_by_pass_every_task_ended():
+    got = replay((FIX / "sweep.jsonl").read_text(), "process.stdout.write(JSON.stringify({passes: m.marks.filter(k => k.name === 'pass').map(k => k.n),"
+                 " open: [...m.nodes.values()].filter(n => n.t1 == null).length, tasks: m.nodes.size, roots: m.roots.length}));")
+    assert got["passes"] == [2, 3] and got["open"] == 0 and got["tasks"] > got["roots"] > 0, got
+
+
+def test_a_new_start_begins_afresh_and_a_question_is_handed_on():
+    events = (FIX / "sweep.jsonl").read_text() + lines([{"t": 99.0, "ev": "hello", "pid": 2},
+                                                       {"t": 100.0, "ev": "mark", "name": "question", "why": json.dumps({"q": "which width?"})}])
+    got = replay(events, "process.stdout.write(JSON.stringify({tasks: m.nodes.size, marks: m.marks.length, said}));")
+    assert got == {"tasks": 0, "marks": 0, "said": [{"q": "which width?"}]}
+
+
+@pytest.mark.parametrize("exit_status, failed", [(0, False), (1, True), ("timed out", True)])
+def test_a_tools_exit_status_decides_whether_it_failed(exit_status, failed):
+    """Debug stderr does not fail an exit-0 tool; nonzero exits and timeouts fail it."""
+    ev = [{"t": 0, "ev": "hello", "pid": 1}, {"t": 1, "ev": "mark", "name": "pass", "why": json.dumps({"n": 1, "explore": 0})},
+          {"t": 2, "ev": "start", "id": 1, "parent": None, "name": "DSE: batch", "why": "", "params": {}},
+          {"t": 3, "ev": "start", "id": 2, "parent": 1, "name": "tool:python3", "why": "generate x=1", "params": {}},
+          {"t": 4, "ev": "end", "id": 2, "name": "", "seconds": 0.1, "failed": False,
+           "output": {"exit": exit_status, "stderr": "DEBUG: testing error handling\n"}},
+          {"t": 5, "ev": "end", "id": 1, "name": "", "seconds": 1, "failed": False, "output": {}}]
+    assert replay(lines(ev), "process.stdout.write(JSON.stringify(!!m.nodes.get(2).failed));") is failed
+
+
+def test_a_journal_cut_short_is_settled_interrupted_once_the_run_ended():
+    """D928: a run killed before its tasks ended leaves them begun in the journal; once the page knows the
+    run is over they are interrupted (failed, at its end) -- and running again should the run go on."""
+    ev = [{"t": 0, "ev": "hello"}, {"t": 1, "ev": "mark", "name": "pass", "why": json.dumps({"n": 1})},
+          {"t": 2, "ev": "start", "id": 1, "parent": None, "name": "DSE: batch", "why": "", "params": {}},
+          {"t": 3, "ev": "start", "id": 2, "parent": 1, "name": "tool:python3", "why": "generate x=1", "params": {}},
+          {"t": 4, "ev": "end", "id": 2, "name": "", "seconds": 1, "failed": False, "output": {}},
+          {"t": 5, "ev": "start", "id": 3, "parent": 1, "name": "tool:python3", "why": "generate x=2", "params": {}}]
+    before, ended, again, early, real = replay(lines(ev), """
+const look = () => [...m.nodes.values()].map(n => [n.id, n.t1 == null, !!n.failed, !!n.interrupted, n.t1 ?? null]);
+const out = [look()];
+LT.settle(m, 9); out.push(look());
+LT.settle(m, null); out.push(look());
+LT.settle(m, 1); out.push(look());                      // an end before them (a start's time): the last event seen
+LT.apply(m, { t: 7, ev: "end", id: 3, seconds: 2, failed: false, output: {} }); out.push(look());
+process.stdout.write(JSON.stringify(out));""")
+    assert before == [[1, True, False, False, None], [2, False, False, False, 4], [3, True, False, False, None]]
+    assert ended == [[1, False, True, True, 9], [2, False, False, False, 4], [3, False, True, True, 9]]
+    assert again == before, "the run goes on: what was settled runs again"
+    assert early == [[1, False, True, True, 5], [2, False, False, False, 4], [3, False, True, True, 5]]
+    assert real[2] == [3, False, False, False, 7], "its own end replaces the settled one"
+
+
+def test_an_agent_stopped_at_its_time_limit_warns_and_a_tool_exit_fails():
+    """D997: exit 124 of an agent is its time limit -- a warning, not a failure; a tool's exit 1 fails."""
+    ev = [{"ev": "start", "id": 1, "name": "agent: claude", "t": 0}, {"ev": "end", "id": 1, "t": 9, "seconds": 9, "output": {"exit": 124}},
+          {"ev": "start", "id": 2, "name": "tool:python3", "t": 9}, {"ev": "end", "id": 2, "t": 10, "seconds": 1, "output": {"exit": 1}}]
+    assert replay(lines(ev), "process.stdout.write(JSON.stringify([...m.nodes.values()].map(n => [n.failed, !!n.timedOut])));") \
+        == [[False, True], [True, False]]
+
+
+def test_the_live_state_fills_running_tasks_and_the_standings():
+    ev = [{"t": 0, "ev": "hello"}, {"t": 1, "ev": "start", "id": 1, "parent": None, "name": "agent: claude", "why": "", "params": {}},
+          {"t": 2, "ev": "start", "id": 2, "parent": None, "name": "tool:x", "why": "", "params": {}},
+          {"t": 3, "ev": "end", "id": 2, "seconds": 1, "output": {}}]
+    got = replay(lines(ev), """LT.applyLive(m, { updates: { 1: { status: "thinking" }, 2: { status: "late" } }, publish: { best: 3 } });
+process.stdout.write(JSON.stringify([m.nodes.get(1).fields, m.nodes.get(2).fields, m.standings.get("best")]));""")
+    assert got == [{"status": "thinking"}, {}, 3], "an ended task keeps its own fields"

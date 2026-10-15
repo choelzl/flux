@@ -99,6 +99,32 @@ def _end(chunks: list[bytes], chars: int = TAIL_CHARS) -> str:
     return text[-chars:]
 
 
+def _keep_whole(binary: str, streams: dict[str, list[bytes]]) -> dict[str, Any]:
+    """D1098: a stream longer than the end the journal keeps (`TAIL_CHARS`) is written whole beside the run's
+    journal -- `<stream> file` (its host path) and `<stream> bytes` for the page to read it in slices. Nothing
+    without a run attached, or when the file cannot be written: the end stays what is said."""
+    from .journal import outputs_dir
+    from .sandbox_paths import host_path
+
+    folder, got = outputs_dir(), {}
+    if not folder:
+        return got
+    stamp = f"{time.time_ns()}-{re.sub(r'[^A-Za-z0-9_.-]+', '_', binary)[:40]}"
+    for k, chunks in streams.items():
+        n = sum(len(c) for c in chunks)
+        if n <= TAIL_CHARS:
+            continue
+        path = os.path.join(folder, f"{stamp}.{k}")
+        try:
+            os.makedirs(folder, exist_ok=True)
+            with open(path, "wb") as fh:
+                fh.writelines(chunks)
+        except OSError:
+            continue
+        got.update({f"{k} file": host_path(path), f"{k} bytes": n})
+    return got
+
+
 def run_tool(cmd: list[str], *, cwd: str | Path | None = None, timeout_s: float,
              env: Mapping[str, str] | None = None, what: str = "",
              error: type[Exception] | None = None, stdin: str | None = None,
@@ -177,14 +203,14 @@ def run_tool(cmd: list[str], *, cwd: str | Path | None = None, timeout_s: float,
                 _end_group(proc)
                 for t in readers:
                     t.join(5)
-                out.update(exit="timed out", stdout=_end(streams["stdout"]), stderr=_end(streams["stderr"]))
+                out.update(exit="timed out", stdout=_end(streams["stdout"]), stderr=_end(streams["stderr"]), **_keep_whole(binary, streams))
                 raise
             except BaseException:                           # an interruption: the tool goes with it
                 _end_group(proc)
                 raise
             # a normal end leaves the group be: its leader reaped, its number could be another's
             run = ToolRun(tuple(cmd), proc.returncode, _decode(streams["stdout"]), _decode(streams["stderr"]))
-            out.update(exit=run.returncode, stdout=run.stdout[-TAIL_CHARS:], stderr=run.stderr[-TAIL_CHARS:])
+            out.update(exit=run.returncode, stdout=run.stdout[-TAIL_CHARS:], stderr=run.stderr[-TAIL_CHARS:], **_keep_whole(binary, streams))
             if judge is not None:                       # D1046: a check's failures, counted in its own task
                 fails = judge(run)
                 out["failing"] = fails

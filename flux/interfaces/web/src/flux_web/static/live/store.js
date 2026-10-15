@@ -219,6 +219,7 @@ export function createStore(ctx) {
   /** What the inspector reads besides the model: a turn's earlier steps from its file, or its transcript. */
   const sources = {
     steps: (file, start, count) => api(`${path}/steps?file=${encodeURIComponent(file)}&start=${start}&count=${count}`),
+    output: (file, start, size) => api(`${path}/output?file=${encodeURIComponent(file)}&start=${start}&size=${size}`),   // D1098
     turnSteps: (t0, t1, agent) => api(`${path}/turn-steps?t0=${t0}&t1=${t1}&agent=${encodeURIComponent(agent)}`),
   };
   return { s, a, view, sources, prepare, load, close, emit, followLog, redraw: now, revalidate: v => { valid = v; }, subscribe: f => { subs.add(f); return () => subs.delete(f); } };

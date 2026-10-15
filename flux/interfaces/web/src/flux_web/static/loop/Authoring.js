@@ -29,7 +29,7 @@ export function AuthoringCard({ name, st, onStop = null }) {
     ${steps.length ? html`<${Conversation} steps=${steps} k=${`author-${name}-${st.started}`} offset=${Math.max(0, (f["steps total"] || steps.length) - steps.length)} live=${running} scroll />`
       : f["tool calls"] ? html`<pre class="val small">${f["tool calls"]}</pre>` : ""}
     ${f.stderr ? html`<details data-author-section="stderr"><summary>Agent stderr</summary><pre class="log small" data-k="author-stderr">${f.stderr}</pre></details>` : ""}
-    ${st.prompt ? html`<details data-author-section="prompt"><summary class="muted">What it was asked</summary><pre class="val small">${st.prompt}</pre></details>` : ""}
+    ${st.prompt ? html`<details key="prompt" data-author-section="prompt"><summary class="muted">What it was asked</summary><pre class="val small">${st.prompt}</pre></details>` : ""}
     <details data-author-section="log" open=${!progress}><summary>Creation log</summary><pre class="log small author-log" data-k="author-log">${(st.log || []).join("\n") || "No log output received yet."}</pre></details>
     ${!running && st.revise && st.before && st.after && st.before !== st.after ? html`<details class="blk" open><summary>${`What it changed in ${st.revise}`}</summary><${Diff} ops=${lineDiff(st.before, st.after)} /></details>` : ""}
     ${!running && !st.ok && !st.connection_error ? html`<p class="callout bad">The agent did not leave a document that passes its checks: read its log above, then try again or write the document yourself.</p>` : ""}

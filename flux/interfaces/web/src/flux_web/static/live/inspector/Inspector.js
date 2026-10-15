@@ -87,7 +87,7 @@ export function PassSummary({ p, nodes, a, N, head = true }) {
   return html`${head ? html`<div class="detail-head alt-ihead"><h2>${passName(p)}</h2>
       <span class=${`pill ${live ? "live" : failed ? "bad" : "ok"}`}>${live ? html`<span class="alt-spin" />` : ""}${live ? "running" : failed ? "failed" : "done"}</span>
       <span class="muted">${dur(t1 - t0)}</span></div>` : ""}
-    ${cand ? html`<div class="alt-tried"><div class="alt-label">Tried</div><b>${cand}</b><span class="mono muted small">${Object.entries(meas).slice(0, 3).map(([k, v]) => `${k} ${fmt(v)}`).join(" · ")}</span></div>` : ""}
+    ${cand ? html`<div key="tried" class="alt-tried"><div class="alt-label">Tried</div><b>${cand}</b><span class="mono muted small">${Object.entries(meas).slice(0, 3).map(([k, v]) => `${k} ${fmt(v)}`).join(" · ")}</span></div>` : ""}
     <div><div class="alt-label">Where the time went</div>
       <div class="alt-bar tall">${order.map(k => html`<i style=${`width:${100 * kinds[k] / total}%;background:${COLORS[k]}`} title=${`${workLabel(k)} ${dur(kinds[k])}`} />`)}</div>
       <div class="mono muted small">${order.slice().sort((x, y) => kinds[y] - kinds[x]).filter(k => kinds[k] >= 1).map(k => `${workLabel(k)} ${dur(kinds[k])}`).join(" · ") || "all under a second"}</div></div>

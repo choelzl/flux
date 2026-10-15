@@ -30,10 +30,10 @@ function AskBox({ who, name, off }) {
 }
 
 /** D945: an added agent's name may change -- the loops that name it said first, as they break. */
-function RenameForm({ a }) {
-  const [v, setV] = useState(a.id), [warn, setWarn] = useState(null);
-  const look = async () => {
-    const name = v.trim();
+/** The new name (`v.name`), and which loops name the old one -- looked up as it is left or Enter pressed. */
+function RenameForm({ a, v, set }) {
+  const [warn, setWarn] = useState(null);
+  const look = async name => {
     if (!name || name === a.id) { setWarn(null); return; }
     try {
       const r = await api(`/admin/agents/${a.id}/rename`, { method: "POST", body: { name, dry_run: true } });
@@ -41,12 +41,13 @@ function RenameForm({ a }) {
         : html`<p class="muted">${`No loop names ${a.id}.`}</p>`);
     } catch (x) { setWarn(html`<p class="bad">${x.message}</p>`); }
   };
-  return html`<div class="stack"><label class="stack">Its name in a document (lower case)<input class="mono" autocomplete="off" aria-label="New name" ...${bound(v, setV)}
-      onChange=${e => { setV(e.currentTarget.value); setTimeout(look); }} onKeyUp=${e => { if (e.key === "Enter") look(); }} /></label>
+  return html`<div class="stack"><label class="stack">Its name in a document (lower case)<input class="mono" autocomplete="off" aria-label="New name" value=${v.name}
+      onInput=${e => set({ name: e.currentTarget.value })} onChange=${e => { set({ name: e.currentTarget.value }); look(e.currentTarget.value.trim()); }}
+      onKeyUp=${e => { if (e.key === "Enter") look(e.currentTarget.value.trim()); }} /></label>
     <p class="muted small">Its settings, variables and tests move with it. Documents are not rewritten.</p><div class="small">${warn}</div></div>`;
 }
 const rename = async a => {
-  const name = await dialog(`Rename ${a.label}`, html`<${RenameForm} a=${a} />`, [["Cancel", null], ["Rename", f => f.querySelector("input").value.trim(), "danger"]]);
+  const name = await dialog(`Rename ${a.label}`, ({ v, set }) => html`<${RenameForm} a=${a} v=${v} set=${set} />`, [["Cancel", null], ["Rename", v => v.name.trim(), "danger"]], { name: a.id });
   if (name == null) return;
   const r = await api(`/admin/agents/${a.id}/rename`, { method: "POST", body: { name } });
   toast(r.ok + (r.loops.length ? ` -- ${plural(r.loops.length, "loop")} still name ${a.id}` : ""), r.loops.length ? "warn" : "ok");
@@ -108,19 +109,18 @@ function AgentPanel({ a, version, askOff }) {
 }
 
 function AddAgent({ kinds }) {
-  const box = useRef(null);
-  // the fields read when Add is pressed
+  const [v, setV] = useState({ name: "", kind: kinds[0]?.id || "", label: "", bin: "" });
+  const field = k => bound(v[k], x => setV(o => ({ ...o, [k]: x })));
   const add = async () => {
-    const f = id => box.current.querySelector(`#ag-new-${id}`).value, v = { name: f("name"), kind: f("kind"), label: f("label"), bin: f("bin") };
     await api("/admin/agents", { method: "POST", body: { name: v.name.trim(), kind: v.kind, label: v.label, bin: v.bin } });
     try { localStorage.setItem("flux-models-tab-server", v.label.trim() || v.name.trim()); } catch (_) { /* per viewer */ }
     toast(`${v.name.trim()} added`, "ok"); route();
   };
-  return html`<fieldset class="set-group" ref=${box}><legend>Add an agent</legend><p class="muted small">Another build of a kind under its own name (<code>generate: nga</code>).</p>
-    <div class="grid-2"><label class="stack">Name (lower case)<input id="ag-new-name" placeholder="nga" class="mono" autocomplete="off" /></label>
-      <label class="stack">Kind<select id="ag-new-kind" aria-label="Its kind">${kinds.map(k => html`<option value=${k.id}>${k.label}</option>`)}</select></label>
-      <label class="stack">Name shown<input id="ag-new-label" placeholder="NGA (our OpenCode)" autocomplete="off" /></label>
-      <label class="stack">Program (a path)<input id="ag-new-bin" placeholder="/opt/nga/bin/nga" class="mono" autocomplete="off" /></label></div>
+  return html`<fieldset class="set-group"><legend>Add an agent</legend><p class="muted small">Another build of a kind under its own name (<code>generate: nga</code>).</p>
+    <div class="grid-2"><label class="stack">Name (lower case)<input id="ag-new-name" placeholder="nga" class="mono" autocomplete="off" ...${field("name")} /></label>
+      <label class="stack">Kind<select id="ag-new-kind" aria-label="Its kind" ...${field("kind")}>${kinds.map(k => html`<option value=${k.id}>${k.label}</option>`)}</select></label>
+      <label class="stack">Name shown<input id="ag-new-label" placeholder="NGA (our OpenCode)" autocomplete="off" ...${field("label")} /></label>
+      <label class="stack">Program (a path)<input id="ag-new-bin" placeholder="/opt/nga/bin/nga" class="mono" autocomplete="off" ...${field("bin")} /></label></div>
     <div class="form-actions"><${Act} cls="primary" onClick=${add}>Add<//></div></fieldset>`;
 }
 

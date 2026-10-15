@@ -6,6 +6,7 @@ import { Card, html, useRef, useState } from "../view.js";
 import { api, createFromText, enc, toast } from "../ui.js";
 import { plural } from "../format.js";
 import { sendFiles } from "../uploads.js";
+import { bound } from "../components/Autosave.js";
 import { progressDialog } from "../components/Modal.js";
 import { Act } from "../components/Act.js";
 import { CodeEditor } from "../components/CodeEditor.js";
@@ -14,60 +15,57 @@ import { PageHead } from "../components/PageHead.js";
 
 /** Create a loop from a starter document or uploaded files, a folder, or a single ZIP. */
 export function UploadForm() {
-  const box = useRef(null), dropped = useRef([]);
-  const [ready, setReady] = useState({ n: 0, dir: null });
-  const field = sel => box.current.querySelector(sel);
-  const said = (n, dir = null) => {
-    if (dir && !field("#up-name").value) field("#up-name").value = dir.replace(/[^A-Za-z0-9_-]+/g, "_").slice(0, 60);
-    setReady({ n, dir });
+  const [name, setName] = useState(""), [got, setGot] = useState({ files: [], dir: null, n: 0 });   // `n`: the pickers drawn anew (cleared)
+  const chose = (files, dir = null) => {
+    if (dir && !name) setName(dir.replace(/[^A-Za-z0-9_-]+/g, "_").slice(0, 60));
+    setGot(g => ({ files, dir, n: files.length ? g.n : g.n + 1 }));
   };
-  const clear = () => { field(".up-files").value = ""; field(".up-folder").value = ""; dropped.current = []; said(0); };
+  // a chosen folder names every file under its own name: that name goes (D702: once, here)
+  const fromFolder = list => {
+    const picked = [...list].map(f => ({ file: f, path: f.webkitRelativePath || f.name })), top = new Set(picked.map(e => e.path.split("/")[0]));
+    return top.size === 1 && picked.every(e => e.path.includes("/")) ? picked.map(e => ({ ...e, path: e.path.split("/").slice(1).join("/") })) : picked;
+  };
   const create = async () => {
-    const name = field("#up-name").value.trim(), files = field(".up-files").files, folder = field(".up-folder").files;
-    // a chosen folder names every file under its own name: that name goes (D702: once, here)
-    const picked = [...folder].map(f => ({ file: f, path: f.webkitRelativePath || f.name }));
-    const top = new Set(picked.map(e => e.path.split("/")[0]));
-    const fromFolder = top.size === 1 && picked.every(e => e.path.includes("/")) ? picked.map(e => ({ ...e, path: e.path.split("/").slice(1).join("/") })) : picked;
-    const chosen = [...[...files].map(f => ({ file: f, path: f.name })), ...fromFolder, ...dropped.current];
-    if (!name) { toast("Name the loop first.", "warn"); field("#up-name").focus(); return; }
+    const n = name.trim(), chosen = got.files;
+    if (!n) { toast("Name the loop first.", "warn"); document.getElementById("up-name")?.focus(); return; }
     if (!chosen.length) {
-      const got = await api("/apps/new-empty", { method: "POST", body: { name } });
-      toast(`${got.name}: fill in its problem`, "ok");
-      location.hash = `#/app/${enc(got.name)}/settings/problem`;
+      const made = await api("/apps/new-empty", { method: "POST", body: { name: n } });
+      toast(`${made.name}: fill in its problem`, "ok");
+      location.hash = `#/app/${enc(made.name)}/settings/problem`;
       return;
     }
-    const pd = progressDialog("Uploading", `${plural(chosen.length, "file")} to ${name}`);
+    const pd = progressDialog("Uploading", `${plural(chosen.length, "file")} to ${n}`);
     try {
-      const n = await sendFiles(name, chosen, { create: true, onProgress: pd.set, signal: pd.signal });
+      const sent = await sendFiles(n, chosen, { create: true, onProgress: pd.set, signal: pd.signal });
       pd.close();
-      toast(`${name} uploaded: ${plural(n, "file")}`, "ok"); location.hash = `#/app/${enc(name)}`;
+      toast(`${n} uploaded: ${plural(sent, "file")}`, "ok"); location.hash = `#/app/${enc(n)}`;
     } catch (x) {
       pd.close();
       toast(pd.signal.aborted ? `The upload was cancelled: ${x.message}.` : `The upload failed: ${x.message}`, pd.signal.aborted ? "warn" : "bad", { timeout: 12000 });
     }
   };
-  return html`<${Card}><div class="upload" ref=${box}><p class="muted">Start empty, or upload a problem.yaml and its files. A ZIP can contain the loop's folder; choose the ZIP on its own.</p>
-    <label class="stack">Name<input placeholder="my_loop" pattern="[A-Za-z0-9_\\-]{1,60}" maxlength="60" style="width:100%" id="up-name" autocomplete="off" /></label>
-    <${DropZone} label="Drop the loop's folder, its files or a .zip here" onFiles=${(got, dir) => { field(".up-files").value = ""; field(".up-folder").value = ""; dropped.current = got; said(got.length, dir); }} />
-    <div class="row"><div class="muted small">${ready.n ? `${plural(ready.n, "file")} ready` : "Without files: a starter problem.yaml, README and empty library/. Opens in the configurator."}${ready.dir ? ` from ${ready.dir}/` : ""}</div>
-      <button type="button" class="small" hidden=${!ready.n} onClick=${clear}>Clear files</button></div>
-    <div class="row"><label class="stack">or choose files / a .zip<input type="file" multiple class="up-files" onChange=${e => { field(".up-folder").value = ""; dropped.current = []; said(e.currentTarget.files.length); }} /></label>
-      <label class="stack">or a folder<input type="file" webkitdirectory multiple class="up-folder" onChange=${e => { const f = e.currentTarget.files; field(".up-files").value = ""; dropped.current = []; said(f.length, f[0]?.webkitRelativePath.split("/")[0]); }} /></label></div>
+  const ready = got.files.length;
+  return html`<${Card}><div class="upload"><p class="muted">Start empty, or upload a problem.yaml and its files. A ZIP can contain the loop's folder; choose the ZIP on its own.</p>
+    <label class="stack">Name<input placeholder="my_loop" pattern="[A-Za-z0-9_\\-]{1,60}" maxlength="60" style="width:100%" id="up-name" autocomplete="off" ...${bound(name, setName)} /></label>
+    <${DropZone} label="Drop the loop's folder, its files or a .zip here" onFiles=${(files, dir) => chose(files, dir)} />
+    <div class="row"><div class="muted small">${ready ? `${plural(ready, "file")} ready` : "Without files: a starter problem.yaml, README and empty library/. Opens in the configurator."}${got.dir ? ` from ${got.dir}/` : ""}</div>
+      <button type="button" class="small" hidden=${!ready} onClick=${() => chose([])}>Clear files</button></div>
+    <div class="row" key=${got.n}><label class="stack">or choose files / a .zip<input type="file" multiple class="up-files" onChange=${e => chose([...e.currentTarget.files].map(f => ({ file: f, path: f.name })))} /></label>
+      <label class="stack">or a folder<input type="file" webkitdirectory multiple class="up-folder" onChange=${e => { const f = e.currentTarget.files; chose(fromFolder(f), f[0]?.webkitRelativePath.split("/")[0]); }} /></label></div>
     <div class="form-actions"><${Act} cls="primary" onClick=${create}>Create loop<//></div></div><//>`;
 }
 
 /** A problem document written here (D906: one that does not load is said, not made). */
 export function NewPage() {
-  const box = useRef(null), ed = useRef(null);
+  const [name, setName] = useState(""), [file, setFile] = useState("problem.yaml"), ed = useRef(null), nameField = useRef(null);
   const create = async () => {
-    const name = box.current.querySelector(".new-name"), file = box.current.querySelector(".new-file").value;
-    if (!await createFromText(name.value, file, ed.current.textarea.value)) { name.focus(); return; }
-    toast(`${name.value} created`, "ok"); location.hash = `#/app/${enc(name.value)}`;
+    if (!await createFromText(name, file, ed.current.textarea.value)) { nameField.current.focus(); return; }
+    toast(`${name} created`, "ok"); location.hash = `#/app/${enc(name)}`;
   };
   return html`<${PageHead} title="Write a problem document" sub="Paste or write the YAML; upload its other files afterwards on the application's page.">
       <a class="btn" href="#/configure">Use the configurator instead</a><//>
-    <${Card}><div ref=${box}><div class="row"><label class="stack">Application<input class="new-name" placeholder="application name" required /></label>
-      <label class="stack">File<input class="new-file" value="problem.yaml" size="28" /></label></div>
+    <${Card}><div><div class="row"><label class="stack">Application<input class="new-name" placeholder="application name" required ref=${nameField} ...${bound(name, setName)} /></label>
+      <label class="stack">File<input class="new-file" size="28" ...${bound(file, setFile)} /></label></div>
       <${CodeEditor} text="" lang="yaml" placeholder=${"id: my_problem\nstatement: >-\n  What the design must do.\n..."} onEditor=${e => { ed.current = e; }} />
       <div class="form-actions"><${Act} cls="primary" onClick=${create}>Create<//></div></div><//>`;
 }

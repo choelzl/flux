@@ -31,9 +31,10 @@ export function filesStore(name, yamlOf, { staged = new Map(), namedOf = null, o
   /** A file written or edited in a dialog: its path (fixed once it has one) and its text. */
   async function editor(path, text) {
     let ed = null;
-    const got = await dialog(path ? `Edit ${path}` : "A new file", html`<div class="file-edit"><label class="stack">Path in the loop<input class="file-path" value=${path || ""} placeholder="check.py, scripts/bench.sh" style="width:100%" readonly=${!!path} /></label>
+    const got = await dialog(path ? `Edit ${path}` : "A new file", ({ v, set }) => html`<div class="file-edit"><label class="stack">Path in the loop<input class="file-path" value=${v.p}
+        placeholder="check.py, scripts/bench.sh" style="width:100%" readonly=${!!path} onInput=${e => set({ p: e.currentTarget.value })} /></label>
       <${CodeEditor} text=${text || ""} lang=${langOf(path || "")} onEditor=${e => { if (e) ed = e; }} /></div>`,
-      [["Cancel", null], ["Save", f => ({ p: f.querySelector(".file-path").value.trim(), text: ed.textarea.value }), "primary"]]);
+      [["Cancel", null], ["Save", v => ({ p: v.p.trim(), text: ed.textarea.value }), "primary"]], { p: path || "" });
     if (!got) return;
     const { p } = got;
     if (!p) { toast("Name the file.", "warn"); return; }
