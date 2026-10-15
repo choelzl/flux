@@ -242,8 +242,19 @@ pre.question, pre.digest-text, .cv-thought { font: 13px/1.5 var(--sans); }
 table.compact td, table.compact th { padding: 4px 8px; font-size: 12.5px; }
 .row-kv .k { min-width: 90px; }
 .detail { max-height: 76vh; overflow: auto; }
-.detail-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.detail-head h2 { font-family: var(--mono); font-size: 14px; }
+/* ---- heads and tools (D1102): [stripe] title, state and meta, the tools joined at the end; a rule under the head */
+.head { display: flex; align-items: center; gap: 8px 10px; flex-wrap: wrap; min-width: 0; padding-bottom: 8px; margin-bottom: 10px; border-bottom: 1px solid var(--line); }
+.head h2 { margin: 0; font: 600 15px var(--sans); min-width: 0; overflow-wrap: anywhere; }
+.head h2.mono { font: 600 14px var(--mono); }
+.head > .stripe { width: 4px; height: 18px; border-radius: 2px; flex-shrink: 0; }
+.head > .tools { margin-left: auto; }
+.tools { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--panel); box-shadow: 0 1px 0 rgb(0 0 0 / .04); flex-shrink: 0; }
+.tools > .tool { width: 32px; height: 30px; padding: 0; display: inline-grid; place-items: center; border: 0; border-radius: 0; background: transparent; color: var(--muted); }
+.tools > .tool + .tool { border-left: 1px solid var(--line); }
+.tool svg { width: 17px; height: 17px; } .tool.big svg { width: 19px; height: 19px; }
+.tools > .tool:hover, .tools > .tool:focus-visible { background: var(--soft); color: var(--accent); text-decoration: none; }
+.tools > .tool.danger:hover { color: var(--bad); }
+.tools > .tool.busy::after { display: none; } .tools > .tool.busy svg { opacity: .4; }
 .blk { margin-top: 8px; }
 pre.val.tall { max-height: 60vh; }
 .card.ask { border-color: color-mix(in srgb, var(--warn) 55%, transparent); background: color-mix(in srgb, var(--warn) 5%, var(--panel)); }
@@ -780,10 +791,7 @@ svg.alt-flow { display: block; width: 100%; height: auto; margin: 0 auto; overfl
 .alt-band { fill: transparent; } .alt-band.odd { fill: color-mix(in srgb, var(--muted) 10%, transparent); } .alt-band-label { font-size: 9px; }
 .alt-cut { fill: var(--panel); }
 /* D982: Live's inspector -- the head in the left side's words, what a task gave first */
-.alt-ihead { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 8px; }
-.alt-ihead h2 { font-family: var(--sans); font-size: 15px; margin: 0; }
 .alt-stripe { width: 4px; height: 18px; border-radius: 2px; flex-shrink: 0; }
-.alt-head-tools { display: inline-flex; gap: 4px; } .alt-icon-btn { min-width: 26px; padding-inline: 6px; font-family: var(--mono); }
 .alt-crumbs { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: 6px 0 2px; font-size: 12px; }
 .alt-pchip { border: 0; border-radius: 10px; padding: 1px 8px; font-size: 12px; background: color-mix(in srgb, var(--k) 24%, var(--panel)); color: var(--ink); }
 .alt-pchip:hover { background: color-mix(in srgb, var(--k) 40%, var(--panel)); }

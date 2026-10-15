@@ -13,6 +13,7 @@ import { AgentChat, ModelChat } from "./Chat.js";
 import { ChooseBody, CriticBody, NotesFold, SearchBody, StepsBody, ToolBody } from "./Bodies.js";
 import { candidateOf, colorOf, fmt, has, headOf, isAgent, isModel, isTool, metricsOf, plain, running, stdoutOf, taskLabel } from "./parts.js";
 import { Pill } from "../../components/Tone.js";
+import { Head, Tool } from "../../components/Head.js";
 
 /** D1094: who did the work, in words -- the program a command ran, the agent or model that answered, its try
     (D1075: the tree's); an engine's own step name says nothing the title does not (it is the tooltip). */
@@ -24,16 +25,15 @@ function runner(n) {
 
 /** The head (P1): the task as the tree names it, its kind's stripe, state, time, Raw and Fullscreen; the
     parents as chips that open them (D1067: a crumb that says something); the purpose and who did it. */
-function Head({ n, env, a }) {
+function TaskHead({ n, env, a }) {
   const N = env.N, title = plain(taskLabel(n), N), parents = [];
   for (let p = n.parent; p; p = p.parent) { const l = plain(taskLabel(p), N); if (l !== title && l.includes(" · ") && !/·\s*evaluation$/i.test(l)) parents.unshift(p); }
   // D1066: a reason that is the loop's own name says nothing; D1094: nor one that is only the engine's source name
   const why = n.why && !N.loopNamed(String(n.why).trim()) && !/^\s*(agent|tool|model|llm)\s*:\s*\S+\s*$/i.test(String(n.why)) ? N.shortAll(String(n.why)) : "";
   const raw = () => showRaw(JSON.stringify({ name: n.name, input: n.params, fields: n.fields, output: n.output }, null, 2), `${n.name} · raw`);
-  return html`<div class="detail-head alt-ihead"><span class="alt-stripe" style=${`background:${colorOf(n)}`} />
-      <h2 title=${taskLabel(n)}>${title}</h2><${TaskPill} n=${n} /><span class="muted">${dur(running(n) ? env.now - n.t0 : n.seconds)}</span>
-      <span class="alt-head-tools"><button type="button" class="small raw-view alt-icon-btn" title="Raw" aria-label="Raw" onClick=${raw}>{ }</button>
-        <button type="button" class="small fullscreen-button alt-icon-btn" title="Fullscreen" aria-label="Fullscreen" onClick=${() => a.fullscreen(n.name)}>⤢</button></span></div>
+  return html`<${Head} cls="alt-ihead" stripe=${colorOf(n)} title=${title} hint=${taskLabel(n)} tools=${html`<${Tool} icon="raw" label="Raw" cls="raw-view" onClick=${raw} />
+      <${Tool} icon="fullscreen" label="Fullscreen" big cls="fullscreen-button" onClick=${() => a.fullscreen(n.name)} />`}>
+      <${TaskPill} n=${n} /><span class="muted">${dur(running(n) ? env.now - n.t0 : n.seconds)}</span><//>
     ${parents.length ? html`<div class="alt-crumbs">${parents.map((p, i) => [i ? html`<span class="muted">›</span>` : "",
       html`<button type="button" class="alt-pchip" style=${`--k:${colorOf(p)}`} title=${taskLabel(p)} onClick=${() => a.select(p.id)}>${plain(taskLabel(p), N)}</button>`])}</div>` : ""}
     <p class="alt-meta muted">${[why, runner(n)].filter(Boolean).flatMap((x, i) => [i ? " · " : "", x])}</p>`;
@@ -61,7 +61,7 @@ function Task({ n, env, a, panel }) {
     if (mem.panel) restoreScroll(el, mem.panel, { follow: running(n) && mem.panel.scrollable }); else el.scrollTop = el.scrollLeft = 0;
     return () => { mem.panel = scrollState(el); };
   }, []);
-  return html`<${Head} n=${n} env=${env} a=${a} />
+  return html`<${TaskHead} n=${n} env=${env} a=${a} />
     <${Body} n=${n} env=${env} a=${a} mem=${mem} />
     <${NotesFold} n=${n} mem=${mem} />
     ${!isAgent(n) && (has(f) || has(o) || has(n.params)) ? html`<${Fold} k="fields" title="Every field" mem=${mem}>
@@ -85,9 +85,9 @@ export function PassSummary({ p, nodes, a, N, head = true }) {
   const cand = nodes.map(candidateOf).find(Boolean) || "";
   const meas = nodes.filter(n => isTool(n) && phaseKind(n) === "measure").map(n => metricsOf(stdoutOf(n))).find(m => Object.keys(m).length) || {};
   const steps = top.filter(n => phaseKind(n) !== "setup");
-  return html`${head ? html`<div class="detail-head alt-ihead"><h2>${passName(p)}</h2>
+  return html`${head ? html`<${Head} cls="alt-ihead" title=${passName(p)}>
       <${Pill} tone=${live ? "run" : failed ? "bad" : "ok"}>${live ? "running" : failed ? "failed" : "done"}<//>
-      <span class="muted">${dur(t1 - t0)}</span></div>` : ""}
+      <span class="muted">${dur(t1 - t0)}</span><//>` : ""}
     ${cand ? html`<div key="tried" class="alt-tried"><div class="alt-label">Tried</div><b>${cand}</b><span class="mono muted small">${Object.entries(meas).slice(0, 3).map(([k, v]) => `${k} ${fmt(v)}`).join(" · ")}</span></div>` : ""}
     <div><div class="alt-label">Where the time went</div>
       <div class="alt-bar tall">${order.map(k => html`<i style=${`width:${100 * kinds[k] / total}%;background:${COLORS[k]}`} title=${`${workLabel(k)} ${dur(kinds[k])}`} />`)}</div>

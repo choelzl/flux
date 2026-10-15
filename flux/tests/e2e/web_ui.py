@@ -400,18 +400,18 @@ class Run:
         return self.b.js("return document.querySelector('#main').innerText")
 
     def button(self, label, scope="#main"):
-        """Click the button (or link) whose text is `label`, in `scope`; a tab only when the scope
+        """Click the button (or link) whose text -- or a tool's label (D1102) -- is `label`, in `scope`; a tab only when the scope
         is a tab bar."""
         ok = self.b.js("""const [label, scope] = arguments;
             const tabs = scope.includes('tabs');
-            const el = [...document.querySelectorAll(scope + ' button, ' + scope + ' a.btn')].find(x => x.textContent.trim() === label && !x.disabled
+            const el = [...document.querySelectorAll(scope + ' button, ' + scope + ' a.btn, ' + scope + ' a.tool')].find(x => (x.textContent.trim() === label || x.getAttribute('aria-label') === label) && !x.disabled
               && (tabs || x.getAttribute('role') !== 'tab'));
             if (!el) return false; el.click(); return true;""", label, scope)
         end = time.time() + 10
         while not ok and time.time() < end:                 # a button busy with its last click comes back
             time.sleep(0.2)
             ok = self.b.js("""const [label, scope] = arguments; const tabs = scope.includes('tabs');
-                const el = [...document.querySelectorAll(scope + ' button, ' + scope + ' a.btn')].find(x => x.textContent.trim() === label && !x.disabled
+                const el = [...document.querySelectorAll(scope + ' button, ' + scope + ' a.btn, ' + scope + ' a.tool')].find(x => (x.textContent.trim() === label || x.getAttribute('aria-label') === label) && !x.disabled
                   && (tabs || x.getAttribute('role') !== 'tab'));
                 if (!el) return false; el.click(); return true;""", label, scope)
         if not ok:

@@ -10,6 +10,7 @@ import { ViewerFrame, ViewerTools, useViewer } from "../viewer.js";
 import { recall, remember } from "../stored.js";
 import { useLoop } from "../loop/context.js";
 import { Pill } from "../components/Tone.js";
+import { Tool, Tools } from "../components/Head.js";
 
 const WRAPPED = 3000, TAIL = 2 << 20;
 const storedTimes = () => recall("flux-log-times") !== "off";
@@ -74,8 +75,7 @@ export function Log({ store }) {
     <div class="toolbar">${check("follow", "follow", null, v => { set({ follow: v }); })}${check("wrap", "wrap")}${check("problems", "problems only")}${check("times", "times", "Each line's time", times)}
       <input placeholder="filter (text or /regex/)" class=${`filter${m?.bad ? " bad" : ""}`} value=${o.filter} onInput=${e => set({ filter: e.currentTarget.value })} />
       <span class="muted">${`${shown.length === total ? total : `${shown.length} of ${total}`} line(s)`}</span>
-      <${ViewerTools} v=${view} title="Log" rawUrl=${raw} />
-      ${L.past ? "" : html`<a class="btn small" href=${`${ctx.base}/log/raw${ctx.qs}`}>Download</a>`}
+      <${Tools}><${ViewerTools} v=${view} title="Log" rawUrl=${raw} />${L.past ? "" : html`<${Tool} icon="download" label="Download" href=${`${ctx.base}/log/raw${ctx.qs}`} />`}<//>
       ${L.skipped ? html`<span class="log-earlier small">${`${(L.skipped.bytes / 1048576).toFixed(1)} MiB of earlier lines not loaded · `}<button type="button" class="small" onClick=${L.loadAll}>Load all</button></span>` : ""}
       ${!L.past && L.stream && L.stream !== "live" ? html`<${Pill} tone="run" small cls="stream" title="The page's connection to the loop">reconnecting<//>` : ""}</div>
     ${L.cut ? html`<p class="muted">Preview: first 1 MiB. Raw opens the complete output.</p>` : ""}${L.failed ? html`<${Notice} tone="bad" what="This start's log could not be read" why=${L.failed} />` : ""}

@@ -5,9 +5,9 @@
 
 import { html, useEffect, useLayoutEffect, useRef, useState } from "./view.js";
 import { restoreScroll, scrollState } from "./scroll.js";
-import { Act } from "./components/Act.js";
 import { FullscreenView, openModal } from "./components/Modal.js";
 import { Toasts, useLayer } from "./notices.js";
+import { Tool } from "./components/Head.js";
 
 /** Whether a view is fullscreen: `{full, open(), close()}` -- for its frame and its tools. */
 export function useViewer() {
@@ -66,7 +66,8 @@ export function showRaw(text, title) {
     { cls: "dlg fullscreen-view", label: title, onCancel: close, opened: el => el.querySelector("button").focus() });
 }
 
-/** Raw (an address opened in a new tab, or a text shown) and Fullscreen for the view `v` frames. */
-export const ViewerTools = ({ v, title = "Viewer", rawUrl, rawText }) => html`${rawUrl ? html`<a class="btn small raw-view" href=${rawUrl} target="_blank" rel="noopener">Raw</a>`
-  : rawText != null ? html`<${Act} cls="small raw-view" onClick=${() => showRaw(typeof rawText === "function" ? rawText() : rawText, `${title} · raw`)}>Raw<//>` : ""}
-  <${Act} cls="small fullscreen-button" onClick=${v.open}>Fullscreen<//>`;
+/** Raw (an address opened in a new tab, or a text shown) and Fullscreen for the view `v` frames -- tools (D1102), for
+    a toolbar. */
+export const ViewerTools = ({ v, title = "Viewer", rawUrl, rawText }) => html`${rawUrl ? html`<${Tool} icon="raw" label="Raw" cls="raw-view" href=${rawUrl} target="_blank" rel="noopener" />`
+  : rawText != null ? html`<${Tool} icon="raw" label="Raw" cls="raw-view" onClick=${() => showRaw(typeof rawText === "function" ? rawText() : rawText, `${title} · raw`)} />` : ""}
+  <${Tool} icon="fullscreen" label="Fullscreen" big cls="fullscreen-button" onClick=${v.open} />`;

@@ -15,6 +15,7 @@ import { Graphs } from "./Graphs.js";
 import { compare } from "./Compare.js";
 import { useLoop } from "../loop/context.js";
 import { Pill } from "../components/Tone.js";
+import { Tool, Tools } from "../components/Head.js";
 
 const fmt = v => v == null ? "" : v !== 0 && Math.abs(v) < 0.01 ? Number(v).toExponential(2)
   : Math.abs(v) >= 1000 || Number.isInteger(v) ? String(Math.round(v * 100) / 100) : String(Number(Number(v).toPrecision(4)));
@@ -88,8 +89,8 @@ export function ResultsTab({ r, view }) {
   const detail = open ? html`<${DesignDetail} key=${keyOf(open)} d=${open} fmt=${fmt} reload=${reload} />` : html`<div class="detail"><${Empty} text="Select a design." /></div>`;
   return html`<${ViewerFrame} v=${full} title="Results"><div ref=${root}>
     <${Card}><div class="results-head"><div><h2>Objective</h2><p class="muted">${r.objectives}${r.total > r.designs.length ? ` · the newest ${r.designs.length} of ${r.total} designs` : ""}</p></div>
-        <div class="actions"><${ViewerTools} v=${full} title="Results" rawUrl=${`${base}/results${qs}${qs ? "&" : "?"}raw=true`} />${r.answer ? html`<a class="btn small" href=${`/api/apps/${enc(name)}/file?path=runs/answer.json&download=1${q}`}>Answer (JSON)</a>` : ""}
-          <a class="btn small" href=${`${base}/report${qs}`} target="_blank" rel="noopener">Report</a></div></div>
+        <${Tools}><${ViewerTools} v=${full} title="Results" rawUrl=${`${base}/results${qs}${qs ? "&" : "?"}raw=true`} />${r.answer ? html`<${Tool} icon="download" label="Answer (JSON)" href=${`/api/apps/${enc(name)}/file?path=runs/answer.json&download=1${q}`} />` : ""}
+          <${Tool} icon="report" label="Report" href=${`${base}/report${qs}`} target="_blank" rel="noopener" /><//></div>
       <${DecisionLine} r=${r} names=${names} comparison=${comparison} onPick=${pick} /><${Invalidated} r=${r} reload=${reload} /><//>
     ${seen.has("results") ? html`<div key="results" hidden=${view === "graphs"}><div class="split results"><${Card}><${ResultsTable} t=${{ r, names, unit, fmt, comparison, columns, values }} selected=${open && keyOf(open)}
             onOpen=${setOpen} onCompare=${pair => compare(ctx, r, pair, directions, fmt)} /><//><${Card} cls="detail-card">${detail}<//></div>

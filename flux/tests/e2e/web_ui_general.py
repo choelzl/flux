@@ -517,7 +517,7 @@ def general_flows(r, watch):
                 r.check("the agent inspector also exposes recorded stdout", b.js("return document.querySelector('.alt-detail [data-k=stdout]').textContent==='RAW agent output'"))
                 r.check("the inspector links directly to the complete current log", b.js("return document.querySelector('.alt-log-link').getAttribute('href').endsWith('/live/log')"))
                 r.check("D984: an agent's turn is a chat: the prompt a folded bubble, the conversation open at its newest end", b.js("const d=document.querySelector('.alt-detail'), c=d.querySelector('.alt-chat');return !!c && !!c.querySelector('.alt-bubble.me.inspector-input:not([open])') && d.querySelector('.agent-view').getBoundingClientRect().height>0 && c.scrollHeight-c.scrollTop-c.clientHeight<30"))
-                b.js("[...document.querySelectorAll('.alt-detail .alt-head-tools button')].find(x=>x.title==='Fullscreen').click();return 1")
+                b.js("[...document.querySelectorAll('.alt-detail .alt-ihead .tools button')].find(x=>x.title==='Fullscreen').click();return 1")
                 b.wait("document.querySelector('dialog.fullscreen-view .alt-chat')", what="the agent in Fullscreen")
                 b.js("window.__altStreams.at(-1).emit('events',{ev:'update',id:4,fields:{status:'still thinking'}});return 1")
                 import time as _t
@@ -1020,7 +1020,7 @@ def general_flows(r, watch):
                 b.js("window.__sharedIdeasFail=true; return 1")
                 r.button("Refresh")
                 b.wait("[...document.querySelectorAll('.toast.t-bad')].some(t=>t.textContent.includes('Temporary notebook error'))", what="failed notebook refresh")
-                r.check("a failed refresh keeps the current notebook and allows retry", b.js("return document.querySelector('.ideas-table').textContent.includes('Owner hypothesis') && [...document.querySelectorAll('#main button')].some(b=>b.textContent==='Refresh'&&!b.disabled)"))
+                r.check("a failed refresh keeps the current notebook and allows retry", b.js("return document.querySelector('.ideas-table').textContent.includes('Owner hypothesis') && [...document.querySelectorAll('#main button')].some(b=>b.getAttribute('aria-label')==='Refresh'&&!b.disabled)"))
                 expected = b.js("""const bad=window.__e2e.bad.splice(0); document.querySelectorAll('.toast.t-bad .x').forEach(x=>x.click());
                   window.__sharedIdeasFail=false; window.__sharedIdeasData.ideas[0].title='Updated owner hypothesis'; return bad;""")
                 r.check("the failed refresh produces one clear error notice", expected == ["Temporary notebook error"], expected)

@@ -2,13 +2,13 @@
 // Refresh, Raw (the answer as it came) and Fullscreen over its content.
 
 import { Card, html } from "../view.js";
-import { Act } from "./Act.js";
+import { Tool, Tools } from "./Head.js";
 import { ViewerFrame, ViewerTools, useViewer } from "../viewer.js";
 
 /** `said` the line; `refresh()`; `raw` the answer (shown as JSON, `rawTitle` its title); `cls` the content's class. */
 export function RefreshCard({ title, said, refresh, raw, rawTitle = title, cls, children }) {
   const view = useViewer();
   return html`<${Card} title=${title}><div class="bar"><span class="muted">${said}</span>
-      <${Act} cls="small" onClick=${refresh}>Refresh<//><${ViewerTools} v=${view} title=${rawTitle} rawText=${JSON.stringify(raw, null, 2)} /></div>
+      <${Tools}><${Tool} icon="refresh" label="Refresh" onClick=${refresh} /><${ViewerTools} v=${view} title=${rawTitle} rawText=${JSON.stringify(raw, null, 2)} /><//></div>
     <${ViewerFrame} v=${view} title=${rawTitle}><div class=${cls}>${children}</div><//><//>`;
 }

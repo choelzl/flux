@@ -18,6 +18,7 @@ import { bound } from "../components/Autosave.js";
 import { recall, remember } from "../stored.js";
 import { useLoop } from "../loop/context.js";
 import { Failed } from "../components/Tone.js";
+import { Tool, Tools } from "../components/Head.js";
 
 /** A name or a folder asked for, the path it makes shown as it is typed; Enter asks. */
 const askPath = (name, title, label, value, ok, pathOf) => askText(title, { label, value, ok,
@@ -131,10 +132,10 @@ function Viewer({ f, showIgnored }) {
   const it = useLoad(() => sel ? api(f.itemUrl(sel.path)).catch(() => null) : null, sel ? `${sel.path}\n${sel.n}\n${sel.meta}` : "").got?.d || null;   // what the item is
   if (!sel) return html`<div class="viewer"><${Empty} text="Select a file." /></div>`;
   const { path, dir } = sel, here = it && it.path === path ? it : null;
-  const download = html`<a class="btn small" href=${fileUrl(path, true)}>Download</a>`;
+  const download = html`<${Tool} icon="download" label="Download" href=${fileUrl(path, true)} />`;
   const editable = mine && got?.text != null && !got.cut;
   const tools = got?.text != null ? html`${editable ? html`<${Act} cls="small" onClick=${() => f.save()}>Save<//>` : ""}
-      <${ViewerTools} v=${view} title=${path} rawUrl=${fileUrl(path, false) + "&raw=true"} />${download}` : got?.binary ? download : "";
+      <${Tools}><${ViewerTools} v=${view} title=${path} rawUrl=${fileUrl(path, false) + "&raw=true"} />${download}<//>` : got?.binary ? html`<${Tools}>${download}<//>` : "";
   const head = html`<div class="viewer-head"><${PathCrumbs} name=${name} path=${path} open=${f.open} />
     <div class="actions">${tools}${here && mine ? html`<${ActionsMenu} label=${path || name} it=${here} acts=${f.acts} />` : ""}</div>
     ${here ? html`<${MetaLine} it=${here} sizeUrl=${dir ? f.itemUrl(path, "/size") : null} />` : ""}</div>`;

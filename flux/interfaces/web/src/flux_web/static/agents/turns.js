@@ -6,6 +6,7 @@ import { Prose } from "../components/Markdown.js";
 import { ViewerFrame, ViewerTools, showRaw, useViewer } from "../viewer.js";
 import { Ago, html } from "../view.js";
 import { Fact, Pill } from "../components/Tone.js";
+import { Head, Tool } from "../components/Head.js";
 
 const ROLES = { generate: "design", critique: "critic" };
 /** D1092: what the turn was for (design, critic, prototype, plan); D1094: a role or nothing -- "model" is its kind. */
@@ -71,10 +72,8 @@ export function TurnDetail({ full, k }) {
   ]).filter(Boolean);
   const prompt = () => showRaw(full.prompt, "Agent prompt");
   return html`<${ViewerFrame} v=${view} title="Agent turn"><div class="detail">
-    <div class="detail-head"><h2>${full.agent || full.model || full.kind}</h2><span class="muted"><${Ago} t=${full.ts} /> · ${dur(full.seconds)}</span></div>
-    <div class="actions">
-      ${full.prompt ? html`<button type="button" class="small agent-prompt-button" onClick=${prompt}>Prompt</button>` : ""}
-      <${ViewerTools} v=${view} title="Agent turn" rawText=${JSON.stringify(full, null, 2)} /></div>
+    <${Head} title=${full.agent || full.model || full.kind} tools=${html`${full.prompt ? html`<${Tool} icon="prompt" label="Prompt" cls="agent-prompt-button" onClick=${prompt} />` : ""}
+        <${ViewerTools} v=${view} title="Agent turn" rawText=${JSON.stringify(full, null, 2)} />`}><span class="muted"><${Ago} t=${full.ts} /> · ${dur(full.seconds)}</span><//>
     <div class="facts">${facts.filter(([f]) => MAIN.has(f)).map(([f, v]) => html`<${TurnFact} key=${f} k=${f} v=${v} />`)}</div>
     ${more.length ? html`<details class="facts-more"><summary>More: ${more.map(([f]) => f).join(", ")}</summary>
       <div class="facts">${more.map(([f, v]) => html`<${TurnFact} key=${f} k=${f} v=${v} />`)}</div></details>` : ""}
