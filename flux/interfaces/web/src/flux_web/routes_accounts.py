@@ -9,10 +9,16 @@ from types import SimpleNamespace
 from typing import Any
 
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
+from pydantic import BaseModel
 
 from .models import Login, NewUser, UserChange, GroupIn, GroupChange, FileText, EnvVar, Settings
 from .models import OVERVIEW_DEFAULT, OVERVIEW_LARGE_CARDS, OVERVIEW_SMALL_CARDS, OverviewLayout
 from .store import SESSION_DAYS, PERMISSIONS, DEFAULT_PERMISSIONS, User
+
+
+class FromEndpoint(BaseModel):                 # D1161: a group's model picked from its endpoint's list, or typed
+    group: str
+    on: bool
 
 
 def register(app: FastAPI, ctx: SimpleNamespace) -> None:
@@ -217,10 +223,11 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
 
         def static(k: str, g: dict[str, Any]) -> dict[str, Any]:
             return {"id": k, "label": g["label"], "tab": g.get("tab") or g["label"], "public": list(g["public"]), "secret": list(g["secret"]),
-                    "endpoint": g["endpoint"], "hint": g.get("hint", ""), "prices": list(g.get("prices", ()))}
+                    "endpoint": g["endpoint"], "model_key": g.get("model_key"), "hint": g.get("hint", ""), "prices": list(g.get("prices", ()))}
 
         per = [{"id": a.name, "label": f"{a.label} ({a.kind})" if not a.builtin else a.label, "tab": a.label,
                 "public": list(a.keys()["public"]), "secret": list(a.keys()["secret"]), "endpoint": a.keys()["public"][0],
+                "model_key": a.keys()["public"][1],
                 "hint": KINDS[a.kind]["hint"], "labels": a.labels(), "agent": a.name, "prices": list(a.prices())} for a in agents.values()]
         return [*(static(k, g) for k, g in GROUPS.items()), *per]
 
@@ -292,7 +299,8 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
         env = {n: {"mine": _env_list(f"agent:{n}:user:{user.id}"), "server": [] if user.external else _inherited_list(f"agent:{n}")}
                for n in agents}
         return {"values": values, "inherited": inherited, "overridden": {k: True for k in inherited if values.get(k)},
-                "groups": groups, **_keys_of(groups), "agent_env": env, "external": user.external}
+                "groups": groups, **_keys_of(groups), "agent_env": env, "external": user.external,
+                "from_endpoint": _from_endpoint(f"user:{user.id}")}
 
     @app.get("/api/admin/settings")
     def get_server_settings(_a: User = Depends(admin_of)) -> dict[str, Any]:
@@ -301,7 +309,7 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
         agents = visible(store)
         groups = _groups(agents)
         return {"values": store.server_settings(), "groups": groups, **_keys_of(groups),
-                "agent_env": {n: _env_list(f"agent:{n}") for n in agents}}
+                "agent_env": {n: _env_list(f"agent:{n}") for n in agents}, "from_endpoint": _from_endpoint("server")}
 
     @app.put("/api/admin/settings")
     def put_server_settings(body: Settings, a: User = Depends(admin_of)) -> dict[str, Any]:
@@ -322,6 +330,46 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
             raise fail(exc) from exc
         store.audit(user.name, "settings", ", ".join(sorted(body.values)))
         return {"values": store.settings(user)}
+
+    # ---- D1161: a group's model picked from its endpoint's list -- the list as the scope's runs would
+    # reach it (the server's; a user's own endpoint and key, else the server's they inherit), the
+    # key kept here; the box "From endpoint" kept per scope and group, a form's choice, not a run's
+    def _from_endpoint(scope: str) -> list[str]:
+        return [str(g) for g in store.server_get(f"models_from_endpoint:{scope}") or []]
+
+    def _pickable(group: str) -> None:
+        from .agents import visible
+
+        if not any(g["id"] == group and g.get("model_key") for g in _groups(visible(store))):
+            raise HTTPException(404, f"{group!r}: no settings group with an endpoint and a model")
+
+    def _set_from_endpoint(scope: str, body: FromEndpoint) -> dict[str, Any]:
+        _pickable(body.group)
+        on = [g for g in _from_endpoint(scope) if g != body.group] + ([body.group] if body.on else [])
+        store.server_set(f"models_from_endpoint:{scope}", on or None)
+        return {"from_endpoint": on}
+
+    @app.get("/api/settings/models")
+    def my_models(group: str, user: User = Depends(user_of)) -> dict[str, Any]:
+        from .model_list import listed
+
+        _pickable(group)
+        return listed(store, user, group)
+
+    @app.get("/api/admin/settings/models")
+    def server_models(group: str, _a: User = Depends(admin_of)) -> dict[str, Any]:
+        from .model_list import listed
+
+        _pickable(group)
+        return listed(store, None, group)
+
+    @app.put("/api/settings/from-endpoint")
+    def my_from_endpoint(body: FromEndpoint, user: User = Depends(user_of)) -> dict[str, Any]:
+        return _set_from_endpoint(f"user:{user.id}", body)
+
+    @app.put("/api/admin/settings/from-endpoint")
+    def server_from_endpoint(body: FromEndpoint, _a: User = Depends(admin_of)) -> dict[str, Any]:
+        return _set_from_endpoint("server", body)
 
     # ---- environment variables (D697): the server's (admins), a user's, a loop's
     @app.get("/api/admin/env")

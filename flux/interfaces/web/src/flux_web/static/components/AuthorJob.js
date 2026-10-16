@@ -1,11 +1,12 @@
 // Flux web (D704, D1122-D1125, D1131): one view of an agent at work on a loop's problem -- writing it (New loop ›
 // Agent), revising it (Settings › Problem › Agent), or either seen from the Overview. A strip: the run glyph (✓ or ✗
 // once it ended), the agent, what it does now (its latest work line), the time it took, Stop, Details. Under it its
-// question (components/Ask.js) and, a revision ended, what it changed. Details: its work as lines, the files (written
+// question (components/Ask.js) -- D1158: or, its check refused the draft, the refusal with Try again, Open in configurator
+// and a note to the agent, in the question's place -- and, a revision ended, what it changed. Details: its work as lines, the files (written
 // / yours), then folded its conversation (D1144: as Live draws an agent), what it was asked, its log and its stderr. One poll (`useAuthor`) follows it.
 
 import { Glyph, Notice, cx, html, useRef, useState } from "../view.js";
-import { loopApi, toast } from "../ui.js";
+import { appHref, loopApi, toast } from "../ui.js";
 import { dur, plural } from "../format.js";
 import { lineDiff } from "../diff.js";
 import { usePoll } from "./Load.js";
@@ -72,9 +73,29 @@ function Lines({ st, rows }) {
     ${st.running ? html`<li class="aj-line now"><${Glyph} tone="run" /><span>${st.now || "working"}…</span></li>` : ""}</ul>`;
 }
 
+/** D1158: the draft its check refused, where a question would be: the refusal, Try again (another round, the same
+    session), Open in configurator (`openConfig`, where there is one), and a note that starts a round told it. */
+function Refused({ st, retry, openConfig }) {
+  const [text, setText] = useState("");
+  const tell = async () => {
+    if (!text.trim()) { toast("Write what to do.", "warn"); return; }
+    await retry(text.trim());
+    setText("");
+  };
+  return html`<div class="qbox aj-refused" role="group" aria-label="Check refused">
+    <div class="qbox-head"><b>Check refused</b><small class="muted">${` · ${st.rounds > 1 ? `round ${st.rounds}, ` : ""}draft kept`}</small></div>
+    ${st.error ? html`<pre class="qbox-text aj-error mono small">${st.error}</pre>` : html`<p class="qbox-text">${AUTHOR_FAILED[1]}</p>`}
+    <div class="qbox-choices"><${Act} cls="small primary" onClick=${() => retry("")}>Try again<//>
+      ${openConfig && st.document ? html`<${Act} cls="small" onClick=${openConfig}>Open in configurator<//>` : ""}</div>
+    <div class="qbox-free"><input class="grow qbox-in" aria-label="Note to agent" placeholder="Or tell agent what to do" value=${text}
+        onInput=${e => setText(e.currentTarget.value)} onKeyDown=${e => { if (e.key === "Enter" && !e.isComposing) { e.preventDefault(); tell().catch(x => toast(x.message, "bad")); } }} />
+      <${Act} cls="small" onClick=${tell}>Send<//></div></div>`;
+}
+
 /** The job: `st` what /author said; `onStop` for whoever may stop it; `answer(text)` for whoever may answer its
-    question; `open` the details at first; `diff` false where what a revision changed is shown beside it. */
-export function AuthorJob({ name, st, onStop = null, answer = null, open = false, diff = true, cls = "" }) {
+    question; `retry(note)` for whoever may send a refused draft back (D1158), `openConfig` where the configurator
+    is elsewhere; `open` the details at first; `diff` false where what a revision changed is shown beside it. */
+export function AuthorJob({ name, st, onStop = null, answer = null, retry = null, openConfig = null, open = false, diff = true, cls = "" }) {
   const [details, setDetails] = useState(open);
   if (!st || !(st.ever || st.connection_error)) return null;
   const running = !!st.running, f = st.progress?.fields || {}, rows = linesOf(st), failed = st.ever && !running && !st.ok && !st.connection_error;
@@ -93,6 +114,7 @@ export function AuthorJob({ name, st, onStop = null, answer = null, open = false
     ${st.connection_error ? html`<${Notice} tone="warn" cls="aj-reconnect" what="Reconnecting" why=${st.connection_error} />` : ""}
     ${f["rate limit"] ? html`<${Notice} tone="warn" what="Rate limit" why=${f["rate limit"]} />` : ""}
     ${st.question ? html`<${Ask} q=${st.question} send=${answer} />` : ""}
+    ${failed && retry ? html`<${Refused} st=${st} retry=${retry} openConfig=${openConfig} />` : ""}
     ${changed ? html`<details class="aj-diff" open><summary>${`Changes to ${st.revise}`}</summary><${Diff} ops=${lineDiff(st.before, st.after)} /></details>` : ""}
     ${details ? html`<div class="aj-details">
       ${rows.length || running ? html`<${Lines} st=${st} rows=${rows} />` : ""}
@@ -109,7 +131,8 @@ export function AuthorJob({ name, st, onStop = null, answer = null, open = false
 /** The author's answer and its Stop, for loop `name`; `then` after either (read again soon). */
 export const authorActs = (name, then = () => {}) => ({
   stop: async () => { toast((await loopApi(name).api("/author/stop", { method: "POST" })).ok, "ok"); then(500); },
-  answer: async text => { toast((await loopApi(name).api("/author/answer", { method: "POST", body: { text } })).ok, "ok"); then(300); } });
+  answer: async text => { toast((await loopApi(name).api("/author/answer", { method: "POST", body: { text } })).ok, "ok"); then(300); },
+  retry: async (text = "") => { toast((await loopApi(name).api("/author/retry", { method: "POST", body: { text } })).ok, "ok"); then(300); } });
 
 /** D704: an agent writing (or revising) the problem, on the Overview: the strip alone. `first` what /author said when
     the page was drawn; a document written long ago, or a draft made into the loop (D1122), no strip; the problem
@@ -122,5 +145,6 @@ export function OverviewAuthor({ name, mine, first }) {
   } });
   if (!st?.ever || (!st.running && st.made) || (!st.running && st.ended && Date.now() / 1000 - st.ended > 3600 * 6)) return null;
   const acts = authorActs(name, ms => poll.soon(ms));
-  return html`<${AuthorJob} name=${name} st=${st} onStop=${mine ? acts.stop : null} answer=${mine ? acts.answer : null} />`;
+  return html`<${AuthorJob} name=${name} st=${st} onStop=${mine ? acts.stop : null} answer=${mine ? acts.answer : null} retry=${mine ? acts.retry : null}
+    openConfig=${mine ? () => { location.hash = `${appHref(null, name)}/settings/problem`; } : null} />`;
 }

@@ -45,7 +45,8 @@ def probe_context(task: Any, workdir: Path, part: str, budget: dict[str, int] | 
     ctx.write_text(json.dumps({"doc": task.to_dict(), "home": task.home or ".", "part": part,
                                "budget": dict(budget), "log": str(root / f"turn-{n:03d}.jsonl"),
                                "stages": [s.name for s in task.stages], "proto": proto or None,
-                               "record": record, "campaign": campaign, "gate_checks": list(checks) or None}))
+                               "record": record, "campaign": campaign, "gate_checks": list(checks) or None,
+                               "hidden": [list(h) for h in getattr(task, "hidden", ())]}))     # D1159: `flux loop` skips them
     return str(ctx)
 
 

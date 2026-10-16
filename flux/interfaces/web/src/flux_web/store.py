@@ -57,6 +57,7 @@ _UNSET = "unset"
 #: D721: each group shows on a tab of its own (`tab`); the agent by default beside Flux's model.
 GROUPS: dict[str, dict[str, Any]] = {
     "model": {"label": "Flux's own model (OpenAI-compatible)", "tab": "Flux", "endpoint": "FLUX_REMOTE_BASE_URL",
+              "model_key": "FLUX_REMOTE_MODEL",                 # D1161: its model, pickable from the endpoint's list
               "public": ("FLUX_REMOTE_BASE_URL", "FLUX_REMOTE_MODEL", "FLUX_LLM_TIMEOUT_S", "FLUX_REMOTE_PRICE_IN", "FLUX_REMOTE_PRICE_OUT",
                          "FLUX_REMOTE_AT_ONCE"),
               "prices": ("FLUX_REMOTE_PRICE_IN", "FLUX_REMOTE_PRICE_OUT"),

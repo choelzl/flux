@@ -23,10 +23,12 @@ DOCUMENT_KEYS = frozenset({
     "skills", "baseline"})
 #: The fields `flow`'s boxes are read into (D775): the loop's own, never a document's key.
 _LIFTED_KEYS = frozenset({"gate", "stages", "space", "seeds", "knowledge", "scope", "critics",
-                          "bench_digest"})          # D1152: flow.knowledge.workbench
+                          "bench_digest",           # D1152: flow.knowledge.workbench
+                          "hidden"})                # D1159: flow.knowledge.hidden
 
 #: set by the loader, never written: a sub-document's record name, `<parent>/<child>` (D455)
-_INTERNAL_KEYS = frozenset({"_record", "_lifted", "_inherited"})
+_INTERNAL_KEYS = frozenset({"_record", "_lifted", "_inherited",
+                            "_hidden_from"})        # D1159: a parent's hidden paths, [absolute or None, as said]
 
 #: the file extension a language's candidates are written with (D628); another language `x`
 #: writes `.x`

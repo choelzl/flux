@@ -17,7 +17,8 @@ import { useLoop } from "../loop/context.js";
 import { Failed } from "../components/Tone.js";
 import { Tool, Tools } from "../components/Head.js";
 import { Check } from "../components/Check.js";
-import { Uploader, placedFiles } from "../components/Uploader.js";
+import { Uploader, hiddenRows, placedFiles } from "../components/Uploader.js";
+import { useHidden } from "./hidden.js";
 
 /** A name or a folder asked for, the path it makes shown as it is typed; Enter asks. */
 const askPath = (name, title, label, value, ok, pathOf) => askText(title, { label, value, ok,
@@ -113,7 +114,7 @@ function useFiles(ctx, refreshList = async () => {}) {
 
 /** The selected item: its head (path, actions, what it is), then a folder's entries, a text in the editor
     (D907: a bounded preview said, never saved back), a binary file to download -- or why it could not be read. */
-function Viewer({ f, showIgnored }) {
+function Viewer({ f, showIgnored, hid }) {
   const ctx = useLoop();
   const { name, q, mine } = ctx, { sel } = f, view = useViewer();
   const fileUrl = (path, dl) => `/api/apps/${enc(name)}/file?path=${enc(path)}${dl ? "&download=1" : ""}${q}`;
@@ -136,12 +137,12 @@ function Viewer({ f, showIgnored }) {
   const tools = got?.text != null ? html`${editable ? html`<${Act} cls="small" onClick=${() => f.save()}>Save<//>` : ""}
       <${Tools}><${ViewerTools} v=${view} title=${path} rawUrl=${fileUrl(path, false) + "&raw=true"} />${download}<//>` : got?.binary ? html`<${Tools}>${download}<//>` : "";
   const head = html`<div class="viewer-head"><${PathCrumbs} name=${name} path=${path} open=${f.open} />
-    <div class="actions">${tools}${here && mine ? html`<${ActionsMenu} label=${path || name} it=${here} acts=${f.acts} />` : ""}</div>
-    ${here ? html`<${MetaLine} it=${here} sizeUrl=${dir ? f.itemUrl(path, "/size") : null} />` : ""}</div>`;
+    <div class="actions">${tools}${here && mine ? html`<${ActionsMenu} label=${path || name} it=${here} acts=${f.acts} hid=${hid} />` : ""}</div>
+    ${here ? html`<${MetaLine} it=${here} sizeUrl=${dir ? f.itemUrl(path, "/size") : null} hidden=${hid?.list} />` : ""}</div>`;
   const onEditor = ed => { f.draft.current = ed && editable ? { path, ed, saved: got.text, rev: got.rev || here?.revision || "" } : null; };
   return html`<${ViewerFrame} v=${view} title=${path}><div class="viewer">${got === null ? html`<${Skeleton} lines=${8} />` : html`${head}${
     got.error ? html`<${Failed} what=${`${path || (dir ? name : path)} could not be opened`} why=${got.error} retry=${() => f.open(path, dir, true)} />`
-    : got.list ? (got.list.length ? html`<${FileList} list=${got.list} open=${f.open} />` : html`<${Empty} text="Empty folder." />`)
+    : got.list ? (got.list.length ? html`<${FileList} list=${got.list} open=${f.open} hidden=${hid?.list} />` : html`<${Empty} text="Empty folder." />`)
     : got.binary ? html`<${Empty} text="Binary file." action=${html`<a class="btn small" href=${fileUrl(path, true)}>Download</a>`} />`
     : html`${got.cut ? html`<${Notice} tone="warn" cls="truncated" what=${`Showing the first ${bytes(new TextEncoder().encode(got.text).length)} of ${bytes(got.size)}`}
           why="too large to edit here. Download has it all." />` : ""}
@@ -149,16 +150,19 @@ function Viewer({ f, showIgnored }) {
 }
 
 /** Files added: dropped or chosen (a folder keeps its paths), each where it goes (D1149: the one uploader). */
-function Adder() {
+function Adder({ hid }) {
   const { name, drawBody } = useLoop(), [rows, setRows] = useState([]);
   const add = async () => {
     if (rows.some(r => r.dest === "custom" && !r.custom.trim())) { toast("Name the folder a file goes to, or choose another place.", "warn"); return; }
     const got = placedFiles(rows);
     const n = await sendWithProgress("Adding files", plural(got.length, "file"), p => sendFiles(name, got, p));
-    if (n != null) { toast(`Added ${plural(n, "file")}`, "ok"); setRows([]); }
+    if (n != null) {
+      for (const p of hiddenRows(rows)) await hid.set(p, true, true);          // D1159: marked hidden from AI as added
+      toast(`Added ${plural(n, "file")}`, "ok"); setRows([]);
+    }
     drawBody();
   };
-  return html`<div class="adder"><${Uploader} rows=${rows} onChange=${setRows} />
+  return html`<div class="adder"><${Uploader} rows=${rows} onChange=${setRows} hideable />
     ${rows.length ? html`<div class="row"><${Act} cls="small primary" onClick=${add}>${`Add ${plural(placedFiles(rows).length, "file")}`}<//></div>` : ""}</div>`;
 }
 
@@ -172,11 +176,12 @@ export function FilesTab({ root }) {
   useEffect(() => setList(root), [root]);
   const rootList = () => loopApi(ctx.name).api(`/files${showIgnored() ? "?ignored=true" : ""}`);
   const f = useFiles(ctx, async () => setList(await rootList()));      // D908: after a rename, move or delete
+  const hid = useHidden(ctx.name);                                       // D1159: what the agents may not read
   useEffect(() => { if (ctx.info.document) f.open(ctx.info.document, false, true); }, []);
   const ignored = html`<${Check} cls="small ignored-toggle" title=".gitignore'd and dot files" id="show-ignored" checked=${showIgnored()}
     onChange=${on => { remember("flux-show-ignored", on ? "1" : "0"); ctx.drawBody(); }}>show ignored<//>`;
-  return html`<div class="grid-app"><${Card} title="Files" cls="files-card" actions=${ignored}><div class="files-list"><${FileList} list=${list} open=${f.open} /></div>${ctx.mine ? html`<${Adder} />` : ""}<//>
-    <${Card} cls="viewer-card"><${Viewer} f=${f} showIgnored=${showIgnored()} /><//></div>`;
+  return html`<div class="grid-app"><${Card} title="Files" cls="files-card" actions=${ignored}><div class="files-list"><${FileList} list=${list} open=${f.open} hidden=${hid.list} /></div>${ctx.mine ? html`<${Adder} hid=${hid} />` : ""}<//>
+    <${Card} cls="viewer-card"><${Viewer} f=${f} showIgnored=${showIgnored()} hid=${hid} /><//></div>`;
 }
 
 /** The agents' workbench: their tools, their notes, the rest -- each opened in the viewer. */

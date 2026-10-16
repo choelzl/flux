@@ -21,7 +21,7 @@ from fastapi.responses import StreamingResponse
 
 from .models import (
     DocText, FileText, RunOptions, Stop, NoteIn, DocSave, AskIn, ShareIn, EnvVar, Advanced, EmptyIn, CloneIn, MoveIn,
-    LoopRename, LoopTransfer, ResetIn, AnswerIn, MakeIn,
+    LoopRename, LoopTransfer, ResetIn, AnswerIn, MakeIn, RetryIn,
 )
 from .runs import ADVANCED, advanced, home_ready, sandbox_config, machine_env, run_env, sandbox_env, loop_permissions
 from .result_preferences import ResultPreferences, merge_preferences, preferences
@@ -444,6 +444,23 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
         except (Escape, OSError) as exc:
             raise HTTPException(400, "the agent's inbox is not a file of this loop") from exc
         store.audit(user.name, "answered the author", f"{whose.name}/{name}")
+        return {"ok": said}
+
+    @app.post("/api/apps/{name}/author/retry")
+    def author_retry(name: str, body: RetryIn, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, str]:
+        """D1158: a draft its author's check refused, repaired again by the same agent (its session continued, D1156),
+        told `text` first when given; not while the loop runs."""
+        w, whose, d, run = loop_of(name, user, owner, edit=True, run=True)
+        if run and runs.live(run):
+            raise HTTPException(409, "stop the loop first: its problem is in use")
+        author = str(authoring.state(d).get("author") or "")
+        check_author(author)
+        try:
+            said = authoring.retry(app_dir=d, workspace=w, name=name, env=_author_env(whose, name, user, author), by=user.name,
+                                   note=body.text)
+        except ValueError as exc:
+            raise HTTPException(409, str(exc)) from exc
+        store.audit(user.name, "draft repaired by an agent", f"{whose.name}/{name}: {author}")
         return {"ok": said}
 
     @app.get("/api/apps/{name}/author/decisions")

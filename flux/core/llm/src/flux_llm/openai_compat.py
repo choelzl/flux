@@ -31,7 +31,7 @@ from .text import default_local_model, local_llm_timeout_s
 from .tools import ToolBudget
 
 __all__ = ["DEFAULT_NUM_PREDICT", "OpenAIChatProposer", "default_model",
-           "local_base_url", "remote_api_key", "remote_base_url", "remote_enabled", "remote_model",
+           "list_models", "local_base_url", "remote_api_key", "remote_base_url", "remote_enabled", "remote_model",
            "set_think_override", "think_override"]
 
 # A structured proposal is a few hundred tokens; the cap bounds a model that will not stop,
@@ -842,3 +842,41 @@ def _error_text(exc: urllib.error.HTTPError) -> str:
     except Exception:  # noqa: BLE001
         pass
     return raw[:200]
+
+
+def list_models(base_url: str, *, key: str | None = None, auth: str | None = None, anthropic: bool = False,
+                timeout_s: float = 10.0) -> list[str]:
+    """The model names an endpoint lists (D1161): an OpenAI-compatible `GET {base}/models` --
+    `{data: [{id}]}`, `/v1` added when the base names the server's root -- or Anthropic's
+    `/v1/models` (`anthropic`: the key as `x-api-key`), Ollama's `{models: [{name}]}` too. `auth` a
+    bearer token where the key is not one. Raises ValueError with a short reason; never says the key."""
+    base = base_url.strip().rstrip("/")
+    if not base.startswith(("http://", "https://")):
+        raise ValueError("Endpoint is not an http(s) URL")
+    urls = [f"{base}/models"] if base.endswith("/v1") else [f"{base}/v1/models", f"{base}/models"]
+    headers = {"Accept": "application/json"}
+    if anthropic:
+        headers["anthropic-version"] = "2023-06-01"
+        if key:
+            headers["x-api-key"] = key
+    bearer = auth or (None if anthropic else key)
+    if bearer:
+        headers["Authorization"] = f"Bearer {bearer}"
+    why = ""
+    for url in urls:
+        try:
+            with urllib.request.urlopen(urllib.request.Request(url, headers=headers), timeout=timeout_s) as resp:
+                doc = json.loads(resp.read() or b"{}")
+        except urllib.error.HTTPError as exc:
+            if exc.code in (401, 403):
+                raise ValueError(f"Endpoint refused the key (HTTP {exc.code})") from None
+            why = f"HTTP {exc.code}" + (f": {t}" if (t := _error_text(exc)) else "")
+            continue                                   # a root without /v1: the next spelling
+        except ValueError:
+            raise ValueError("Model list is not JSON") from None
+        except Exception as exc:  # noqa: BLE001 -- unreachable, timed out, refused: said, not raised
+            raise ValueError(f"No answer from endpoint ({getattr(exc, 'reason', None) or exc})") from None
+        listed = (doc.get("data") or doc.get("models") or []) if isinstance(doc, dict) else []
+        names = [str(m.get("id") or m.get("name") or m.get("model") or "") if isinstance(m, dict) else str(m) for m in listed]
+        return sorted(dict.fromkeys(n for n in names if n))
+    raise ValueError(f"Model list failed ({why})" if why else "Endpoint lists no models")

@@ -187,13 +187,25 @@ def _variant(name: str) -> dict:
         d["flow"]["knowledge"] = {"digest": "codex", "workbench": {"by": "claude", "timeout_s": 99}}
     elif name == "library_off_workbench":
         d["flow"]["knowledge"] = {"off": True, "lessons": "claude", "workbench": "model"}
+    # D1159: the paths hidden from the agents -- beside the library, with it off, with the flow kept as written
+    elif name == "hidden":
+        d["flow"]["knowledge"] = {"files": ["check.py"], "hidden": ["rtl/", "method.md"]}
+    elif name == "hidden_library_off":
+        d["flow"]["knowledge"] = {"off": True, "hidden": ["rtl/*.sv"], "lessons": "mined"}
+    elif name == "hidden_kept_flow":
+        d["flow"]["orchestrate"] = {"policy": [{"policy": "sweep"}, {"policy": "gradient"}], "space": {"mode": ["a", "b"]}}
+        d["flow"]["generate"] = {"command": "{python} {home}/gen.py {artifact} {mode}"}
+        d["flow"]["knowledge"] = {"digest": "claude", "hidden": ["rtl/"]}
+    elif name == "hidden_agent":
+        d["flow"]["generate"] = {"by": "claude", "hidden": ["method.md"]}
     return d
 
 
 @pytest.mark.parametrize("name", ["scalar_choices", "needs_override", "spaced_script", "params_placeholder", "kept_flow_knowledge",
                                   "model_search_options", "policy_options", "critic_options", "lessons_options", "library", "library_kept_flow",
                                   "agent_options", "probe_off", "probe_gate_off", "critic_session", "skills_off", "skills_some_off",
-                                  "skills_from", "skills_from_some_off", "workbench_off", "workbench_agent", "library_off_workbench"])
+                                  "skills_from", "skills_from_some_off", "workbench_off", "workbench_agent", "library_off_workbench",
+                                  "hidden", "hidden_library_off", "hidden_kept_flow", "hidden_agent"])
 def test_an_untouched_edit_keeps_the_meaning(name, tmp_path):
     src = tmp_path / "src" / name
     src.mkdir(parents=True)
@@ -210,6 +222,9 @@ def test_an_untouched_edit_keeps_the_meaning(name, tmp_path):
     if name.startswith(("skills", "workbench")) or name == "library_off_workbench":
         assert not [k for k in kept if "skills" in k or "knowledge" in k or k == "flow.boxes"], kept
         assert after.get("skills") == _variant(name).get("skills")
+    if name.startswith("hidden"):
+        assert not [k for k in kept if "knowledge" in k], kept
+        assert (after["flow"].get("knowledge") or {}).get("hidden") == (_variant(name)["flow"].get("knowledge") or {}).get("hidden")
     if name.startswith("library_kept") or name == "library":
         assert "flow.knowledge" not in kept and "FILE rtl/top.sv:" in after["flow"]["knowledge"]["text"], (kept, after["flow"])
     # a typed choice is the same value of the same type: "01" is not 1, "true" is not True

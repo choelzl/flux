@@ -31,7 +31,7 @@ _DELEGABLE = frozenset({"validate", "orchestrate", "plan", "dse", "generate", "e
 #: passed, a stage's numbers, the pick
 CRITIC_BOXES = ("orchestrate", "test", "measure", "select")
 _AGENT_OPTS = ("session", "timeout_s", "questions", "max_questions", "wait_s", "bin", "args", "probe", "allow",
-               "output", "resume", "name")
+               "output", "resume", "name", "hidden")          # D1159: `hidden`, more paths this agent may not read
 #: the words each box takes on the surface, and what the loop calls them inside
 _BY_WORDS = {"validate": {"rules": "rules", "model": "llm"},
              "orchestrate": {"rules": "rules", "given": "given", "model": "llm", "tools": "agent"},
@@ -76,6 +76,14 @@ def _by_surface(flow: dict[str, Any]) -> dict[str, Any]:
     if isinstance(o, list) or (isinstance(o, str) and o in _dse_words()) \
             or (isinstance(o, dict) and ({"policy", "space", "seeds"} & set(o) or set(o) & set(_dse_words()))):
         flow["dse"] = flow.pop("orchestrate")
+    k = flow.get("knowledge")
+    if isinstance(k, dict) and "hidden" in k:              # D1159: the paths hidden from the agents, beside the library
+        k = dict(k)
+        flow["_hidden"] = k.pop("hidden")
+        if k:
+            flow["knowledge"] = k
+        else:
+            flow.pop("knowledge")
     k = flow.get("knowledge")
     if isinstance(k, dict) and "by" in k:
         raise TaskError("flow.knowledge: who digests the papers is `digest:` -- knowledge: {digest: claude} (D830)")
@@ -242,6 +250,8 @@ def _lift(doc: dict[str, Any]) -> dict[str, Any]:
     flow = _by_surface(raw) if strict else dict(raw)
     if "_bench" in flow:
         doc["bench_digest"] = flow.pop("_bench")
+    if "_hidden" in flow:
+        doc["hidden"] = flow.pop("_hidden")
     for box in ("test", "measure"):
         if isinstance(raw.get(box), dict) and ("agent" in raw[box] or "by" in raw[box]):
             raise TaskError(f"flow.{box} is never delegated to an agent: it establishes facts (D460)")

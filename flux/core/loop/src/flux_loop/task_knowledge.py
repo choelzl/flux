@@ -42,15 +42,17 @@ def library_queries(task: TaskSpec, parts: Any = (), n: int = 8, words: int = 12
     return list(dict.fromkeys(got))[:n]
 
 
-def _agent_digest(spec: Any, skills: Any = ()):
+def _agent_digest(spec: Any, skills: Any = (), hidden: Any = ()):
     """D771: `ask(path, prompt, text) -> (digest, by)` -- one coding agent turn per paper, in a
     scratch directory of its own. D785: the paper's text is a file there (`paper.txt`) the agent
     reads with its tools, in pieces as it needs, not the brief itself -- a paper's 30,000 tokens
     overflowed a model's context; the brief is the instructions and where the original is."""
     import shutil
     import tempfile
+    from types import SimpleNamespace
 
     from .agent import agent_spec, run_turn
+    from .hidden import hidden_subs
 
     agent = agent_spec(spec)
 
@@ -70,7 +72,8 @@ def _agent_digest(spec: Any, skills: Any = ()):
 
                 install(list(skills), work)
             subs = {"prompt": brief, "prompt_file": str(work / "BRIEF.md"), "artifact": str(work / "digest.md"),
-                    "workdir": str(work), "part": "digest", "name": f"digest {Path(path).name}", "home": str(work)}
+                    "workdir": str(work), "part": "digest", "name": f"digest {Path(path).name}", "home": str(work),
+                    **hidden_subs(SimpleNamespace(hidden=hidden))}            # D1159: the loop's hidden paths
             turn = run_turn(agent, agent.argv, subs, workdir=work)
             if not turn.ok:                       # D782: an agent that says why on stdout (OpenCode) is heard too
                 said = " ".join((turn.stderr or "").split())[-300:] or " ".join((turn.stdout or "").split())[-300:]
@@ -122,6 +125,7 @@ class KnowledgeMixin:
             for src in getattr(self._mentor, "sources", ()):         # D1152: the lessons' agent has the loop's skills
                 if type(src).__name__ == "AgentLessons":
                     src.skills = self.agent_skill_list()
+                    src.hidden = self.task.hidden                    # D1159
         return self._mentor
 
     def digesting(self) -> bool:
@@ -136,7 +140,7 @@ class KnowledgeMixin:
         sources = [x for x in getattr(mentor, "sources", ()) if type(x).__name__ == "Digest"]
         if not sources:
             return {}
-        ask = _agent_digest(self.task.digest_by, self.agent_skill_list()) if self.task.digest_by is not None else None
+        ask = _agent_digest(self.task.digest_by, self.agent_skill_list(), self.task.hidden) if self.task.digest_by is not None else None
         out: dict[str, Any] = {}
         for src in sources:
             if ask is not None:
@@ -168,7 +172,7 @@ class KnowledgeMixin:
                  "files by their path. No preamble, no list of every file (one is appended).")
         try:
             if agent is not None:
-                ask = _agent_digest(agent, self.agent_skill_list())
+                ask = _agent_digest(agent, self.agent_skill_list(), self.task.hidden)
                 about, by = ask(str(Path(bench).resolve()), brief + f"\n\nThe workbench is the folder {Path(bench).resolve()}: "
                                 "read its files with your tools.")
             elif getattr(state, "proposer", None) is not None:

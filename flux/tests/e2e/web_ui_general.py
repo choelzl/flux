@@ -515,6 +515,74 @@ def general_flows(r, watch):
 
     r.step("new loop by agent", new_loop_by_agent)
 
+    def author_refused():
+        """D1158: a draft its author's check refused is no dead end -- the refusal where a question would be, Try again
+        (another round, the same session), a note that starts a round told it, Open in configurator (the draft made a
+        loop, its Settings › Problem). FLUX_E2E_SHOTS: the page at 1280 and 390 px, light and dark."""
+        with loop(r, "ui-author-refused") as name:
+            now = b.js("return Date.now()/1000")
+            error = ("`problem.yaml` names 1 path the loop folder does not have:\n  - check.py  (named by flow.test)\n"
+                     "The loop folder holds: library/, golden.py, problem.yaml\n"
+                     "Paths are relative to the loop folder (`{home}` is the loop folder). Write what is missing there, or change the key to name what is there.")
+            state = {"ever": True, "running": False, "ok": False, "rc": 1, "started": now - 340, "ended": now - 20, "elapsed_s": 320,
+                     "author": "claude", "by": "bob", "document": "problem.yaml", "error": error, "resumable": True, "rounds": 1,
+                     "activity": [{"t": now - 300, "k": "read", "text": "library/spec.md"}, {"t": now - 200, "k": "write", "text": "problem.yaml"},
+                                  {"t": now - 100, "k": "check", "text": "the check refused it: `problem.yaml` names 1 path the loop folder does not have:", "tone": "bad"},
+                                  {"t": now - 20, "k": "check", "text": "stopped after 3 repairs: the draft stays; try again, or tell the agent what to do", "tone": "bad"}],
+                     "files": [{"path": "problem.yaml", "by": "written"}, {"path": "golden.py", "by": "written"}, {"path": "library/spec.md", "by": "yours"}]}
+            b.js("""window.__arFetch=window.fetch; window.__arState=arguments[1]; window.__arSent=[];
+              const base='/api/apps/'+arguments[0], reply=d=>new Response(JSON.stringify(d),{headers:{'Content-Type':'application/json'}});
+              window.fetch=async(u,o)=>{
+                const path=new URL(String(u),location.href).pathname, m=(o&&o.method)||'GET';
+                if(path===base+'/author' && m==='GET') return reply(window.__arState);
+                if(['/author/retry','/author/make'].some(p=>path===base+p)){ window.__arSent.push([path.slice(base.length), JSON.parse(o.body)]); return reply({ok:'sent'}); }
+                const response=await window.__arFetch(u,o);
+                if(path!==base || m!=='GET') return response;
+                const data=await response.json(); data.agent_draft=true; return reply(data);
+              };
+              localStorage.setItem('flux-byagent:bob', JSON.stringify({name: arguments[0], stage: 1, kept: {}, who: 'claude', askMe: true})); return 1;""", name, state)
+            try:
+                r.page("#/configure/agent", "document.querySelector('.aj .aj-refused')", "a refused draft")
+                card = b.js("const c=document.querySelector('.aj .aj-refused'); return {head: c.querySelector('.qbox-head').textContent, error: c.querySelector('.aj-error').textContent,"
+                            " buttons: [...c.querySelectorAll('button')].map(x=>x.textContent), place: c.querySelector('input').placeholder}")
+                r.check("the refusal is where a question would be: what is missing, its key, what the folder holds",
+                        card["head"].startswith("Check refused") and "check.py  (named by flow.test)" in card["error"] and "The loop folder holds" in card["error"], card)
+                r.check("its actions: Try again, Open in configurator, a note to the agent",
+                        card["buttons"] == ["Try again", "Open in configurator", "Send"] and card["place"] == "Or tell agent what to do", card)
+                r.check("the strip says it failed, the draft stays", b.js("return document.querySelector('.aj[data-author-state=bad] .aj-now').textContent.includes('No document passed')"))
+                if shots := os.environ.get("FLUX_E2E_SHOTS"):
+                    Path(shots).mkdir(parents=True, exist_ok=True)
+                    for width in (1280, 390):
+                        b.cmd("WebDriver:SetWindowRect", {"width": width, "height": 900})
+                        time.sleep(0.5)
+                        for theme in ("light", "dark"):
+                            b.js(f"document.documentElement.dataset.theme = '{theme}'; return 1")
+                            time.sleep(0.4)
+                            b.shot(Path(shots) / f"author-refused-{width}-{theme}.png", full=True)
+                    b.js("delete document.documentElement.dataset.theme; return 1")
+                    b.cmd("WebDriver:SetWindowRect", {"width": 1280, "height": 900})
+                b.cmd("WebDriver:SetWindowRect", {"width": 390, "height": 900})
+                r.check("the refused draft fits a phone", b.js("return document.documentElement.scrollWidth<=innerWidth+1"))
+                b.cmd("WebDriver:SetWindowRect", {"width": 1280, "height": 900})
+                b.js("[...document.querySelectorAll('.aj-refused button')].find(x => x.textContent === 'Try again').click(); return 1")
+                b.wait("window.__arSent.length === 1", what="Try again sent")
+                r.check("Try again starts another round, told nothing", b.js("return window.__arSent[0]") == ["/author/retry", {"text": ""}])
+                b.js("const i=document.querySelector('.aj-refused input'); i.value='write check.py beside the document'; i.dispatchEvent(new Event('input', {bubbles: true})); return 1")
+                b.js("[...document.querySelectorAll('.aj-refused button')].find(x => x.textContent === 'Send').click(); return 1")
+                b.wait("window.__arSent.length === 2", what="the note sent")
+                r.check("a note starts a round told it", b.js("return window.__arSent[1]") == ["/author/retry", {"text": "write check.py beside the document"}])
+                b.js("[...document.querySelectorAll('.aj-refused button')].find(x => x.textContent === 'Open in configurator').click(); return 1")
+                b.wait("window.__arSent.length === 3", what="the draft made")
+                r.check("Open in configurator makes the draft the loop, as a finished draft is", b.js("return window.__arSent[2]") == ["/author/make", {"first_pass": False}])
+                b.wait(f"location.hash === '#/app/{name}/settings/problem'", what="the configurator")
+                r.check("and lands in its Settings › Problem", True)
+                r.clean("a refused draft")
+            finally:
+                b.cmd("WebDriver:SetWindowRect", {"width": 1280, "height": 900})
+                b.js("window.fetch=window.__arFetch; localStorage.removeItem('flux-byagent:bob'); return 1")
+
+    r.step("author refused", author_refused)
+
     def live_page():
         with loop(r, "ui-live-alt") as name:
             now = b.js("return Date.now()/1000")
@@ -2317,3 +2385,97 @@ objectives: [{metric: timings.fast, goal: 15, direction: minimize},
                 b.js("window.fetch = window.__partialFetch; return 1")
 
     r.step("partial agent usage", partial_agent_usage)
+
+    def models_from_endpoint():
+        """D1161: a model "From endpoint" -- the box on, the field a menu of what the endpoint lists (asked by the
+        server, here of a fake OpenAI-compatible endpoint named as bob's own), one picked, saved as a typed name is,
+        both kept over a reload; a value the list lacks kept as "not listed"; a list that fails said under it."""
+        import threading
+        from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+        class Models(BaseHTTPRequestHandler):
+            def do_GET(self):
+                ok = self.path.startswith("/e2e/v1/models")
+                self.send_response(200 if ok else 500)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps({"data": [{"id": "e2e-alpha"}, {"id": "e2e-beta"}]} if ok else {"error": "down"}).encode())
+
+            def log_message(self, *_a):
+                pass
+
+        fake = ThreadingHTTPServer(("127.0.0.1", 0), Models)
+        threading.Thread(target=fake.serve_forever, daemon=True).start()
+        base = f"http://127.0.0.1:{fake.server_port}/e2e/v1"
+        model = "#set-me-FLUX_REMOTE_MODEL"
+        box = "[...document.querySelectorAll('#main .model-head label.check')].find(l => l.closest('.stack').querySelector('#set-me-FLUX_REMOTE_MODEL'))"
+
+        def flux_tab():
+            b.js("try { localStorage.setItem('flux-models-tab-me', 'Flux'); } catch (_) {} return 1")
+            r.page("#/", "document.querySelector('#main')", "the loops")      # away and back: the settings read anew
+            r.page("#/account", f"document.querySelector('{model}')", "bob's model settings")
+            b.wait(f"document.querySelector('{model}')?.offsetParent", what="the Flux tab")
+
+        try:
+            r.login("bob")
+            r.api("/settings", "PUT", {"values": {"FLUX_REMOTE_BASE_URL": base, "FLUX_REMOTE_API_KEY": "e2e-model-secret", "FLUX_REMOTE_MODEL": None}})
+            r.api("/settings/from-endpoint", "PUT", {"group": "model", "on": False})
+            flux_tab()
+            r.check("the model is a text box until From endpoint is on", b.js(f"return document.querySelector('{model}').tagName === 'INPUT' && !!{box}"))
+            b.js(f"{box}.querySelector('input').click(); return 1")
+            b.wait(f"document.querySelector('{model}')?.tagName === 'SELECT' && document.querySelector('{model}').options.length === 3", what="the endpoint's list")
+            got = b.js(f"return [...document.querySelector('{model}').options].map(o => o.textContent)")
+            r.check("on, a menu of the models the endpoint lists (D1161)", got == ["Not set", "e2e-alpha", "e2e-beta"], str(got))
+            r.check("the key never reaches the page", b.js("return !document.documentElement.outerHTML.includes('e2e-model-secret')"))
+            b.js(f"const s = document.querySelector('{model}'); s.value = 'e2e-beta'; s.dispatchEvent(new Event('change', {{bubbles: true}})); return 1")
+            b.wait(f"document.querySelector('{model}').closest('.stack').querySelector('.save-mark')?.dataset.state === 'saved'", what="the model saved")
+            r.check("the name picked is saved as a typed one is", json.loads(r.api("/settings")["body"])["values"].get("FLUX_REMOTE_MODEL") == "e2e-beta")
+            if os.environ.get("FLUX_E2E_SHOTS"):
+                out = Path(os.environ["FLUX_E2E_SHOTS"])
+                out.mkdir(parents=True, exist_ok=True)
+                for theme in ("light", "dark"):
+                    for width in (1280, 390):
+                        b.js("document.body.innerHTML = ''; const f = document.createElement('iframe'); f.id = 'phone'; localStorage.setItem('flux-theme', arguments[1]);"
+                             "localStorage.setItem('flux-models-tab-me', 'Flux'); f.style.cssText = `width:${arguments[0]}px;height:900px;border:0`;"
+                             "f.src = '/?models=' + Date.now() + '#/account'; document.body.append(f); return 1", width, theme)
+                        b.wait(f"(() => {{ const d = document.getElementById('phone').contentDocument; const s = d && d.querySelector('{model}'); return s && s.tagName === 'SELECT' && s.options.length === 3; }})()", timeout=20)
+                        b.js(f"document.getElementById('phone').contentDocument.querySelector('{model}').closest('fieldset').scrollIntoView({{block: 'start'}}); return 1")
+                        time.sleep(0.6)
+                        b.shot(out / f"models-from-endpoint-{width}px-{theme}.png")
+                b.js("localStorage.removeItem('flux-theme'); return 1")
+            b.js("window.__modelsOld = 1; location.reload(); return 1")   # the page loaded anew: both kept on the server
+            b.wait("!window.__modelsOld && document.readyState === 'complete' && document.querySelector('#main')", what="the page reloaded")
+            b.js(watch)
+            flux_tab()
+            b.wait(f"document.querySelector('{model}')?.tagName === 'SELECT' && document.querySelector('{model}').options.length === 3", what="the list again")
+            state = f"(() => {{ const s = document.querySelector('{model}'), l = {box}; return [s && s.value, !!(l && l.querySelector('input').checked)]; }})()"
+            try:
+                got = b.wait(f"(() => {{ const g = {state}; return g[0] === 'e2e-beta' && g[1] && g; }})()", timeout=15, what="the model kept", said=state)
+            except AssertionError as x:
+                got = str(x)
+            r.check("after a reload: From endpoint still on, the model picked (D1161)", got == ["e2e-beta", True], str(got))
+            r.api("/settings", "PUT", {"values": {"FLUX_REMOTE_MODEL": "e2e-gone"}})
+            r.api("/settings", "PUT", {"values": {"FLUX_REMOTE_BASE_URL": base.replace("/e2e/", "/down/")}})
+            flux_tab()
+            b.wait(f"document.querySelector('{model}').closest('.stack').querySelector('.model-said.t-warn')", what="the failure said")
+            got = b.js(f"const s = document.querySelector('{model}'); return [s.value, s.selectedOptions[0].textContent, s.closest('.stack').querySelector('.model-said').textContent]")
+            r.check("a name the list lacks is kept, said not listed; a list that fails said under it", got[:2] == ["e2e-gone", "e2e-gone (not listed)"] and "HTTP 500" in got[2], str(got))
+            if os.environ.get("FLUX_E2E_SHOTS"):
+                b.js(f"document.querySelector('{model}').closest('fieldset').scrollIntoView({{block: 'start'}}); return 1")
+                time.sleep(0.4)
+                b.shot(Path(os.environ["FLUX_E2E_SHOTS"]) / "models-from-endpoint-failed.png")
+            b.js(f"{box}.querySelector('input').click(); return 1")
+            b.wait(f"document.querySelector('{model}')?.tagName === 'INPUT'", what="the text box back")
+            r.check("off, the text box again, its value kept", b.js(f"return document.querySelector('{model}').value") == "e2e-gone")
+            end = time.time() + 10
+            while "model" in json.loads(r.api("/settings")["body"])["from_endpoint"] and time.time() < end:
+                time.sleep(0.25)
+            r.check("off is kept too", "model" not in json.loads(r.api("/settings")["body"])["from_endpoint"])
+            r.clean("models from endpoint")
+        finally:
+            r.api("/settings", "PUT", {"values": {"FLUX_REMOTE_BASE_URL": None, "FLUX_REMOTE_API_KEY": None, "FLUX_REMOTE_MODEL": None}})
+            r.api("/settings/from-endpoint", "PUT", {"group": "model", "on": False})
+            fake.shutdown()
+            fake.server_close()
+
+    r.step("models from endpoint", models_from_endpoint)

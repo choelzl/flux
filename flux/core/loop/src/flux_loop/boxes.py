@@ -118,10 +118,13 @@ def _lookup_context(problem: Any, state: Any, workdir: Path) -> str:
 
 def box_turn(box: str, spec: Any, question: str, schema: dict[str, Any], state: Any,
              check: Callable[[dict], str | None] | None = None, home: str = "",
-             problem: Any = None, skills: list[Any] | None = None) -> dict[str, Any] | None:
+             problem: Any = None, skills: list[Any] | None = None, hidden: Any = ()) -> dict[str, Any] | None:
     """The agent's answer to `question` for `box`, checked; None when it fell back (said, and
     on the record). Given the `problem`, the brief carries its LIBRARY section (D648)."""
+    from types import SimpleNamespace
+
     from .agent import DECIDE, agent_spec, converse, library_section, run_turn, workbench_link, workbench_section
+    from .hidden import hidden_subs
     from .recall import BOX_LOOKUP_LINE, SKILL_LOOKUP_LINE
     from .skills import LOOP_SKILLS, install
 
@@ -163,7 +166,8 @@ def box_turn(box: str, spec: Any, question: str, schema: dict[str, Any], state: 
     subs = {"prompt": brief, "prompt_file": str(prompt_file), "artifact": str(out), "workdir": str(workdir),
             "part": box, "name": box, "python": sys.executable, "workbench": bench,
             "home": home or ".",                      # D1038: an agent of one's own may name its files, as a design's does
-            "probe": _lookup_context(problem, state, workdir)}       # D1115: `flux loop` reads this loop's record
+            "probe": _lookup_context(problem, state, workdir),       # D1115: `flux loop` reads this loop's record
+            **hidden_subs(getattr(problem, "task", None) or SimpleNamespace(hidden=hidden))}   # D1159
     resume = sess.id if sess is not None and a.resume else None
     shape = json.dumps(schema, indent=1)
     message = ""
@@ -219,6 +223,7 @@ class AgentLessons:
     def __init__(self, agent: Any) -> None:
         self.agent = agent
         self.skills: list[Any] = []                         # D1152: the loop's agents' skills, set by its problem
+        self.hidden: Any = ()                               # D1159: the paths hidden from them, likewise
 
     def render(self, state: Any) -> str:
         if "_agent_lessons" in state.__dict__:
@@ -254,7 +259,7 @@ class AgentLessons:
                     return f"lesson {i + 1} cites " + (f"rows {bad} that do not exist" if bad else "no row")
             return None
 
-        doc = box_turn("extract", self.agent, question, schema, state, check=cited, skills=self.skills)
+        doc = box_turn("extract", self.agent, question, schema, state, check=cited, skills=self.skills, hidden=self.hidden)
         text = "\n".join(f"- {les['text'].strip()} (rows {', '.join(map(str, les['rows']))})"
                          for les in (doc or {}).get("lessons") or [])
         state.__dict__["_agent_lessons"] = text

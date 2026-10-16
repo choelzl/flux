@@ -94,6 +94,10 @@ class TaskSpec:
     #: D1152: `flow.knowledge.workbench` -- who sums up the workbench in the Setup: None the papers' digester
     #: (D1114), "off", "model", or {"agent": spec}
     bench_by: Any = None
+    #: D1159: `flow.knowledge.hidden` -- the paths hidden from the loop's AI agents: (absolute path or glob, as its
+    #: loop said it), a sub-loop's parent's too; `hidden_said` the document's own, as written
+    hidden: tuple[tuple[str, str], ...] = ()
+    hidden_said: tuple[str, ...] = ()
     #: The flow (D542): one key per box of the drawing naming its half, normalised; what it
     #: implies is folded into `roles`, `generator`, `critique`, `budget.calibrate`.
     flow: dict[str, Any] = field(default_factory=dict)
@@ -238,6 +242,7 @@ class TaskSpec:
                 raise TaskError(f"ladder keys {bad_ladder} are not the ladder's; known: {sorted(known_ladder)}")
         elif ladder not in (None, True, False):
             raise TaskError("`ladder` is true (the default ladder) or an object of its fields")
+        hidden_said, hidden = _hidden(doc, base)          # D1159: before what is read, which leaves them out
         knowledge, sheet = doc.get("knowledge") or "", ""
         # D773: `flow: {knowledge: {agent: …}}` -- that coding agent digests the papers in the Setup
         digest_by = flow["knowledge"]["agent"] if isinstance(flow.get("knowledge"), dict) else None
@@ -261,7 +266,7 @@ class TaskSpec:
                 path = Path(f) if Path(f).is_absolute() or base is None else Path(base) / f
                 path = inside(path, f"knowledge.files: {f!r}")
                 if path.is_dir():            # a folder: each of its files, by its path in the folder
-                    inner = sorted(p for p in path.rglob("*") if p.is_file()
+                    inner = sorted(p for p in path.rglob("*") if p.is_file() and not _is_hidden(p, hidden)
                                    and not any(x.startswith(".") or x == "__pycache__" for x in p.relative_to(path).parts))
                     for p in inner:
                         body = read_input(inside(p, f"knowledge.files: {f!r}"))
@@ -269,6 +274,8 @@ class TaskSpec:
                     continue
                 if not path.is_file():
                     raise TaskError(f"knowledge.files: {f!r} is not a file or folder" + (f" beside {base}" if base is not None else ""))
+                if _is_hidden(path, hidden):          # D1159: hidden from the agents, read by no prompt either
+                    continue
                 body = read_input(path)
                 text = (text + "\n\n" if text else "") + f"FILE {path.name}:\n{body}"
             knowledge = text
@@ -373,6 +380,7 @@ class TaskSpec:
         ext = EXTENSIONS.get(language.lower(), "." + language.lower().replace(" ", ""))
         _check_placeholders(gate, stages, generator, space, baseline)
         skills, skills_said, skills_off = _skills(doc.get("skills"), base)
+        skills = tuple(sk for sk in skills if not _is_hidden(sk, hidden))      # D1159
         bench_by = _bench_by(doc.get("bench_digest"))
         workbench = str((Path(base) / "workbench").resolve()) if base is not None else ""
         if "agent" in generator:                          # D1137: a design agent's probe names checks the gate has
@@ -398,6 +406,7 @@ class TaskSpec:
             knowledge_sheet=sheet, digest_by=digest_by,
             skills=skills, skills_said=skills_said, skills_off=skills_off, skills_on=skills_said != "off",
             bench_by=bench_by, workbench=workbench, language_inferred=bool(inferred),
+            hidden=hidden, hidden_said=hidden_said,
         )
 
     def _to_dict(self) -> dict[str, Any]:
@@ -430,6 +439,7 @@ class TaskSpec:
             **({"ladder": self.ladder} if self.ladder else {}),
             **({"skills": self.skills_said} if self.skills_said is not None else {}),
             **({"bench_digest": self.bench_by} if self.bench_by is not None else {}),
+            **({"hidden": list(self.hidden_said)} if self.hidden_said else {}),
             **({"critics": {b: dict(c) for b, c in self.critics.items()}} if self.critics else {}),
             **({"scope": {**{k: _as_said(v) for k, v in self.scope.items() if k != "timeout_s"},
                           **({"timeout_s": self.scope["timeout_s"]} if self.scope.get("timeout_s") != 120 else {})}}
@@ -546,6 +556,11 @@ def _inherited(parent: dict[str, Any], child: dict[str, Any]) -> dict[str, Any]:
     `budget` and `params` merge key by key -- a child that says only `test:` keeps the
     parent's stages, objectives' search and knowledge."""
     out = dict(child)
+    # D1159: the parent's hidden paths, beside the child's own -- as said (relative to the same folder), or
+    # absolute when the child is in a folder of its own (`_paths_beside`)
+    passed = [*(parent.get("_hidden_from") or []), *([None, h] for h in (parent.get("hidden") or []) if isinstance(h, str))]
+    if passed:
+        out["_hidden_from"] = passed
     for key in _INHERITED:
         if key not in out and key in parent:
             out[key] = parent[key]
@@ -595,6 +610,11 @@ def _paths_beside(parent: dict[str, Any], base: Path) -> dict[str, Any]:
                     else _space(v) if isinstance(v, dict) else v) for k, v in knobs.items()}
 
     out = dict(parent)
+    if out.get("hidden") or out.get("_hidden_from"):       # D1159: the parent's hidden paths, absolute
+        from ..hidden import absolute
+
+        out["_hidden_from"] = [[a if a is not None else str(base / r), r] for a, r in (out.get("_hidden_from") or [])] \
+            + [list(x) for x in absolute([h for h in out.pop("hidden", None) or [] if isinstance(h, str)], base)]
     know = out.get("knowledge")
     if isinstance(know, dict):
         out["knowledge"] = {k: ([_abs(x) for x in v] if k == "files" and isinstance(v, list) else _abs(v) if k == "sheet" else v)
@@ -648,6 +668,30 @@ def _skills(raw: Any, base: Any) -> tuple[tuple[str, ...], Any, tuple[str, ...]]
     except SkillError as exc:
         raise TaskError(f"skills: {exc}") from exc
     return tuple(str(sk.path) for sk in found if sk.name not in off), raw, tuple(dict.fromkeys(off))
+
+
+def _hidden(doc: dict[str, Any], base: Any) -> tuple[tuple[str, ...], tuple[tuple[str, str], ...]]:
+    """D1159: `flow.knowledge.hidden` -- (the paths the document says, each hidden path as (absolute, as said)
+    with the parent's), checked; said to the library (flux_knowledge.hidden), which leaves them out."""
+    from ..hidden import absolute, hide, said_hidden
+
+    try:
+        said = said_hidden(doc.get("hidden"), base)
+    except ValueError as exc:
+        raise TaskError(str(exc)) from exc
+    root = Path(base if base is not None else ".")
+    passed = tuple((str(a) if a is not None else str(absolute([str(r)], root)[0][0]), str(r).rstrip("/") or str(r))
+                   for a, r in (doc.get("_hidden_from") or []))
+    out = tuple(dict.fromkeys(passed + absolute(said, base)))
+    if base is not None:
+        hide(base, [a for a, _r in out])
+    return said, out
+
+
+def _is_hidden(path: Any, hidden: tuple[tuple[str, str], ...]) -> bool:
+    from ..hidden import is_hidden
+
+    return bool(hidden) and is_hidden(path, [a for a, _r in hidden])
 
 
 def _bench_by(raw: Any) -> Any:

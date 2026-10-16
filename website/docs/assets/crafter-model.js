@@ -357,7 +357,10 @@
       skillsFrom: "Read from", library: "Library", libraryOff: "Off: no files, papers or text are read.",
       reads: "What every prompt reads", papersBy: "Papers summed up by",
       lessons: "Lessons from records", lessonsBy: "Lessons by", workbench: "Workbench digest", workbenchBy: "Summed up by",
-      workbenchSays: "When the workbench changed, before a pass" },
+      workbenchSays: "When the workbench changed, before a pass",
+      // D1159: paths hidden from the AI agents (flow.knowledge.hidden) -- the Knowledge box's section, the Files tab's
+      hidden: "Hidden from AI", hiddenSays: "Agents and prompts never read these; the loop's checks and measurements still use them.",
+      hiddenNone: "Nothing hidden.", hiddenAdd: "File, folder or pattern", hiddenPick: "Hide", hiddenRemove: "Show to AI" },
     budget: { steps: { label: "Designs per pass", dflt: "24" }, passes: { label: "Passes", dflt: "until stopped" },
       parallel: { label: "Passes at once", dflt: "1", hint: "needs an admin on a server" }, batch: { label: "Designs side by side", dflt: "1" },
       repair_attempts: { label: "Repairs per design", dflt: "12" }, exploration_quota: { label: "Share kept for new ideas", dflt: "0", hint: "0 to 1" },
@@ -670,6 +673,7 @@
       budget: { steps: "", passes: "", parallel: "", batch: "", repair_attempts: "", finalists: "", workers: "", prototype: "" },
       space: [], partsMode: "none", parts: "", params: [],
       skillsOn: true, skillsFrom: "", skillsOff: [],          // D1152: `skills:` -- on, its folders said, names off
+      hidden: [],                                             // D1159: flow.knowledge.hidden, the paths as said
     };
   }
 
@@ -1041,10 +1045,10 @@
     if (ktext) R.text = ktext;
     if (!own("flow.knowledge")) { if (kf["flow.knowledge"] !== undefined) F.push("  knowledge: " + inline(kf["flow.knowledge"], false)); }
     else if (boxesKept && kb.knowledge !== undefined) {   // D1135: its choice kept with the flow; what is read is the state's
-      var kk = kb.knowledge;
-      F = F.concat(knowledgeLines(kk === "off" || kk === false ? "off"
-        : kk && typeof kk === "object" && !Array.isArray(kk) ? (kk.off ? kk : Object.assign({}, R, kk))
-        : Object.assign({}, R, { digest: kk })));
+      var kk = kb.knowledge, kh = hiddenOf(state).length ? { hidden: hiddenOf(state) } : {};   // D1159
+      F = F.concat(knowledgeLines(kk === "off" || kk === false ? (kh.hidden ? Object.assign({ off: true }, kh) : "off")
+        : kk && typeof kk === "object" && !Array.isArray(kk) ? Object.assign(kk.off ? {} : Object.assign({}, R), kk, kh)
+        : Object.assign({}, R, { digest: kk }, kh)));
     }
     else {
       var kv = boxVal("knowledge"), K = Object.assign({}, R);
@@ -1064,6 +1068,7 @@
         if (K.workbench) KO.workbench = K.workbench;
         K = KO;
       }
+      if (hiddenOf(state).length) K.hidden = hiddenOf(state);   // D1159: hidden whether the library is on or off
       if (Object.keys(K).length === 1 && K.off) F.push("  knowledge: off");
       else if (Object.keys(K).length) F = F.concat(knowledgeLines(K));
     }
@@ -1113,6 +1118,13 @@
     var off = (state.skillsOff || []).filter(function (n) { return n !== name; });
     if (!on) off.push(name);
     state.skillsOff = off;
+  }
+
+  /** D1159: the paths hidden from the agents, as said (each trimmed, none twice). */
+  function hiddenOf(state) {
+    var out = [];
+    ((state && state.hidden) || []).forEach(function (p) { p = String(p || "").trim(); if (p && out.indexOf(p) < 0) out.push(p); });
+    return out;
   }
 
   /** `flow.knowledge`'s lines: inline, or a block when it has a text (written as prose). */
@@ -1529,7 +1541,7 @@
   var FLUX_ARGV = ["{python}", "-W", "ignore", "-m", "flux_cli.main"];
   var PRESET_ARGV = ["{python}", "-W", "ignore", "-m", "flux_presets"];
   var STATE_KEYS = ["id", "statement", "contract", "language", "knowledge", "parts", "space", "flow", "gate", "stages",
-                    "objectives", "budget", "baseline", "params", "skills"];
+                    "objectives", "budget", "baseline", "params", "skills", "hidden"];
   /** The loop's knobs the configurator's Graph sets beside each box (LoopRequest): when a design explores,
       how a part yields, how many worse edits are tolerated, an agent's turns, how a repair edits and when it reverts,
       how many parts are drafted at once. */
@@ -1579,7 +1591,7 @@
       the configurator holds it (the loop's inside words: llm, none, {agent: ...}). */
   var BY_WORDS = {};                     // the configurator holds the document's own words; only agents differ
   var PRESETS = ["opencode", "claude", "codex"];
-  var AGENT_OPTS = ["session", "timeout_s", "questions", "max_questions", "wait_s", "bin", "args", "probe", "allow", "output", "resume", "name"];
+  var AGENT_OPTS = ["session", "timeout_s", "questions", "max_questions", "wait_s", "bin", "args", "probe", "allow", "output", "resume", "name", "hidden"];
   function toInner(box, v) {
     var words = BY_WORDS[box] || {};
     if (v === false) v = "off";
@@ -1641,6 +1653,10 @@
       }
       if (k === "orchestrate" && val && typeof val === "object" && !Array.isArray(val) && "scope" in val) {   // D1022
         out.scope = val.scope; val = Object.assign({}, val); delete val.scope;
+        if (!Object.keys(val).length) continue;
+      }
+      if (k === "knowledge" && val && typeof val === "object" && !Array.isArray(val) && "hidden" in val) {   // D1159
+        out.hidden = val.hidden; val = Object.assign({}, val); delete val.hidden;   // the paths hidden from the agents, apart
         if (!Object.keys(val).length) continue;
       }
       if (k === "knowledge" && val && typeof val === "object" && !Array.isArray(val) && "digest" in val) {   // D830
@@ -1734,7 +1750,7 @@
         }
         if (k === "knowledge") {                     // its choice (off, an agent, a digest); its files apart
           if (v && typeof v === "object" && !Array.isArray(v)) {
-            v = Object.assign({}, v); ["files", "sheet", "text", "library"].forEach(function (x) { delete v[x]; });
+            v = Object.assign({}, v); ["files", "sheet", "text", "library", "hidden"].forEach(function (x) { delete v[x]; });
             if (!Object.keys(v).length) continue;
           }
         }
@@ -1809,6 +1825,9 @@
       s.skillsOff = sk.off === undefined || sk.off === null ? [] : typeof sk.off === "string" ? [sk.off] : sk.off.slice();
     } else if (sk !== undefined && sk !== null) keep("skills", "skills in a form the configurator does not edit");
     keep("scope", "the scope each pass works on (`orchestrate.scope`: its list, brief and check), which the configurator does not edit");
+    var hd = raw.hidden;                                   // D1159: the paths hidden from the AI agents
+    if (typeof hd === "string") s.hidden = [hd];
+    else if (Array.isArray(hd)) s.hidden = hd.filter(function (x) { return typeof x === "string"; });
 
     // params: plain values, each its type kept
     var pm = raw.params;
@@ -2021,7 +2040,7 @@
               renameAgent: renameAgent, agentRest: agentRest, probeOf: probeOf, setProbe: setProbe, BUDGET_KEYS: BUDGET_KEYS, keptText: keptText,
               // D1146: who works a box, the words both views say, where a draft stands
               whoOptions: whoOptions, whoOn: whoOn, whoWorks: whoWorks, agentOf: agentOf, agentWord: agentWord,
-              skillOn: skillOn, setSkill: setSkill, skillsDoc: skillsDoc,
+              skillOn: skillOn, setSkill: setSkill, skillsDoc: skillsDoc, hiddenOf: hiddenOf,
               STEP_TITLES: STEP_TITLES, WORDS: WORDS, readiness: readiness };
 
   if (typeof module !== "undefined" && module.exports) module.exports = api;

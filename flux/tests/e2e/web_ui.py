@@ -718,8 +718,8 @@ def flows(r: Run) -> None:
         r.page("#/app/knowledge_skills/settings/problem?step=graph", "document.querySelector('.cfg[data-step=graph] .cfg-cycle')", "the Graph")
         b.js(open_box)
         b.wait("document.querySelectorAll('.cfg-panel [data-sec=skills] li').length >= 2", timeout=10, what="the skills")
-        r.check("Knowledge has four sections, Skills first", b.js("return [...document.querySelectorAll('.cfg-panel [data-sec]')].map(x => x.dataset.sec)")
-                == ["skills", "library", "lessons", "workbench"])
+        r.check("Knowledge has five sections, Skills first (D1159: Hidden from AI)", b.js("return [...document.querySelectorAll('.cfg-panel [data-sec]')].map(x => x.dataset.sec)")
+                == ["skills", "library", "hidden", "lessons", "workbench"])
         r.check("the loop's skill and the built-in one, both on", b.js(skills) == [["rtl-style", True], ["flux-loop-commands", True]], str(b.js(skills)))
         b.js("[...document.querySelectorAll('.cfg-panel [data-sec=skills] li')].find(l => l.textContent.includes('flux-loop-commands')).querySelector('input').click(); return 1")
         saved = save("one skill off saved")
@@ -3243,6 +3243,10 @@ def flows(r: Run) -> None:
     from web_ui_lifecycle import lifecycle_flows
 
     lifecycle_flows(r, WATCH)
+
+    from web_ui_hidden import hidden_flows           # D1159: paths hidden from the agents
+
+    hidden_flows(r, WATCH)
     if os.environ.get("FLUX_E2E_GALLERY"):          # screenshots of Live for recorded journals, for review by eye
         from web_ui_gallery import gallery_flows
 

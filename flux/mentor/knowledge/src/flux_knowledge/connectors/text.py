@@ -83,13 +83,16 @@ def ingest_pdf_file(path: str | Path, *, standard_id: str, repo_root: Path,
 def library_files(directory: str | Path) -> list[Path]:
     """The files `ingest_library` reads under `directory`, sorted: the library's suffixes, not
     the folder's README, not an implementation's git metadata or test benches."""
+    from ..hidden import hidden
+
     directory = Path(directory)
     if not directory.is_dir():
         return []
     return [p for p in sorted(directory.rglob("*"))
             if p.is_file() and p.suffix.lower() in LIBRARY_SUFFIXES and p.name != "README.md"
             and not (p.suffix.lower() in SOURCE_SUFFIXES
-                     and {".git", "test", "tests"} & set(p.relative_to(directory).parts))]
+                     and {".git", "test", "tests"} & set(p.relative_to(directory).parts))
+            and not hidden(p)]                          # D1159: hidden from the loop's agents
 
 
 def ingest_library(directory: str | Path, *, standard_id: str = "library",

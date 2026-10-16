@@ -28,5 +28,5 @@ export function ReviseByAgent({ name }) {
       <h3>Files to read</h3><${AttachBox} items=${items} onChange=${setItems} />
       <${AskMe} on=${askMe} set=${setAskMe} />
       <div class="form-actions"><${Act} cls="primary" disabled=${job?.running} onClick=${revise}>Revise<//></div><//>
-    ${job ? html`<${AuthorJob} name=${name} st=${job} onStop=${acts.stop} answer=${acts.answer} />` : ""}`;
+    ${job ? html`<${AuthorJob} name=${name} st=${job} onStop=${acts.stop} answer=${acts.answer} retry=${acts.retry} />` : ""}`;
 }

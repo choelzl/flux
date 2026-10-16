@@ -11,8 +11,12 @@ flux task run sums --passes 1 --json sums/out/answer.json
 ```
 
 `task check` validates the document, lists the stages and required tools, and reports problems
-before a run. It does not execute the candidate checks and measurements. A bounded first run
-checks the actual scripts and their output.
+before a run: every file the document names must be in the folder (a missing one is listed with the
+key that names it and what the folder holds), and the golden model must run. It exits 2 when the
+document does not load (`not a task:`) and 1 when something is missing or refused (`MISSING:`,
+`REFUSED:`). It is the same check an agent writing the problem runs before it ends its turn. It
+does not execute the candidate checks and measurements. A bounded first run checks the actual
+scripts and their output.
 
 A folder normally contains `problem.yaml`. Additional `NAME.problem.yaml` files describe
 alternate problems in the same folder and use separate records. When a folder contains several

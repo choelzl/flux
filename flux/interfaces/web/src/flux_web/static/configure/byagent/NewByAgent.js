@@ -75,11 +75,17 @@ function Ask({ state, items, setItems, edit, who, askMe, setAskMe, draft: start 
     <div class="form-actions ba-nav"><span class="grow" /><${Act} cls="primary" onClick=${go}>Draft<//></div>`;
 }
 
+/** The draft to the configurator, a loop now (D1122's Open in configurator; D1158: a refused draft too). */
+async function toConfigurator(name, made) {
+  const r = await loopApi(name).api("/author/make", { method: "POST", body: { first_pass: false } });
+  toast(r.ok, "ok"); made(); location.hash = `${appHref(null, name)}/settings/problem`;
+}
+
 /** 2. Drafting. */
-function Drafting({ name, st, poll, review }) {
+function Drafting({ name, st, poll, review, made }) {
   if (!st) return html`<${Card}><${Skeleton} lines=${4} /><//>`;
   const acts = authorActs(name, ms => poll.soon(ms));
-  return html`<${AuthorJob} name=${name} st=${st} onStop=${acts.stop} answer=${acts.answer} open />
+  return html`<${AuthorJob} name=${name} st=${st} onStop=${acts.stop} answer=${acts.answer} retry=${acts.retry} openConfig=${() => toConfigurator(name, made)} open />
     <div class="form-actions ba-nav"><span class="grow" /><button type="button" class="primary" disabled=${!(st.ok && !st.running)} onClick=${review}>Review</button></div>`;
 }
 
@@ -133,7 +139,7 @@ function Review({ name, st, poll, flow, save, who, askMe, check }) {
 /** What `flux task check` said that matters: what is missing or refused, else that it passed. */
 function checkSaid(out) {
   const lines = String(out || "").split("\n");
-  return lines.filter(l => /NOT ANSWERABLE|WILL SKIP|MISSING|NOT READY|not a task|does not exist|refused/i.test(l)).map(l => l.trim());
+  return lines.filter(l => /NOT ANSWERABLE|WILL SKIP|MISSING|NOT READY|not a task|does not exist|refused/i.test(l)).map(l => l.trim());   // REFUSED: D1155
 }
 
 /** 4. Ready. */
@@ -156,7 +162,7 @@ function Ready({ name, back, made }) {
       <${Check} id="ba-first-pass" checked=${first} onChange=${setFirst}>${`Run one cheap pass first${stage ? ` (${stage} only)` : ""}`}<//><//>
     <${Notice} tone="none" cls="ba-side" what=${`Made as ${name}.`} why="Change anything later in the configurator." /></div>
     <div class="form-actions ba-nav"><button type="button" onClick=${back}>Back</button><span class="grow" />
-      <${Act} onClick=${() => make(false, `${appHref(null, name)}/settings/problem`)}>Open in configurator<//>
+      <${Act} onClick=${() => toConfigurator(name, made)}>Open in configurator<//>
       <${Act} cls="primary" disabled=${!res} onClick=${() => make(first && res?.ok, `${appHref(null, name)}`)}>Make loop<//></div>`;
 }
 
@@ -199,7 +205,7 @@ export function NewByAgent({ draft = null, onDraft = () => {}, done = () => {} }
   const reach = i => i === 0 ? !flow.name : i === 1 ? !!flow.name : ready;
   const go = i => save({ stage: i });
   const body = stage === 0 ? html`<${Ask} state=${state} items=${items} setItems=${keepItems} edit=${edit} who=${who} askMe=${askMe} setAskMe=${v => { setAskMe(v); }} draft=${start} />`
-    : stage === 1 || !ready ? html`<${Drafting} name=${flow.name} st=${st} poll=${poll} review=${() => go(2)} />`
+    : stage === 1 || !ready ? html`<${Drafting} name=${flow.name} st=${st} poll=${poll} review=${() => go(2)} made=${() => save({ name: null, stage: 0, kept: {} })} />`
     : stage === 2 ? html`<${Review} name=${flow.name} st=${st} poll=${poll} flow=${flow} save=${save} who=${flow.who || ""} askMe=${flow.askMe ?? true} check=${() => go(3)} />`
     : html`<${Ready} name=${flow.name} back=${() => go(2)} made=${() => save({ name: null, stage: 0, kept: {} })} />`;
   return html`<div class="ba-flow"><${StageBar} stage=${stage >= 2 && !ready ? 1 : stage} reach=${reach} go=${go} />

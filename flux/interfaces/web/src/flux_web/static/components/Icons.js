@@ -25,6 +25,7 @@ export const ICONS = {
   refresh: () => svg("M15.5 10a5.5 5.5 0 1 1-1.6-3.9", "M15.5 3.5v3.5H12"),
   report: () => svg("M5.5 3.5h6l3 3v10h-9z", "M11.5 3.5v3h3M8 10.5h4.5M8 13.5h4.5"),
   close: () => svg("M5.5 5.5l9 9M14.5 5.5l-9 9"),
+  lock: () => svg(html`<rect x="4.5" y="9" width="11" height="7.5" rx="1.5" />`, "M7 9V6.5a3 3 0 0 1 6 0V9"),   // D1159: hidden from AI
   bin: () => svg("M3.5 5.5h13M7.5 5.5V3.5h5v2M5 5.5l.9 11h8.2l.9-11M8.3 8.5v5.5M11.7 8.5v5.5"),
   bell: () => svg("M5 13.5V9.2a5 5 0 0 1 10 0v4.3l1.3 1.8H3.7z", "M8.3 17.2a1.7 1.7 0 0 0 3.4 0"),
 };

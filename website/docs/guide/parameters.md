@@ -240,11 +240,41 @@ stage.
 | `digest` | `model` | Who summarises the library's papers: `model` or an agent |
 | `lessons` | `off` | Lessons drawn from the record: `off`, `mined`, or an agent |
 | `workbench` | who digests | Who sums up the agents' `workbench/` when it changed: `off`, `model`, or an agent (`{by: claude, timeout_s: 600}` with its options); unsaid, whoever digests the papers |
-| `off` | `false` | `off: true` turns reading off (`lessons` and `workbench` may stand beside it); `knowledge: off` is the same |
+| `hidden` | Empty | Files, folders or globs (relative to the folder) the AI agents may not read: tests, checks, a gate's files and their parameters; see [Hidden from AI](#hidden-from-ai) |
+| `off` | `false` | `off: true` turns reading off (`lessons`, `workbench` and `hidden` may stand beside it); `knowledge: off` is the same |
 
 `knowledge: claude` is short for `{digest: claude}`. `by:` on the knowledge box is refused:
 say `digest:`. While knowledge is on, the loop's `library/` and the server's shared library
 are read; PDFs go through `pdftotext`.
+
+### Hidden from AI
+
+`knowledge.hidden` keeps an agent from gaming the gate by reading it: the loop's own tools (its
+checks, stages, scripts and probes) read these paths as ever, and a check's failure text still
+reaches the agent; no agent and no prompt reads them.
+
+```yaml
+flow:
+  knowledge:
+    hidden: [tests/, golden.py, "params/*.json"]
+```
+
+Each path is relative to the loop folder, inside it, and never the document itself. Sub-loops
+hide their parent's paths too, beside their own. An agent's own `hidden:` option adds paths for that
+agent alone. Hidden paths are left out of the library, the knowledge files, the skills, the
+workbench's index and `flux loop library`; `flux loop diff`, `gate` and `measure` refuse them.
+Every agent turn's brief names them as off limits, and the agent's own permission settings refuse
+them:
+
+- **Claude Code:** `--settings` with `permissions.deny`: `Read(...)` and `Edit(...)` on each path
+  (absolute, `//...`), and `Bash(...)` on a command that names it.
+- **OpenCode:** `permission.read`, `permission.edit` and `permission.bash` deny patterns in its
+  config (`OPENCODE_CONFIG_CONTENT`).
+- **Codex:** no per-path rule a user can set; only the brief says so.
+
+This stops an agent from targeting a path; it is no sandbox. A script the agent writes could still
+open the file, so for secrets use the run's sandbox. In the web app, a file or folder is hidden from
+the Files tab (Actions, Hide from AI), when it is added, or in the configurator's Knowledge box.
 
 ### Skills
 
@@ -333,6 +363,7 @@ Beside `by: <agent>` on any box an agent may work:
 | `wait_s` | `300` | Seconds to wait for the operator's answer |
 | `probe` | `{gate: 20, stages: 3}` | Checks per turn the agent may run with `flux probe`; per stage `{bench: 2}`; `false` turns them off |
 | `allow` | `[]` | Give back denied raw tools, e.g. `[yosys]`, or `all` |
+| `hidden` | `[]` | More paths this agent may not read, beside `knowledge.hidden` ([Hidden from AI](#hidden-from-ai)) |
 | `bin` | The agent on PATH (or `FLUX_<NAME>_BIN`) | The program to run |
 | `args` | None (or `FLUX_<NAME>_ARGS`) | Extra arguments, added before the prompt |
 | `output` | `text` | Your own agent: how its output is read (`text`, `opencode`, `claude`, `codex`) |

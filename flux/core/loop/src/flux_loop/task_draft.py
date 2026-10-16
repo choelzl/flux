@@ -16,6 +16,7 @@ from typing import Any
 from .model import _json
 from .types import Candidate, LoopState
 from .document import _leaf, _substitute
+from .hidden import hidden_subs
 from .task_knowledge import library_queries
 from .words import plural
 from .recall import LOOKUP_LINE
@@ -167,7 +168,7 @@ class DraftMixin:
         prompt_file.write_text(message or brief)
         subs = {"prompt": brief, "prompt_file": str(prompt_file), "artifact": str(path), "workdir": str(workdir),
                 "part": sg or "", "name": name, "python": sys.executable, "home": self.task.home or ".",
-                "workbench": self.task.workbench, "probe": probe_ctx}
+                "workbench": self.task.workbench, "probe": probe_ctx, **hidden_subs(self.task)}   # D1159
         if self.agent_skill_list() and not resume:     # install skills where the agent looks (D588, D1152: the built-in ones too)
             from .skills import install
 
@@ -439,7 +440,7 @@ class DraftMixin:
         prompt_file.write_text(message or brief)
         subs = {"prompt": brief, "prompt_file": str(prompt_file), "artifact": str(path), "workdir": str(workdir),
                 "part": subgoal or "", "name": safe, "python": sys.executable, "home": self.task.home or ".",
-                "workbench": self.task.workbench, "probe": probe_ctx}
+                "workbench": self.task.workbench, "probe": probe_ctx, **hidden_subs(self.task)}   # D1159
         if self.agent_skill_list() and not resume:     # D1152: the prototype's agent has the loop's skills too
             from .skills import install
 

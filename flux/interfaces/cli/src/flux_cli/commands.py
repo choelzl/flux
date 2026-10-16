@@ -72,15 +72,39 @@ def pick_document(path: str) -> str | None:
             return str(hit[0])
 
 
+def _document_file(path: str) -> Any:
+    """The document file a `task check` of a file or folder means: the file, else the folder's document that loads
+    (its first when none does); None when the folder holds none."""
+    from pathlib import Path
+
+    from flux_loop.document import documents_in, loadable
+
+    p = Path(path)
+    if not p.is_dir():
+        return p if p.is_file() else None
+    docs = documents_in(p)
+    if len(docs) > 1:
+        good = [d for d, err in loadable(p) if not err]
+        docs = good[:1] or docs
+    return docs[0] if docs else None
+
+
 def cmd_task_check(args: argparse.Namespace) -> int:
     """Validate a task document, list what it declares, and name any tool it needs that
-    is not on PATH; runs nothing."""
+    is not on PATH; runs nothing. D1155: the author's check first -- the document's files each there, its golden
+    model running (flux_loop.author.check_problem) -- a refusal said as `not a task:` (it does not load) or
+    `REFUSED:` (it loads, and would fail), the exit non-zero."""
     from flux_loop import PromptProblem, TaskError, load_task
+    from flux_loop.author import check_problem, is_draft
 
+    doc_file = _document_file(args.file)
+    refused = ""
+    if doc_file is not None:
+        _t, _p, refused = check_problem(doc_file, draft=is_draft(doc_file.parent), tools=False)
     try:
         task = load_task(args.file)
     except TaskError as exc:
-        print(f"not a task: {exc}")
+        print(f"not a task: {refused or exc}")
         return 2
     problem = PromptProblem(task)
     print(f"task {task.id}: {task.statement[:100]}")
@@ -140,8 +164,9 @@ def cmd_task_check(args: argparse.Namespace) -> int:
         print(f"  WILL SKIP stage {name}: needs {', '.join(tools)}, not on PATH")
     if missing:
         print(f"  MISSING: {', '.join(missing)}")          # tools not on PATH, or a world's inputs (traces)
-        return 1
-    if wrong:
+    if refused:
+        print("  REFUSED: " + refused.replace("\n", "\n    "))
+    if missing or wrong or refused:
         return 1
     print("  tools: " + ("present for every stage" if not skipped else
                          "present for the gate and the stages that run (see WILL SKIP above)"))
@@ -574,7 +599,8 @@ def cmd_ask(args: argparse.Namespace) -> int:
 
     ask = Ask(prompt=args.prompt, workdir=workdir, inputs=inputs, author=author, checks=args.checks, passes=args.passes,
               skills=skills, no_run=bool(args.no_run), questions=getattr(args, "questions", "decide") or "decide",
-              wait_s=float(getattr(args, "wait_s", 600.0) or 600.0),
+              wait_s=float(getattr(args, "wait_s", 600.0) or 600.0), session=getattr(args, "session", None) or None,
+              repair=bool(getattr(args, "repair", False)), note=str(getattr(args, "note", "") or ""),
               journal=workdir / "runs" / "author" if args.no_run else None)     # D1125: the page's activity and answers
     if tui:
         return _ask_tui(ask, run_pass=run_pass, proposer=author_model, review=review, channel=channel)
@@ -585,7 +611,8 @@ def cmd_ask(args: argparse.Namespace) -> int:
               f"run it: flux task run {workdir / 'problem.yaml'}")
         return 0
     if got["error"]:
-        print(f"\nno runnable document after {plural(args.checks, 'repair')}: {got['error']}")
+        print(f"\nno runnable document after {plural(args.checks, 'repair')} -- the draft stays in {workdir}.\n"
+              f"REFUSED: {got['error']}")
         return 1
     print("\n" + "\n".join(got["report"]))
     out = got["result"]

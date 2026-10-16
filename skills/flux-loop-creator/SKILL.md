@@ -94,11 +94,11 @@ A box is a word, an agent name, or `{by: <who>, ...options}` (the old `{agent: X
 | `plan` | `off`; `model`/agent writes a plan per round (it may change budgets and roles, never the gate) |
 | `validate`, `select` | `rules` / `objectives` almost always; an agent on `select` only breaks ties |
 | `critic:` | on the box it judges, e.g. `test: {build: make, critic: claude}` (D1040; there is no `flow.critique`) |
-| `knowledge` | `{files, text, sheet, digest: model|<agent>, lessons: off|mined|<agent>, workbench: off|model|<agent>}` or `off` |
+| `knowledge` | `{files, text, sheet, digest: model|<agent>, lessons: off|mined|<agent>, workbench: off|model|<agent>, hidden: [paths]}` or `off` |
 | `test`, `measure` | always yours, never an agent's |
 
 Agent options: `timeout_s` (1800), `session: turn|pass`, `questions: decide|model|operator`,
-`probe: {gate: 20, stages: 3}` (how often it may run `flux probe`), `allow`.
+`probe: {gate: 20, stages: 3}` (how often it may run `flux probe`), `allow`, `hidden: [paths]`.
 
 ## 4. Add a search (settings to walk)
 
@@ -150,6 +150,10 @@ changes `model`. Phases chain policies, each continuing from where the last ende
   against refining the best; `revert_after`/`regress_after`/`max_tolerance` govern backing off.
 - **Knowledge costs prompt space.** `knowledge: off` for small RTL loops (mul8); a method `sheet`
   plus a few `files` for hard numeric ones (NLU).
+- **Hide what grades the design.** `knowledge: {hidden: [tests/, golden.py]}` keeps the agents from
+  reading (and gaming) the gate's tests, expected outputs or parameters; the gate and stages still
+  use them, and a check's failure text still reaches the agent. Paths are relative to the loop
+  folder, never the document; sub-loops inherit them; it stands beside `off: true` too.
 
 ## 7. Check, migrate, run small
 
@@ -161,7 +165,17 @@ flux task run my_loop --passes 1 --screen-only   # cheap first look
 flux task run my_loop --passes 1 --json answer.json
 ```
 
-`task check` exits 2 when the file is not a document and 1 when something is missing.
+`task check` exits 2 when the file is not a document (`not a task: <why>`) and 1 when something is
+missing or refused (`MISSING:` a tool, `REFUSED: <why>` -- a file a key names is not in the folder, the
+golden model does not run). Every path it names is relative to the loop folder, each missing file with the
+key that names it and what the folder holds.
+
+**When Flux runs you as a loop's author** (New loop › Agent, `flux ask`), your brief names the exact check
+command (`<python> -m flux_cli task check . --no-sandbox`): it is the check Flux runs when your turn ends.
+Run it before you end every turn and fix what it says until it passes -- a refused draft comes back to you
+with the refusal, and the same refusal twice means your last change did not touch what it names. Write the
+golden model yourself, and name files as `{home}/<file>` in commands and by paths relative to the loop
+folder elsewhere, never by an absolute path: the draft's folder moves when the loop is made.
 `task run` exits 0 when a design meets every goal, 3 when correct designs were measured but none
 qualifies (the closest is reported), 1 when nothing was measured. A changed document opens a new
 campaign in the same record.

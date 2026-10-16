@@ -90,7 +90,7 @@ def test_a_refused_document_goes_back_with_the_reason(tmp_path):
     assert not got["error"]
     refusals = [h["refused"] for h in got["history"] if h["turn"] == "repair"]
     assert "keys a document does not have: goals" in refusals[0]
-    assert "check.py beside the document, and it is not there" in refusals[1]
+    assert "  - check.py  (named by flow.test)" in refusals[1], "D1157: the path, and the key that names it"
     assert "THE DOCUMENT WAS REFUSED" in author.prompts[1] and "goals" in author.prompts[1]
 
 
@@ -212,3 +212,4 @@ def test_a_golden_that_never_fills_its_declared_width_is_refused(tmp_path):
 
     assert "never sets the top bit of output `s` (9 bits)" in check("(a + b) & 0xFF")
     assert check("a + b") == ""
+    assert check("(a + b) & 0x3F") == "", "D1162: a narrow value in a wide port is not a truncation"

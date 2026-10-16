@@ -249,6 +249,17 @@ def available(env: dict[str, str], agents: dict[str, Any]) -> list[dict[str, Any
     return out
 
 
+def _outcome(path: Path) -> dict[str, Any] | None:
+    """A small JSON file the author wrote beside its journal (outcome.json, session.json), or None."""
+    try:
+        if path.is_symlink() or path.stat().st_size > 64 * 1024:
+            return None
+        got = json.loads(path.read_text())
+    except (OSError, ValueError):
+        return None
+    return got if isinstance(got, dict) else None
+
+
 def _alive(pid: int | None) -> bool:
     if not pid:
         return False
@@ -301,6 +312,8 @@ class Authoring:
         st["files"] = files_of(app_dir, st)
         st["observed"] = time.time()
         st["elapsed_s"] = max(0, (st.get("ended") or st["observed"]) - st.get("started", st["observed"]))
+        st["resumable"] = bool(st.pop("session", None))           # D1156: the page needs no session's id, nor the ask again
+        st.pop("ask", None)
         return st
 
     def start(self, *, app_dir: Path, workspace: Any, name: str, prompt: str, author: str, env: dict[str, str],
@@ -311,8 +324,6 @@ class Authoring:
                 raise ValueError("this loop has moved or been removed; reload it before starting an agent")
             if self.state(app_dir).get("running"):
                 raise ValueError("an agent is writing this loop's problem already")
-            f = self.files(app_dir)
-            f["log"].parent.mkdir(exist_ok=True)
             ask = prompt.strip()
             before = ""
             if revise:
@@ -320,44 +331,86 @@ class Authoring:
                 ask = (f"REVISE the problem this folder already holds: the document `{revise}` and the files it names. "
                        f"Edit `{revise}` itself, in place; keep everything the instruction does not ask to change.\n\n"
                        f"THE INSTRUCTION:\n{prompt.strip()}\n\nTHE CURRENT `{revise}`:\n```yaml\n{before}\n```")
-            # the agent works on a copy of the loop's own files: only that copy is writable in the
-            # sandbox -- the record (out/), the log (runs/) and the workbench stay out of its reach
-            root = app_dir / WORK
-            shutil.rmtree(root, ignore_errors=True)
-            work = root / app_dir.name  # preserve the loop ID on the host and in /sandbox/<id>
-            work.mkdir(parents=True)
-            for p in app_dir.iterdir():
-                if p.name in _NOT_THE_PROBLEMS:
-                    continue
-                if p.is_dir() and not p.is_symlink():
-                    shutil.copytree(p, work / p.name, symlinks=True, ignore=shutil.ignore_patterns("__pycache__", ".git"))
-                elif p.is_file():
-                    shutil.copy2(p, work / p.name)
-            from flux_loop.author import DECISIONS, install_author_skills
+            for old in ("author-activity.jsonl", "author-decisions.json", "author-outcome.json"):
+                (self.files(app_dir)["log"].parent / old).unlink(missing_ok=True)
+            self._launch(app_dir, workspace, name, ask=ask, author=author, env=env, attachments=attachments, by=by,
+                         ask_me=ask_me, extra=[], header="revision" if revise else "authoring",
+                         state={"prompt": prompt.strip()[:4000], "revise": revise, "before": before,
+                                "yours": sorted({f"library/{a.name}" for a in attachments})})
 
-            kept = f["log"].parent / "author-decisions.json"
-            if revise and kept.is_file() and not kept.is_symlink():       # D1124: the decisions it keeps current
-                shutil.copyfile(kept, work / DECISIONS)
-            for old in ("author-activity.jsonl", "author-decisions.json"):
-                (f["log"].parent / old).unlink(missing_ok=True)
-            skills = install_author_skills(work)                          # D1123: placed here, seen in the sandbox
-            flux = shutil.which("flux") or sys.argv[0]
-            argv = [flux, "ask", ask, "--dir", str(work), "--no-run", "--author", author]
-            if ask_me:
-                argv += ["--questions", "operator"]
-            for a in attachments:
-                argv += ["--file", str(a)]
-            with open(f["log"], "a") as fh:
-                fh.write(f"\n── {'revision' if revise else 'authoring'} {time.strftime('%Y-%m-%d %H:%M:%S')} by {by} · "
-                         f"{AUTHORS.get(author, author)} ──\n")
-            log = open(f["log"], "ab")
-            proc = subprocess.Popen(argv, cwd=str(work), stdout=log, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
-                                    env=env, start_new_session=True)
-            log.close()
-            f["state"].write_text(json.dumps({"pid": proc.pid, "started": time.time(), "ended": None, "author": author,
-                                              "prompt": prompt.strip()[:4000], "by": by, "revise": revise, "before": before,
-                                              "work_directory": work.name, "ask_me": bool(ask_me), "skills": skills,
-                                              "yours": sorted({f"library/{a.name}" for a in attachments})}))
+    def retry(self, *, app_dir: Path, workspace: Any, name: str, env: dict[str, str], by: str, note: str = "") -> str:
+        """D1158: another round of repairs on a draft its author's check refused -- the same agent, its session
+        continued where it can be (D1156), the person's `note` told it first. The draft as it was left is the round's
+        start; its work so far stays on the page."""
+        with self._lock:
+            st = self.state(app_dir)
+            if st.get("running"):
+                raise ValueError("an agent is writing this loop's problem already")
+            if not st.get("ever") or st.get("ok"):
+                raise ValueError("no refused draft to repair")
+            try:                                                     # its session and ask, which the page is not sent
+                raw = json.loads(self.files(app_dir)["state"].read_text())
+            except (OSError, ValueError):
+                raw = {}
+            st = {**st, **{k: raw[k] for k in ("session", "ask") if k in raw}}
+            logs = self.files(app_dir)["log"].parent
+            extra = ["--repair"]
+            if st.get("session"):
+                extra += ["--session", str(st["session"])]
+            if note.strip():
+                extra += ["--note", note.strip()]
+            ask = st.get("ask") or st.get("prompt") or ""
+            self._launch(app_dir, workspace, name, ask=ask, author=str(st.get("author") or "model"), env=env, attachments=[],
+                         by=by, ask_me=bool(st.get("ask_me")), extra=extra, header="repair",
+                         state={k: st.get(k) for k in ("prompt", "revise", "before", "yours", "session")}
+                         | {"rounds": int(st.get("rounds") or 1) + 1},
+                         keep=[(logs / "author-activity.jsonl", Path("runs/author/activity.jsonl"))])
+        return "the agent repairs the draft" + (" as told" if note.strip() else "")
+
+    def _launch(self, app_dir: Path, workspace: Any, name: str, *, ask: str, author: str, env: dict[str, str],
+                attachments: list[Path], by: str, ask_me: bool, extra: list[str], header: str, state: dict[str, Any],
+                keep: list[tuple[Path, Path]] = ()) -> None:
+        """`flux ask --no-run` on a copy of the loop's own files (the only writable folder in the sandbox: the record
+        (out/), the log (runs/) and the workbench stay out of its reach), followed by a thread till it ends. `keep`:
+        files of the log copied into the copy first (a repair's earlier work lines)."""
+        f = self.files(app_dir)
+        f["log"].parent.mkdir(exist_ok=True)
+        root = app_dir / WORK
+        shutil.rmtree(root, ignore_errors=True)
+        work = root / app_dir.name  # preserve the loop ID on the host and in /sandbox/<id>
+        work.mkdir(parents=True)
+        for p in app_dir.iterdir():
+            if p.name in _NOT_THE_PROBLEMS:
+                continue
+            if p.is_dir() and not p.is_symlink():
+                shutil.copytree(p, work / p.name, symlinks=True, ignore=shutil.ignore_patterns("__pycache__", ".git"))
+            elif p.is_file():
+                shutil.copy2(p, work / p.name)
+        from flux_loop.author import DECISIONS, install_author_skills
+
+        kept = f["log"].parent / "author-decisions.json"
+        if (state.get("revise") or "--repair" in extra) and kept.is_file() and not kept.is_symlink():   # D1124: kept current
+            shutil.copyfile(kept, work / DECISIONS)
+        for src, rel in keep:
+            if src.is_file() and not src.is_symlink():
+                (work / rel).parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(src, work / rel)
+        skills = install_author_skills(work)                          # D1123: placed here, seen in the sandbox
+        flux = shutil.which("flux") or sys.argv[0]
+        argv = [flux, "ask", ask, "--dir", str(work), "--no-run", "--author", author, *extra]
+        if ask_me:
+            argv += ["--questions", "operator"]
+        for a in attachments:
+            argv += ["--file", str(a)]
+        with open(f["log"], "a") as fh:
+            fh.write(f"\n── {header} {time.strftime('%Y-%m-%d %H:%M:%S')} by {by} · {AUTHORS.get(author, author)} ──\n")
+        log = open(f["log"], "ab")
+        proc = subprocess.Popen(argv, cwd=str(work), stdout=log, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
+                                env=env, start_new_session=True)
+        log.close()
+        f["state"].write_text(json.dumps({**state, "pid": proc.pid, "started": time.time(), "ended": None, "author": author,
+                                          "ask": ask, "by": by, "work_directory": work.name, "ask_me": bool(ask_me),
+                                          "skills": skills}))
         threading.Thread(target=self._wait, args=(proc, app_dir, workspace, name), daemon=True).start()
 
     def _wait(self, proc: subprocess.Popen, app_dir: Path, workspace: Any, name: str) -> None:
@@ -390,9 +443,18 @@ class Authoring:
                 doc.unlink(missing_ok=True)
             from flux_loop.author import DECISIONS
 
-            for src, kept in ((work / DECISIONS, "author-decisions.json"), (work / "runs" / "author" / "activity.jsonl", "author-activity.jsonl")):
-                if src.is_file() and not src.is_symlink():          # D1124, D1125: the author's, kept in the log
+            journal = work / "runs" / "author"
+            for src, kept in ((work / DECISIONS, "author-decisions.json"), (journal / "activity.jsonl", "author-activity.jsonl"),
+                              (journal / "outcome.json", "author-outcome.json")):
+                if src.is_file() and not src.is_symlink():          # D1124, D1125, D1158: the author's, kept in the log
                     shutil.copyfile(src, f["log"].parent / kept)
+            outcome = _outcome(f["log"].parent / "author-outcome.json")
+            if outcome:
+                st["error"] = str(outcome.get("error") or "")[:6000]          # D1158: the refusal its repairs left
+                if outcome.get("session"):
+                    st["session"] = str(outcome["session"])                   # D1156: continued by Try again
+            elif (journal / "session.json").is_file():
+                st["session"] = str((_outcome(journal / "session.json") or {}).get("session") or "") or st.get("session")
             for rel in _problem_files(work):                         # the agent's files back into the loop
                 p, target = work / rel, app_dir / rel
                 if target.is_file() and target.read_bytes() == p.read_bytes():

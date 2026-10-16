@@ -7,7 +7,8 @@ hands the author the report; the author revises it for another pass, or says it 
 
 The author writes the problem, never the design. The document is checked before anything runs
 (it loads, uses only document keys, every tool is on PATH, every named file exists); a refused
-document goes back to the author with the reason, up to `checks` times. Input files are copied
+document goes back to the author with the reason, up to `checks` times -- an agent's session resumed (D1156), the
+check it runs itself the same (D1155) -- and then stays, refused, for another round (D1158). Input files are copied
 under `<workdir>/library/` (D791: the loop's library) and read through the document's `flow: {knowledge: {files: [...]}}` (added
 when the author forgot them).
 """
@@ -22,9 +23,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
-__all__ = ["AUTHOR_SKILLS", "DECISIONS", "DECISION_STEPS", "DOCUMENT_KEYS", "Activity", "Ask", "author_skills", "check_document",
-           "decisions_of_document", "drive", "install_author_skills", "parse_files", "question_options", "read_decisions",
-           "reference", "workspace", "workspace_skills"]
+__all__ = ["AUTHOR_SKILLS", "DECISIONS", "DECISION_STEPS", "DOCUMENT_KEYS", "Activity", "Ask", "author_skills", "check_command",
+           "check_document", "check_problem", "decisions_of_document", "drive", "install_author_skills", "is_draft", "named_files",
+           "parse_files", "question_options", "read_decisions", "reference", "workspace", "workspace_skills"]
 
 HERE = Path(__file__).resolve().parent
 #: flux/, from core/loop/src/flux_loop/author.py
@@ -114,6 +115,10 @@ class Ask:
     questions: str = "decide"                               # D1125: "operator" -- the agent may ask; the answer from `journal`'s inbox
     wait_s: float = 600.0                                   # how long a question waits for its answer
     journal: Path | None = None                             # D1125: where the author's activity and inbox are (`runs/author`)
+    session: str | None = None                              # D1156: the agent author's session, resumed by a repair
+    repair: bool = False                                    # D1158: the draft is there: check it, repair it, write nothing new
+    note: str = ""                                          # D1158: what the person says to do on that repair
+    hidden: list[str] = field(default_factory=list)         # D1159: paths in workdir hidden from an agent author
 
 
 def _inputs_block(ask: Ask, *, inline: bool) -> str:
@@ -136,9 +141,35 @@ def _inputs_block(ask: Ask, *, inline: bool) -> str:
     return "\n".join(lines)
 
 
-def brief(ask: Ask, *, inline: bool, error: str = "", report: str = "", current: str = "", note: str = "") -> str:
+def check_command() -> str:
+    """The check an agent author runs itself (D1155): `flux task check` of its folder by the Python running this flux
+    -- found inside the sandbox and out, and not one of the commands a design agent is denied -- on this machine
+    (the author runs where its check runs: no sandbox started from inside one, nor around an author run without)."""
+    import shlex
+    import sys
+
+    return f"{shlex.quote(sys.executable)} -m flux_cli task check . --no-sandbox"
+
+
+def repair_message(ask: Ask, error: str, *, attempt: int = 0, stuck: str = "", note: str = "") -> str:
+    """What a resumed agent author reads on a repair (D1156): the refusal, whether its last change fixed it, a
+    person's note -- not the whole brief again, which its session holds."""
+    parts = []
+    if note:
+        parts.append(f"THE PERSON WHO ASKED says:\n{note}")
+    if error:
+        parts.append(f"THE CHECK REFUSED `{DOCUMENT}`" + (f" (repair {attempt} of {ask.checks})" if attempt else "") + f":\n{error}")
+    if stuck:
+        parts.append(stuck)
+    parts.append(f"Fix it in `{DOCUMENT}` and the files it names, here in {ask.workdir}. Run `{check_command()}` until it "
+                 "passes, then end your turn.")
+    return "\n\n".join(parts) + "\n"
+
+
+def brief(ask: Ask, *, inline: bool, error: str = "", report: str = "", current: str = "", note: str = "", stuck: str = "") -> str:
     """What the author reads: the role, the ask, the inputs, the reference, and -- on a
-    repair -- why the document was refused, or -- between passes -- what the loop found."""
+    repair -- why the document was refused (`stuck`: that the last repair did not fix it, D1157), or -- between
+    passes -- what the loop found; a person's `note` with either."""
     parts = [
         "YOU WRITE THE PROBLEM, NOT THE DESIGN. A design loop will generate candidate designs, check each with "
         "the gate you define, measure the survivors with the stages you define and decide by the objectives you "
@@ -170,10 +201,10 @@ def brief(ask: Ask, *, inline: bool, error: str = "", report: str = "", current:
     if note:
         parts.append(f"THE PERSON WHO ASKED READ YOUR DOCUMENT and says:\n{note}\nRevise `{DOCUMENT}` (and its "
                      "files) accordingly; keep what they did not question.")
-    elif error:
-        parts.append(f"THE DOCUMENT WAS REFUSED, before anything ran:\n{error}\nFix it: rewrite `{DOCUMENT}` and "
-                     "whatever file it names that is wrong or missing.")
-    elif report:
+    if error:
+        parts.append(f"THE DOCUMENT WAS REFUSED, before anything ran:\n{error}\n" + (f"{stuck}\n" if stuck else "")
+                     + f"Fix it: rewrite `{DOCUMENT}` and whatever file it names that is wrong or missing.")
+    elif report and not note:
         parts.append(
             "THE LOOP RAN YOUR DOCUMENT. Its report:\n" + report +
             f"\n\nIf this answers the ask, you are done: say so ({'`done: true`' if inline else f'write the word DONE to `{DONE}`'}). "
@@ -220,6 +251,11 @@ def _agent_aids(ask: Ask) -> list[str]:
         out.append(f"THE BUNDLED LOOPS, read only, at {BUNDLED}: {', '.join(loops)}. Read them for how a document, its "
                    "golden model and its scripts are written; never write there, and take nothing from them that this ask "
                    "does not need.")
+    out.append(f"CHECK BEFORE YOU END YOUR TURN: run `{check_command()}` in the working directory. It is the check the "
+               "loop runs when your turn ends: the document loads, every file it names is in this folder, the golden model "
+               "runs, the tools are on PATH. It exits 0 when the document passes; otherwise it says why (`not a task:` or "
+               "`REFUSED:`, or `MISSING:` for a tool) and exits non-zero. Fix what it says and run it again until it passes; "
+               "only then end your turn. (An agent or a model said NOT READY is this machine's setup, not your document.)")
     out.append("QUESTIONS: " + _ASKING["operator" if ask.questions == "operator" else "decide"].replace("write the file", f"write `{DOCUMENT}`")
                + (" Ask with the choices as a short list (one per line, `- `) and the question last." if ask.questions == "operator" else ""))
     return out
@@ -461,7 +497,12 @@ def _answerer(ask: Ask, activity: "Activity | None", say: Callable[[str], None])
     return answer
 
 
-def _agent_turn(ask: Ask, text: str, say: Callable[[str], None], activity: "Activity | None" = None) -> tuple[bool, str]:
+def _agent_turn(ask: Ask, text: str, say: Callable[[str], None], activity: "Activity | None" = None,
+                short: str = "") -> tuple[bool, str]:
+    """One turn of an agent author. With `short` (a repair, D1156) and a session to resume, the agent continues
+    that session told `short` only -- `text`, the whole brief, if it cannot be resumed -- and is not nudged to
+    rewrite the document (a repair may rightly change another file only). The session it ends on is the ask's,
+    and said beside its journal (`session.json`) for a later round."""
     from .agent import agent_spec, converse
 
     spec = agent_spec(ask.author)
@@ -474,13 +515,31 @@ def _agent_turn(ask: Ask, text: str, say: Callable[[str], None], activity: "Acti
     before = found.read_text() if found.is_file() else None
     subs = {"prompt": text, "prompt_file": str(prompt_file), "artifact": str(target), "workdir": str(ask.workdir),
             "part": "problem", "name": "problem", "python": __import__("sys").executable, "home": str(ask.workdir)}
+    if ask.hidden:                                     # D1159: its own rules refuse them, its brief says so
+        from types import SimpleNamespace
+
+        from .hidden import absolute, hidden_subs, said_hidden
+
+        subs.update(hidden_subs(SimpleNamespace(hidden=absolute(said_hidden(ask.hidden, ask.workdir), ask.workdir))))
     if ask.skills:
         from .skills import install
 
         install(ask.skills, ask.workdir)
     install_author_skills(ask.workdir)                 # D1123: the author's own, where it looks
+    resume = ask.session if short and spec.resume else None
+    if resume and activity is not None:
+        activity.add("note", "the agent continues its session")
     turn, _asked = converse(spec, subs, workdir=ask.workdir, artifact=target, prompt_file=prompt_file,
-                            answer=_answerer(ask, activity, say), say=say)
+                            answer=_answerer(ask, activity, say), say=say, session=resume, message=short,
+                            nudges=0 if short else None)
+    if turn.session:
+        ask.session = turn.session
+        if ask.journal is not None:
+            try:
+                Path(ask.journal).mkdir(parents=True, exist_ok=True)
+                (Path(ask.journal) / "session.json").write_text(json.dumps({"agent": spec.tool, "session": turn.session}) + "\n")
+            except OSError:
+                pass
     if not turn.ok:
         return False, f"the author {spec.tool} exited {turn.rc}: {(turn.stderr or turn.text)[-300:]}"
     found = document_path(ask.workdir)
@@ -490,22 +549,180 @@ def _agent_turn(ask: Ask, text: str, say: Callable[[str], None], activity: "Acti
     return False, "wrote " + (found.name if now != before else "nothing new")
 
 
-def _home_files(doc: dict[str, Any]) -> list[str]:
-    """Every `{home}/<file>` a command of the document names."""
-    tokens: list[str] = []
+#: What a loop folder holds that is not the problem's own: the author's (its skills, brief, decisions), the loop's
+#: record and log -- never listed to the author as the loop's files.
+_NOT_THE_LOOPS = {".claude", ".opencode", ".agents", "AUTHOR-BRIEF.md", ".flux-steps", ".flux-probes", "runs", "out",
+                  "__pycache__", ".git", DECISIONS}
+_HOME_REF = re.compile(r"\{home\}/([^\s\"'`]+)")
+#: What the loop writes as it runs: a path there is not the author's to write.
+_MADE_BY_THE_LOOP = ("out/", "workbench/")
+_LISTED = 20
 
-    def walk(x: Any) -> None:
+
+def named_files(doc: dict[str, Any]) -> list[tuple[str, str, str]]:
+    """Every file or folder the document names beside it (D1157), as (the key that names it, its path in the loop
+    folder, what it must be: `path` a file or folder, `golden` the golden check's model, `folder`, `loop` a folder
+    with its own problem.yaml, `glob` a pattern that matches a file): `{home}/x` anywhere but the prose, and the
+    plain paths the loader reads beside the document -- flow.knowledge.files and sheet, baseline.file, skills,
+    flow.generate.catalog, subtasks, a space's `from:` with no values said. What the loop writes as it runs (out/,
+    workbench/) and a path with a placeholder in it are not named here."""
+    out: list[tuple[str, str, str]] = []
+
+    def add(key: str, path: Any, kind: str) -> None:
+        path = str(path).strip()
+        if path.startswith("{home}/"):
+            path = path[len("{home}/"):]
+        path = path.removeprefix("./").rstrip("/")
+        if not path or "{" in path or Path(path).is_absolute() or (path + "/").startswith(_MADE_BY_THE_LOOP):
+            return
+        if kind == "path" and any(c in path for c in "*?["):
+            kind = "glob"
+        if all(p != path for _k, p, _w in out):
+            out.append((key, path, kind))
+
+    def walk(x: Any, key: str) -> None:
         if isinstance(x, str):
-            tokens.extend(re.findall(r"\{home\}/([^\s\"']+)", x))
+            for m in _HOME_REF.findall(x):
+                add(key, m, "golden" if f"--golden {{home}}/{m}" in x else "path")
         elif isinstance(x, dict):
-            for v in x.values():
-                walk(v)
+            for k, v in x.items():
+                if not (key == "" and k in ("statement", "contract")):
+                    walk(v, f"{key}.{k}" if key else str(k))
         elif isinstance(x, list):
-            for v in x:
-                walk(v)
+            for i, v in enumerate(x):
+                walk(v, f"{key}[{i}]")
 
-    walk({k: doc.get(k) for k in ("flow", "generator")})          # D775: the gate and the stages are in flow
-    return sorted(set(tokens))
+    walk(doc, "")
+    flow = doc.get("flow") if isinstance(doc.get("flow"), dict) else {}
+    know = flow.get("knowledge") if isinstance(flow.get("knowledge"), dict) else {}
+    for i, f in enumerate(know.get("files") if isinstance(know.get("files"), list) else []):
+        if isinstance(f, str):
+            add(f"flow.knowledge.files[{i}]", f, "path")
+    if isinstance(know.get("sheet"), str):
+        add("flow.knowledge.sheet", know["sheet"], "path")
+    base = doc.get("baseline")
+    if isinstance(base, dict) and isinstance(base.get("file"), str):
+        add("baseline.file", base["file"], "path")
+    skills = doc.get("skills")
+    if isinstance(skills, dict):
+        skills = skills.get("from")
+    for i, f in enumerate([skills] if isinstance(skills, str) and skills != "off" else skills if isinstance(skills, list) else []):
+        if isinstance(f, str):
+            add(f"skills[{i}]" if isinstance(doc.get("skills"), list) else "skills", f, "folder")
+    gen = flow.get("generate") if isinstance(flow.get("generate"), dict) else {}
+    for i, f in enumerate(gen.get("catalog") if isinstance(gen.get("catalog"), list) else []):
+        if isinstance(f, str):
+            add(f"flow.generate.catalog[{i}]", f, "path")
+    for i, f in enumerate(doc.get("subtasks") if isinstance(doc.get("subtasks"), list) else []):
+        if isinstance(f, str):
+            add(f"subtasks[{i}]", f, "loop")
+
+    def spaces(x: Any, key: str) -> None:
+        if not isinstance(x, dict):
+            return
+        for k, v in x.items():
+            if k == "space" and isinstance(v, dict):
+                for knob, val in v.items():
+                    if isinstance(val, dict) and isinstance(val.get("from"), str) and not val.get("values"):
+                        add(f"{key}.space.{knob}.from", val["from"], "glob")
+            else:
+                spaces(v, f"{key}.{k}" if key else str(k))
+
+    spaces(doc, "")
+    return out
+
+
+def _there(folder: Path, path: str, kind: str) -> bool:
+    p = folder / path
+    if kind == "glob":
+        return any(h.is_file() for h in folder.glob(path))
+    if kind == "folder":
+        return p.is_dir()
+    if kind == "loop":
+        return (p / DOCUMENT).is_file()
+    return p.exists()
+
+
+def _missing(doc: dict[str, Any], folder: Path, draft: bool) -> list[tuple[str, str, str]]:
+    """What `named_files` names that the folder does not have. A parent's `{home}` is each sub-loop's folder (D801):
+    there, what every sub-loop has is there. Outside an author's draft, a golden model the gate names may be missing:
+    the loop's model writes it before the first pass (D604)."""
+    kids = [folder / s for s in doc.get("subtasks") or [] if isinstance(s, str)] if isinstance(doc.get("subtasks"), list) else []
+    out = []
+    for key, path, kind in named_files(doc):
+        if _there(folder, path, kind) or (kids and all(_there(k, path, kind) for k in kids)):
+            continue
+        if kind == "golden" and not draft:
+            continue
+        out.append((key, path, kind))
+    return out
+
+
+def _listing(folder: Path, sub: str = "") -> str:
+    """What a folder holds, a short `ls` (folders with a /), without the author's own and the loop's record."""
+    d = folder / sub if sub else folder
+    try:
+        names = sorted(d.iterdir(), key=lambda p: (not p.is_dir(), p.name))
+    except OSError:
+        return "(cannot be read)"
+    shown = [p.name + ("/" if p.is_dir() else "") for p in names
+             if not (sub == "" and p.name in _NOT_THE_LOOPS) and not p.name.startswith(".")]
+    if not shown:
+        return "(empty)"
+    more = len(shown) - _LISTED
+    return ", ".join(shown[:_LISTED]) + (f", and {more} more" if more > 0 else "")
+
+
+def _missing_said(missing: list[tuple[str, str, str]], folder: Path) -> str:
+    """The missing files, each with the key that names it, and what the folders they were looked for in hold."""
+    what = {"folder": "a folder", "loop": f"a folder with its own {DOCUMENT}", "glob": "a pattern no file matches",
+            "golden": "the golden model"}
+    lines = [f"`{DOCUMENT}` names {plural(len(missing), 'path')} the loop folder does not have:"]
+    lines += [f"  - {path}  (named by {key}{'; ' + what[kind] if kind in what else ''})" for key, path, kind in missing]
+    seen: list[str] = []
+    for _key, path, _kind in missing:
+        sub = Path(path).parent
+        while str(sub) not in ("", ".") and not (folder / sub).is_dir():
+            sub = sub.parent
+        sub_s = "" if str(sub) == "." else sub.as_posix()
+        if sub_s not in seen:
+            seen.append(sub_s)
+    for sub in seen[:4]:
+        lines.append(f"{sub + '/' if sub else 'The loop folder'} holds: {_listing(folder, sub)}")
+    lines.append("Paths are relative to the loop folder (`{home}` is the loop folder). Write what is missing there, "
+                 "or change the key to name what is there.")
+    return "\n".join(lines)
+
+
+def _absolute_named(doc: dict[str, Any], folder: Path) -> str:
+    """Why the document names its own folder by an absolute path, or "": a draft moves when it is made."""
+    roots = {str(folder), str(folder.resolve())}
+    found: list[str] = []
+
+    def walk(x: Any, key: str) -> None:
+        if isinstance(x, str):
+            if any(r in x for r in roots):
+                found.append(key)
+        elif isinstance(x, dict):
+            for k, v in x.items():
+                walk(v, f"{key}.{k}" if key else str(k))
+        elif isinstance(x, list):
+            for i, v in enumerate(x):
+                walk(v, f"{key}[{i}]")
+
+    walk(doc, "")
+    if not found:
+        return ""
+    return (f"{', '.join(found[:6])} name{'s' if len(found) == 1 else ''} the loop folder by its absolute path: the "
+            "folder moves when the loop is made. Write `{home}/<file>` in a command, a path relative to the loop folder "
+            "elsewhere.")
+
+
+def _relative(text: str, folder: Path) -> str:
+    """`text` with the loop folder's absolute path said as paths relative to it: the author's paths, sandboxed or not."""
+    for root in sorted({str(folder.resolve()), str(folder)}, key=len, reverse=True):
+        text = text.replace(root + "/", "").replace(root, "the loop folder")
+    return text
 
 
 def _golden_fault(task: Any, workdir: Path) -> str:
@@ -517,6 +734,8 @@ def _golden_fault(task: Any, workdir: Path) -> str:
 
     from .golden_proto import golden_check
 
+    if getattr(task, "subtasks", None) or getattr(task, "split", False):
+        return ""                                    # a parent's gate is its sub-loops' (D802): each checks its own
     cmd = golden_check(task)
     if "--golden" not in cmd or cmd.index("--golden") + 1 >= len(cmd):
         return ""
@@ -542,13 +761,15 @@ def _golden_fault(task: Any, workdir: Path) -> str:
             return (f"the golden model {path.name} answers {sorted(r['expected'])} for {r['inputs']}, not the output "
                     f"ports {sorted(outs)}: golden() returns one value per output port, by name")
     # an unsigned output whose top bit no vector sets, corners included, disagrees with its
-    # declared width: live, `s` declared 17 bits was returned as `total & 0xFFFF` (D622)
+    # declared width: live, `s` declared 17 bits was returned as `total & 0xFFFF` (D622). D1162: only when it
+    # stops one bit short -- a value that never reaches half its width (a popcount's 0..32 in 32 bits) is a
+    # wide port, harmless, and refusing it left the author nothing to fix
     for p in g.ports:
         bits = int(p["bits"])
         if p["dir"] != "out" or not p.get("unsigned") or bits < 2 or g.ulp.get(p["name"]) is not None:
             continue
         top = max((int(r["expected"][p["name"]]) for r in rows), default=0)
-        if top < (1 << (bits - 1)):
+        if (1 << (bits - 2)) <= top < (1 << (bits - 1)):
             return (f"the golden model {path.name} never sets the top bit of output `{p['name']}` ({bits} bits) over "
                     f"{len(rows)} vectors, corner cases included: its width or golden() is wrong. Make the "
                     f"declared width match what golden() returns (and the contract say the same).")
@@ -556,29 +777,51 @@ def _golden_fault(task: Any, workdir: Path) -> str:
 
 
 def check_document(workdir: Path, inputs: list[Path] = (), skills: bool = False) -> tuple[Any, Any, str]:
-    """(task, problem, "") when the authored document can run, else (None, None, why): it
-    loads, says only document keys, names only files that exist, needs only tools on PATH.
-    Input files the document forgot are added to its `knowledge.files`."""
-    import yaml
-
-    from .document import TaskError, task_in
-    from .task import PromptProblem
-
+    """(task, problem, "") when the authored document can run, else (None, None, why): `check_problem` on its
+    `problem.yaml`, an author's draft. Input files the document forgot are added to its `knowledge.files`."""
     path = document_path(workdir)
     if not path.is_file():
-        return None, None, f"there is no `{DOCUMENT}` in {workdir}"
+        listing = _listing(workdir) if Path(workdir).is_dir() else "(no folder)"
+        return None, None, f"there is no `{DOCUMENT}` in the loop folder; it holds: {listing}"
+    return check_problem(path, inputs=inputs, skills=skills)
+
+
+def is_draft(folder: Path) -> bool:
+    """Whether a folder is an author's draft: its brief beside the document (D1155)."""
+    return (Path(folder) / "AUTHOR-BRIEF.md").is_file()
+
+
+def check_problem(path: Path, *, draft: bool = True, tools: bool = True, inputs: list[Path] = (),
+                  skills: bool = False) -> tuple[Any, Any, str]:
+    """The check an authored document passes before anything runs (D589, D1155) -- the author's after each turn, and
+    `flux task check`'s: (task, problem, "") when it can run, else (None, None, why), every path in `why` relative to
+    the loop folder. It is YAML, says only document keys, names only files the folder has (each missing one with the
+    key that names it and what the folder holds), loads, its golden model runs, and (`tools`) the tools it needs are
+    on PATH. A `draft` is an author's: it must also write its golden model (outside a draft the loop's model may,
+    D604) and never name its folder by its absolute path. `inputs` the document forgot are added to its
+    `knowledge.files`; with `skills`, `skills: [skills]`."""
+    import yaml
+
+    from .document import TaskError, load_task
+    from .task import PromptProblem
+
+    path = Path(path)
+    workdir = path.parent
     try:
         doc = yaml.safe_load(path.read_text())
     except yaml.YAMLError as exc:
-        return None, None, f"`{DOCUMENT}` is not YAML: {exc}"
+        return None, None, _relative(f"`{path.name}` is not YAML: {exc}", workdir)
     if not isinstance(doc, dict):
-        return None, None, f"`{DOCUMENT}` is not a mapping of keys"
+        return None, None, f"`{path.name}` is not a mapping of keys"
     unknown = sorted(set(doc) - DOCUMENT_KEYS)
     if unknown:
         return None, None, f"keys a document does not have: {', '.join(unknown)}; the keys are {', '.join(sorted(DOCUMENT_KEYS))}"
-    missing = [f for f in _home_files(doc) if not (workdir / f).is_file()]
+    why = _absolute_named(doc, workdir) if draft else ""
+    if why:
+        return None, None, why
+    missing = _missing(doc, workdir, draft)
     if missing:
-        return None, None, f"the commands name {', '.join(missing)} beside the document, and it is not there: write it"
+        return None, None, _missing_said(missing, workdir)
     flow = doc.get("flow") if isinstance(doc.get("flow"), dict) else {}
     know = flow.get("knowledge") if isinstance(flow.get("knowledge"), dict) else {}
     named = set(know.get("files") or [])
@@ -593,17 +836,65 @@ def check_document(workdir: Path, inputs: list[Path] = (), skills: bool = False)
     if changed:
         path.write_text(yaml.safe_dump(doc, sort_keys=False))
     try:
-        task = task_in(doc, workdir)
+        task = load_task(path)
         problem = PromptProblem(task)
     except (TaskError, ValueError) as exc:
-        return None, None, f"the document does not load: {exc}"
-    why = _golden_fault(task, workdir)
-    if why:
-        return None, None, why
-    tools = problem.tools_missing()
+        return None, None, _relative(f"the document does not load: {exc}", workdir)
+    from .golden_proto import golden_path
+
+    gp = golden_path(task)
+    if draft or gp is None or gp.is_file():
+        why = _golden_fault(task, workdir)
+        if why:
+            return None, None, _relative(why, workdir)
     if tools:
-        return None, None, f"tools not on PATH: {', '.join(tools)} (use the tools this machine has: see the reference)"
+        need = problem.tools_missing()
+        if need:
+            return None, None, f"tools not on PATH: {', '.join(need)} (use the tools this machine has: see the reference)"
     return task, problem, ""
+
+
+def _snapshot(folder: Path) -> dict[str, tuple[int, int]]:
+    """The loop's files as they are (size, time written), the author's own and the record left out: what a repair
+    changed (D1157)."""
+    out: dict[str, tuple[int, int]] = {}
+    for p in sorted(Path(folder).rglob("*")):
+        rel = p.relative_to(folder)
+        if rel.parts[0] in _NOT_THE_LOOPS or any(x.startswith(".") or x == "__pycache__" for x in rel.parts) or not p.is_file():
+            continue
+        st = p.stat()
+        out[rel.as_posix()] = (st.st_size, st.st_mtime_ns)
+        if len(out) >= 400:
+            break
+    return out
+
+
+def _gist(error: str) -> str:
+    """A refusal without what changes between two tellings of it (what the folder holds): its first line and the
+    paths it lists."""
+    lines = (error or "").strip().splitlines()
+    return "\n".join(lines[:1] + [ln for ln in lines[1:] if ln.startswith("  - ")])
+
+
+def _stuck(last: dict[str, Any] | None, error: str, folder: Path) -> str:
+    """D1157: when the repair before came back with the same refusal, what it changed -- a short diff of the
+    document, or that it changed nothing, and the other files it changed -- so the next does something else."""
+    if not last or not error or _gist(last["error"]) != _gist(error):
+        return ""
+    import difflib
+
+    doc = document_path(folder).read_text() if document_path(folder).is_file() else ""
+    now = _snapshot(folder)
+    others = sorted(p for p in set(last["files"]) | set(now) if p != DOCUMENT and last["files"].get(p) != now.get(p))
+    if doc != last["doc"]:
+        diff = list(difflib.unified_diff(last["doc"].splitlines(), doc.splitlines(), "before", "after", n=1, lineterm=""))[2:]
+        shown = diff[:40] + ([f"... {len(diff) - 40} more lines"] if len(diff) > 40 else [])
+        said = (f"YOUR LAST CHANGE DID NOT FIX THIS: the check says the same as before. What you changed in "
+                f"`{DOCUMENT}`:\n```diff\n" + "\n".join(shown) + "\n```")
+    else:
+        said = f"YOUR LAST CHANGE DID NOT FIX THIS: the check says the same as before, and `{DOCUMENT}` did not change."
+    said += (f"\nOther files you changed: {', '.join(others[:8])}." if others else "\nNo other file changed either.")
+    return said + " Read the refusal again and change what it names."
 
 
 def _phase(name: str, why: str):
@@ -641,16 +932,32 @@ def drive(ask: Ask, *, run_pass: Callable[..., Any], proposer: Any = None,
 
         add_listener(activity)                     # D1125: the agent's tool calls, as lines
 
-    def turn(text: str) -> tuple[bool, str]:
+    def turn(text: str, short: str = "") -> tuple[bool, str]:
         with _phase("author: " + ("the model" if inline else str(getattr(ask.author, "get", lambda *_: None)("preset") or ask.author)),
                     "writes the problem document and its files"):
-            return _model_turn(ask, proposer, text, activity) if inline else _agent_turn(ask, text, say, activity)
+            return _model_turn(ask, proposer, text, activity) if inline else _agent_turn(ask, text, say, activity, short)
+
+    def ended(error: str) -> None:
+        """D1158: how the authoring ended, beside its journal (`outcome.json`): the refusal its repairs did not fix
+        ("" when the document passed) and the session a later round resumes; said as a line when it gave up."""
+        if error and activity is not None:
+            activity.add("check", f"stopped after {plural(ask.checks, 'repair')}: the draft stays; try again, or tell the agent what to do",
+                         tone="bad")
+        if ask.journal is not None:
+            try:
+                Path(ask.journal).mkdir(parents=True, exist_ok=True)
+                (Path(ask.journal) / "outcome.json").write_text(json.dumps({"error": error, "session": ask.session,
+                                                                            "repairs": ask.checks}) + "\n")
+            except OSError:
+                pass
 
     def checked(error: str) -> None:
         if activity is None:
             return
         if error:
-            activity.add("check", f"the check refused it: {error.splitlines()[0]}", tone="bad")
+            lines = error.strip().splitlines()
+            said = lines[0] + (" " + lines[1].strip() if lines[0].endswith(":") and len(lines) > 1 else "")
+            activity.add("check", f"the check refused it: {said}", tone="bad")
             return
         activity.add("check", "the check passed: the document loads, its files and tools are here", tone="ok")
         rows, why = read_decisions(ask.workdir)
@@ -659,7 +966,7 @@ def drive(ask: Ask, *, run_pass: Callable[..., Any], proposer: Any = None,
 
     try:
         return _drive(ask, run_pass=run_pass, proposer=proposer, say=say, review=review, loop_proposer=loop_proposer,
-                      inline=inline, turn=turn, checked=checked)
+                      inline=inline, turn=turn, checked=checked, ended=ended)
     finally:
         if activity is not None:
             from flux_profile import remove_listener
@@ -669,7 +976,8 @@ def drive(ask: Ask, *, run_pass: Callable[..., Any], proposer: Any = None,
 
 def _drive(ask: Ask, *, run_pass: Callable[..., Any], proposer: Any, say: Callable[[str], None],
            review: Callable[[Path, Any, Any], str | None] | None, loop_proposer: Any, inline: bool,
-           turn: Callable[[str], tuple[bool, str]], checked: Callable[[str], None]) -> dict[str, Any]:
+           turn: Callable[..., tuple[bool, str]], checked: Callable[[str], None],
+           ended: Callable[[str], None] = lambda _e: None) -> dict[str, Any]:
     import inspect
 
     from .passes import between_passes, carrying, mark
@@ -695,17 +1003,33 @@ def _drive(ask: Ask, *, run_pass: Callable[..., Any], proposer: Any, say: Callab
                 say("author: the document stands; the loop goes on improving the design"
                     + (" (exploring: it came to rest)" if rests else ""))
         error = ""
+        last: dict[str, Any] | None = None      # D1157: the refusal the last repair answered, and the folder before it
+
+        def before(refused: str) -> dict[str, Any]:
+            return {"error": refused, "files": _snapshot(ask.workdir),
+                    "doc": document_path(ask.workdir).read_text() if document_path(ask.workdir).is_file() else ""}
+
         for attempt in range(ask.checks + 1):
-            if n == 0 and attempt == 0:
+            if n == 0 and attempt == 0 and not ask.repair:
                 say("author: writing the initial problem document and supporting files…")
                 done, what = turn(brief(ask, inline=inline))
                 history.append({"pass": 1, "turn": "write", "what": what})
                 say(f"author: {what}")
+            elif n == 0 and attempt == 0 and ask.note:          # D1158: a person's word on a refused draft
+                _t, _p, pre = check_document(ask.workdir, ask.inputs, skills=bool(ask.skills))
+                last = before(pre)
+                say("author: told what to do by the person who asked…")
+                done, what = turn(brief(ask, inline=inline, note=ask.note, error=pre, current=last["doc"]),
+                                  repair_message(ask, pre, note=ask.note))
+                history.append({"pass": 1, "turn": "note", "note": ask.note, "what": what})
+                say(f"author (your note): {what}")
             elif error:
                 say(f"author: repairing the refused document (attempt {attempt}/{ask.checks})…")
-                current = document_path(ask.workdir).read_text() if document_path(ask.workdir).is_file() else ""
-                done, what = turn(brief(ask, inline=inline, error=error, current=current))
-                history.append({"pass": n + 1, "turn": "repair", "what": what, "refused": error})
+                stuck = _stuck(last, error, ask.workdir)
+                last = before(error)
+                done, what = turn(brief(ask, inline=inline, error=error, current=last["doc"], stuck=stuck),
+                                  repair_message(ask, error, attempt=attempt, stuck=stuck))
+                history.append({"pass": n + 1, "turn": "repair", "what": what, "refused": error, **({"stuck": True} if stuck else {})})
                 say(f"author (repair): {what}")
             say("author: checking the document, required files and tools…")
             with _phase("check: problem document", "validate the authored document, files and tools"):
@@ -722,14 +1046,19 @@ def _drive(ask: Ask, *, run_pass: Callable[..., Any], proposer: Any, say: Callab
             _done, what = turn(brief(ask, inline=inline, note=note, current=current))
             history.append({"pass": n + 1, "turn": "review", "note": note, "what": what})
             say(f"author (your note): {what}")
+            last = None
             for _attempt in range(ask.checks + 1):
                 task, problem, error = check_document(ask.workdir, ask.inputs, skills=bool(ask.skills))
                 if not error:
                     break
                 say(f"document refused: {error}")
-                _done, what = turn(brief(ask, inline=inline, error=error, current=document_path(ask.workdir).read_text()
-                                         if document_path(ask.workdir).is_file() else ""))
+                stuck = _stuck(last, error, ask.workdir)
+                last = before(error)
+                _done, what = turn(brief(ask, inline=inline, error=error, current=last["doc"], stuck=stuck),
+                                   repair_message(ask, error, attempt=_attempt + 1, stuck=stuck))
                 history.append({"pass": n + 1, "turn": "repair", "what": what, "refused": error})
+        if n == 0 or error:
+            ended(error)
         if error:
             return {"document": str(document_path(ask.workdir)), "error": error, "history": history, "result": out,
                     "task": task, "problem": problem, "report": report}

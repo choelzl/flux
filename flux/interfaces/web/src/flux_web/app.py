@@ -17,7 +17,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import routes_accounts, routes_admin, routes_agents, routes_loops, routes_results
+from . import routes_accounts, routes_admin, routes_agents, routes_hidden, routes_loops, routes_results
 from .models import EnvVar
 from .routes_results import journal_messages  # noqa: F401 -- D888: still importable from here
 from .runs import HOST_RULE, LOOKUP, RunManager, loop_files
@@ -276,6 +276,7 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
     routes_admin.register(app, ctx)
     routes_loops.register(app, ctx)
     routes_results.register(app, ctx)
+    routes_hidden.register(app, ctx)                      # D1159: paths hidden from the agents
 
     # ---- pages
     if CRAFTER.is_dir():

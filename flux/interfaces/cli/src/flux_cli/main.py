@@ -172,6 +172,10 @@ def build_parser() -> argparse.ArgumentParser:
                        help="operator: an agent author may ask a question, answered in runs/author/inbox.jsonl (the web's page) "
                             "within --wait-s; decide (default): it decides.")
     ask_p.add_argument("--wait-s", type=float, default=600.0, help="How long a question waits for its answer (default 600).")
+    ask_p.add_argument("--repair", action="store_true",
+                       help="The document is in --dir already, refused: check it and repair it, write nothing new (D1158).")
+    ask_p.add_argument("--session", default=None, help="The agent author's session to continue (D1156).")
+    ask_p.add_argument("--note", default="", help="With --repair: what the person says to do (D1158).")
     ask_p.add_argument("--steps", type=int, default=None, help="The loop's steps per pass (default: the document's).")
     ask_p.add_argument("--screen-only", action="store_true", help="Stop every pass at the first stage.")
     ask_p.add_argument("--model", default=None, help="The model (the author when --author model, and the loop's).")

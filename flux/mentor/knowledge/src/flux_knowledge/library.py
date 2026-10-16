@@ -53,11 +53,13 @@ def index_for(folders: Iterable[str] = ()) -> Any:
     key = _folders(folders)
     if not key:
         return base
-    key = (str(id(base)), *key)          # the shared library the extra folders join
+    from .hidden import version
+
+    key = (str(id(base)), f"hidden {version()}", *key)   # the shared library the extra folders join; D1159: what is hidden
     if key not in _INDEXES:
         from .connectors.text import ingest_library
 
-        extra = [c for d in key[1:] for c in ingest_library(d, repo_root=FLUX_ROOT)]
+        extra = [c for d in key[2:] for c in ingest_library(d, repo_root=FLUX_ROOT)]
         _INDEXES[key] = BM25Index(list(base._chunks) + extra)
     return _INDEXES[key]
 

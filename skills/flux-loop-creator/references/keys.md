@@ -36,7 +36,7 @@ Refused: `id` (the folder is the id) and every old top-level form (`gate`, `stag
 | `select` | objectives, agent (tie-breaker only), `{finalists: 3}` |
 | `calibrate` | on, off |
 | `feedback` | human, off |
-| `knowledge` | `{files, text, sheet, digest: model|<agent>, lessons: off|mined|<agent>, workbench: off|model|<agent>}` or `off` (`workbench` unsaid: whoever digests) |
+| `knowledge` | `{files, text, sheet, digest: model|<agent>, lessons: off|mined|<agent>, workbench: off|model|<agent>, hidden: [paths]}` or `off` (`workbench` unsaid: whoever digests; `hidden` also beside `off: true`) |
 
 Any box: a word, an agent name (`claude`, `codex`, `opencode`, or a server agent), or
 `{by: <who>, ...}`. Critics: `critic: <who>` on the box judged (orchestrate, test, select).
@@ -69,8 +69,18 @@ A list of phases chains policies.
 
 `timeout_s` (1800, or `FLUX_<NAME>_TIMEOUT_S`), `session: turn|pass`, `questions:
 decide|model|operator`, `max_questions` (2), `wait_s` (300), `probe: {gate: 20, stages: 3}` or
-`false`, `allow: [] | all`; a custom agent `by: {command: [...], output: text}` plus `bin`,
-`args`, `output`, `resume`, `name`.
+`false`, `allow: [] | all`, `hidden: [paths]` (more paths this agent may not read); a custom agent
+`by: {command: [...], output: text}` plus `bin`, `args`, `output`, `resume`, `name`.
+
+## Hidden from AI (`knowledge.hidden`)
+
+`flow: {knowledge: {hidden: [tests/, golden.py, "params/*.json"]}}`: files, folders or globs
+relative to the loop folder (inside it, never the document) that no agent or prompt reads; the
+loop's gate, stages and scripts still do. Sub-loops add their parent's. Each agent turn's brief
+names them; Claude Code gets `--settings` deny rules (Read/Edit/Bash), OpenCode `permission`
+deny patterns; Codex has no per-path rule (the brief only). The library, knowledge files,
+skills, the workbench index and `flux loop library` leave them out; `flux loop diff|gate|measure`
+refuse them.
 
 ## Objectives
 

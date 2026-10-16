@@ -99,6 +99,10 @@ class AnswerIn(BaseModel):                 # D1125: the answer to the author's q
     text: str = Field(min_length=1, max_length=8000)
 
 
+class RetryIn(BaseModel):                  # D1158: another round of repairs on a refused draft, told what to do or not
+    text: str = Field(default="", max_length=8000)
+
+
 class MakeIn(BaseModel):                   # D1122: a drafted loop made, with one cheap pass or none
     first_pass: bool = False
 

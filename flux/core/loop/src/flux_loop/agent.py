@@ -157,6 +157,7 @@ class AgentSpec:
     allowed: tuple[str, ...] = ()  # denied commands this agent was given back (`allow:`, D678)
     kind: str = ""                 # the preset it runs as (D807); "" for a command of one's own
     endpoint: str = ""             # its endpoint as resolved (D1027: the slots it shares with every loop)
+    hidden: tuple[str, ...] = ()   # D1159: more paths this agent may not read, beside the loop's (relative to its folder)
 
 
 def _argv(command: Any) -> tuple[str, ...]:
@@ -174,7 +175,7 @@ def agent_spec(spec: Any) -> AgentSpec:
     if not isinstance(spec, dict):
         raise ValueError("agent: a preset's name or {preset|command, timeout_s, questions, ...}")
     known = {"preset", "command", "resume", "output", "name", "timeout_s", "questions", "max_questions", "wait_s", "bin", "args",
-             "session", "probe", "allow"}
+             "session", "probe", "allow", "hidden"}
     unknown = sorted(set(spec) - known)
     if unknown:
         raise ValueError(f"agent: {', '.join(unknown)} is not one of {', '.join(sorted(known))}")
@@ -184,7 +185,13 @@ def agent_spec(spec: Any) -> AgentSpec:
     session = str(spec.get("session") or "turn")
     if session not in SESSIONS:
         raise ValueError(f"agent.session is one of {', '.join(SESSIONS)}, not {session!r}")
-    common = dict(timeout_s=float(spec.get("timeout_s") or 1800.0), questions=questions,
+    try:                                              # D1159: the agent's own hidden paths, beside the loop's
+        from .hidden import said_hidden
+
+        own_hidden = said_hidden(spec.get("hidden"), None, "agent.hidden")
+    except ValueError as exc:
+        raise ValueError(str(exc)) from exc
+    common = dict(timeout_s=float(spec.get("timeout_s") or 1800.0), questions=questions, hidden=own_hidden,
                   max_questions=int(spec.get("max_questions", 2)), wait_s=float(spec.get("wait_s") or 300.0),
                   session=session, probe=_probe(spec.get("probe", True)), probe_checks=_probe_checks(spec.get("probe", True)))
     allow = spec.get("allow") or []
@@ -448,7 +455,9 @@ _STAMP = ".index.json"                    # what the README was written from: ea
 
 
 def _bench_files(root: Path) -> list[Path]:
-    return sorted((p for p in root.rglob("*") if p.is_file() and p.suffix not in (".pyc", ".pyo")
+    from flux_knowledge.hidden import hidden
+
+    return sorted((p for p in root.rglob("*") if p.is_file() and p.suffix not in (".pyc", ".pyo") and not hidden(p)   # D1159
                    and p.relative_to(root).parts != (WORKBENCH_README,)
                    and not any(q.startswith(".") or q == "__pycache__" for q in p.relative_to(root).parts)),
                   key=lambda p: str(p.relative_to(root)))
@@ -1143,6 +1152,15 @@ def _run_turn(spec: AgentSpec, argv: tuple[str, ...], subs: dict[str, str], *, w
 
     from .observe import _phase
 
+    from .hidden import hidden_line, turn_hidden, with_hidden
+
+    hidden = turn_hidden(subs, spec.hidden, workdir)       # D1159: the paths hidden from the agent
+    if hidden and not (spec.resume is not None and argv == spec.resume) and subs.get("prompt") is not None:
+        line = hidden_line(hidden)                          # a fresh turn's brief says so; a resumed session was told
+        subs = {**subs, "prompt": subs["prompt"].rstrip("\n") + "\n\n" + line + "\n"}
+        pf = Path(subs.get("prompt_file") or "")
+        if subs.get("prompt_file") and pf.is_file() and line not in (said := pf.read_text(errors="replace")):
+            pf.write_text(said.rstrip("\n") + "\n\n" + line + "\n")
     cmd = [t.format(**_inline(subs, workdir)) for t in argv]
     if spec.add_dir and subs.get("workbench"):
         cmd += [*spec.add_dir, subs["workbench"]]  # its real path: a tool that checks it sees past the link (D677)
@@ -1155,6 +1173,8 @@ def _run_turn(spec: AgentSpec, argv: tuple[str, ...], subs: dict[str, str], *, w
     # block on the loop's inherited socket until the timeout.
     # PWD set too (D586): OpenCode takes its project directory from `PWD`, not the cwd.
     env = _config_env(spec, _own_env(spec, {**os.environ, "PWD": str(workdir)}, cmd[0]))
+    kind = spec.kind or (Path(cmd[0]).name if Path(cmd[0]).name in ("claude", "opencode", "codex") else "")
+    cmd, env = with_hidden(kind, cmd, env, hidden, workdir)    # D1159: its own permission settings refuse them
     if subs.get("probe"):
         env["FLUX_PROBE"] = subs["probe"]            # `flux probe` finds its turn's context (D678)
     # the prompt on stdin unless the command names a slot for it (D672); a resume's answer
@@ -1341,7 +1361,7 @@ class Exchange:
 def converse(spec: AgentSpec, subs: dict[str, str], *, workdir: Path, artifact: Path,
              answer: Callable[[str], tuple[str, str]], say: Callable[[str], None] = lambda _m: None,
              prompt_file: Path | None = None, session: str | None = None,
-             message: str = "") -> tuple[Turn, list[Exchange]]:
+             message: str = "", nudges: int | None = None) -> tuple[Turn, list[Exchange]]:
     """The agent's turn, and every question it ends on answered (by `answer(question) ->
     (text, by)`) until it writes the artifact, stops asking, fails, or has asked
     `max_questions`. The answer resumes its session; without one, a fresh run's brief
@@ -1349,7 +1369,8 @@ def converse(spec: AgentSpec, subs: dict[str, str], *, workdir: Path, artifact: 
 
     Given a `session` (D669), the turn resumes it with `message` instead of the brief; a
     session that cannot be resumed (gone, failed, out of context) starts fresh from
-    `subs["prompt"]`, the full brief."""
+    `subs["prompt"]`, the full brief. `nudges` (NUDGES unsaid): how often a turn that left `artifact` as it was is
+    told to write it -- 0 where a turn may rightly change other files only (an author's repair, D1156)."""
     before = artifact.read_text() if artifact.is_file() else None     # a prototype's file exists to be edited
 
     def wrote() -> bool:
@@ -1382,7 +1403,7 @@ def converse(spec: AgentSpec, subs: dict[str, str], *, workdir: Path, artifact: 
                 prompt_file.write_text(brief)
             turn = run_turn(spec, spec.argv, {**subs, "prompt": brief}, workdir=workdir)
     # An agent that ends a turn without writing its file is nudged to write it (D618).
-    for n in range(NUDGES):
+    for n in range(NUDGES if nudges is None else nudges):
         full = overflowed(turn)
         if (not turn.ok and not full) or wrote() or question_in(turn.text) is not None:
             break

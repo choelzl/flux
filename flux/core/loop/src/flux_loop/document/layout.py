@@ -144,6 +144,11 @@ def _layout(doc: Any) -> Any:
         out["subtasks"] = [_layout(c) for c in out["subtasks"]]
     if flow:
         out["flow"] = _by_layout(flow)
+    if doc.get("hidden"):                                  # D1159: the paths hidden from the agents, beside who digests
+        f = out.setdefault("flow", {})
+        k = f.get("knowledge")
+        k = {} if k is None or k == "model" else {"off": True} if k == "off" else {"digest": k} if not isinstance(k, dict) else k
+        f["knowledge"] = {**k, "hidden": list(doc["hidden"])}
     if doc.get("scope"):                                   # D1022: said under the box that picks it
         f = out.setdefault("flow", {})
         o = f.get("orchestrate")

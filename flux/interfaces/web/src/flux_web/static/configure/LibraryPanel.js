@@ -6,7 +6,9 @@
 //     shared library (read while it is on, their papers summed up once), files added here, a text, a method sheet, who
 //     sums the papers up;
 //   Lessons from records: off, mined or an agent (its settings under More, D1142);
-//   Workbench digest: on or off, who sums it up (the papers' digester unless said).
+//   Workbench digest: on or off, who sums it up (the papers' digester unless said);
+//   Hidden from AI (D1159): the files, folders and patterns the agents may not read (`knowledge.hidden`), added and
+//     removed here -- the loop's checks and measurements still use them.
 
 import { html, useChanges, useEffect, useState } from "../view.js";
 import { api } from "../ui.js";
@@ -16,6 +18,8 @@ import { Choice } from "../components/Tabs.js";
 import { Kept, Pick, Text, isKept } from "./fields.js";
 import { isAgent } from "./who.js";
 import { Check } from "../components/Check.js";
+import { Tool } from "../components/Head.js";
+import { HiddenMark, hiddenBy } from "../files/hidden.js";
 
 const NO_STORE = { subscribe: () => () => {}, s: { files: [] } };
 let uses = null;                                         // the shared library's papers and Flux's own skills, asked once
@@ -58,7 +62,7 @@ function AddFiles({ store, rows, setRows, into, label, then }) {
 
 /** `who(box)` the choice of who works a box (BoxPanel's), `opts(slot)` an agent's settings; `fixed` the flow is kept as written. */
 export function Knowledge({ M, state, edit, store, who, opts, fixed, direct }) {
-  const [up, setUp] = useState([]), [upSkills, setUpSkills] = useState([]), [got, setGot] = useState(null);
+  const [up, setUp] = useState([]), [upSkills, setUpSkills] = useState([]), [got, setGot] = useState(null), [hideIn, setHideIn] = useState("");
   useChanges(store || NO_STORE);
   useEffect(() => { let live = true; usesOnce().then(u => { if (live) setGot(u); }); return () => { live = false; }; }, []);
   const W = M.WORDS.graph, f = state.flow, files = (store || NO_STORE).s.files, keptKnow = isKept(state, "flow.knowledge");
@@ -99,7 +103,9 @@ export function Knowledge({ M, state, edit, store, who, opts, fixed, direct }) {
     <${Head} title=${W.library} on=${libOn} disabled=${fixed} set=${on => edit(() => { f.knowledge = on ? "default" : "none"; })} />
     ${libOn ? html`<h4 class="muted small">${W.reads}</h4>
       <ul class="cfg-lib-reads" aria-label=${W.reads}>
-        ${readRows(files, reads).map(r => row(r.path, html`<code>${r.path}</code>`, r.missing ? "missing" : r.n ? `folder, ${plural(r.n, "file")}` : "", isRead(r.path), () => toggle(r.path), false))}
+        ${readRows(files, reads).map(r => hiddenBy(r.path, M.hiddenOf(state))      // D1159: hidden from AI, read by no prompt
+          ? row(r.path, html`<code>${r.path}</code>`, "hidden from AI", false, null, true)
+          : row(r.path, html`<code>${r.path}</code>`, r.missing ? "missing" : r.n ? `folder, ${plural(r.n, "file")}` : "", isRead(r.path), () => toggle(r.path), false))}
         ${row("library/", html`<code>library/</code>`, lib ? `${plural(lib, "paper")}, digested` : "papers added there, digested", true, null, true)}
         ${row("shared", html`<span>shared library</span>`, papers != null ? plural(papers, "paper") : "", true, null, true)}</ul>
       <${AddFiles} store=${store} rows=${up} setRows=${setUp} into="" label="Drop files or folders to read" then=${readAdded} />
@@ -121,5 +127,25 @@ export function Knowledge({ M, state, edit, store, who, opts, fixed, direct }) {
     ${wbOn ? html`<p class="cfg-says">${W.workbenchSays}</p><div class="cfg-bar"><span class="muted small">${W.workbenchBy}</span>${who("workbench")}</div>
       ${isAgent(f.workbench) ? opts("workbench") : ""}` : ""}</div>`;
 
-  return html`${skills}${keptKnow ? html`<${Kept} M=${M} state=${state} at="flow.knowledge" direct=${direct} />` : html`${library}${lessons}${workbench}`}`;
+  // Hidden from AI: the paths no agent or prompt reads, the loop's own tools still do (D1159)
+  const hidden = M.hiddenOf(state), isDoc = p => /(^|\/)problem\.ya?ml$|\.problem\.ya?ml$/.test(p);
+  const setHidden = list => edit(() => { state.hidden = list; });
+  const addHidden = () => {
+    const p = hideIn.trim().replace(/^\.\//, "");
+    if (p && !hidden.includes(p)) setHidden([...hidden, p]);
+    setHideIn("");
+  };
+  const tops = [...new Set(files.map(x => x.path.includes("/") ? `${x.path.split("/")[0]}/` : x.path))].filter(p => !isDoc(p) && !hidden.includes(p)).sort();
+  const hiddenSec = html`<div class="cfg-sub" data-sec="hidden">
+    <${Head} title=${W.hidden} control=${html`<span class="muted small">${hidden.length || ""}</span>`} />
+    <p class="cfg-says">${W.hiddenSays}</p>
+    ${hidden.length ? html`<ul class="cfg-hidden" aria-label=${W.hidden}>${hidden.map(p => html`<li key=${p}><${HiddenMark} path=${p} /><code>${p}</code>
+        <${Tool} icon="close" label=${`${W.hiddenRemove}: ${p}`} onClick=${() => setHidden(hidden.filter(x => x !== p))} /></li>`)}</ul>`
+      : html`<p class="cfg-says muted">${W.hiddenNone}</p>`}
+    <div class="row cfg-hide-add"><input class="mono" list="cfg-hide-choices" aria-label=${W.hiddenAdd} placeholder=${W.hiddenAdd} value=${hideIn}
+        onInput=${e => setHideIn(e.currentTarget.value)} onKeyDown=${e => { if (e.key === "Enter") { e.preventDefault(); addHidden(); } }} />
+      <datalist id="cfg-hide-choices">${tops.map(p => html`<option key=${p} value=${p} />`)}</datalist>
+      <button class="small" type="button" disabled=${!hideIn.trim()} onClick=${addHidden}>${W.hiddenPick}</button></div></div>`;
+
+  return html`${skills}${keptKnow ? html`<${Kept} M=${M} state=${state} at="flow.knowledge" direct=${direct} />` : html`${library}${hiddenSec}${lessons}${workbench}`}`;
 }

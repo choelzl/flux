@@ -48,6 +48,13 @@ class Where:
     part: str | None = None
     ctx: str = ""                                  # the turn's probe context, when inside a turn
     task: Any = field(default=None, repr=False)
+    hidden: list = field(default_factory=list)     # D1159: (absolute, as said) -- hidden from the agents
+
+    def off_limits(self, path: str) -> bool:
+        """Whether `path` is hidden from the loop's agents (D1159)."""
+        from .hidden import matches
+
+        return matches(path, self.hidden or list(getattr(self.spec(), "hidden", ())))
 
     def spec(self) -> Any:
         if self.task is None:
@@ -64,7 +71,8 @@ def where(loop: str | None = None, db: str | None = None, campaign: str | None =
     if not loop and ctx_path and Path(ctx_path).is_file():
         ctx = json.loads(Path(ctx_path).read_text())
         return Where(ctx.get("home") or ".", ctx.get("doc") or {}, db or ctx.get("record") or "",
-                     campaign or ctx.get("campaign") or "", part if part is not None else (ctx.get("part") or None), ctx_path)
+                     campaign or ctx.get("campaign") or "", part if part is not None else (ctx.get("part") or None), ctx_path,
+                     hidden=[tuple(h) for h in ctx.get("hidden") or []])
     from .document import load_task
 
     path = Path(loop or ".")
@@ -76,7 +84,7 @@ def where(loop: str | None = None, db: str | None = None, campaign: str | None =
         raise NotHere(f"{path}: {exc}") from exc
     root = (task.record or task.id).split("/")[0]
     return Where(str(task.home or path.resolve()), task.to_dict(), db or str(task.out_dir() / f"{root}.db"),
-                 campaign or task.record or task.id, part, "", task)
+                 campaign or task.record or task.id, part, "", task, list(task.hidden))
 
 
 # ---- the record -------------------------------------------------------------------------
@@ -280,6 +288,8 @@ def diff(w: Where, a: str, b: str, context: int = 3) -> dict[str, Any]:
     """Two designs line by line; either may be a file instead."""
     def text(x: str) -> tuple[str, str]:
         p = Path(x)
+        if p.exists() and w.off_limits(str(p)):         # D1159: refused, as the agent's own tools refuse it
+            raise NotHere(f"{x} is hidden from the loop's agents (flow.knowledge.hidden)")
         if p.is_file():
             return str(p), p.read_text()
         d = design(w, x)
@@ -295,8 +305,12 @@ def _index(w: Where) -> Any:
     from flux_knowledge.library import index_for
 
     from .document import library_folders
+    from .hidden import hide
 
-    return index_for(library_folders(w.spec()))
+    task = w.spec()
+    if w.hidden:                                   # D1159: a sub-loop's parent's too, as the turn was given them
+        hide(w.home, [a for a, _r in w.hidden] + [a for a, _r in task.hidden])
+    return index_for(library_folders(task))
 
 
 def _digests(w: Where, index: Any, sources: list[str] | None = None) -> dict[str, dict[str, Any]]:
@@ -376,6 +390,8 @@ def _probe(w: Where, kind: str, file: str, stages: list[str] | None, gate_first:
 
     from .probe import probe
 
+    if w.off_limits(file):                         # D1159: no verdict on a file hidden from the agents
+        raise NotHere(f"{file} is hidden from the loop's agents (flow.knowledge.hidden)")
     ctx = _ctx(w)
     try:
         code, text = probe(kind, file, stages, ctx_path=ctx, gate_first=gate_first)

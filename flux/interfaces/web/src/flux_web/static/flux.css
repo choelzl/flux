@@ -861,6 +861,8 @@ ul.files li.ignored .file-link, ul.files li.ignored small { opacity: .55; }
 .qbox-text { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 .qbox-choices { display: flex; gap: 6px; flex-wrap: wrap; }
 .qbox-free input { flex: 1; min-width: 0; width: auto; }
+/* D1158: an author's draft its check refused, in the question's place: the refusal scrolls, its own height at most */
+.aj-error { max-height: 14em; overflow: auto; background: none; border: 0; padding: 0; font-size: var(--fs-sm); }
 .talk-ask { min-width: 0; }
 .alt-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin: 0 0 12px; }
 .subrow .alt-controls { flex: 1; justify-content: flex-end; margin-left: auto; }
@@ -1324,6 +1326,11 @@ th.num .th-arrow { right: auto; left: 0; }
 .set-fields .price-pair .inline { flex: 1 1 7em; }
 .agent-found { gap: 6px 10px; }
 .set-fields label.stack { margin-bottom: 0; }
+/* D1161: the model's label and "From endpoint" on one line; on, its menu as wide as the field it replaces */
+.set-fields .model-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; min-width: 0; }
+.set-fields .model-head label.check { font-size: var(--fs-sm); color: var(--muted); gap: 4px; }
+.set-fields .inline select.model-pick { flex: 1; min-width: 0; width: 0; color: var(--ink); font-size: var(--fs-base); }
+.set-fields .model-said { overflow-wrap: anywhere; }
 
 /* D915: a design of parts on the charts -- each group one colour, `--gc` (set on the point from the
    results' whole list of groups, the whole first), read by the fill, the outline and the legend alike;
@@ -1478,3 +1485,15 @@ td.cleared s { color: var(--muted); }
   .ba-decision .ba-acts { grid-row: auto; }
   .steps.ba-stages button { padding: 4px 8px 4px 4px; }
 }
+
+/* D1159: paths hidden from the AI agents -- a lock on their rows, the Knowledge box's list, the uploader's switch */
+.hidden-mark { display: inline-flex; align-items: center; color: var(--muted); flex-shrink: 0; }
+.hidden-mark svg { width: 13px; height: 13px; }
+ul.files li > .hidden-mark { margin-left: -4px; }
+.item-hidden { display: inline-flex; align-items: center; gap: 3px; }
+.cfg-hidden { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.cfg-hidden li { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.cfg-hidden li code { overflow-wrap: anywhere; margin-right: auto; }
+.cfg-hide-add { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.cfg-hide-add input { flex: 1 1 160px; min-width: 0; }
+.up-rows .up-hide { white-space: nowrap; }
