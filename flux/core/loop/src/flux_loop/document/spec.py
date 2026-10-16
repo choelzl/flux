@@ -252,8 +252,15 @@ class TaskSpec:
             for f in files:                  # D586: the documents a prompt came with -- specs, code, papers, tests
                 path = Path(f) if Path(f).is_absolute() or base is None else Path(base) / f
                 path = inside(path, f"knowledge.files: {f!r}")
+                if path.is_dir():            # a folder: each of its files, by its path in the folder
+                    inner = sorted(p for p in path.rglob("*") if p.is_file()
+                                   and not any(x.startswith(".") or x == "__pycache__" for x in p.relative_to(path).parts))
+                    for p in inner:
+                        body = read_input(inside(p, f"knowledge.files: {f!r}"))
+                        text = (text + "\n\n" if text else "") + f"FILE {path.name}/{p.relative_to(path).as_posix()}:\n{body}"
+                    continue
                 if not path.is_file():
-                    raise TaskError(f"knowledge.files: {f!r} is not a file" + (f" beside {base}" if base is not None else ""))
+                    raise TaskError(f"knowledge.files: {f!r} is not a file or folder" + (f" beside {base}" if base is not None else ""))
                 body = read_input(path)
                 text = (text + "\n\n" if text else "") + f"FILE {path.name}:\n{body}"
             knowledge = text
@@ -369,6 +376,13 @@ class TaskSpec:
         except SkillError as exc:
             raise TaskError(f"skills: {exc}") from exc
         workbench = str((Path(base) / "workbench").resolve()) if base is not None else ""
+        if "agent" in generator:                          # D1137: a design agent's probe names checks the gate has
+            from ..agent import agent_spec
+
+            unknown = [c for c in agent_spec(generator["agent"]).probe_checks if gate.named(c) is None]
+            if unknown:
+                raise TaskError(f"flow.generate.probe.gate.checks: {', '.join(unknown)} is not a check of the gate "
+                                f"(its checks: {', '.join(c.name for c in gate) or 'none'})")
         return cls(
             id=tid.strip(), statement=statement.strip(), contract=str(doc.get("contract") or ""),
             language=language, extension=ext,

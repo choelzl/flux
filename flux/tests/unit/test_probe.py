@@ -132,3 +132,37 @@ def test_a_loop_turn_hands_the_agent_its_probe_and_records_what_it_probed(tmp_pa
     assert out.decision is not None, said
     assert any("the agent probed gate x2" in m for m in said), [m for m in said if "probe" in m]
     assert sys.executable
+
+
+def test_a_probe_may_run_part_of_the_gate(tmp_path):
+    """D1137: `probe: {gate: {runs: N, checks: [...]}}` -- the agent's `flux probe gate` runs those checks only; the
+    loop still runs every check on what it hands in, and a partial pass is not kept for the out-of-time hand-in."""
+    from flux_loop.document import load_task
+    from flux_loop.probe import probe, probe_context
+    from flux_loop.agent import agent_spec
+
+    a = agent_spec({"preset": "claude", "probe": {"gate": {"runs": 5, "checks": ["lint"]}, "confirm": 0}})
+    assert a.probe_checks == ("lint",) and dict(a.probe)["gate"] == 5 and dict(a.probe)["confirm"] == 0
+    with pytest.raises(ValueError, match="checks: \\[names\\]"):
+        agent_spec({"preset": "claude", "probe": {"gate": {"runs": 5, "checks": "lint"}}})
+    home = tmp_path / "loop"
+    home.mkdir()
+    doc = ("statement: s\nlanguage: text\nflow:\n  generate: {by: claude, probe: {gate: {checks: [lint]}}}\n"
+           "  test:\n    lint: \"{python} -c pass\"\n    golden: \"{python} -c 'import sys; sys.exit(1)'\"\n")
+    (home / "problem.yaml").write_text(doc)
+    task = load_task(home)
+    f = tmp_path / "d.txt"
+    f.write_text("x\n")
+    (tmp_path / "w1").mkdir()
+    (tmp_path / "w2").mkdir()
+    part = probe_context(task, tmp_path / "w1", "", {"gate": 5}, checks=("lint",))
+    whole = probe_context(task, tmp_path / "w2", "", {"gate": 5})
+    code, said = probe("gate", str(f), ctx_path=part)
+    assert code == 0 and said.startswith("GATE: passed"), said
+    assert not list((tmp_path / "w1" / ".flux-probes").glob("passed-*")), "a partial pass is not kept"
+    assert probe("gate", str(f), ctx_path=whole)[0] == 1, "the whole gate refuses it"
+    (home / "problem.yaml").write_text(doc.replace("[lint]", "[lint, smoke]"))
+    with pytest.raises(Exception, match="smoke is not a check of the gate"):
+        load_task(home)
+    line = __import__("flux_loop.probe", fromlist=["probe_line"]).probe_line([], {"gate": 5}, checks=("lint",))
+    assert "the gate's checks lint (not the whole gate" in line

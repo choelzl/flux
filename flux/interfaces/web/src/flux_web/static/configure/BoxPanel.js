@@ -1,21 +1,26 @@
 // Flux web, configure (D1118): a box of the loop opened -- who works it (rules, a model, the coding agent, a script
 // where Flux takes one, off), its critic when it has one, and that step's own settings, each default shown greyed.
-// Check, Measure and Choose say where their commands and goals are set.
+// Check, Measure and Choose say where their commands and goals are set; the Library is LibraryPanel.js. `kept`: the
+// flow is kept as written (who works each box said, not chosen), `keptBudget` the budget (its knobs read-only).
 
 import { Notice, html } from "../view.js";
 import { Head } from "../components/Head.js";
-import { Pick, Text, Who, WhoTag } from "./fields.js";
+import { Kept, Pick, Text, Who, WhoTag, isKept } from "./fields.js";
+import { Library } from "./LibraryPanel.js";
 import { Select } from "../components/Select.js";
 import { isAgent, whoOn, whoOptions } from "./who.js";
 
-/** A budget knob of the loop, empty for its default (greyed). */
-const Knob = ({ state, edit, label, k, dflt, hint }) => html`<${Text} label=${label} value=${state.budget[k]} placeholder=${dflt} hint=${hint}
-  set=${v => edit(() => { state.budget[k] = v; })} />`;
+/** A budget knob of the loop, empty for its default (greyed); read-only when the budget is kept as written. */
+const Knob = ({ state, edit, label, k, dflt, hint, disabled }) => html`<${Text} label=${label} value=${state.budget[k]} placeholder=${dflt} hint=${hint}
+  disabled=${disabled} set=${v => edit(() => { state.budget[k] = v; })} />`;
 
 const Goto = ({ go, step, what, children }) => html`<p class="cfg-says">${children} <button type="button" class="link" onClick=${() => go(step)}>${what}</button></p>`;
 
-export function BoxPanel({ M, state, box, agent, setAgent = () => {}, edit, go, kept }) {
-  const f = state.flow, b = M.BOXES[box] || { title: box };
+/** The Library's title and line: the box of what is read (knowledge), its papers summed up and its lessons. */
+const LIBRARY = { title: "Library", says: "What every prompt reads: files, papers summed up once, text, lessons." };
+
+export function BoxPanel({ M, state, box, agent, setAgent = () => {}, edit, go, kept, keptBudget = false, store, direct }) {
+  const f = state.flow, b = box === "knowledge" ? LIBRARY : M.BOXES[box] || { title: box };
   const choose = (bx, opts) => k => edit(() => {
     f[bx] = opts.find(o => o.k === k).value();
     if (state.agentRaw) delete state.agentRaw[bx];               // another choice: its own settings go (D728)
@@ -26,7 +31,7 @@ export function BoxPanel({ M, state, box, agent, setAgent = () => {}, edit, go, 
     options=${M.AGENTS.map(a => [a, labels[a] || a])} onChange=${a => { setAgent(a); edit(() => set(`agent:${a}`)); }} />` : "";
   const who = (bx = box) => {
     const opts = whoOptions(M, bx, f[bx], agent);
-    return html`<span class="cfg-who-row"><${Who} label=${`Who works ${M.BOXES[bx].title}`} fixed=${kept} options=${opts} on=${whoOn(opts, f[bx])} pick=${choose(bx, opts)} />
+    return html`<span class="cfg-who-row"><${Who} label=${bx === "knowledge" ? "Library" : `Who works ${M.BOXES[bx].title}`} fixed=${kept} options=${opts} on=${whoOn(opts, f[bx])} pick=${choose(bx, opts)} />
       ${which(f[bx], v => { f[bx] = v; if (state.agentRaw) delete state.agentRaw[bx]; })}</span>`;
   };
   const critic = bx => {
@@ -34,7 +39,7 @@ export function BoxPanel({ M, state, box, agent, setAgent = () => {}, edit, go, 
     return html`<div class="cfg-bar"><span class="muted small">Critic</span><${Who} label=${`The critic on ${M.BOXES[bx].title}`} fixed=${kept} options=${opts}
       on=${whoOn(opts, cur)} pick=${k => edit(() => { M.setCritic(state, bx, opts.find(o => o.k === k).value()); })} />${which(cur, v => M.setCritic(state, bx, v))}</div>`;
   };
-  const K = (label, k, dflt, hint) => html`<${Knob} state=${state} edit=${edit} label=${label} k=${k} dflt=${dflt} hint=${hint} />`;
+  const K = (label, k, dflt, hint) => html`<${Knob} state=${state} edit=${edit} label=${label} k=${k} dflt=${dflt} hint=${hint} disabled=${keptBudget} />`;
   const raw = state.agentRaw && state.agentRaw[box] && isAgent(f[box]);
   let head = who(), body = "";
   switch (box) {
@@ -67,9 +72,9 @@ export function BoxPanel({ M, state, box, agent, setAgent = () => {}, edit, go, 
         ${f.generate === "catalog" ? html`<${Text} label="Existing designs" wide value=${state.generateCatalog} placeholder="designs/a.sv, designs/b.sv"
           hint="files beside the document, tried in order" set=${v => edit(() => { state.generateCatalog = v; })} />` : ""}
         <div class="cfg-grid2">${K("Designs per pass", "steps", "24")}${K("Repairs per design", "repair_attempts", "12")}
-          <${Pick} label="Prototype first" hint="default: with a golden model" value=${state.budget.prototype} set=${v => edit(() => { state.budget.prototype = v; })}
+          <${Pick} label="Prototype first" hint="default: with a golden model" disabled=${keptBudget} value=${state.budget.prototype} set=${v => edit(() => { state.budget.prototype = v; })}
             options=${[["", "default"], ["false", "off"], ["true", "on"], ["python", "in Python"], ["systemc", "in SystemC"]]} />
-          <${Pick} label="Repair by" value=${state.budget.patching} set=${v => edit(() => { state.budget.patching = v; })}
+          <${Pick} label="Repair by" disabled=${keptBudget} value=${state.budget.patching} set=${v => edit(() => { state.budget.patching = v; })}
             options=${[["", "edits (default)"], ["true", "edits"], ["false", "rewrites"]]} /></div>
         ${isAgent(f.generate) ? html`<div class="cfg-sub"><h4>Agent turns</h4><div class="cfg-grid2">${K("Continues past time", "agent_continues", "3")}
           ${K("Final turn, s", "agent_grace_s", "¼ of its time")}</div></div>` : ""}`;
@@ -92,10 +97,8 @@ export function BoxPanel({ M, state, box, agent, setAgent = () => {}, edit, go, 
         ${K("Worse edits tolerated", "regress_after", "2")}${K("Passes at once", "parallel", "1", "needs an admin on a server")}</div>`;
       break;
     case "knowledge":
-      body = html`<${Goto} go=${go} step="prompt" what="Prompt › Files">The files the model reads are marked in<//>`;
-      break;
-    case "digest":
-      if (f.knowledge === "none") { head = html`<${WhoTag} kind="off">off<//>`; body = html`<p class="cfg-says">Library is off.</p>`; }
+      if (isKept(state, "flow.knowledge")) { head = ""; body = html`<${Kept} M=${M} state=${state} at="flow.knowledge" direct=${direct} />`; break; }
+      body = html`<${Library} M=${M} state=${state} edit=${edit} store=${store} who=${who} fixed=${kept} />`;
       break;
     default:
   }

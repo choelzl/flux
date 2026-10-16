@@ -624,6 +624,103 @@ def flows(r: Run) -> None:
         r.clean("DSE settings")
     r.step("dse setting", dse_setting)
 
+    def library_box():
+        """D1136: one Library box on the Graph -- what every prompt reads checked from the loop's files and folders, files
+        added there and checked, a text, a method sheet, who sums up the papers, the lessons -- saved into flow.knowledge."""
+        import yaml
+
+        made = r.api("/apps/new-empty", "POST", {"name": "library_box"})
+        r.check("create a loop for the Library", made["status"] == 200, made["body"])
+        root = r.data / "users/bob/apps/library_box"
+        (root / "rtl").mkdir(exist_ok=True)
+        for f in ("rtl/top.sv", "rtl/alu.sv"):
+            (root / f).write_text("module m; endmodule\n")
+        (root / "golden.py").write_text("print('ok')\n")
+        (root / "method.md").write_text("Pipeline first.\n")
+        raw = yaml.safe_load((root / "problem.yaml").read_text())
+        raw["flow"] = {"test": {"check": "true"}}
+        (root / "problem.yaml").write_text(yaml.safe_dump(raw, sort_keys=False))
+        setv = ("const [css, v] = arguments; const el = document.querySelector(css); el.value = v;"
+                " el.dispatchEvent(new Event(el.tagName === 'SELECT' ? 'change' : 'input', {bubbles: true})); return 1")
+        pick = ("const [who, what] = arguments; [...document.querySelector('.cfg-panel [role=group][aria-label=\"' + who + '\"]').querySelectorAll('button')]"
+                ".find(b => b.textContent.trim() === what).click(); return 1")
+        rows = "return [...document.querySelectorAll('.cfg-panel .cfg-lib-reads li')].map(l => [l.querySelector('code, span').textContent, l.querySelector('input').checked, l.querySelector('input').disabled])"
+
+        r.page("#/app/library_box/settings/problem?step=graph", "document.querySelector('.cfg[data-step=graph] .cfg-cycle')", "the Graph")
+        nodes = b.js("return [...document.querySelectorAll('.cfg-cycle [data-node]')].map(n => n.dataset.node)")
+        r.check("one Library box, no Digest or Lessons box (D1136)", "knowledge" in nodes and "digest" not in nodes and "lessons" not in nodes
+                and "Library" in b.js("return document.querySelector('.cfg-cycle [data-node=knowledge]').textContent")
+                and b.js("return !!document.querySelector('.cfg-cycle [data-node=knowledge] .pill.ai')"), str(nodes))
+        b.js("document.querySelector('.cfg-cycle [data-node=knowledge]').dispatchEvent(new MouseEvent('click', {bubbles: true})); return 1")
+        b.wait("document.querySelector('.cfg-panel .cfg-lib-reads li code')", timeout=10, what="the Library's files")
+        got = b.js(rows)
+        r.check("the Library lists the loop's files, a folder as one row, library/ and the shared library read while on",
+                ["golden.py", False, False] in got and ["rtl/", False, False] in got and ["library/", True, True] in got
+                and ["shared library", True, True] in got and not any(x[0].startswith("rtl/t") for x in got), str(got))
+        r.check("the folder says its files", "folder, 2 files" in b.js("return document.querySelector('.cfg-panel .cfg-lib-reads').textContent"))
+        b.js("[...document.querySelectorAll('.cfg-panel .cfg-lib-reads li')].find(l => l.textContent.startsWith('rtl/')).querySelector('input').click(); return 1")
+        b.js(setv, ".cfg-panel [data-fc-field=knowledge-text]", "Widths are 8 bits.")
+        b.js(setv, ".cfg-panel [data-fc-field=knowledge-sheet]", "method.md")
+        b.js(pick, "Who works Digest papers", b.js("return [...document.querySelector('.cfg-panel [role=group][aria-label=\"Who works Digest papers\"]').querySelectorAll('button')].pop().textContent.trim()"))
+        digest = b.js("return document.querySelector('.cfg-panel [role=group][aria-label=\"Who works Digest papers\"] button.on').textContent.trim()")
+        b.js(pick, "Who works Lessons", "mined")
+        added = r.files / "library_box" / "notes.md"            # where the browser may read
+        added.parent.mkdir(parents=True, exist_ok=True)
+        added.write_text("Notes to read.\n")
+        b.attach(".cfg-panel input.up-files", str(added))
+        r.button("Add 1 file", ".cfg-panel")
+        b.wait("[...document.querySelectorAll('.cfg-panel .cfg-lib-reads li')].some(l => l.textContent.startsWith('notes.md') && l.querySelector('input').checked)",
+               timeout=20, what="the added file, checked")
+        r.button("Save to problem.yaml", ".cfg-nav")
+        r.dialog_button("Save")
+        b.wait("document.querySelector('.cfg-status.t-ok') && !document.querySelector('.cfg-status.t-run')", timeout=20, what="the Library saved")
+        saved = json.loads(r.api("/apps/library_box/document")["body"])
+        know = (saved["raw"].get("flow") or {}).get("knowledge")
+        r.check("the Library saves what is read, the text, the sheet, who digests and the lessons", know == {
+            "files": ["rtl/", "notes.md"], "sheet": "method.md", "text": "Widths are 8 bits.", "digest": digest, "lessons": "mined"}
+            and digest != "model" and saved["normal"] is not None, str(know))
+        r.page("#/app/library_box/settings/problem?step=prompt", "document.querySelector('.cfg[data-step=prompt] .files-panel li')", "Prompt")
+        r.check("Prompt › Files says what is read, without a toggle", not b.js("return !!document.querySelector('.cfg-reads')")
+                and b.js("return [...document.querySelectorAll('.files-panel li')].some(l => l.textContent.includes('rtl/top.sv') && l.textContent.includes('read'))"))
+        r.clean("the Library")
+    r.step("library box", library_box)
+
+    def kept_read_only():
+        """D1136: a part the configurator keeps as written is read-only where it would be edited, with one notice and the way
+        to Direct edit -- not fields whose typing the save drops."""
+        import yaml
+
+        made = r.api("/apps/new-empty", "POST", {"name": "kept_parts"})
+        r.check("create a loop with kept parts", made["status"] == 200, made["body"])
+        path = r.data / "users/bob/apps/kept_parts/problem.yaml"
+        raw = yaml.safe_load(path.read_text())
+        raw["flow"] = {"test": {"check": "true"}, "measure": {"bench": {"command": "true", "metrics": ["t"]}}}
+        raw["objectives"] = [{"metric": "t", "direction": "minimize", "tie": 0.05}]
+        raw["budget"] = {"steps": 3, "prototype_attempts": 12}
+        path.write_text(yaml.safe_dump(raw, sort_keys=False))
+        r.page("#/app/kept_parts/settings/problem?step=objective", "document.querySelector('.cfg[data-step=objective] .cfg-kept')", "the kept objectives")
+        said = b.js("return document.querySelector('.cfg-body .cfg-kept').innerText")
+        r.check("kept objectives: the notice, what is written, no field", "Kept as written: change it in Direct edit." in said and "tie: 0.05" in said
+                and not b.js("return !!document.querySelector('.cfg-body input, .cfg-body select:not(.cfg-add)')"), said)
+        r.check("its Direct edit is a link to the document", b.js("return document.querySelector('.cfg-kept a').getAttribute('href')").endswith("/settings/problem/edit"))
+        b.click(".cfg-rail button[data-step=graph]")
+        b.wait("document.querySelector('.cfg[data-step=graph] .cfg-cycle')", timeout=10, what="the Graph")
+        b.js("document.querySelector('.cfg-cycle [data-node=records]').dispatchEvent(new MouseEvent('click', {bubbles: true})); return 1")
+        b.wait("document.querySelector('.cfg-panel input')", timeout=10, what="the Record box")
+        got = b.js("return [document.querySelectorAll('.cfg-body .cfg-kept').length, [...document.querySelectorAll('.cfg-panel input')].every(i => i.disabled)]")
+        r.check("a kept budget: one notice on the Graph, its knobs read-only", got == [1, True], str(got))
+        b.click(".cfg-rail button[data-step=save]")
+        b.wait("document.querySelector('.cfg[data-step=save] .cfg-ready')", timeout=10, what="Save")
+        r.button("Save to problem.yaml", ".cfg-nav")
+        b.wait("document.querySelector('dialog.dlg[open]') || document.querySelector('.cfg-status.t-ok')", timeout=20, what="the save or its changes")
+        if b.js("return !!document.querySelector('dialog.dlg[open]')"):
+            r.dialog_button("Save")
+        b.wait("document.querySelector('.cfg-status.t-ok') && !document.querySelector('.cfg-status.t-run')", timeout=20, what="the save")
+        after = yaml.safe_load(path.read_text())
+        r.check("the kept parts are saved as written", after["objectives"] == raw["objectives"] and after["budget"] == raw["budget"], str(after))
+        r.clean("kept parts")
+    r.step("kept read-only", kept_read_only)
+
     def baseline_setting():
         import yaml
 

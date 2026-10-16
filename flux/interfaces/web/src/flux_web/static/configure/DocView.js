@@ -9,7 +9,7 @@ import { Head, Tool } from "../components/Head.js";
 // the steps that write a key: top-level keys, then `flow`'s boxes
 const TOP = { statement: ["prompt"], contract: ["prompt"], language: ["prompt"], objectives: ["objective"], budget: ["graph", "extra"],
   baseline: ["extra"], parts: ["extra"], params: ["extra"], flow: ["checks", "graph"] };
-const FLOW = { test: ["checks"], measure: ["checks"], select: ["checks", "graph"], orchestrate: ["graph", "extra"], knowledge: ["graph", "prompt"] };
+const FLOW = { test: ["checks"], measure: ["checks"], select: ["checks", "graph"], orchestrate: ["graph", "extra"], knowledge: ["graph"] };
 
 /** The document's lines, each with the steps that write it (a key's lines go with it). */
 export function linesOf(yaml) {

@@ -329,6 +329,7 @@ dialog.dlg > h2 { font-size: 16px; margin-bottom: 8px; }
 .cfg label.stack > select { align-self: flex-start; max-width: 100%; }
 .cfg input.mono { font-family: var(--mono); font-size: 12.5px; }
 .cfg input.narrow { width: 88px; }
+.cfg input:disabled, .cfg textarea:disabled, .cfg select:disabled { opacity: .6; cursor: not-allowed; }
 .cfg .grow { flex: 1; }
 .cfg-sec { display: grid; gap: 8px; min-width: 0; }
 .cfg-sec > h3 { margin: 0; display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
@@ -363,8 +364,15 @@ dialog.dlg > h2 { font-size: 16px; margin-bottom: 8px; }
 .cfg-who.on-script, .cfg-who.on-fixed { --k: var(--ink); } .cfg-who.on-off { --k: var(--muted); }
 .subtabs.cfg-who button.on { color: var(--k); background: color-mix(in srgb, var(--k) 14%, var(--panel)); }
 .tag.cfg-who-tag:not(.kind) { color: var(--muted); }
-button.tag.cfg-reads { border-style: dashed; color: var(--muted); }
-button.tag.cfg-reads.on { border-style: solid; color: var(--ink); background: var(--soft); }
+/* the Library: what every prompt reads, a row each (D1136) */
+.cfg-lib-reads { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.cfg-lib-reads label { display: flex; gap: 8px; align-items: baseline; min-width: 0; margin: 0; }
+.cfg-lib-reads label code, .cfg-lib-reads label span { min-width: 0; overflow-wrap: anywhere; }
+.cfg-lib-reads input:disabled + * { color: var(--muted); }
+/* a part kept as written: said, and what the document says, read-only (D1136) */
+.cfg-kept { display: grid; gap: 6px; min-width: 0; }
+pre.cfg-kept-as { margin: 0; padding: 8px 10px; background: var(--soft); border: 1px solid var(--line); border-radius: 8px; font-size: 12px;
+  line-height: 1.5; color: var(--muted); white-space: pre-wrap; overflow-wrap: anywhere; max-height: 240px; overflow: auto; }
 .cfg-file-tags { display: inline-flex; gap: 6px; flex-wrap: wrap; }
 /* the document: its lines, the step's lit */
 pre.cfg-yaml { position: relative; margin: 0; padding: 8px 0; background: var(--soft); border: 1px solid var(--line); border-radius: 8px; font-size: 12px; line-height: 1.55; overflow: auto; max-height: calc(100vh - 150px); }

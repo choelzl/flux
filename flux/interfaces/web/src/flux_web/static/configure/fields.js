@@ -3,7 +3,7 @@
 // one control for who works a step: a choice of its kinds, the one chosen tinted by its kind (rules, a model, the
 // agent's pink, a script).
 
-import { cx, html } from "../view.js";
+import { Notice, cx, html } from "../view.js";
 import { Select } from "../components/Select.js";
 import { Choice } from "../components/Tabs.js";
 import { Tag } from "../components/Tone.js";
@@ -15,7 +15,7 @@ const Label = ({ label, hint, wide, cls, children }) => html`<label class=${cx("
 export const Text = ({ label, value, set, placeholder = "", hint, wide = false, area = false, rows = 2, k, invalid, mono = false, cls, disabled = false }) => html`<${Label}
   label=${label} hint=${hint} wide=${wide || area} cls=${cls}>${area
     ? html`<textarea rows=${rows} aria-label=${label} data-fc-field=${k || null} aria-invalid=${invalid === k && k ? "true" : null} placeholder=${placeholder}
-        value=${value ?? ""} onInput=${e => set(e.currentTarget.value)} />`
+        value=${value ?? ""} disabled=${disabled} onInput=${e => set(e.currentTarget.value)} />`
     : html`<input type="text" class=${mono ? "mono" : ""} aria-label=${label} data-fc-field=${k || null} aria-invalid=${invalid === k && k ? "true" : null}
         placeholder=${placeholder} value=${value ?? ""} disabled=${disabled} onInput=${e => set(e.currentTarget.value)} />`}<//>`;
 
@@ -33,4 +33,17 @@ export const Who = ({ options, on, pick, label, fixed = false }) => {
   const cur = options.find(o => o.k === on) || options[0];
   if (fixed) return html`<${WhoTag} kind=${cur.cls}>${cur.label}<//>`;
   return html`<${Choice} small cls=${cx("cfg-who", `on-${cur.cls}`)} label=${label} value=${cur.k} onChange=${pick} options=${options.map(o => [o.k, o.label])} />`;
+};
+
+/** Whether a part of the document (`at`: "budget", "objectives", "flow.test", "flow.boxes", ...) is kept as written. */
+export const isKept = (state, ...at) => at.some(a => (state.kept || []).includes(a));
+
+/** The one guard of a part kept as written: what one types there would be dropped (the save writes it as it was),
+    so its fields are read-only and this says where it is changed -- Direct edit (`direct` its address); `at` given,
+    a compact view of what the document says, for a section whose fields are not drawn. */
+export const Kept = ({ M, state, at, direct }) => {
+  const text = at && M ? M.keptText(state, at) : "";
+  return html`<div class="cfg-kept"><${Notice} tone="none" what="Kept as written:">${" change it in "}${direct
+      ? html`<a href=${direct}>Direct edit</a>` : "Direct edit"}.<//>
+    ${text ? html`<pre class="cfg-kept-as mono">${text}</pre>` : ""}</div>`;
 };

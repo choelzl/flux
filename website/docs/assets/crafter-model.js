@@ -508,7 +508,7 @@
   // ------------------------------------------------------------------ the state
   function base() {
     return {
-      id: "", statement: "", contract: "", language: "", languageOther: "", knowledgeFiles: "",
+      id: "", statement: "", contract: "", language: "", languageOther: "", knowledgeFiles: "", knowledgeText: "", knowledgeSheet: "",
       checks: [], stages: [], objectives: [],
       flow: defaultFlow(), generateCommand: "", generateCatalog: "", orchestrateCommand: "", orchestrateTimeout: "",
       baseline: { mode: "off", source: "project", file: "", command: "", timeout: "", metrics: [] },
@@ -874,21 +874,29 @@
       });
     }
 
-    // knowledge: what is read, and who digests it
+    // knowledge: what is read (files and folders, a text, a method sheet), and who digests it
+    var R = {}, kfiles = list(state.knowledgeFiles), ksheet = String(state.knowledgeSheet || "").trim(), ktext = String(state.knowledgeText || "").trim();
+    if (kfiles.length) R.files = kfiles;
+    if (ksheet) R.sheet = ksheet;
+    if (ktext) R.text = ktext;
     if (!own("flow.knowledge")) { if (kf["flow.knowledge"] !== undefined) F.push("  knowledge: " + inline(kf["flow.knowledge"], false)); }
-    else if (boxesKept && kb.knowledge !== undefined) F.push("  knowledge: " + inline(kb.knowledge, false));   // D1135: kept with the flow
+    else if (boxesKept && kb.knowledge !== undefined) {   // D1135: its choice kept with the flow; what is read is the state's
+      var kk = kb.knowledge;
+      F = F.concat(knowledgeLines(kk === "off" || kk === false ? "off"
+        : kk && typeof kk === "object" && !Array.isArray(kk) ? (kk.off ? kk : Object.assign({}, R, kk))
+        : Object.assign({}, R, { digest: kk })));
+    }
     else {
-      var kv = boxVal("knowledge"), K = {}, kfiles = list(state.knowledgeFiles);
-      if (kfiles.length) K.files = kfiles;
+      var kv = boxVal("knowledge"), K = Object.assign({}, R);
       var dg = (state.flow || {}).digest;                  // D784, D791: the Digest box -- the model unless an agent
       if (typeof dg === "string" && dg.indexOf("agent:") === 0) K.digest = dg.slice(6);      // D830: by name, as every box
       var ls = (state.flow || {}).lessons, lr = (state.agentRaw || {}).lessons;   // D796: the Learn box
       var lrName = lr && lr.agent && typeof lr.agent === "object" ? lr.agent.preset : null;
       if (ls && ls !== "off") K.lessons = lr && (ls === INLINE_AGENT || (lrName && ls === "agent:" + lrName)) ? toSurface("lessons", lr)   // D1135: its own settings kept
         : typeof ls === "string" && ls.indexOf("agent:") === 0 ? ls.slice(6) : ls;
-      if (kv === "none" || kv === "off") K = K.lessons ? { off: true, lessons: K.lessons } : { off: true };
+      if (kv === "none" || kv === "off") K = K.lessons ? { off: true, lessons: K.lessons } : { off: true };   // `off` stands alone: nothing read
       if (Object.keys(K).length === 1 && K.off) F.push("  knowledge: off");
-      else if (Object.keys(K).length) F.push("  knowledge: " + inline(K, false));
+      else if (Object.keys(K).length) F = F.concat(knowledgeLines(K));
     }
 
     // select: how many reach the last stage, and who chooses
@@ -920,6 +928,16 @@
 
     if (F.length) out += "\nflow:\n" + F.join("\n") + "\n";
     return out;
+  }
+
+  /** `flow.knowledge`'s lines: inline, or a block when it has a text (written as prose). */
+  function knowledgeLines(K) {
+    if (typeof K !== "object" || K === null) return ["  knowledge: " + inline(K, false)];
+    if (typeof K.text !== "string" || !K.text) return ["  knowledge: " + inline(K, false)];
+    return ["  knowledge:"].concat(Object.keys(K).map(function (k) {
+      if (k !== "text") return "    " + q(k) + ": " + inline(K[k], false);
+      return prose("text", K.text).replace(/\n$/, "").split("\n").map(function (l) { return l ? "    " + l : ""; }).join("\n");
+    }));
   }
 
   /** D1040, D1119: the boxes a critic may judge (surface.py CRITIC_BOXES), and those a lone `critique` judges. */
@@ -985,6 +1003,7 @@
       if (bp.source === "file") add(String(bp.file || "").trim().replace(/^\{home\}\//, ""));
     }
     list(state.knowledgeFiles).forEach(add);
+    add(String(state.knowledgeSheet || "").trim());
     return files;
   }
 
@@ -1478,6 +1497,7 @@
       if (kept.indexOf(at) < 0 && raw[key] !== undefined) {
         kept.push(at); notes.push("`" + at + "` is kept as written: " + why + ".");
         if (at.indexOf("flow.") === 0) s.keptFlow[at] = keptValue(asWritten, at);
+        else (s.keptAs = s.keptAs || {})[at] = asWritten[key];           // what a read-only view of it shows
       }
     }
     s.id = String(raw.id || normal.id || "");
@@ -1500,11 +1520,15 @@
     if (lang && LANGUAGES.indexOf(lang.toLowerCase()) >= 0) s.language = lang.toLowerCase();
     else if (lang) { s.language = "other"; s.languageOther = lang; }
 
-    // knowledge: the files the model reads (the papers are library/'s, D791)
-    var kn = raw.knowledge;
-    if (kn && typeof kn === "object" && !Array.isArray(kn) && Object.keys(kn).every(function (k) { return k === "files"; })) {
-      if (kn.files) s.knowledgeFiles = (Array.isArray(kn.files) ? kn.files : [kn.files]).join(", ");
-    } else if (kn) keep("knowledge", "a methods sheet or inline notes, which the configurator does not edit");
+    // knowledge: the files and folders the model reads, a text, a method sheet (the papers are library/'s, D791)
+    var kn = raw.knowledge, strOk = function (v) { return v === undefined || v === null || typeof v === "string"; };
+    var kfs = kn && kn.files !== undefined && kn.files !== null ? (Array.isArray(kn.files) ? kn.files : [kn.files]) : [];
+    if (kn && typeof kn === "object" && !Array.isArray(kn) && Object.keys(kn).every(function (k) { return ["files", "text", "sheet"].indexOf(k) >= 0; })
+        && strOk(kn.text) && strOk(kn.sheet) && kfs.every(function (f) { return typeof f === "string" && f.indexOf(",") < 0; })) {
+      s.knowledgeFiles = kfs.join(", ");
+      s.knowledgeText = String(kn.text || "");
+      s.knowledgeSheet = String(kn.sheet || "");
+    } else if (kn) keep("knowledge", "what is read, in a form the configurator does not edit");
     keep("scope", "the scope each pass works on (`orchestrate.scope`: its list, brief and check), which the configurator does not edit");
 
     // params: plain values, each its type kept
@@ -1683,6 +1707,15 @@
     return { state: s, kept: kept, notes: notes };
   }
 
+  /** A part kept as written, as the document says it: a line per entry (a read-only view of it); "" when unknown. */
+  function keptText(state, at) {
+    var v = at.indexOf("flow.") === 0 ? ((state && state.keptFlow) || {})[at] : ((state && state.keptAs) || {})[at];
+    if (v === undefined) return "";
+    if (Array.isArray(v)) return v.map(function (x) { return "- " + inline(x, false); }).join("\n");
+    if (v && typeof v === "object") return Object.keys(v).map(function (k) { return q(k) + ": " + inline(v[k], false); }).join("\n");
+    return inline(v, false);
+  }
+
   /** A drawing node's title, as the box shows it (D727: the web's step bar names its box). */
   function boxTitle(id) {
     return { "crit-division": "Critic: division", "crit-part": "Critic: each part", "crit-decision": "Critic: decision",
@@ -1705,7 +1738,7 @@
               language: language, impliedLanguage: impliedLanguage, checkType: checkType, isPreset: isPreset, isCustom: isCustom, fits: fits,
               uniqueName: uniqueName, unitFor: unitFor, dictionarySpec: dictionarySpec, paramOnly: paramOnly, parameterSearch: parameterSearch,
               knobNames: knobNames, choiceOf: choiceOf, list: list, num: num, shown: shown, paramsOf: paramsOf, hasParts: hasParts,
-              CRITIC_BOXES: CRITIC_BOXES, criticsOf: criticsOf, setCritic: setCritic, BUDGET_KEYS: BUDGET_KEYS };
+              CRITIC_BOXES: CRITIC_BOXES, criticsOf: criticsOf, setCritic: setCritic, BUDGET_KEYS: BUDGET_KEYS, keptText: keptText };
 
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.FluxCrafterModel = api;

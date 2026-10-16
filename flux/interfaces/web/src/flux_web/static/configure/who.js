@@ -1,6 +1,7 @@
 // Flux web, configure (D1118): who works each step of the loop, as the Graph says it -- each box's kinds of worker
 // (rules, a model, the coding agent, a script, off), the one its value is, and the value a kind picks. A script works a
 // step only where Flux takes one: Design (`generate: {command}` or `{catalog}`) and Orchestrate (a search `command`).
+// The Library (knowledge) is on or off; who sums up its papers (digest) and its lessons are chosen inside it.
 
 export const isAgent = v => typeof v === "string" && v.startsWith("agent:");
 /** An agent's name as a box says it ("own settings" for one written with its own, D728). */
@@ -22,7 +23,7 @@ export function whoOptions(M, box, cur, agent) {
     case "critique": return [opt("off", "off", "off"), opt("model", "model", "model"), a];
     case "calibrate": return [opt("on", "on", "rules"), opt("off", "off", "off")];
     case "select": return [opt("objectives", "goals", "rules"), a];
-    case "knowledge": return [opt("default", "library", "rules"), opt("none", "off", "off")];
+    case "knowledge": return [opt("default", "on", "rules"), opt("none", "off", "off")];
     case "digest": return [opt("model", "model", "model"), a];
     case "lessons": return [opt("off", "off", "off"), opt("mined", "mined", "rules"), a];
     default: return [];

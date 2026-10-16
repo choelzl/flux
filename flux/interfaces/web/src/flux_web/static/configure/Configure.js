@@ -94,6 +94,7 @@ function ConfigureLoop({ M, name, owner }) {
   return html`<p class="muted small doc-line"><span class="mono">${doc.document}</span>${" · saving drops comments" + (got.kept.length ? "; the rest is kept as written" : "")}</p>
     ${doc.error ? html`<${Notice} tone="bad" what="The document does not load:" why=${doc.error} />` : ""}
     <${Configurator} M=${M} state=${got.state} step=${stepOfHash() || "prompt"} onStep=${stepToHash} notes=${got.notes} saveLabel=${"Save to " + doc.document}
+      direct=${`${appHref(owner, name)}/settings/problem/edit`}
       save=${save} checked=${() => checkedOf(pre)} changes=${changesOf(name, got.kept)} store=${store} onChange=${store.watch} />`;
 }
 

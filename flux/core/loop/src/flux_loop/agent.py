@@ -153,6 +153,7 @@ class AgentSpec:
     config: tuple[tuple[str, str], ...] = ()   # JSON merged into these variables of the agent's environment (D673)
     add_dir: tuple[str, ...] = ()  # the option that opens a folder outside the work directory (the workbench, D677)
     probe: tuple[tuple[str, int], ...] | None = (("gate", 20), ("stages", 3))   # `flux probe` per turn (D678); None = off
+    probe_checks: tuple[str, ...] = ()   # D1137: the gate's checks its `flux probe gate` runs; () = every one
     allowed: tuple[str, ...] = ()  # denied commands this agent was given back (`allow:`, D678)
     kind: str = ""                 # the preset it runs as (D807); "" for a command of one's own
     endpoint: str = ""             # its endpoint as resolved (D1027: the slots it shares with every loop)
@@ -185,7 +186,7 @@ def agent_spec(spec: Any) -> AgentSpec:
         raise ValueError(f"agent.session is one of {', '.join(SESSIONS)}, not {session!r}")
     common = dict(timeout_s=float(spec.get("timeout_s") or 1800.0), questions=questions,
                   max_questions=int(spec.get("max_questions", 2)), wait_s=float(spec.get("wait_s") or 300.0),
-                  session=session, probe=_probe(spec.get("probe", True)))
+                  session=session, probe=_probe(spec.get("probe", True)), probe_checks=_probe_checks(spec.get("probe", True)))
     allow = spec.get("allow") or []
     if allow == "all":
         allow = list(DENIED)                          # the restriction lifted for this agent (D678)
@@ -259,17 +260,42 @@ def _in_box(argv: tuple[str, ...]) -> tuple[str, ...]:
     return (*argv[:i + 1], "danger-full-access", *argv[i + 2:])
 
 
+_PROBE_HELP = ("agent.probe is true, false, or {gate: N | {runs: N, checks: [names]}, <stage>: N, stages: N} "
+               "(probes per turn; `checks`: only those of the gate)")
+
+
 def _probe(value: Any) -> tuple[tuple[str, int], ...] | None:
-    """`probe:` (D678): true (the default budget), false (off), or {gate: N, <stage>: N, stages: N}."""
+    """`probe:` (D678): true (the default budget), false (off), or {gate: N, <stage>: N, stages: N}; D1137: the gate
+    may be {runs: N, checks: [names]} -- its probe runs those checks only."""
     from .probe import PROBE_DEFAULT
 
     if value is True or value is None:
         return tuple(PROBE_DEFAULT.items())
     if value is False:
         return None
-    if not isinstance(value, dict) or not all(isinstance(v, int) and not isinstance(v, bool) and v >= 0 for v in value.values()):
-        raise ValueError("agent.probe is true, false, or {gate: N, <stage>: N, stages: N} (probes per turn)")
-    return tuple({**PROBE_DEFAULT, **{str(k): int(v) for k, v in value.items()}}.items())
+    count = lambda v: isinstance(v, int) and not isinstance(v, bool) and v >= 0  # noqa: E731
+    if not isinstance(value, dict):
+        raise ValueError(_PROBE_HELP)
+    out = {}
+    for k, v in value.items():
+        if k == "gate" and isinstance(v, dict):
+            if set(v) - {"runs", "checks"} or not count(v.get("runs", PROBE_DEFAULT["gate"])) or not _names(v.get("checks", [])):
+                raise ValueError(_PROBE_HELP)
+            v = v.get("runs", PROBE_DEFAULT["gate"])
+        if not count(v):
+            raise ValueError(_PROBE_HELP)
+        out[str(k)] = int(v)
+    return tuple({**PROBE_DEFAULT, **out}.items())
+
+
+def _names(v: Any) -> bool:
+    return isinstance(v, list) and all(isinstance(x, str) and x for x in v)
+
+
+def _probe_checks(value: Any) -> tuple[str, ...]:
+    """D1137: the checks a `probe: {gate: {checks: [...]}}` names; () = the whole gate."""
+    gate = value.get("gate") if isinstance(value, dict) else None
+    return tuple(gate.get("checks") or ()) if isinstance(gate, dict) else ()
 
 
 def _allowed(argv: tuple[str, ...], allow: list[str]) -> tuple[str, ...]:

@@ -7,12 +7,14 @@ import { Choice } from "../components/Tabs.js";
 import { Tool } from "../components/Head.js";
 import { Select } from "../components/Select.js";
 import { Tag } from "../components/Tone.js";
+import { Kept, isKept } from "./fields.js";
 
 const up = o => o.label === "atleast" || o.label === "max" || (o.label === "balance" && o.direction !== "minimize");
 /** The label a row's direction and goal make: a goal is a limit (at least, at most). */
 const labelOf = (higher, goal) => String(goal || "").trim() ? (higher ? "atleast" : "atmost") : (higher ? "max" : "min");
 
-export function ObjectiveStep({ M, state, edit }) {
+export function ObjectiveStep({ M, state, edit, direct }) {
+  if (isKept(state, "objectives")) return html`<${Kept} M=${M} state=${state} at="objectives" direct=${direct} />`;   // D1136
   const rep = M.reported(state), used = state.objectives.map(o => o.metric), objs = state.objectives;
   const tradeoff = objs.length > 0 && objs.every(o => o.label === "balance");
   const unit = m => (M.dictionarySpec(state, m) || {}).unit || M.unitFor(m);

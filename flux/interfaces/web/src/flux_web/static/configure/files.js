@@ -12,6 +12,9 @@ import { progressDialog } from "../components/Modal.js";
 import { CodeEditor } from "../components/CodeEditor.js";
 
 /** `yamlOf()` the document as it stands; `namedOf()` the files the configurator's commands name (D912); `onDraw(missing)`. */
+/** Whether a path the document names is among `have` (a set of paths): a folder ("rtl/") by a file in it (D1136). */
+const lacks = (have, p) => p.endsWith("/") ? ![...have].some(h => h.startsWith(p)) : !have.has(p);
+
 export function filesStore(name, yamlOf, { staged = new Map(), namedOf = null, onDraw = null } = {}) {
   const said = changes(), emit = said.emit, s = { files: [], missing: [], listed: false };
   const named = () => namedOf ? namedOf() : [...new Set([...String(yamlOf() || "").matchAll(/\{home\}\/([\w.\/-]+)/g)].map(m => m[1].replace(/[.,;:)]+$/, "")))];
@@ -23,7 +26,7 @@ export function filesStore(name, yamlOf, { staged = new Map(), namedOf = null, o
     s.files = await list().catch(() => []);
     s.listed = true;
     const have = new Set(s.files.map(f => f.path));
-    s.missing = named().filter(p => !have.has(p));
+    s.missing = named().filter(p => lacks(have, p));
     if (onDraw) onDraw(s.missing);
     emit();
   }
@@ -68,7 +71,7 @@ export function filesStore(name, yamlOf, { staged = new Map(), namedOf = null, o
     /** D912: which of `paths` the loop lacks; null until its files are listed. */
     missing(paths) {
       const have = new Set(name ? s.files.map(f => f.path) : staged.keys());
-      return name && !s.listed ? null : { missing: paths.filter(p => !have.has(p)) };
+      return name && !s.listed ? null : { missing: paths.filter(p => lacks(have, p)) };
     },
     /** A new loop: its files, once it exists -- D1075: with their progress, cancellable. */
     async upload(appName) {

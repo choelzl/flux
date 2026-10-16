@@ -151,21 +151,32 @@ def _variant(name: str) -> dict:
         d["flow"]["test"] = {"check": "{python} {home}/check.py {artifact}", "critic": {"by": "claude", "timeout_s": 99}}
     elif name == "lessons_options":
         d["flow"]["knowledge"] = {"lessons": {"by": "claude", "timeout_s": 99}}
+    # D1136: the Library's text, method sheet and folders are the configurator's, not kept as written
+    elif name == "library":
+        d["flow"]["knowledge"] = {"files": ["rtl/", "check.py"], "sheet": "method.md", "text": "Widths are 8 bits.\nNo latches:  ever.",
+                                  "digest": "claude", "lessons": "mined"}
+    elif name == "library_kept_flow":            # a flow kept as written keeps its choices; what is read is still edited
+        d["flow"]["orchestrate"] = {"policy": [{"policy": "sweep"}, {"policy": "gradient"}], "space": {"mode": ["a", "b"]}}
+        d["flow"]["generate"] = {"command": "{python} {home}/gen.py {artifact} {mode}"}
+        d["flow"]["knowledge"] = {"files": ["rtl"], "text": "Read the spec first.", "digest": "claude"}
     return d
 
 
 @pytest.mark.parametrize("name", ["scalar_choices", "needs_override", "spaced_script", "params_placeholder", "kept_flow_knowledge",
-                                  "model_search_options", "policy_options", "critic_options", "lessons_options"])
+                                  "model_search_options", "policy_options", "critic_options", "lessons_options", "library", "library_kept_flow"])
 def test_an_untouched_edit_keeps_the_meaning(name, tmp_path):
     src = tmp_path / "src" / name
     src.mkdir(parents=True)
-    for f in ("check.py", "bench.py", "my bench.py", "gen.py"):
+    for f in ("check.py", "bench.py", "my bench.py", "gen.py", "method.md", "rtl/top.sv"):
+        (src / f).parent.mkdir(parents=True, exist_ok=True)
         (src / f).write_text("print('time_ms=1')\n")
     (src / "problem.yaml").write_text(yaml.safe_dump(_variant(name), sort_keys=False))
     (tmp_path / "w").mkdir()
     before, after, kept = _round(src / "problem.yaml", tmp_path / "w")
     for key in COMPARED:
         assert after.get(key) == before.get(key), (key, kept)
+    if name.startswith("library"):
+        assert "flow.knowledge" not in kept and "FILE rtl/top.sv:" in after["flow"]["knowledge"]["text"], (kept, after["flow"])
     # a typed choice is the same value of the same type: "01" is not 1, "true" is not True
     space = (before.get("space") or {}).get("mode")
     if space:
@@ -324,3 +335,76 @@ def test_the_graphs_settings_load_and_read_back(tmp_path, which):
     assert not got["kept"], got["kept"]
     assert got["yaml"] == out["yaml"]
     assert got["state"]["critics"] == {"orchestrate": "off", "test": "model", "measure": "off", "select": "agent:claude"}
+
+
+LIBRARY_JS = r"""
+const c = require(process.argv[1]);
+c.setCatalog(JSON.parse(require("fs").readFileSync(process.argv[2], "utf8")));
+const out = {};
+for (const [name, on, digest, lessons] of [["agents", "default", "agent:claude", "agent:codex"], ["model_mined", "default", "model", "mined"],
+                                          ["off_lessons", "none", "model", "mined"], ["off", "none", "agent:claude", "off"]]) {
+  const s = c.base();
+  Object.assign(s, {id: "lib", statement: "a library", language: "python", knowledgeFiles: "rtl/, golden.py",
+                    knowledgeText: "Widths are 8 bits.", knowledgeSheet: "method.md"});
+  s.flow.knowledge = on; s.flow.digest = digest; s.flow.lessons = lessons;
+  s.checks = [{type: "custom", tool: "custom-check", name: "test", params: {command: "{python} {home}/golden.py"}, count_re: "", timeout: ""}];
+  s.stages = [{tool: "custom-stage", name: "bench", params: {command: "{python} {home}/golden.py"}, metrics: "t", needs: "", gates: []}];
+  s.objectives = [c.newObjective("t", "min")];
+  out[name] = {yaml: c.buildYaml(s), named: c.namedFiles(s)};
+}
+process.stdout.write(JSON.stringify(out));
+"""
+
+
+def test_the_librarys_choices_load_and_read_back(tmp_path):
+    """D1136: the Library box -- files and folders read, a text, a method sheet, who sums up the papers, the lessons --
+    writes a document the loader takes, read back into the same choices; off reads nothing but may still draw lessons."""
+    r = subprocess.run(["node", "-e", LIBRARY_JS, str(ASSETS / "crafter-model.js"), str(ASSETS / "tools.json")],
+                       capture_output=True, text=True, timeout=60)
+    assert r.returncode == 0, r.stderr
+    out = json.loads(r.stdout)
+    want = {"agents": {"digest": "claude", "lessons": "codex"}, "model_mined": {"lessons": "mined"},
+            "off_lessons": {"off": True, "lessons": "mined"}, "off": False}          # YAML reads a bare `off` as false
+    for name, got in out.items():
+        home = tmp_path / name / "lib"                  # D786: the folder is the id
+        (home / "rtl").mkdir(parents=True)
+        (home / "rtl/top.sv").write_text("module top; endmodule\n")
+        for f in ("golden.py", "method.md"):
+            (home / f).write_text("print('t=1')\n")
+        (home / "problem.yaml").write_text(got["yaml"])
+        raw = yaml.safe_load(got["yaml"])["flow"]["knowledge"]
+        said = {k: v for k, v in raw.items() if k not in ("files", "sheet", "text")} if isinstance(raw, dict) else raw
+        assert said == want[name], (name, got["yaml"])
+        assert "rtl/" in got["named"] and "method.md" in got["named"]
+        task = load_task(str(home / "problem.yaml"))
+        if want[name] is False or want[name].get("off"):
+            assert not task.knowledge, name
+            continue
+        assert raw["files"] == ["rtl/", "golden.py"] and raw["sheet"] == "method.md" and raw["text"] == "Widths are 8 bits."
+        assert "Widths are 8 bits." in task.knowledge and "FILE rtl/top.sv:" in task.knowledge and "FILE golden.py:" in task.knowledge
+        v = views(home / "problem.yaml")
+        back = subprocess.run(["node", "-e", READ_JS, str(ASSETS / "crafter-model.js"), str(ASSETS / "tools.json")],
+                              input=json.dumps({"raw": v["raw"], "normal": v["normal"]}, default=str), capture_output=True, text=True, timeout=60)
+        assert back.returncode == 0, back.stderr
+        again = json.loads(back.stdout)
+        assert not again["kept"], again["kept"]
+        assert again["yaml"] == got["yaml"]
+        st = again["state"]
+        assert (st["knowledgeFiles"], st["knowledgeText"], st["knowledgeSheet"]) == ("rtl/, golden.py", "Widths are 8 bits.", "method.md")
+
+
+KEPT_JS = r"""
+const c = require(process.argv[1]);
+const doc = {statement: "x", budget: {steps: 4, mystery: 1}, objectives: [{metric: "t", direction: "minimize", tie: 0.1}], params: {width: {a: 1}}};
+const got = c.fromDoc(doc, doc);
+process.stdout.write(JSON.stringify({kept: got.kept, text: Object.fromEntries(got.kept.map(k => [k, c.keptText(got.state, k)]))}));
+"""
+
+
+def test_a_part_kept_as_written_is_shown_as_written():
+    """D1136: each part kept as written has a read-only view of what the document says, for the step that would edit it."""
+    r = subprocess.run(["node", "-e", KEPT_JS, str(ASSETS / "crafter-model.js")], capture_output=True, text=True, timeout=60)
+    assert r.returncode == 0, r.stderr
+    out = json.loads(r.stdout)
+    assert set(out["kept"]) == {"budget", "objectives", "params"}, out
+    assert out["text"] == {"budget": "steps: 4\nmystery: 1", "objectives": "- {metric: t, direction: minimize, tie: 0.1}", "params": "width: {a: 1}"}, out

@@ -32,7 +32,7 @@ def budget_of(budget: dict[str, int], key: str) -> int:
 
 
 def probe_context(task: Any, workdir: Path, part: str, budget: dict[str, int] | None,
-                  proto: list[str] | None = None, *, record: str = "", campaign: str = "") -> str:
+                  proto: list[str] | None = None, *, record: str = "", campaign: str = "", checks: tuple[str, ...] = ()) -> str:
     """The turn's context file (a new log per turn): what `flux probe` and `flux loop` read -- the
     document, the part, the record and its campaign. Probes off (`budget` None): a budget of none,
     so `flux loop` still finds its loop."""
@@ -45,17 +45,18 @@ def probe_context(task: Any, workdir: Path, part: str, budget: dict[str, int] | 
     ctx.write_text(json.dumps({"doc": task.to_dict(), "home": task.home or ".", "part": part,
                                "budget": dict(budget), "log": str(root / f"turn-{n:03d}.jsonl"),
                                "stages": [s.name for s in task.stages], "proto": proto or None,
-                               "record": record, "campaign": campaign}))
+                               "record": record, "campaign": campaign, "gate_checks": list(checks) or None}))
     return str(ctx)
 
 
 def probe_line(stages: list[str], budget: dict[str, int] | None, proto: bool = False,
-               allowed: tuple[str, ...] = ()) -> str:
+               allowed: tuple[str, ...] = (), checks: tuple[str, ...] = ()) -> str:
     """The brief's sentence on probes."""
     if budget is None:
         return ""
     n_gate = budget_of(budget, "gate")
-    what = "the prototype's check" if proto else "the gate"
+    what = "the prototype's check" if proto else (f"the gate's checks {', '.join(checks)} (not the whole gate: the loop runs "
+                                                   "every check on what you hand in)" if checks else "the gate")
     line = (f"You may check a file with the loop's own tools: `flux probe gate FILE` runs {what} on it "
             f"(up to {n_gate} times this turn)")
     if stages and not proto:
@@ -144,6 +145,14 @@ def _gate(ctx: dict[str, Any], ctx_path: str, src: Path, text: str, n: int) -> t
     from .types import BuildError
 
     task, problem, state, _said = _setup(ctx, ctx_path, f"run-gate-{n:03d}")
+    if ctx.get("gate_checks"):                             # D1137: only the checks this agent's probe names
+        import dataclasses
+
+        from .document.gate import Gate
+        from .task import PromptProblem
+
+        task = dataclasses.replace(task, gate=Gate(c for c in task.gate if c.name in ctx["gate_checks"]))
+        problem = PromptProblem(task)
     part = ctx.get("part") or None
     cand = _candidate(task, text, src.stem, part)
     try:
@@ -236,7 +245,8 @@ def probe(kind: str, file: str, stages: str | list[str] | None = None, ctx_path:
             _log(ctx, row("gate", run.ok, text_out[-300:], t0, **({"kept": _keep(ctx_path, src, text, sha)} if run.ok else {})))
             return (0 if run.ok else 1), text_out[-6000:] + f"\n[gate probe {used + 1} of {cap}]"
         ok, report, line = _gate(ctx, ctx_path, src, text, used + 1)
-        _log(ctx, row("gate", ok, line, t0, **({"kept": _keep(ctx_path, src, text, sha)} if ok else {})))
+        # a file kept for the out-of-time hand-in (D1104) passed the whole gate, not a part of it (D1137)
+        _log(ctx, row("gate", ok, line, t0, **({"kept": _keep(ctx_path, src, text, sha)} if ok and not ctx.get("gate_checks") else {})))
         out.append(report + f"\n[gate probe {used + 1} of {cap}]")
         if not ok:
             return 1, "\n".join(out)

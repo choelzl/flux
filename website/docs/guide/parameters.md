@@ -234,7 +234,7 @@ stage.
 
 | Field | Default | Purpose |
 |---|---|---|
-| `files` | Empty | Files the model reads (specs, sources, notes, PDFs), relative to the folder |
+| `files` | Empty | Files and folders the model reads (specs, sources, notes, PDFs), relative to the folder; a folder is each of its files |
 | `text` | Empty | Inline context |
 | `sheet` | Absent | A methods sheet appended to the text |
 | `digest` | `model` | Who summarises the library's papers: `model` or an agent |

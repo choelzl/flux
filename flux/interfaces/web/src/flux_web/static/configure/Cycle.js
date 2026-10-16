@@ -1,6 +1,7 @@
 // Flux web, configure (D1118, D1128): the loop drawn as it runs -- five steps on a ring (Search, Design, Check, Measure,
-// Choose); around it what feeds them: Validate, Plan, the search policy and your notes into Search, the knowledge and
-// the digested papers into Design, Calibrate beside Measure; the record and the lessons below the ring. A design its
+// Choose); around it what feeds them: Validate, Plan, the search policy and your notes into Search, the Library (what
+// every prompt reads, its papers digested, its lessons: D1136) into Design, Calibrate beside Measure; the record below
+// the ring. A design its
 // checks refuse goes back to Design. Each box wears its kind's colour (Live's), an "AI" pill when a model or an agent
 // works it, a "critic" pill when a critic judges it; a step that is off is dashed. A click (Enter, Space) opens it.
 
@@ -14,7 +15,7 @@ const RING = [["orchestrate", -162], ["generate", -90], ["test", -18], ["measure
 const P = Object.fromEntries(RING.map(([k, a]) => [k, [CX + R * Math.cos(a * Math.PI / 180), CY + R * Math.sin(a * Math.PI / 180)]]));
 /** Each box's kind of work, as Live colours it. */
 const KIND = { validate: "setup", plan: "plan", dse: "search", orchestrate: "search", feedback: "setup", generate: "design",
-  test: "check", measure: "measure", calibrate: "measure", select: "choose", knowledge: "setup", digest: "setup", records: "setup", lessons: "setup" };
+  test: "check", measure: "measure", calibrate: "measure", select: "choose", knowledge: "setup", records: "setup" };
 const f1 = x => x.toFixed(1);
 
 function head(x1, y1, x2, y2, back) {
@@ -33,7 +34,11 @@ function workerOf(M, state, box, agent) {
   if (box === "orchestrate" && M.parameterSearch(state)) return ["settings", ""];
   if (box === "generate" && M.paramOnly(state)) return ["off", "off"];
   if (box === "dse") { const p = f.dse === "none" ? "adaptive" : f.dse; return isAgent(p) ? [cut(agentWord(M, p)), "ai"] : [cut(p), M.halfOf(state, "dse") === "model" ? "ai" : ""]; }
-  if (box === "digest" && f.knowledge === "none") return ["off", "off"];
+  if (box === "knowledge") {                     // AI: a model or an agent sums up its papers (and an agent may write lessons)
+    if (f.knowledge === "none") return f.lessons && f.lessons !== "off" ? ["lessons only", isAgent(f.lessons) ? "ai" : ""] : ["off", "off"];
+    const n = M.list(state.knowledgeFiles).length;
+    return [isAgent(f.digest) ? cut(agentWord(M, f.digest)) : n ? plural(n, "file") : "", "ai"];
+  }
   const v = f[box], opts = whoOptions(M, box, v, agent), o = opts.find(x => x.k === whoOn(opts, v)) || {};
   return [o.cls === "agent" ? cut(o.label) : o.cls === "model" ? "" : cut(o.label || String(v)), o.cls === "off" ? "off" : ["model", "agent"].includes(o.cls) ? "ai" : ""];
 }
@@ -68,10 +73,8 @@ export function Cycle({ M, state, agent, sel, pick }) {
     ${arcs}
     <path class="e back" d=${`M${f1(T[0] - 30)} ${f1(T[1] + 20)} Q${f1(CX + 30)} ${f1(CY - 60)} ${f1(G[0] + 12)} ${f1(G[1] + 20)}`} />${head(G[0] + 16, G[1] + 31, G[0] + 12, G[1] + 20, true)}
     ${[["validate", 50], ["plan", 112], ["dse", 174], ["feedback", 236]].map(([k, y]) => html`${line(148, y, O[0] - 62, O[1] + (y - 143) * 0.12, off(k))}${node(k, 86, y)}`)}
-    ${line(498, 50, G[0] + 50, G[1] - 20, true)}${node("knowledge", 560, 40)}
-    ${line(644, 40, 622, 40, true)}${node("digest", 706, 40)}
+    ${line(498, 50, G[0] + 50, G[1] - 20, true)}${node("knowledge", 560, 40, 124, "Library")}
     ${line(Me[0] + 160, Me[1], Me[0] + 62, Me[1], true)}${node("calibrate", Me[0] + 222, Me[1])}
     ${line(Ch[0] - 62, Ch[1] + 8, 210, 468, false)}${node("records", 148, 480)}
-    ${line(100, 460, 100, 431, off("lessons"))}${node("lessons", 86, 410)}
     ${RING.map(([k]) => node(k, P[k][0], P[k][1]))}</svg>`;
 }

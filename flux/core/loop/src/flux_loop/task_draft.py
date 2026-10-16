@@ -123,10 +123,10 @@ class DraftMixin:
                             questions=agent.questions,
                             library=library_section(self, library_queries(self.task, [p for p in self.parts if p.name == sg]), state),
                             workbench=workbench_section(self.task.workbench),
-                            probes=probe_line([s.name for s in self.task.stages], budget, allowed=agent.allowed),
+                            probes=probe_line([s.name for s in self.task.stages], budget, allowed=agent.allowed, checks=agent.probe_checks),
                             denied=set(agent.allowed) < set(DENIED))
         workbench_link(self.task.workbench, workdir)
-        probe_ctx = probe_context(self.task, workdir, sg or "", budget, **_where(state))
+        probe_ctx = probe_context(self.task, workdir, sg or "", budget, checks=agent.probe_checks, **_where(state))
         resume = sess.id if agent.resume and sess.id and prior is not None and failure else None
         message = ""
         if not (agent.resume and sess.id and sess.timed_out):

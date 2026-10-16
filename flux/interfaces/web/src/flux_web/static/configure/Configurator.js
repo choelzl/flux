@@ -20,9 +20,9 @@ const NO_STORE = { subscribe: () => () => {} };
 
 /** `state` the model's, `step` the one to open; `save(yaml, state)` a promise of the line to say (an error with
     `field` focuses that box); `saveDraft(state, step)` (a new loop); `checked()` [kind, words] of the loop's own check;
-    `changes(yaml)` a promise of what a save changes (a loop that exists); `notes` what is kept as written; `extra` the
-    Extra step's last section; `store` the files (files.js); `calm` an untouched draft says what is to do, not errors. */
-export function Configurator({ M, state, step, onStep, touched = false, isNew = false, save, saveDraft, saveLabel = "Save", checked, changes, notes = [],
+    `changes(yaml)` a promise of what a save changes (a loop that exists); `notes` what is kept as written, `direct` the
+    address of Direct edit, where it is changed; `extra` the Extra step's last section; `store` the files (files.js); `calm` an untouched draft says what is to do, not errors. */
+export function Configurator({ M, state, step, onStep, touched = false, isNew = false, save, saveDraft, saveLabel = "Save", checked, changes, notes = [], direct = null,
   extra = null, store, onChange, calm = false, nameLabel, namePlaceholder }) {
   const [, redraw] = useState(0), [at, setAt] = useState(() => stepId(M, step)), [status, setStatus] = useState({ kind: "", text: "" });
   const [agent, setAgent] = useState(() => agentOf(M, state)), [invalid, setInvalid] = useState("");
@@ -70,12 +70,12 @@ export function Configurator({ M, state, step, onStep, touched = false, isNew = 
     ${save ? html`<button type="button" class=${cx("cfg-save", last && "primary", status.kind === "pending" && "busy")} disabled=${status.kind === "pending"} onClick=${doSave}>${saveLabel}</button>` : ""}
     ${next ? html`<button type="button" class="primary cfg-next" onClick=${() => go(next.id)}><span class="cfg-next-what">${`Next: ${next.title}`}</span><span class="cfg-next-short">Next</span></button>` : ""}</div>`;
 
-  const p = { M, state, edit, invalid, agent };
+  const p = { M, state, edit, invalid, agent, direct };
   const body = {
     prompt: () => html`<${PromptStep} ...${p} store=${store} opts=${{ nameLabel, namePlaceholder }} />`,
     checks: () => html`<${ChecksStep} ...${p} />`,
     objective: () => html`<${ObjectiveStep} ...${p} />`,
-    graph: () => html`<${GraphStep} ...${p} setAgent=${setAgent} go=${go} />`,
+    graph: () => html`<${GraphStep} ...${p} setAgent=${setAgent} go=${go} store=${store} />`,
     extra: () => html`<${ExtraStep} ...${p} extra=${extra} />`,
     save: () => html`<${SaveStep} msgs=${msgs} ready=${ready} calm=${quiet} go=${go} nav=${nav} changes=${changes} notes=${notes} yaml=${yaml} file=${file} />`,
   }[at];
