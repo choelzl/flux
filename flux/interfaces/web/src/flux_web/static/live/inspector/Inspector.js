@@ -12,7 +12,7 @@ import { Block, Fold, StepRow, TaskPill, memoryOf } from "./bits.js";
 import { AgentChat, ModelChat } from "./Chat.js";
 import { ChooseBody, CriticBody, NotesFold, SearchBody, StepsBody, ToolBody } from "./Bodies.js";
 import { candidateOf, colorOf, fmt, has, headOf, isAgent, isModel, isTool, metricsOf, plain, running, stdoutOf, taskLabel } from "./parts.js";
-import { Pill } from "../../components/Tone.js";
+import { Pill, Tag } from "../../components/Tone.js";
 import { Head, Tool } from "../../components/Head.js";
 
 /** D1094: who did the work, in words -- the program a command ran, the agent or model that answered, its try
@@ -35,7 +35,7 @@ function TaskHead({ n, env, a }) {
       <${Tool} icon="fullscreen" label="Fullscreen" big cls="fullscreen-button" onClick=${() => a.fullscreen(n.name)} />`}>
       <${TaskPill} n=${n} /><span class="muted">${dur(running(n) ? env.now - n.t0 : n.seconds)}</span><//>
     ${parents.length ? html`<div class="alt-crumbs">${parents.map((p, i) => [i ? html`<span class="muted">›</span>` : "",
-      html`<button type="button" class="alt-pchip" style=${`--k:${colorOf(p)}`} title=${taskLabel(p)} onClick=${() => a.select(p.id)}>${plain(taskLabel(p), N)}</button>`])}</div>` : ""}
+      html`<${Tag} k=${colorOf(p)} title=${taskLabel(p)} onClick=${() => a.select(p.id)}>${plain(taskLabel(p), N)}<//>`])}</div>` : ""}
     <p class="alt-meta muted">${[why, runner(n)].filter(Boolean).flatMap((x, i) => [i ? " · " : "", x])}</p>`;
 }
 

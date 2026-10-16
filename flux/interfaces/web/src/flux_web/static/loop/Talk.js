@@ -14,7 +14,7 @@ import { Bin } from "../components/Bin.js";
 import { Markdown } from "../components/Markdown.js";
 import { Conversation, liveWork } from "../components/Conversation.js";
 import { usePoll } from "../components/Load.js";
-import { Pill } from "../components/Tone.js";
+import { Pill, Tag } from "../components/Tone.js";
 
 /** D993: the answering agent's thinking, commands and replies, as Live shows an agent; followed while it answers. */
 function AgentTurn({ url }) {
@@ -55,11 +55,11 @@ function Turn({ a, t, open }) {
 /** A conversation: its turns; D990 folded or not; Reply to its latest; removed by whoever may. */
 function Thread({ turns, folded, t, open }) {
   const id = turns[0].thread_id || turns[0].id, last = turns.at(-1), running = turns.some(a => a.running), selected = turns.some(a => a.id === t.reply);
-  return html`<${Card} cls=${`ask-card has-bin${selected ? " selected-thread" : ""}${folded ? " collapsed" : ""}`}><div class="ask-thread-head"><strong>Conversation</strong>
-      ${turns.some(a => a.private) ? html`<span class="pill small ask-private" title="Asked without edit rights on this loop: no one else sees it">only you</span>` : ""}
-      ${t.canAsk && !running && last.answer ? html`<button type="button" class="small ask-reply ask-reply-top" disabled=${t.busy} data-reply-to=${last.id} title="Reply to this conversation's latest answer" onClick=${() => t.replyTo(last)}>Reply</button>` : ""}
-      <button type="button" class="small ask-collapse" data-ask-toggle=${id} aria-expanded=${String(!folded)} aria-label=${`${folded ? "Expand" : "Collapse"} conversation: ${turns[0].question}`} onClick=${() => t.fold(id, !folded)}>${folded ? "Expand" : "Collapse"}</button>
-      ${(t.mine || turns.every(a => a.by === me.name)) && !running ? html`<${Bin} what="conversation" title="Remove this conversation?" said="All its messages, answers and saved reply context are removed for everyone who sees this loop." remove=${() => t.remove(turns[0])} />` : ""}</div>
+  return html`<${Card} cls=${`ask-card${selected ? " selected-thread" : ""}${folded ? " collapsed" : ""}`} title="Conversation"
+    meta=${turns.some(a => a.private) ? html`<${Tag} cls="ask-private" title="Asked without edit rights on this loop: no one else sees it">only you<//>` : null}
+    actions=${html`${t.canAsk && !running && last.answer ? html`<button type="button" class="small ask-reply ask-reply-top" disabled=${t.busy} data-reply-to=${last.id} title="Reply to this conversation's latest answer" onClick=${() => t.replyTo(last)}>Reply</button>` : ""}
+      <button type="button" class="small ask-collapse" data-ask-toggle=${id} aria-expanded=${String(!folded)} aria-label=${`${folded ? "Expand" : "Collapse"} conversation: ${turns[0].question}`} onClick=${() => t.fold(id, !folded)}>${folded ? "Expand" : "Collapse"}</button>`}
+    tools=${(t.mine || turns.every(a => a.by === me.name)) && !running ? html`<${Bin} what="conversation" title="Remove this conversation?" said="All its messages, answers and saved reply context are removed for everyone who sees this loop." remove=${() => t.remove(turns[0])} />` : null}>
     ${turns.map(a => html`<${Turn} key=${a.id} a=${a} t=${t} open=${open} />`)}<//>`;
 }
 

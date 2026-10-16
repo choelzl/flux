@@ -37,7 +37,7 @@ function Containers({ r, reload }) {
   // D921: a sample, said with its time
   return html`<${Card} title=${`Sandbox containers (${r.engine || "none"})`} actions=${r.containers_at ? html`<span class="muted small">asked <${Ago} t=${r.containers_at} /></span>` : null}>
     ${r.error ? html`<${Notice} tone="bad" what="The containers could not be read" why=${r.error} />` : !cs.length ? html`<${Empty} text="No sandbox container." />`
-    : html`<${SortableTable} memo="flux-sort-containers" first=${3} cls="list" scroll keyOf=${c => c.name} rows=${cs} cols=${[
+    : html`<${SortableTable} memo="flux-sort-containers" first=${3} cls="list" keyOf=${c => c.name} rows=${cs} cols=${[
         { label: "Container", key: c => c.name, asc: true }, { label: "Loop", key: c => c.user ? `${c.user}/${c.loop}` : "", asc: true }, { label: "State", key: state, asc: true },
         { label: "CPU", key: c => c.cpu, num: true }, { label: "Memory", key: c => c.mem, num: true }, { label: "PIDs", key: c => c.pids, num: true }, { label: "" }]}
       row=${c => html`<tr><td class="mono">${c.name}</td><td><${LoopLink} u=${c.user} a=${c.loop} /></td>
@@ -54,7 +54,7 @@ function LoopDisk({ loops, reload }) {
   const clear = (l, what, label, text) => html`<${Act} cls="small" onClick=${async () => {
     if (!await confirmDialog(`${label}: ${l.user} / ${l.app}?`, text, { ok: label, danger: what === "all" })) return;
     await clean(l.cache_key || l.key, what); reload(); }}>${label}<//>`;
-  return html`<${Card} title="Disk per loop"><${SortableTable} memo="flux-sort-loop-disk" first=${7} scroll keyOf=${l => `${l.user}/${l.app}`} rows=${loops}
+  return html`<${Card} title="Disk per loop"><${SortableTable} memo="flux-sort-loop-disk" first=${7} keyOf=${l => `${l.user}/${l.app}`} rows=${loops}
     cols=${[{ label: "Loop", key: l => `${l.user}/${l.app}`, asc: true }, { label: "" }, ...SIZES.map(([k, label]) => ({ label, key: l => l[k] || 0, num: true })), { label: "" }]}
     row=${l => html`<tr><td><${LoopLink} u=${l.user} a=${l.app} /></td><td>${l.running ? html`<${Pill} tone="run">running<//>` : ""}</td>
       ${SIZES.map(([k]) => html`<td class=${cx("num mono", k === "total" && "strong")}>${bytes(l[k])}</td>`)}
@@ -71,7 +71,7 @@ function OtherCaches({ caches, reload }) {
     await clean(c.key, "all"); reload();
   };
   return html`<${Card} title="Caches no loop owns"><p class="muted">Deleting one frees its space; it is rebuilt when needed.</p>
-    <${SortableTable} memo="flux-sort-caches" first=${2} scroll keyOf=${c => c.key} rows=${caches}
+    <${SortableTable} memo="flux-sort-caches" first=${2} keyOf=${c => c.key} rows=${caches}
       cols=${[{ label: "Cache", key: c => c.key, asc: true }, { label: "Whose", key: c => c.kind === "gone" ? `${c.user}/${c.app}` : "", asc: true },
         { label: "Size", key: c => c.size, num: true }, { label: "Last touched", key: c => c.touched }, { label: "" }]}
       row=${c => html`<tr><td class="mono">${c.key}</td>

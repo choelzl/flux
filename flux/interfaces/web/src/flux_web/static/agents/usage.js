@@ -3,6 +3,7 @@
 import { dur, fmtTok, money, plural } from "../ui.js";
 import { Card, html } from "../view.js";
 import { Fact } from "../components/Tone.js";
+import { Table } from "../components/Table.js";
 
 const Fig = props => html`<${Fact} size="headline" ...${props} />`;
 
@@ -21,13 +22,12 @@ export function UsageCard({ u }) {
       <${Fig} label="Tokens out" value=${t.counted ? fmtTok(t.tokens_out) : "—"} sub=${outSub} />
       <${Fig} label="Cost" value=${t.cost_usd ? money(t.cost_usd) : "—"} sub=${t.cost_usd ? "at the prices set, else the agent's own" : "no prices set"} />
     </div>
-    ${u.by.length > 1 ? html`<table class="list compact">
-      <thead><tr>${["Who", "Kind", "Turns", "Time", "Tokens in", "Tokens out", "Cost"].map((x, i) => html`<th class=${i > 1 ? "num" : ""}>${x}</th>`)}</tr></thead>
-      <tbody>${u.by.map(b => html`<tr key=${`${b.who}|${b.kind}`}>
+    ${u.by.length > 1 ? html`<${Table} heads=${["Who", "Kind", "Turns", "Time", "Tokens in", "Tokens out", "Cost"].map((label, i) => ({ label, num: i > 1 }))}>
+      ${u.by.map(b => html`<tr key=${`${b.who}|${b.kind}`}>
         <td class="strong">${b.who}</td><td class="muted">${b.kind}</td>
         <td class="num mono">${String(b.turns)}</td><td class="num mono">${dur(b.seconds)}</td>
         <td class="num mono">${b.counted ? fmtTok(b.tokens_in) : "—"}</td><td class="num mono">${b.counted ? fmtTok(b.tokens_out) : "—"}</td>
-        <td class="num mono">${b.cost_usd ? money(b.cost_usd) : "—"}</td></tr>`)}</tbody></table>` : ""}
+        <td class="num mono">${b.cost_usd ? money(b.cost_usd) : "—"}</td></tr>`)}<//>` : ""}
   <//>`;
 }
 

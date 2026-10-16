@@ -805,10 +805,10 @@ def flows(r: Run) -> None:
              " String(u).startsWith('/api/apps/sw/results') ? Promise.resolve(new Response(JSON.stringify(fixture), {headers: {'Content-Type': 'application/json'}}))"
              " : window.__viewerFetch(u, o); return 1", GRAPHS_RESULTS)
         try:
-            r.page("#/app/sw/results", "document.querySelector('.results-head a.raw-view')", "Results")
-            r.button("Fullscreen", ".results-head")
+            r.page("#/app/sw/results", "document.querySelector('.objective-card .head a.raw-view')", "Results")
+            r.button("Fullscreen", ".objective-card .head")
             b.wait("document.querySelector('dialog.fullscreen-view[open] table.designs')", what="fullscreen results")
-            r.check("results have Raw and fullscreen table views", b.js("return !!document.querySelector('dialog .results-head a.raw-view[href*=\"/results\"]')"))
+            r.check("results have Raw and fullscreen table views", b.js("return !!document.querySelector('dialog .objective-card .head a.raw-view[href*=\"/results\"]')"))
             b.keys(b.ESCAPE)
             b.wait("!document.querySelector('dialog.fullscreen-view[open]')", what="results returned")
             r.clean("raw and fullscreen")
@@ -1238,7 +1238,7 @@ def flows(r: Run) -> None:
         b.wait("[...document.querySelectorAll('.files-card ul.files li')].some(l => l.innerText.includes('scratch.tmp'))", what="the ignored shown")
         r.check("show ignored files lists it, marked", b.js("return [...document.querySelectorAll('.files-card li.ignored')].some(l => l.innerText.includes('scratch.tmp'))"))
         r.check("an ignored one is greyed, no pill (D937)", b.js("const l = [...document.querySelectorAll('.files-card li.ignored')].find(l => l.innerText.includes('scratch.tmp'));"
-                "return !l.querySelector('.pill') && !l.innerText.includes('ignored') && getComputedStyle(l.querySelector('a')).opacity < 0.9"))
+                "return !l.querySelector('.pill, .tag') && !l.innerText.includes('ignored') && getComputedStyle(l.querySelector('a')).opacity < 0.9"))
         r.check("a dotfile counts as ignored (D836)", not any(n.startswith(".gitignore") for n in names)
                 and b.js("return [...document.querySelectorAll('.files-card li.ignored')].some(l => l.innerText.includes('.gitignore'))"))
         b.click("#show-ignored")

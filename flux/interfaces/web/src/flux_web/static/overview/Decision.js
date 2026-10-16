@@ -10,6 +10,7 @@ import { GroupRow, MeasurementHeader, VerdictBadge, useColumns, useValuesMode } 
 import { MainNumbers } from "./parts.js";
 import { useLoop } from "../loop/context.js";
 import { Pill } from "../components/Tone.js";
+import { Table } from "../components/Table.js";
 
 /** D1093: "#3", as everywhere; D1094: the parts' whole -- its whole name on hover. */
 export const own = (ctx, x) => String(x) === ctx.name ? "whole" : String(x).startsWith(`${ctx.name}#`) ? String(x).slice(ctx.name.length) : String(x);
@@ -31,16 +32,16 @@ function BestTable({ r, n, comparison, unit }) {
   const hid = m => columns.hidden(m) ? " hidden-measurement" : "";
   return html`<div class="blk result-table-surface" data-values=${values.mode}>
     <div class="best-table-head"><h3>${`Best ${top.length}`}</h3>${columns.controls}${values.toggle}</div>
-    <div class="scroll-x"><table class="list compact best-n"><thead><${GroupRow} metrics=${metrics} groups=${groups} leading=${3} />
+    <${Table} cls="list compact best-n" thead=${html`<${GroupRow} metrics=${metrics} groups=${groups} leading=${3} />
       <tr><th /><th>Design</th><th class="status-column">Status</th>
-        ${metrics.map(m => html`<th class=${`num measurement-head${hid(m)}${dict.get(m) || ""}`} aria-label=${m} title=${`${m}${unit[m] ? " (" + unit[m] + ")" : ""}`}><${MeasurementHeader} text=${labels.get(m)} /></th>`)}</tr></thead>
-      <tbody>${top.map((d, i) => html`<tr class=${`clickable ${d.verdict}`} onClick=${() => ctx.goTab("Results")}>
+        ${metrics.map(m => html`<th class=${`num measurement-head${hid(m)}${dict.get(m) || ""}`} aria-label=${m} title=${`${m}${unit[m] ? " (" + unit[m] + ")" : ""}`}><${MeasurementHeader} text=${labels.get(m)} /></th>`)}</tr>`}>
+      ${top.map((d, i) => html`<tr class=${`clickable ${d.verdict}`} onClick=${() => ctx.goTab("Results")}>
         <td class="muted">${d.decision ? "★" : String(i + 1)}</td>
         <td class="mono" title=${`${d.name} · ${d.shown}${d.last ? " · " + d.last : ""}`}><span class=${`table-design-name${(d.base || d.name).includes("#") ? " design-id" : ""}`} title=${d.name}>${names.get(d)}</span></td>
         <td class="status-column"><${VerdictBadge} verdict=${d.verdict} reason=${d.why.join("; ")} /></td>
         ${metrics.map(m => { const ok = d.meets[m], display = measurementText(d, m, comparison, num4, values.relative);
           return html`<td class=${`num mono${hid(m)}${dict.get(m) || ""}${ok === true ? " meets" : ok === false ? " misses" : ""}`}
-            title=${`${display.title}${unit[m] ? " · " + unit[m] : ""}${ok === true ? " · meets the limit" : ok === false ? " · misses the limit" : ""}`}>${display.text}</td>`; })}</tr>`)}</tbody></table></div></div>`;
+            title=${`${display.title}${unit[m] ? " · " + unit[m] : ""}${ok === true ? " · meets the limit" : ok === false ? " · misses the limit" : ""}`}>${display.text}</td>`; })}</tr>`)}<//></div>`;
 }
 
 /** The decision (D1092: said "#3"), the closest when none meets every requirement (D900), or why there is none. */

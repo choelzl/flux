@@ -6,6 +6,7 @@
 import { Notice, changes, html, useChanges, useLayoutEffect, useRef, useState } from "../view.js";
 import { Toasts, useLayer } from "../notices.js";
 import { bytes } from "../format.js";
+import { Close, Head } from "./Head.js";
 
 /** A modal dialog (its top layer above the page): open while drawn, closed when it goes; Escape calls `onClose()`
     (none: Escape does nothing -- the caller says what it does). `at(el)` is handed the element once open. */
@@ -100,11 +101,11 @@ export function progressDialog(title, said) {
   return { signal: ctl.signal, set: (a, b) => { at = [a, b]; m.draw(view()); }, close: m.close };
 }
 
-/** A view shown fullscreen: its head (the title, Close) and `children`. */
-export function FullscreenView({ title, close, children }) {
-  return html`<div class="fullscreen-head"><h2>${title}</h2><button class="small" type="button" onClick=${close}>Close</button></div>
-    <div class="fullscreen-content">${children}</div>`;
-}
+/** A fullscreen view's head: its title, Close. */
+export const FullscreenHead = ({ title, close }) => html`<${Head} title=${title} tools=${html`<${Close} onClick=${close} />`} />`;
+/** A view shown fullscreen: its head and `children`. */
+export const FullscreenView = ({ title, close, children }) => html`<${FullscreenHead} title=${title} close=${close} />
+  <div class="fullscreen-content">${children}</div>`;
 
 /** The page left: each dialog of the stack cancelled as Escape would (a dialog belongs to its page; an upload's
     progress stays). */

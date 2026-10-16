@@ -7,6 +7,7 @@ import { options } from "./vendor/preact.module.js";
 import { useEffect, useLayoutEffect, useRef, useState } from "./vendor/hooks.module.js";
 import { cleanup } from "./state.js";
 import { agoText, when } from "./format.js";
+import { Head } from "./components/Head.js";
 
 export { html, render };
 
@@ -42,10 +43,11 @@ export function useChanges(source) {
   useLayoutEffect(() => source.subscribe(() => redraw(n => n + 1)), [source]);
 }
 
-/** A card: its head when it has a title or actions, then what it holds. */
-export function Card({ title, actions, cls = "", children, ...rest }) {
+/** A card: its head (D1106: the one `Head` -- the title, `meta` muted after it, `actions`, `tools`) when it has one,
+    then what it holds. */
+export function Card({ title, meta, actions, tools, cls = "", children, ...rest }) {
   return html`<section ...${rest} class=${"card " + cls}>
-    ${title || actions ? html`<div class="card-head">${title ? html`<h2>${title}</h2>` : ""}${actions ? html`<div class="actions">${actions}</div>` : ""}</div>` : ""}
+    ${title || actions || tools ? html`<${Head} title=${title} actions=${actions} tools=${tools}>${meta ? html`<span class="muted">${meta}</span>` : ""}<//>` : ""}
     ${children}</section>`;
 }
 
@@ -61,8 +63,11 @@ export function Ago({ t }) {
 }
 
 /** D1102: a tone's glyph -- the turning ring for run, ✓ ! ✗ ○ for ok, warn, bad, none (drawn by the stylesheet, so
-    a state's text is its words alone). */
-export const Glyph = ({ tone = "none" }) => html`<i class=${tone === "run" ? "g spin" : `g g-${tone}`} aria-hidden="true" />`;
+    a state's text is its words alone); `label` when the glyph is all there is to say it. D1110: the ring is the
+    small spinner, for a line, a field or a button; the other is the Live graph's dashed ring. */
+export const Glyph = ({ tone = "none", label }) => label
+  ? html`<i class=${tone === "run" ? "g spin" : `g g-${tone}`} role="img" aria-label=${label} title=${label} />`
+  : html`<i class=${tone === "run" ? "g spin" : `g g-${tone}`} aria-hidden="true" />`;
 
 /** D1102: a state in a block -- reading, failed, out of date, empty, a dialog's consequence: its glyph, what happened
     (in its tone), why (muted), then `children`, and its one action at the end; `quiet` (dashed) for nothing yet. */

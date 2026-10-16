@@ -22,7 +22,7 @@ export const TaskPill = ({ n }) => { const [tone, text] = stateOf(n); return htm
 export function StepRow({ x, a, N }) {
   const s = summaryOf(x), crit = /^\s*critique\s*:/i.test(String(x.name));
   return html`<button type="button" class="alt-step-row" style=${`--k:${x.failed ? "var(--bad)" : colorOf(x)}`} data-task=${String(x.id)} onClick=${() => a.select(x.id)}>
-    <span class="alt-task-state"><${Glyph} tone=${running(x) ? "run" : x.failed ? "bad" : x.rejected ? "warn" : "ok"} /></span>
+    <${Glyph} tone=${running(x) ? "run" : x.failed ? "bad" : x.rejected ? "warn" : "ok"} />
     <span class="alt-task-name" title=${taskLabel(x)}>${N.shortAll(taskLabel(x))}${s ? html`<span class="muted">${` — ${s}`}</span>` : ""}
       ${crit ? html`<span class="muted">${` — ${/^(rejected|sent back)/i.test(String(x.output?.verdict ?? "")) ? "rejected" : x.output?.verdict ? "no objection" : ""}`}</span>` : ""}</span>
     <span class="mono muted small">${dur(x.seconds ?? (x.t1 ?? Date.now() / 1000) - x.t0)}</span></button>`;

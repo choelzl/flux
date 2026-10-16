@@ -11,7 +11,7 @@ import { startLoop, stopLoop, restartLoop } from "../loops.js";
 import { Act } from "../components/Act.js";
 import { LastSaid, StatePill } from "../components/StatePill.js";
 import { SortableTable } from "../components/SortableTable.js";
-import { Pill } from "../components/Tone.js";
+import { Pill, Tag } from "../components/Tone.js";
 import { Choice } from "../components/Tabs.js";
 
 const STATE_RANK = l => l.running ? 4 : l.failed ? 3 : l.stopped ? 2 : l.last_active ? 1 : 0;
@@ -23,7 +23,7 @@ const redrawn = () => { document.activeElement?.blur?.(); pageRefresh?.().catch(
     D1006: the first press schedules it after the pass, the button turns red, a second (confirmed) abandons it. */
 function LoopActions({ l, name, owner, href }) {
   const canRun = l.can_run ?? (owner ? l.perm === "edit" || me.role === "admin" : can("run_loops"));
-  if (owner && !canRun) return html`<span class="pill">${l.perm === "edit" ? "can edit" : "watching"}</span>`;
+  if (owner && !canRun) return html`<${Tag}>${l.perm === "edit" ? "can edit" : "watching"}<//>`;
   if (l.running) {
     const stopNow = !!l.stop_requested && !l.restart_requested, restartNow = !!l.restart_requested;
     return html`<${Act} cls=${`small${stopNow ? " danger solid" : ""}`} title=${stopNow ? "Stop is scheduled. Press again to abandon the current pass." : "Stop after this pass"}

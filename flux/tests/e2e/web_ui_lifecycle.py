@@ -93,7 +93,7 @@ def lifecycle_flows(r, watch):
             b.js("window.__draftEditor.scrollTop = window.__draftScroll; return true;")
             r.button("Fullscreen", ".viewer")
             b.wait("document.querySelector('dialog.fullscreen-view[open] textarea')")
-            r.button("Close", "dialog.fullscreen-view .fullscreen-head")
+            r.button("Close", "dialog.fullscreen-view .head")
             b.wait("!document.querySelector('dialog.fullscreen-view')")
             r.check("the fullscreen Close button also retains the draft and scroll", b.ajs("""const [selector, draft, done] = arguments;
                 requestAnimationFrame(() => requestAnimationFrame(() => {

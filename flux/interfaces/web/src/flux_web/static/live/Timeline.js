@@ -3,6 +3,7 @@
 // to choose from.
 
 import { cx, html } from "../view.js";
+import { Close } from "../components/Head.js";
 import { dur } from "../format.js";
 import { WORK_COLORS as COLORS, AGENT_COLOR, ownSpans, phaseKind, workLabel } from "./work_style.js";
 import { taskState as state } from "./model.js";
@@ -10,11 +11,11 @@ import { passShort, taskLabel } from "./views.js";
 
 const agentActive = n => { for (let p = n; p; p = p.parent) if (/^agent:/i.test(p.name)) return true; return false; };
 
-/** The tasks a click landed on, side by side; Escape or × closes it (D981). */
+/** The tasks a click landed on, side by side; Escape or Close closes it (D981). */
 function Choice({ v, a }) {
   return html`<div class="alt-choice" role="group" aria-label="Tasks side by side" onKeyDown=${e => { if (e.key === "Escape") { e.preventDefault(); a.closeChoice(true); } }}>
     <div class="alt-choice-head"><strong>${`${workLabel(v.choice.kind)} · side by side here`}</strong>
-      <button type="button" class="small" aria-label="Close the tasks side by side" onClick=${() => a.closeChoice(false)}>×</button></div>
+      <${Close} label="Close the tasks side by side" onClick=${() => a.closeChoice(false)} /></div>
     ${v.choice.ids.map(id => v.model.nodes.get(id)).filter(Boolean).map(n => html`<button key=${n.id} type="button" class="alt-choice-task" data-choice=${String(n.id)}
       data-task=${String(n.id)} aria-label=${`${n.name} · ${state(n)}`} onClick=${() => a.select(n.id)}>
       <span>${taskLabel(n)}${n.why ? html`<small class="muted">${" · " + n.why}</small>` : ""}</span><small class="muted">${state(n)}</small></button>`)}</div>`;
@@ -64,9 +65,9 @@ export function Timeline({ v, a }) {
       ${order.map(({ n, kind, t0: s0, t1: s1 }) => html`<g class=${cx("alt-time-task", n.id === v.selected && "sel")} data-kind=${kind} aria-pressed=${String(n.id === v.selected)}
           data-task=${String(n.id)} tabindex="0" role="button" aria-label=${`${n.name} · ${state(n)}`} onClick=${e => press(e, n, kind)} onKeyDown=${e => key(e, n)}>
         <title>${`${taskLabel(n)} · ${dur(n.seconds ?? now - n.t0)}${n.t1 == null ? " so far" : n.failed ? " · failed" : ""}`}</title>
-        <rect x=${X(s0)} y=${T + lanes.indexOf(kind) * lane + 3} width=${Math.max(3, X(s1) - X(s0))} height=${lane - 6} rx="2" fill=${COLORS[kind]} class=${`bar ${state(n)}`} /></g>`)}
+        <rect x=${X(s0)} y=${T + lanes.indexOf(kind) * lane + 3} width=${Math.max(3, X(s1) - X(s0))} height=${lane - 6} rx="2" style=${`fill:${COLORS[kind]}`} class=${`bar ${state(n)}`} /></g>`)}
       ${cuts.map(([kind, t]) => html`<rect x=${X(t) - .75} y=${T + lanes.indexOf(kind) * lane + 3} width="1.5" height=${lane - 6} class="alt-cut" pointer-events="none" />`)}
-      ${agents.map(({ kind, t0: s0, t1: s1 }) => html`<rect x=${X(s0)} y=${T + lanes.indexOf(kind) * lane + lane - 7} width=${Math.max(3, X(s1) - X(s0))} height="4" rx="1" fill=${AGENT_COLOR} class="agent-time" pointer-events="none" />`)}
+      ${agents.map(({ kind, t0: s0, t1: s1 }) => html`<rect x=${X(s0)} y=${T + lanes.indexOf(kind) * lane + lane - 7} width=${Math.max(3, X(s1) - X(s0))} height="4" rx="1" style=${`fill:${AGENT_COLOR}`} class="agent-time" pointer-events="none" />`)}
     </svg>
     ${agents.length ? html`<p class="muted small tl-legend"><span><i class="sw" style=${`background:${AGENT_COLOR}`} />Agent activity within the work</span></p>` : ""}
     ${v.choice ? html`<${Choice} v=${v} a=${a} />` : ""}</div>`;

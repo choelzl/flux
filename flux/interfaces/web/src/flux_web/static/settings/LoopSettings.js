@@ -14,6 +14,8 @@ import { MeasurementOptions } from "../results/columns.js";
 import { Advanced } from "./Advanced.js";
 import { Select } from "../components/Select.js";
 import { useLoop } from "../loop/context.js";
+import { Tag } from "../components/Tone.js";
+import { Table } from "../components/Table.js";
 
 const Measurements = ({ results }) => html`<${Card} title="Measurements" cls="measurement-preferences">
   <p class="muted">Visible controls table columns. Main selects metrics for loop lists, decision summaries and default charts. % formats summaries as percent change from the matching baseline, otherwise P90 performance of accepted designs. Tables have their own Absolute/Relative toggle. Saved with this project and shared across browsers; calculations still use every metric. Only owners, editors and admins can save changes.</p>
@@ -38,7 +40,7 @@ function Sharing({ name, sh }) {
   const set = async (user, perm) => { await loopApi(name).api("/shares", { method: "PUT", body: { user, perm } }); toast(perm ? `Shared with ${user}: ${perm}` : `No longer shared with ${user}`, "ok"); route(); };
   const access = (cur, attrs) => html`<${Select} ...${attrs} options=${Object.entries(CAN)} value=${cur} />`;
   const rows = sh.shares.map(x => html`<div key=${x.user} class="share-who"><span class="share-av" aria-hidden="true">${x.user.slice(0, 1).toUpperCase()}</span><span class="strong">${x.user}</span></div>
-    ${sh.can_share ? access(x.perm, { "aria-label": `What ${x.user} may do`, onChange: p => set(x.user, p) }) : html`<span class="pill">${CAN[x.perm] || x.perm}</span>`}
+    ${sh.can_share ? access(x.perm, { "aria-label": `What ${x.user} may do`, onChange: p => set(x.user, p) }) : html`<${Tag}>${CAN[x.perm] || x.perm}<//>`}
     ${sh.can_share ? html`<button type="button" class="small" onClick=${() => set(x.user, null)}>Remove</button>` : html`<span />`}`);
   const none = html`<p class="muted share-none">${sh.can_share ? "Not shared." : "Shared with nobody else."}</p>`;
   if (!sh.can_share) return html`<${Card} title="Sharing" cls="loop-sharing">${sh.shares.length ? html`<div class="share-grid">${rows}</div>` : none}<//>`;
@@ -92,10 +94,10 @@ function LoopMaintenance({ mt }) {
   const [last, setLast] = useState(() => Object.fromEntries(mt.tasks.map(t => [t.key, t.last])));
   const run = async t => { const got = await loopApi(name).api(`/maintenance/${t.key}`, { method: "POST" }); setLast(x => ({ ...x, [t.key]: got })); toast(`${t.title}: ${got.said}`, got.ok ? "ok" : "bad"); };
   return html`<${Card} title="Maintenance"><p class="muted">${running ? "Stop the loop first: a running loop is never touched." : "Run on this loop now; the admin's schedule runs them on every loop."}</p>
-    <div class="scroll-x"><table class="list compact mt-table"><thead><tr><th>Task</th><th>Last run on this loop</th><th /></tr></thead>
-      <tbody>${mt.tasks.map(t => { const x = last[t.key]; return html`<tr><td data-label="Task" title=${t.what}><strong>${t.title}</strong></td>
+    <${Table} cls="list compact mt-table" heads=${["Task", "Last run on this loop", ""]}>
+      ${mt.tasks.map(t => { const x = last[t.key]; return html`<tr><td data-label="Task" title=${t.what}><strong>${t.title}</strong></td>
         <td data-label="Last run on this loop" class="mt-said">${x ? html`<span class=${x.ok ? "" : "bad"} title=${x.said}><${Ago} t=${x.t} />${` · ${x.said}`}</span>` : html`<span class="muted">never</span>`}</td>
-        <td class="right mt-acts"><${Act} cls="small" disabled=${running} onClick=${() => run(t)}>Run<//></td></tr>`; })}</tbody></table></div><//>`;
+        <td class="right mt-acts"><${Act} cls="small" disabled=${running} onClick=${() => run(t)}>Run<//></td></tr>`; })}<//><//>`;
 }
 
 /** Reset: what to keep chosen, what goes listed as it is chosen. */

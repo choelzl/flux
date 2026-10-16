@@ -12,7 +12,8 @@ import { Act } from "../components/Act.js";
 import { bound, useAutosave } from "../components/Autosave.js";
 import { SortableTable } from "../components/SortableTable.js";
 import { Select } from "../components/Select.js";
-import { Pill } from "../components/Tone.js";
+import { Pill, Tag } from "../components/Tone.js";
+import { Table } from "../components/Table.js";
 
 /** D818: a one-time link to choose a password -- an invitation, or a reset; copied, or selected to copy. */
 function LinkBox({ name, url, kind }) {
@@ -99,7 +100,7 @@ export function Users({ users, use, res, catalog }) {
     { label: "" }];
   const row = u => { const x = useOf(u.name); return html`<tr data-user=${u.name}>
     <td class="strong">${u.name}${u.pending ? html`<${Pill} small title="Invited: their password is not set yet">invited<//>` : ""}</td>
-    <td>${u.name === me.name ? html`<span class="pill">${u.group}</span>` : html`<${GroupSelect} groups=${catalog.groups} value=${u.group_id} label=${`${u.name}'s group`} onChange=${to => setGroup(u, to)} />`}
+    <td>${u.name === me.name ? html`<${Tag}>${u.group}<//>` : html`<${GroupSelect} groups=${catalog.groups} value=${u.group_id} label=${`${u.name}'s group`} onChange=${to => setGroup(u, to)} />`}
       ${u.disabled ? html`<${Pill} tone="bad">disabled<//>` : ""}</td>
     <td><${Act} cls="small" title=${`Select ${u.name}'s permissions`} aria-label=${`Select ${u.name}'s permissions`} onClick=${() => editPermissions(u, catalog)}>Select<//></td>
     <${Limit} u=${u} limits=${limits} def=${def} />
@@ -111,7 +112,7 @@ export function Users({ users, use, res, catalog }) {
       <${Act} cls="small" onClick=${() => able(u)}>${u.disabled ? "Enable" : "Disable"}<//>
       <${Act} cls="small" title="A one-time link to choose a password; it replaces the last one" onClick=${() => link(u)}>${u.pending ? "New invitation link" : "Password reset link"}<//></div></td></tr>`; };
   // D926: sorted by its headers (a menu on a phone); a row is moved, never rebuilt -- an edit or a pending save stays
-  return html`<${Card} title="Users"><${SortableTable} memo="flux-sort-users" cols=${cols} rows=${users} row=${row} keyOf=${u => u.name} cls="list users" scroll />
+  return html`<${Card} title="Users"><${SortableTable} memo="flux-sort-users" cols=${cols} rows=${users} row=${row} keyOf=${u => u.name} cls="list users" />
     <${AddUser} groups=${catalog.groups} />
     <p class="muted small">Server access is set for the whole group on the Groups tab. Loop creation, execution and sharing are controlled by Permissions.</p><//>`;
 }
@@ -148,12 +149,12 @@ export function Groups({ catalog }) {
   return html`<${Card} title="Groups" cls="user-groups">
     <p class="muted">Server access applies to all group members on their next run or agent invocation. Personal settings and per-user permissions are preserved.</p>
     ${catalog.groups.some(g => g.server_access == null) ? html`<p class="muted small">Keep existing access preserves members' current settings until you choose a policy for the group.</p>` : ""}
-    <table class="list groups"><thead><tr><th>Group</th><th class="num">Members</th>
-      <th title="Inherit server and machine model, agent and environment settings, or use members' own settings only">Server access</th><th>Actions</th></tr></thead>
-      <tbody>${catalog.groups.map(g => html`<tr key=${g.id} data-group=${g.id}><td><div class="group-label"><span class="strong">${g.name}</span>
-          ${g.admin ? html`<span class="pill small" title="Full server administration powers, retained when this group is renamed">Server admin</span>` : ""}</div></td>
+    <${Table} cls="list groups" heads=${["Group", { label: "Members", num: true },
+      { label: "Server access", title: "Inherit server and machine model, agent and environment settings, or use members' own settings only" }, "Actions"]}>
+      ${catalog.groups.map(g => html`<tr key=${g.id} data-group=${g.id}><td><div class="group-label"><span class="strong">${g.name}</span>
+          ${g.admin ? html`<${Tag} title="Full server administration powers, retained when this group is renamed">Server admin<//>` : ""}</div></td>
         <td class="num mono">${String(g.members)}</td><td><${GroupAccess} g=${g} /></td>
-        <td><${Act} cls="small" title=${`Rename ${g.name}`} onClick=${() => rename(g)}>Rename…<//></td></tr>`)}</tbody></table>
+        <td><${Act} cls="small" title=${`Rename ${g.name}`} onClick=${() => rename(g)}>Rename…<//></td></tr>`)}<//>
     <div class="group-create"><h3>New group</h3><div class="row">
       <label class="stack" for="group-name">Group name<input id="group-name" placeholder="Group name" maxlength="60" autocomplete="off" ...${bound(name, setName)} /></label>
       <label class="stack" for="group-server-access">Server access<${AccessSelect} value=${null} label="Server access for the new group" id="group-server-access" onChange=${e => setAccess(e.currentTarget.value)} /></label>

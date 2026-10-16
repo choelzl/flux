@@ -5,6 +5,7 @@
 import { html, useLayoutEffect, useRef, useState } from "../view.js";
 import { Overview } from "./Overview.js";
 import { Select } from "../components/Select.js";
+import { Tag } from "../components/Tone.js";
 import { LoopContext } from "../loop/context.js";
 
 const MOCK_CTX = { name: "sample", owner: "__overview_mock_data__", qs: "", mine: false, tab: "Overview", still: () => () => true, goTab: () => {}, drawBody: () => {} };
@@ -67,7 +68,7 @@ export function LayoutEditor({ prefs, example, save, cancel }) {
           <div class="overview-layout-columns">${draft.columns.map((ids, c) => html`<section class="overview-layout-column" aria-label=${`${c === 0 ? "Left" : "Right"} column`}>
             ${heading(c === 0 ? "Left column" : "Right column", ids.length, true)}<${List} ids=${ids} catalog=${prefs.large_cards} column=${c} used=${draft.columns.flat()} edit=${editColumn(c)} moveOut=${moveOut(c)} /></section>`)}</div>
           <p class="muted small overview-layout-mobile-note">On phones, the left column appears first.</p></section></div>
-      <section class="overview-preview-panel" aria-label="Overview preview with mock data"><div class="overview-preview-head"><h3>Preview</h3><span class="pill">Mock Data</span></div>
+      <section class="overview-preview-panel" aria-label="Overview preview with mock data"><div class="overview-layout-heading"><h3>Preview</h3><${Tag}>Mock Data<//></div>
         <p class="muted small">Sample values illustrate the layout. Your loops are unchanged until you save.</p>
         <div class="overview-layout-preview" inert><${LoopContext.Provider} value=${{ ...MOCK_CTX, st: example.state }}><${Overview} r=${example.results} notes=${example.notes} bench=${example.workbench}
           use=${example.usage} prefs=${{ layout: draft }} ideas=${example.ideas} /><//></div></section></div>

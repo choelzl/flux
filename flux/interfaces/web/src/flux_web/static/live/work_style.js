@@ -1,8 +1,9 @@
 // Shared timeline colours: work keeps its colour, agent activity is an overlay.
-// D978: palette A4 -- one meaning per colour in the tree, the graph and the timeline; the agent keeps its pink
-export const WORK_COLORS = { setup: "#8f9aa6", plan: "#c98a56", search: "#d9b440", design: "#5b6ee8",
-  check: "#3faa78", measure: "#2fb0c6", choose: "#e8804f", critic: "#97b84a" };
-export const AGENT_COLOR = "#d45eae";
+// D978: palette A4 -- one meaning per colour in the tree, the graph and the timeline; the agent keeps its pink.
+// D1107: the colours are the stylesheet's tokens (--work-*, --agent: a value per theme), named here for a style.
+const KINDS = ["setup", "plan", "search", "design", "check", "measure", "choose", "critic"];
+export const WORK_COLORS = Object.fromEntries(KINDS.map(k => [k, `var(--work-${k})`]));
+export const AGENT_COLOR = "var(--agent)";
 export const workLabel = kind => kind[0].toUpperCase() + kind.slice(1);
 
 // D977: the kind of work a phase names, as Live's timeline has it (flux_web/timeline.py `kind_of`,

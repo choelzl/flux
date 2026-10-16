@@ -19,6 +19,15 @@ export const Pill = ({ tone = "none", small = false, icon = false, cls = "", tit
   ? html`<span ...${rest} class=${cx("pill icon", `t-${tone}`, small && "small", cls)} role="img" aria-label=${title} title=${title}><${Glyph} tone=${tone} /></span>`
   : html`<span ...${rest} class=${cx("pill", `t-${tone}`, small && "small", cls)} title=${title || null}><${Glyph} tone=${tone} />${children}</span>`;
 
+/** D1108: a label in a line that is not a state -- a role, "mock data", "ai", a critic: no glyph, neutral, or tinted
+    by `k` (a kind's colour: an agent's pink, a box's kind); `count` a tally (×3, an unread number) in figures; a
+    button with `onClick` (a parent task that opens). */
+export const Tag = ({ k, count = false, onClick, cls = "", title, children, ...rest }) => {
+  const c = cx("tag", k && "kind", count && "count", cls), style = k ? `--k:${k}` : null;
+  return onClick ? html`<button ...${rest} type="button" class=${c} style=${style} title=${title || null} onClick=${onClick}>${children}</button>`
+    : html`<span ...${rest} class=${c} style=${style} title=${title || null}>${children}</span>`;
+};
+
 /** A value with its label, a tile: `size` "headline" (the Overview, the machine) or "wide" for a long value
     on its own line; `tone` when the value is a verdict; then `children` (a meter, a text) and `sub`, a muted line. */
 export const Fact = ({ label, value, tone, size = "", sub, onClick, cls = "", children, ...rest }) => html`<div ...${rest}

@@ -5,6 +5,7 @@ import { html } from "../view.js";
 import { measurementText, relativeMeasurement } from "../results/preferences.js";
 import { num4 } from "../charts/marks.js";
 import { useLoop } from "../loop/context.js";
+import { Table } from "../components/Table.js";
 
 export { Stat } from "../components/Stat.js";
 
@@ -25,6 +26,5 @@ export function MainNumbers({ r, d, main, compare, unit }) {
 }
 
 /** A small table of a card: its heads (the first left, the others numbers), its rows. */
-export const SummaryTable = ({ heads, children }) => html`<div class="scroll-x"><table class="list compact overview-summary-table">
-  <thead><tr>${heads.map((label, i) => html`<th class=${i ? "num" : ""}>${label}</th>`)}</tr></thead><tbody>${children}</tbody></table></div>`;
+export const SummaryTable = ({ heads, children }) => html`<${Table} cls="list compact overview-summary-table" heads=${heads.map((label, i) => ({ label, num: i > 0 }))}>${children}<//>`;
 export const ValueCell = ({ v, title = "" }) => html`<td class="num mono" title=${title}>${v}</td>`;

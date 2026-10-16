@@ -6,6 +6,7 @@ import { cx, Empty, html, useLayoutEffect, useRef, useState } from "../view.js";
 import { dictionaryClasses, measurementLabels, measurementText } from "./preferences.js";
 import { GroupRow, MeasurementHeader, VerdictBadge } from "./columns.js";
 import { Choice } from "../components/Tabs.js";
+import { Table } from "../components/Table.js";
 
 const PAGE = 200;
 export const keyOf = d => JSON.stringify([d.part || "", d.base || d.name, d.key || ""]);
@@ -53,13 +54,12 @@ export function ResultsTable({ t, selected, onOpen, onCompare }) {
   return html`<div class="bar"><${Choice} label="Which designs" value=${filter} onChange=${k => { setFilter(k); setPage(PAGE); }} options=${which} />
       <span class="grow" />${columns.controls}${values.toggle}
       <button class="small" disabled=${picked.length !== 2} onClick=${() => onCompare(picked)}>${picked.length ? `Compare ${picked.length}/2` : "Compare"}</button></div>
-    <div class="result-table-surface" data-values=${values.mode} ref=${box}>${shown.length ? html`<div class="scroll-x rows-scroll"><table class="list designs">
-      <thead><${GroupRow} metrics=${metrics} groups=${r.metric_groups || {}} leading=${3} />
+    <div class="result-table-surface" data-values=${values.mode} ref=${box}>${shown.length ? html`<${Table} cls="list designs" box="rows-scroll" thead=${html`<${GroupRow} metrics=${metrics} groups=${r.metric_groups || {}} leading=${3} />
         <tr><th class="pick" title="Tick two to compare"></th>${th("name", "Design")}${th("verdict", "Status", "status-column")}
           ${metrics.map(m => { const l = limitOf(m); return th(m, m, `num measurement-head${columns.hidden(m) ? " hidden-measurement" : ""}${dict.get(m) || ""}`,
             `${m}${unit[m] ? ` (${unit[m]})` : ""}${l ? ` · ${l.direction === "maximize" ? "at least" : "at most"} ${l.goal}` : ""}`,
-            l ? html`<div class="lim">${`${l.direction === "maximize" ? "≥" : "≤"} ${l.goal}`}</div>` : null); })}</tr></thead>
-      <tbody>${shown.map(d => html`<tr key=${keyOf(d)} class=${`clickable ${d.verdict}${d.decision ? " decided" : ""}${keyOf(d) === selected ? " sel" : ""}`} onClick=${() => onOpen(d)}>
+            l ? html`<div class="lim">${`${l.direction === "maximize" ? "≥" : "≤"} ${l.goal}`}</div>` : null); })}</tr>`}>
+      ${shown.map(d => html`<tr key=${keyOf(d)} class=${`clickable ${d.verdict}${d.decision ? " decided" : ""}${keyOf(d) === selected ? " sel" : ""}`} onClick=${() => onOpen(d)}>
         <td class="pick"><input type="checkbox" title="compare" aria-label=${`Compare ${d.name}`} checked=${picked.some(p => keyOf(p) === keyOf(d))}
           onClick=${e => { e.stopPropagation(); tick(d, e.currentTarget.checked); }} onKeyDown=${e => { if (e.key === "Enter") { e.preventDefault(); e.currentTarget.click(); } }} /></td>
         <td class="mono" title=${`${d.name} · ${d.shown}${d.last ? " · " + d.last : ""}`}>${d.decision ? html`<span class="star" title="decision">★ </span>` : ""}
@@ -67,7 +67,7 @@ export function ResultsTable({ t, selected, onOpen, onCompare }) {
             <span class=${`table-design-name${(d.base || d.name).includes("#") ? " design-id" : ""}`}>${names.get(d)}</span></button>
           ${d.part && !(d.base || d.name).includes("#") ? html`<div class="muted small table-part" title=${d.part}>${d.part}</div>` : ""}</td>
         <td class="status-column"><${VerdictBadge} verdict=${d.verdict} reason=${d.why.join("; ")} /></td>
-        ${metrics.map(m => cell(d, m))}</tr>`)}</tbody></table></div>
+        ${metrics.map(m => cell(d, m))}</tr>`)}<//>
       ${all.length > shown.length ? html`<div class="more"><button class="small" onClick=${() => setPage(n => n + PAGE)}>${`Show ${Math.min(PAGE, all.length - shown.length)} more`}</button>
         <span class="muted">${` ${shown.length} of ${all.length} shown`}</span></div>` : ""}`
       : html`<${Empty} text="No design matches." />`}</div>`;

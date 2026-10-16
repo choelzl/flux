@@ -3,14 +3,14 @@
 import { Glyph, html } from "../view.js";
 import { WORK_COLORS as COLORS } from "./work_style.js";
 import { taskState as state } from "./model.js";
+import { Tag } from "../components/Tone.js";
 
 const Segment = ({ s }) => typeof s === "string" ? s
   : s.b != null ? html`<b>${s.b}</b>`
   : s.dots ? html`<span class="alt-dots">${s.dots.map(c => html`<i class=${c} />`)}</span>`
   : html`<span class=${s.cls} title=${s.title || null}>${s.text}</span>`;
 
-const Mark = ({ m }) => m === "spin" ? html`<span class="alt-task-state" role="img" aria-label="running"><${Glyph} tone="run" /></span>`
-  : html`<span class="alt-task-state" title=${m.title || null}><${Glyph} tone=${m.tone} /></span>`;
+const Mark = ({ m }) => m === "spin" ? html`<${Glyph} tone="run" label="running" />` : html`<${Glyph} tone=${m.tone} label=${m.title} />`;
 
 /** What a line's button does, as its attributes: open a task (D980), open or fold, show a pass, a box. */
 function actOf(l, a) {
@@ -28,9 +28,9 @@ function actOf(l, a) {
 function Line({ l, a, located }) {
   if (l.type === "more") return html`<button type="button" class="alt-more-tries" style=${`--depth:${l.depth}`} data-more=${l.key} onClick=${() => a.toggleTries(l.key)}>${l.text}</button>`;
   if (l.type === "skip") return html`<div class="alt-tree-row step quiet skipped" style=${`--depth:${l.depth};--k:${COLORS.check}`}>
-    <span class="alt-fold-space" /><span class="alt-task" title="not run: a check before it failed"><span class="alt-task-state muted">○</span><span class="alt-task-name muted">${l.text}</span></span></div>`;
+    <span class="alt-fold-space" /><span class="alt-task" title="not run: a check before it failed"><${Glyph} tone="none" /><span class="alt-task-name muted">${l.text}</span></span></div>`;
   if (l.type === "wait") return html`<div class="alt-tree-row box wait" style=${`--depth:${l.depth};--k:${l.k}`} aria-label=${`${l.title}: still to come`}>
-    <span class="alt-fold-space" /><span class="alt-task"><span class="alt-task-state wait">·</span><span class="alt-task-name"><b>${l.title}</b></span></span></div>`;
+    <span class="alt-fold-space" /><span class="alt-task"><${Glyph} tone="none" /><span class="alt-task-name"><b>${l.title}</b></span></span></div>`;
   const f = l.fold, here = l.act.task && located != null && String(l.act.task.id) === String(located);
   return html`<div class=${`alt-tree-row ${l.cls}`} style=${`--depth:${l.depth}` + (l.k ? `;--k:${l.k}` : "")}>
     ${f ? html`<button type="button" class="alt-fold" data-fold=${String(f.key)} aria-label=${`${f.collapsed ? "Expand" : "Collapse"} ${f.label}`} aria-expanded=${String(!f.collapsed)}
@@ -38,7 +38,7 @@ function Line({ l, a, located }) {
     <button type="button" class=${`alt-task ${l.btnCls || ""}${l.picked ? " sel" : ""}${here ? " alt-located" : ""}`} title=${l.title || null} ...${actOf(l, a)}>
       <${Mark} m=${l.mark} />
       <span class="alt-task-name">${l.name.filter(s => s !== "" && s != null).map(s => html`<${Segment} s=${s} />`)}</span>
-      ${l.pills.map(p => html`<span class=${p.cls} title=${p.title || null}>${p.text}</span>`)}
+      ${l.pills.map(p => html`<${Tag} k=${p.k} count=${p.count} title=${p.title}>${p.text}<//>`)}
       ${l.noTime ? "" : html`<span class="mono muted small">${l.time}</span>`}
     </button></div>`;
 }

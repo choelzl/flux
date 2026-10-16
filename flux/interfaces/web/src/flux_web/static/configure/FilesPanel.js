@@ -5,6 +5,7 @@
 import { html, Notice, useChanges, useEffect, useRef, useState } from "../view.js";
 import { bytes, plural } from "../format.js";
 import { DropZone } from "../components/DropZone.js";
+import { Tool } from "../components/Head.js";
 import { bound } from "../components/Autosave.js";
 
 export function FilesPanel({ store }) {
@@ -17,7 +18,7 @@ export function FilesPanel({ store }) {
     <div class="files-panel">${files.length ? html`<ul class="files flist">${files.map(f => html`<li key=${f.path}>
         <a href="javascript:void 0" onClick=${() => store.open(f)}><span class="ic">·</span>${f.path}</a>
         <small class="muted">${bytes(f.size)}${f.staged ? " · with the new loop" : ""}</small>
-        <button class="link danger-link" title=${`Delete ${f.path}`} onClick=${() => store.remove(f)}>×</button></li>`)}</ul>` : html`<p class="muted">No files.</p>`}
+        <${Tool} icon="close" danger label=${`Delete ${f.path}`} onClick=${() => store.remove(f)} /></li>`)}</ul>` : html`<p class="muted">No files.</p>`}
       ${missing.length ? html`<${Notice} key="missing" tone="bad" what="The document names these, and the loop does not have them:">
         ${" "}${missing.map((p, i) => html`${i ? ", " : ""}<a href="javascript:void 0" title="Write it here" onClick=${() => store.editor(p, "")}>${p}</a>`)}<//>` : ""}
       <div class="row"><button class="small" type="button" onClick=${() => store.editor("", "")}>New file</button><input placeholder="folder (optional)" class="narrow-in" ...${bound(into, setInto)} /></div>

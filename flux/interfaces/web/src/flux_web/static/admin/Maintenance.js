@@ -7,6 +7,7 @@ import { Act } from "../components/Act.js";
 import { bound, useAutosave } from "../components/Autosave.js";
 import { Select } from "../components/Select.js";
 import { Pill } from "../components/Tone.js";
+import { Table } from "../components/Table.js";
 
 const EVERY_UNITS = [["min", 1 / 60], ["h", 1], ["d", 24]];
 const PARAM_LABEL = { days: "older than (days)", keep: "keep (names, comma-separated)", min_free_pct: "alert below (% free)",
@@ -61,6 +62,5 @@ export function Maintenance({ r, reload }) {
       <td class="right mt-acts"><${Act} cls="small" onClick=${async () => { await runTask(t); reload(); }}>Run<//><button type="button" class="small" onClick=${() => edit(t)}>Edit</button></td></tr>`;
   };
   return html`<${Card} title="Maintenance"><p class="muted small">Clean-up on a schedule. A running loop is never touched; every run is in the audit trail.</p>
-    <div class="scroll-x"><table class="list compact mt-table"><thead><tr><th>Task</th><th>Schedule</th><th>Last run</th><th>Result</th><th /></tr></thead>
-      <tbody>${r.tasks.map(row)}</tbody></table></div><//>`;
+    <${Table} cls="list compact mt-table" heads=${["Task", "Schedule", "Last run", "Result", ""]}>${r.tasks.map(row)}<//><//>`;
 }

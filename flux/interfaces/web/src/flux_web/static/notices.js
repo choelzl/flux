@@ -4,6 +4,7 @@
 // (the top layer -- a notice under a modal dialog was never seen), the others nothing.
 
 import { Glyph, changes, html, useChanges, useLayoutEffect, useMemo } from "./view.js";
+import { Close } from "./components/Head.js";
 
 let list = [], seq = 0, out = false, layers = [];
 const said = changes(), emit = said.emit;
@@ -29,7 +30,7 @@ export function Toasts({ at = null }) {
   const here = (layers.length ? layers[layers.length - 1] : null) === at;
   return html`<div class="toasts" role="status" aria-live="polite">${here ? list.map(t => html`<div key=${t.id} class=${`toast notice t-${TONE[t.kind] || "none"}`}>
     <${Glyph} tone=${TONE[t.kind] || "none"} /><span class="notice-text">${t.href ? html`<a href=${t.href}>${t.text}</a>` : t.text}</span>
-    <button class="x" aria-label="dismiss" onClick=${() => drop(t.id)}>×</button></div>`) : ""}</div>`;
+    <${Close} label="Dismiss" cls="x" onClick=${() => drop(t.id)} /></div>`) : ""}</div>`;
 }
 /** The banner while the server is out of reach (D694). */
 export function Offline() {

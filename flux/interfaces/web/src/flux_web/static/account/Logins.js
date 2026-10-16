@@ -61,7 +61,7 @@ function AgentLogin({ a, test, login }) {
   const pill = s => VERIFIED[s] || VERIFIED.untested;
   return html`<div class="agent-conn" data-agent=${a.id}><dl class="agent-states">
       <dt>Installation</dt><dd><${Pill} tone=${a.program ? "ok" : "bad"}>${a.program ? "installed" : "missing"}<//></dd>
-      <dt>Connection</dt><dd><span class=${`pill ${c.mechanism === "none" ? "" : "ok"}`}>${MECHANISM[c.mechanism] || c.mechanism}</span><span class="muted small">${c.said}</span>
+      <dt>Connection</dt><dd><${Pill} tone=${c.mechanism === "none" ? "none" : "ok"}>${MECHANISM[c.mechanism] || c.mechanism}<//><span class="muted small">${c.said}</span>
         ${Object.keys(a.fields || {}).length ? html`<span class="muted small agent-sources">${Object.entries(a.fields).map(([f, x]) => `${FIELD_WORD[f] || f}: ${x.source}`).join(" · ")}</span>` : ""}</dd>
       <dt>Verification</dt><dd><${Pill} tone=${ver[0]} title=${v.when ? `tested ${when(v.when)}` : ""}>${ver[1]}<//>
         ${v.state === "ready" && v.when ? html`<span class="muted small">${when(v.when)}</span>` : ""}${v.state === "failed" && v.said ? html`<${Said} tone="bad" cls="small">${v.said}<//>` : ""}

@@ -513,7 +513,7 @@ def general_flows(r, watch):
                     " const v=document.querySelector('.alt-visual'), ok=v.scrollWidth<=v.clientWidth+1 && n.scrollWidth>n.clientWidth; x.remove(); return ok"))
                 r.check("Live has Tree, Graph and Timeline, and the start's Log (D1095)", b.js("return [...document.querySelectorAll('.subrow .subtabs button')].map(b=>b.textContent).join(',')==='Tree,Graph,Timeline,Log'"))
                 r.check("current pass selects the agent and exposes prompt plus conversation together", b.js("const d=document.querySelector('.alt-detail');return d.dataset.task==='4' && d.textContent.includes('Considering a faster design') && !d.querySelector('.dtabs') && document.querySelectorAll('.alt-tree [data-task]').length===2"))
-                r.check("D982: the inspector heads a task as the tree names it, its parents as chips", b.js("const d=document.querySelector('.alt-detail');return d.querySelector('.alt-ihead h2').textContent==='Agent · claude' && [...d.querySelectorAll('.alt-pchip')].map(c=>c.textContent).join(',')==='Design · current' && d.querySelector('.alt-meta').textContent.includes('agent claude')"))
+                r.check("D982: the inspector heads a task as the tree names it, its parents as chips", b.js("const d=document.querySelector('.alt-detail');return d.querySelector('.alt-ihead h2').textContent==='Agent · claude' && [...d.querySelectorAll('.alt-crumbs .tag')].map(c=>c.textContent).join(',')==='Design · current' && d.querySelector('.alt-meta').textContent.includes('agent claude')"))
                 r.check("the agent inspector also exposes recorded stdout", b.js("return document.querySelector('.alt-detail [data-k=stdout]').textContent==='RAW agent output'"))
                 r.check("the inspector links directly to the complete current log", b.js("return document.querySelector('.alt-log-link').getAttribute('href').endsWith('/live/log')"))
                 r.check("D984: an agent's turn is a chat: the prompt a folded bubble, the conversation open at its newest end", b.js("const d=document.querySelector('.alt-detail'), c=d.querySelector('.alt-chat');return !!c && !!c.querySelector('.alt-bubble.me.inspector-input:not([open])') && d.querySelector('.agent-view').getBoundingClientRect().height>0 && c.scrollHeight-c.scrollTop-c.clientHeight<30"))
@@ -523,7 +523,7 @@ def general_flows(r, watch):
                 import time as _t
                 _t.sleep(1.5)                                   # a redraw or two while it is in Fullscreen
                 r.check("D987: an agent stays in Fullscreen across Live's redraws (it was left blank)", b.js("return !!document.querySelector('dialog.fullscreen-view[open] .alt-chat') && document.querySelectorAll('.alt-detail[data-task]').length === 1"))
-                b.js("[...document.querySelectorAll('dialog.fullscreen-view button')].find(x=>x.textContent==='Close').click();return 1")
+                b.js("document.querySelector('dialog.fullscreen-view .head .close').click();return 1")
                 # D1036: the whole conversation -- the steps before the live window come from the turn's file, scrolling up
                 filed = r.data / "users" / "bob" / "apps" / name / ".flux-steps" / "t.jsonl"
                 filed.parent.mkdir(parents=True, exist_ok=True)
@@ -674,7 +674,7 @@ def general_flows(r, watch):
                 r.button("Timeline", ".subrow .subtabs")
                 b.wait("document.querySelector('.alt-timeline')", what="alternate timeline")
                 r.check("the timeline takes the full width, the inspector under it (D976)", b.js("const v=document.querySelector('.alt-visual-card').getBoundingClientRect(), i=document.querySelector('.alt-inspector-card').getBoundingClientRect();return v.width>900 && i.top>=v.bottom"))
-                r.check("Live timeline groups work and uses the existing work colours with an agent overlay", b.js("const svg=document.querySelector('.alt-timeline');return [...svg.querySelectorAll('text')].some(n=>n.textContent==='Design') && svg.querySelector('[data-task=\"10\"] .bar').getAttribute('fill')==='#3faa78' && svg.querySelector('[data-task=\"4\"] .bar').getAttribute('fill')==='#5b6ee8' && svg.querySelector('.agent-time').getAttribute('fill')==='#d45eae' && !svg.querySelector('.pass-line') && [...svg.querySelectorAll('.alt-band-label')].map(t=>t.textContent).join(',')==='0,1,2'"))
+                r.check("Live timeline groups work and uses the existing work colours with an agent overlay", b.js("const svg=document.querySelector('.alt-timeline');return [...svg.querySelectorAll('text')].some(n=>n.textContent==='Design') && svg.querySelector('[data-task=\"10\"] .bar').style.fill==='var(--work-check)' && svg.querySelector('[data-task=\"4\"] .bar').style.fill==='var(--work-design)' && svg.querySelector('.agent-time').style.fill==='var(--agent)' && !svg.querySelector('.pass-line') && [...svg.querySelectorAll('.alt-band-label')].map(t=>t.textContent).join(',')==='0,1,2'"))
                 r.check("timeline has one lane per category like Live", b.js("return document.querySelector('.alt-timeline [data-task=\"3\"] .bar').getAttribute('y')===document.querySelector('.alt-timeline [data-task=\"4\"] .bar').getAttribute('y') && !document.querySelector('.alt-bar-label') && document.querySelector('.alt-timeline').getBoundingClientRect().height<120"))
                 if os.environ.get("FLUX_E2E_SHOTS"):
                     b.shot(Path(os.environ["FLUX_E2E_SHOTS"]) / "live-alt-timeline.png")
@@ -736,9 +736,9 @@ def general_flows(r, watch):
                 b.js("""const s = window.__altStreams.at(-1), t = Date.now() / 1000;      // D1016: a design continued in its pass -- twice the same task
                   for (const [id, t0] of [[901, t], [902, t + 10]]) { s.emit('events', {ev: 'start', id, t: t0, parent: null, name: 'generation: improve wheel#7', why: 'gate', params: {}});
                     s.emit('events', {ev: 'end', id, t: t0 + 5, seconds: 5, output: {}}); } return 1""")
-                b.wait("document.querySelector('.alt-tree .alt-again')", what="the repeated design as one line")
+                b.wait("document.querySelector('.alt-tree .tag.count')", what="the repeated design as one line")
                 r.check("D1016, D1045: a box's runs in a row are one line, ×N, its tries under it", b.js(
-                    "const p = document.querySelector('.alt-tree .alt-again'); return p.textContent === '×3' && p.closest('.alt-tree-row').querySelector('.alt-task-name').textContent === 'Design improve wheel#7'"))   # D1064: a design not named after its loop keeps its name
+                    "const p = document.querySelector('.alt-tree .tag.count'); return p.textContent === '×3' && p.closest('.alt-tree-row').querySelector('.alt-task-name').textContent === 'Design improve wheel#7'"))   # D1064: a design not named after its loop keeps its name
                 choose("Live start", "21")
                 b.wait("document.querySelector('.alt-detail')?.textContent.includes('FULL retained prompt')", what="retained task inspector")
                 r.check("older start replays its own passes, prompts and output", b.js("return document.querySelector('.alt-detail').textContent.includes('Retained answer') && !document.querySelector('.live-alt').textContent.includes('FULL live prompt') && window.__altTraceRequests.at(-1).includes('start_id=21')"))
@@ -776,7 +776,7 @@ def general_flows(r, watch):
                 b.click('.alt-tree [data-task="52"]')
                 r.check("nonzero-exit tool exposes failure badge and output", b.js("return document.querySelector('.alt-detail').dataset.task==='52' && document.querySelector('.alt-detail .pill.t-bad').textContent==='failed' && document.querySelector('.alt-detail [data-k=stderr]').textContent==='compiler failed' && !!document.querySelector('.alt-detail [data-k=stderr]').closest('.err')"))
                 b.click('.alt-tree [data-task="53"]')
-                r.check("interrupted tree rows use the interruption glyph and accessible state", b.js("const n=document.querySelector('.alt-tree [data-task=\"53\"]');return n.classList.contains('interrupted') && !!n.querySelector('.alt-task-state .g-warn') && n.getAttribute('aria-label').includes('interrupted')"))
+                r.check("interrupted tree rows use the interruption glyph and accessible state", b.js("const n=document.querySelector('.alt-tree [data-task=\"53\"]');return n.classList.contains('interrupted') && !!n.querySelector('.g.g-warn') && n.getAttribute('aria-label').includes('interrupted')"))
                 b.js("window.__altLast=document.querySelector('.alt-detail').dataset.task;return 1")
                 b.js("document.querySelector('.alt-visual').dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowDown',bubbles:true}));return 1")
                 r.check("navigation ends at the last task", b.js("return document.querySelector('.alt-detail').dataset.task===window.__altLast"))
@@ -1196,7 +1196,7 @@ objectives: [{metric: timings.fast, goal: 15, direction: minimize},
                 r.page(f"#/app/{name}/ask", "document.querySelector('.drawer.open .ask-reply')", "chat drawer")
                 b.wait("getComputedStyle(document.querySelector('.drawer')).transform === 'none'", what="open drawer transition")
                 b.js("window.__askDown = true; return 1")              # D1009: the server restarting
-                b.click(".drawer-head button"); b.click(".ask-fab")
+                b.click(".drawer .head .close"); b.click(".ask-fab")
                 b.wait("document.querySelector('.ask-offline')", what="Talk says it reconnects")
                 r.check("D1009: with the server away, Talk keeps its conversations and says it reconnects", b.js("return document.querySelectorAll('.ask-card').length === 2"))
                 b.js("window.__askDown = false; return 1")
@@ -1204,7 +1204,7 @@ objectives: [{metric: timings.fast, goal: 15, direction: minimize},
                 r.check("Ask keeps conversations separate and renders answer text safely", b.js("return document.querySelectorAll('.ask-card').length === 2 && !document.querySelector('.ask-agent img')"))
                 r.check("an older conversation starts folded, Reply at its top; the newest stays open (D990)", b.js(
                     'const o = document.querySelector(`[data-ask-toggle="${arguments[0]}"]`).closest(".ask-card"), n = document.querySelector(`[data-ask-toggle="${arguments[1]}"]`).closest(".ask-card");'
-                    ' return o.classList.contains("collapsed") && !!o.querySelector(".ask-thread-head .ask-reply-top")?.getClientRects().length && !n.classList.contains("collapsed")', other, root))
+                    ' return o.classList.contains("collapsed") && !!o.querySelector(".head .ask-reply-top")?.getClientRects().length && !n.classList.contains("collapsed")', other, root))
                 b.click(f'.ask-thinking[data-ask-thinking="{root}"]')       # D993
                 b.wait("document.querySelector('dialog .ask-agent-view .cv-text')", what="the agent's thinking and commands")
                 r.check("an answer's agent turn reads as Live reads an agent (D993)", b.js(
@@ -1213,7 +1213,7 @@ objectives: [{metric: timings.fast, goal: 15, direction: minimize},
                 b.click(f'.ask-reply[data-reply-to="{root}"]')
                 b.wait("document.querySelector('.ask-compose-head').textContent.includes('Reply to:')", what="reply context")
                 b.js("const q = document.querySelector('#ask-q'); q.value = 'Explain the numbers'; q.dispatchEvent(new Event('input')); return 1")
-                b.click(".drawer-head button")
+                b.click(".drawer .head .close")
                 b.click(".ask-fab")
                 b.wait("document.querySelector('.drawer.open #ask-q') && getComputedStyle(document.querySelector('.drawer')).transform === 'none'", what="reopened chat")
                 r.check("closing Ask preserves the follow-up and its draft", b.js("return document.querySelector('#ask-q').value === 'Explain the numbers' && document.querySelector('.ask-compose-head').textContent.includes('Reply to:')"))
@@ -1225,7 +1225,7 @@ objectives: [{metric: timings.fast, goal: 15, direction: minimize},
                 r.check("Reply sends its parent and keeps turns together in order", b.js("const posted = window.__askPosted[0], turns = [...document.querySelector('.selected-thread').querySelectorAll('.ask-user p')]; return posted.parent_id === arguments[0] && posted.question === 'Explain the numbers' && turns[0].textContent === 'Why is this design best?' && turns[1].textContent === posted.question && !document.querySelector('#ask-q').value", root))
                 b.click(f'[data-ask-toggle="{root}"]')
                 r.check("collapsing a conversation shows only its initial prompt", b.js("const c = document.querySelector('.selected-thread'), visible = [...c.querySelectorAll('.ask-message')].filter(el => el.getClientRects().length); return visible.length === 1 && visible[0].querySelector('p').textContent === 'Why is this design best?' && c.querySelector('.ask-collapse').getAttribute('aria-expanded') === 'false' && !c.querySelector('.ask-turn .ask-reply').getClientRects().length && !!c.querySelector('.ask-reply-top').getClientRects().length"))
-                b.click(".drawer-head button"); b.click(".ask-fab")
+                b.click(".drawer .head .close"); b.click(".ask-fab")
                 b.wait("document.querySelector('.drawer.open .selected-thread.collapsed') && getComputedStyle(document.querySelector('.drawer')).transform === 'none'", what="reopened collapsed chat")
                 r.check("closing Ask preserves the collapsed conversation and its reply context", b.js("return document.querySelector('.selected-thread .ask-collapse').textContent === 'Expand' && document.querySelector('.ask-compose-head').textContent.includes('Reply to:')"))
                 b.js('document.querySelector(`[data-ask-toggle="${arguments[0]}"]`).focus(); return 1', root)
@@ -1247,7 +1247,7 @@ objectives: [{metric: timings.fast, goal: 15, direction: minimize},
                 r.check("notes are distinct from agent conversations", b.js("return window.__askNotes.length === 1 && window.__askPosted.length === 2"))
                 b.js("document.querySelector('details[data-ask-output]').open = true; const h = document.querySelector('.ask-history'), log = document.querySelector('[data-ask-log]'); h.scrollTop = 170; log.scrollTop = 55; document.querySelector('#ask-q').focus(); window.__askBeforePoll = window.__askPolls; window.__askData[0].running = true; window.__askData[0].ended = null; return 1")
                 # Closing/reopening starts the poll while keeping the same history scroll container.
-                b.click(".drawer-head button"); b.click(".ask-fab")
+                b.click(".drawer .head .close"); b.click(".ask-fab")
                 b.wait("document.querySelector('.ask-send')?.disabled && getComputedStyle(document.querySelector('.drawer')).transform === 'none'", what="busy conversation")
                 b.js("const h = document.querySelector('.ask-history'), log = document.querySelector('[data-ask-log]'); h.scrollTop = 170; log.scrollTop = 55; document.querySelector('#ask-q').focus(); window.__askBeforePoll = window.__askPolls; window.__askData[0].log.push('new activity'); return 1")
                 b.wait("window.__askPolls > window.__askBeforePoll && document.querySelector('[data-ask-log]')?.textContent.includes('new activity')", what="chat activity refresh")
@@ -1260,7 +1260,7 @@ objectives: [{metric: timings.fast, goal: 15, direction: minimize},
                 b.shot(r.shots / "ask-chat-mobile.png", full=True)
                 b.cmd("WebDriver:SetWindowRect", {"width": 1200, "height": 900})
                 b.js("window.__askData[0].running = false; window.__askData[0].ended = 210; document.querySelector('.steer-card').open = false; const q = document.querySelector('#ask-q'); q.value = ''; q.dispatchEvent(new Event('input')); return 1")
-                b.click(".drawer-head button"); b.click(".ask-fab")
+                b.click(".drawer .head .close"); b.click(".ask-fab")
                 b.wait("document.querySelector('.ask-reply') && getComputedStyle(document.querySelector('.drawer')).transform === 'none'", what="finished conversation")
                 b.click(f'.ask-reply[data-reply-to="{root}"]')
                 b.wait("document.querySelector('.ask-compose-head').textContent.includes('Reply to:')", what="selected conversation")
@@ -1473,8 +1473,8 @@ objectives: [{metric: timings.fast, goal: 15, direction: minimize},
                 b.wait("document.querySelector('.user-groups #group-name')", what="groups subtab")
                 r.check("groups subtab contains no user table", b.js("return !document.querySelector('table.users') && document.querySelector('#users-subtabs [aria-selected=true]').textContent === 'Groups'"))
                 r.check("groups use aligned columns and a labelled creation section", b.js("""return JSON.stringify([...document.querySelectorAll('table.groups thead th')].map(t => t.textContent)) === JSON.stringify(['Group', 'Members', 'Server access', 'Actions'])
-                  && document.querySelectorAll('table.groups .pill').length === 1
-                  && document.querySelector('table.groups .pill').textContent === 'Server admin'
+                  && document.querySelectorAll('table.groups .tag').length === 1
+                  && document.querySelector('table.groups .tag').textContent === 'Server admin'
                   && document.querySelector('.group-create label[for=group-name]')
                   && document.querySelector('.group-create label[for=group-server-access]');"""))
                 b.type("#group-name", "E2E Team")

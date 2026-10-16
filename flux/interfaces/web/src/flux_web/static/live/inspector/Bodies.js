@@ -7,7 +7,8 @@ import { WORK_COLORS as COLORS, phaseKind } from "../work_style.js";
 import { Block, Fold, Pre, StepRow, Stream } from "./bits.js";
 import { bestOf, candidateOf, cell, colorOf, dictsOf, failingOf, fieldsOf, fmt, isTool, linesOf, meanOf, measured, metricsOf, notReached,
   running, stdoutOf, taskLabel, tidyCommand, usualOf } from "./parts.js";
-import { Fact, Facts } from "../../components/Tone.js";
+import { Fact, Facts, Pill, Tag } from "../../components/Tone.js";
+import { Table } from "../../components/Table.js";
 
 const lineCount = t => `${linesOf(t).length} line${linesOf(t).length === 1 ? "" : "s"}`;
 
@@ -30,13 +31,12 @@ function Metrics({ n, env, out, metrics }) {
     const c = (m - bm) / Math.abs(bm);
     return [Math.abs(c) < 0.0005 ? "=" : `${c > 0 ? "+" : "−"}${Math.abs(c * 100).toFixed(1)}%`, dir * c > 0 ? "up" : dir * c < 0 ? "down" : ""];
   };
-  return html`<div class="alt-table-wrap"><table class="list compact alt-metrics">
-    <thead><tr><th>metric</th><th class="num keep-case" title=${me}>${me ? env.N.shortAll(me) : "this design"}</th>
-      ${compares ? html`<th class="num">best so far</th><th class="num">change</th>` : ""}</tr></thead>
-    <tbody>${rows.map(([k, v, m]) => { const b = best[k], [said, better] = change(k, m);
+  return html`<${Table} cls="list compact alt-metrics" thead=${html`<tr><th>metric</th><th class="num keep-case" title=${me}>${me ? env.N.shortAll(me) : "this design"}</th>
+      ${compares ? html`<th class="num">best so far</th><th class="num">change</th>` : ""}</tr>`}>
+    ${rows.map(([k, v, m]) => { const b = best[k], [said, better] = change(k, m);
       return html`<tr><td>${k}${goals[k] ? ` ${goals[k] > 0 ? "↑" : "↓"}` : ""}</td><td class="num mono">${cell(v)}</td>
         ${compares ? html`<td class="num mono" title=${b?.who || ""}>${b ? [cell(b.v), html`<span class="muted small">${` ${env.N.shortAll(b.who || "")}`}</span>`] : "—"}</td>
-          <td class=${`alt-change ${better}`}>${said}</td>` : ""}</tr>`; })}</tbody></table></div>`;
+          <td class=${`alt-change ${better}`}>${said}</td>` : ""}</tr>`; })}<//>`;
 }
 
 /** A command: what it gave first -- its running time and latest lines, a check's failing count and first
@@ -111,12 +111,11 @@ export function ChooseBody({ n, a, env }) {
         <span class="muted">${`picked, then rejected by the critic${rejected.get(chosen) ? `: ${rejected.get(chosen)}` : ""}`}</span></div>`
       : chosen || said.decision ? html`<div class="alt-result ok" style=${`--k:${colorOf(n)}`}><span class="alt-big" title=${chosen || said.decision}>${`★ ${id(chosen || said.decision)}`}</span>
         ${by ? html`<span class="muted">${by}</span>` : ""}</div>` : ""}
-    ${rows.length ? html`<div class="alt-table-wrap"><table class="list compact alt-metrics">
-      <thead><tr><th>design</th>${cols.map(k => { const g = goals.find(x => x.metric === k), d = g === g0 ? dir : g?.direction; return html`<th class="num">${k}${d ? ` ${/max/i.test(d) ? "↑" : "↓"}` : ""}</th>`; })}</tr></thead>
-      <tbody>${rows.map(([c, m, earlier]) => html`<tr class=${rejected.has(c) ? "alt-rejected" : c === chosen ? "alt-chosen" : ""} title=${rejected.has(c) ? `rejected by the critic: ${rejected.get(c)}` : ""}>
-        <td title=${c}>${rejected.has(c) ? [`✗ ${id(c)}`, html`<span class="alt-critic-tag">critic</span>`] : c === chosen ? `★ ${id(c)}` : id(c)}
+    ${rows.length ? html`<${Table} cls="list compact alt-metrics" thead=${html`<tr><th>design</th>${cols.map(k => { const g = goals.find(x => x.metric === k), d = g === g0 ? dir : g?.direction; return html`<th class="num">${k}${d ? ` ${/max/i.test(d) ? "↑" : "↓"}` : ""}</th>`; })}</tr>`}>
+      ${rows.map(([c, m, earlier]) => html`<tr class=${rejected.has(c) ? "alt-rejected" : c === chosen ? "alt-chosen" : ""} title=${rejected.has(c) ? `rejected by the critic: ${rejected.get(c)}` : ""}>
+        <td title=${c}>${rejected.has(c) ? [`✗ ${id(c)}`, html`<${Tag} k=${COLORS.critic}>critic<//>`] : c === chosen ? `★ ${id(c)}` : id(c)}
           ${earlier ? html`<span class="muted small"> · an earlier pass</span>` : ""}</td>
-        ${cols.map(k => html`<td class="num mono">${cell(m[k])}</td>`)}</tr>`)}</tbody></table></div>` : ""}
+        ${cols.map(k => html`<td class="num mono">${cell(m[k])}</td>`)}</tr>`)}<//>` : ""}
     ${n.kids.length ? html`<div class="alt-steps">${n.kids.map(x => html`<${StepRow} key=${x.id} x=${x} a=${a} N=${env.N} />`)}</div>` : ""}</div>`;
 }
 
@@ -126,8 +125,8 @@ export function CriticBody({ n }) {
   const agreed = /no objection|stands|agree|^ok/i.test(verdict);
   const m = /^([^:{]+):\s*(\{.*\})\s*$/s.exec(subject), numbers = m ? metricsOf(m[2].replace(/['"{},]/g, " ").replace(/\s*:\s*/g, "=")) : {};
   return html`<div class="task-inspector">
-    ${verdict ? html`<div class="alt-verdict"><span class=${`alt-badge ${agreed ? "ok" : "objection"}`}>${agreed ? "No objection" : /^rejected/i.test(verdict) ? "Rejected" : "Objection"}</span>${agreed ? "" : html`<span>${verdict}</span>`}</div>` : ""}
-    ${subject ? html`<div><div class="alt-label">Subject</div>${m ? html`<div class="alt-verdict"><span class="alt-pchip" style=${`--k:${COLORS.choose}`}>${m[1].trim()}</span>
+    ${verdict ? html`<div class="alt-verdict"><${Pill} tone=${agreed ? "ok" : /^rejected/i.test(verdict) ? "bad" : "warn"}>${agreed ? "No objection" : /^rejected/i.test(verdict) ? "Rejected" : "Objection"}<//>${agreed ? "" : html`<span>${verdict}</span>`}</div>` : ""}
+    ${subject ? html`<div><div class="alt-label">Subject</div>${m ? html`<div class="alt-verdict"><${Tag} k=${COLORS.choose}>${m[1].trim()}<//>
       <span class="mono muted small">${Object.entries(numbers).map(([k, v]) => `${k} ${fmt(v)}`).join(" · ")}</span></div>` : html`<div class="mono">${subject}</div>`}</div>` : ""}</div>`;
 }
 

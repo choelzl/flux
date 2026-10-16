@@ -4,7 +4,7 @@
 // (aria-live) says "saved" or the error to a screen reader; its `data-state` (saving, saved, error) is what a test
 // waits for.
 
-import { html, useEffect, useLayoutEffect, useRef, useState } from "../view.js";
+import { Glyph, html, useEffect, useLayoutEffect, useRef, useState } from "../view.js";
 
 /** D939: the check over the field: at a text field's right end, in a text area's corner, beside a box, a number or a
     menu, on the top right corner of a field too narrow to hold it beside its text; fixed over the page, it moves
@@ -26,7 +26,7 @@ function SavedCheck({ field }) {
 }
 
 const SaveMark = ({ s }) => html`<span class=${`save-mark small${{ saving: " saving", saved: " ok", error: " bad" }[s.state] || ""}`} role="status" aria-live="polite" data-state=${s.state || null}>
-  ${s.state === "saving" ? html`<span class="spin" aria-hidden="true" />` : s.state === "saved" && s.shown ? html`<span class="sr-only">saved</span>` : s.state === "error" ? s.error : ""}
+  ${s.state === "saving" ? html`<${Glyph} tone="run" />` : s.state === "saved" && s.shown ? html`<span class="sr-only">saved</span>` : s.state === "error" ? s.error : ""}
   ${s.state === "saved" && s.shown && s.at?.isConnected && s.at.getBoundingClientRect().width ? html`<${SavedCheck} field=${s.at} />` : ""}</span>`;
 
 const FIELD = "input, select, textarea";

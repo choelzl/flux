@@ -13,6 +13,8 @@ import { SortableTable } from "../components/SortableTable.js";
 import { Loaded, useLoad } from "../components/Load.js";
 import { Select } from "../components/Select.js";
 import { recall, remember } from "../stored.js";
+import { Tag } from "../components/Tone.js";
+import { Table } from "../components/Table.js";
 
 const PERIODS = [[1, "24 hours"], [7, "7 days"], [30, "30 days"]];
 const TITLE = { failures: "Failures", usage: "Usage", endpoints: "Endpoints and agents" };
@@ -35,12 +37,12 @@ function Spark({ xs, label }) {
     style=${`height:${x > 0 ? Math.max(2, Math.round(16 * x / max)) : 1}px;width:6px;margin-right:2px`} />`)}</span>`;
 }
 function Failures({ f }) {
-  return html`${f.starts.length ? html`<table class="list compact"><thead><tr><th>When</th><th>Loop</th><th>Why</th></tr></thead>
-      <tbody>${f.starts.slice(0, 20).map(s => html`<tr key=${`${s.when}|${s.user}|${s.app}`}><td class="muted"><${When} t=${s.when} /></td><td><${LoopLink} u=${s.user} a=${s.app} /></td>
-        <td class="mono small why-cell">${(s.why || []).slice(-2).join(" · ") || `exit ${s.rc}`}</td></tr>`)}</tbody></table>`
+  return html`${f.starts.length ? html`<${Table} heads=${["When", "Loop", "Why"]}>
+      ${f.starts.slice(0, 20).map(s => html`<tr key=${`${s.when}|${s.user}|${s.app}`}><td class="muted"><${When} t=${s.when} /></td><td><${LoopLink} u=${s.user} a=${s.app} /></td>
+        <td class="mono small why-cell">${(s.why || []).slice(-2).join(" · ") || `exit ${s.rc}`}</td></tr>`)}<//>`
     : html`<p class="muted">No start failed.</p>`}
-    ${f.tests.length ? html`<h3>Agent Tests whose latest run failed</h3><table class="list compact"><thead><tr><th>User</th><th>Agent</th><th>Step</th><th>Why</th><th>When</th></tr></thead>
-      <tbody>${f.tests.map(t => html`<tr key=${`${t.user}|${t.agent}|${t.step}|${t.when}`}><td>${t.user}</td><td>${t.agent}</td><td>${t.step}</td><td class="small">${t.why}</td><td class="muted"><${When} t=${t.when} /></td></tr>`)}</tbody></table>` : ""}`;
+    ${f.tests.length ? html`<h3>Agent Tests whose latest run failed</h3><${Table} heads=${["User", "Agent", "Step", "Why", "When"]}>
+      ${f.tests.map(t => html`<tr key=${`${t.user}|${t.agent}|${t.step}|${t.when}`}><td>${t.user}</td><td>${t.agent}</td><td>${t.step}</td><td class="small">${t.why}</td><td class="muted"><${When} t=${t.when} /></td></tr>`)}<//>` : ""}`;
 }
 
 /** D841: turns recorded before a price was set, priced once at today's prices. */
@@ -58,7 +60,7 @@ function Usage({ u }) {
   const table = (by, head) => {
     const rows = Object.entries(by).sort((a, b) => sum(b[1].tokens) - sum(a[1].tokens)), values = rows.map(([, v]) => v);
     const tokens = u.days.map((_, i) => sum(values.map(v => v.tokens[i] || 0)));
-    return html`<${SortableTable} memo=${`flux-sort-usage-${head}`} first=${2} scroll rows=${rows} keyOf=${([k]) => k}
+    return html`<${SortableTable} memo=${`flux-sort-usage-${head}`} first=${2} rows=${rows} keyOf=${([k]) => k}
       cols=${[{ label: head, key: ([k]) => k, asc: true }, { label: "Turns", key: ([, v]) => sum(v.turns), num: true }, { label: "Tokens", key: ([, v]) => sum(v.tokens), num: true },
         { label: "Cost", key: ([, v]) => sum(v.cost), num: true }, { label: `Tokens ${per} (${u.days[0]} – ${u.days.at(-1)}, UTC)` }]}
       row=${([k, v]) => html`<tr><td class="strong">${k}</td><td class="num">${String(sum(v.turns))}</td><td class="num mono">${fmtTok(sum(v.tokens))}</td>
@@ -67,7 +69,7 @@ function Usage({ u }) {
         <${Total} label="Cost" value=${`$${sum(values.map(v => sum(v.cost))).toFixed(2)}`} /><td data-label=${`Tokens ${per}`}><${Spark} xs=${tokens} label=${`Total: tokens ${per}`} /></td><//>`} />`;
   };
   return html`${Object.keys(u.users).length ? html`<h3>By user</h3>${table(u.users, "User")}<h3>By agent or model</h3>${table(u.agents, "Agent or model")}
-      ${u.top.length ? html`<h3>Highest usage loops</h3><${SortableTable} memo="flux-sort-usage-loops" first=${2} scroll rows=${u.top} keyOf=${t => `${t.user}/${t.app}`}
+      ${u.top.length ? html`<h3>Highest usage loops</h3><${SortableTable} memo="flux-sort-usage-loops" first=${2} rows=${u.top} keyOf=${t => `${t.user}/${t.app}`}
         cols=${[{ label: "Loop", key: t => `${t.user}/${t.app}`, asc: true }, { label: "Turns", key: t => t.turns, num: true }, { label: "Tokens", key: t => t.tokens, num: true },
           { label: "Cost", key: t => t.cost, num: true }, { label: "Time", key: t => t.seconds, num: true }]}
         row=${t => html`<tr><td><${LoopLink} u=${t.user} a=${t.app} /></td><td class="num">${String(t.turns)}</td><td class="num mono">${fmtTok(t.tokens)}</td>
@@ -86,7 +88,7 @@ const Endpoints = ({ eps }) => eps.length ? html`<${SortableTable} memo="flux-in
   cols=${[{ label: "Which", key: e => `${e.kind} ${e.where}`, asc: true }, { label: "Turns", key: e => e.turns, num: true },
     { label: "Failed", key: e => e.rate * 1e6 + e.turns, num: true }, { label: "Median", key: e => e.p50, num: true }, { label: "Slow (95%)", key: e => e.p95, num: true },
     { label: "Last used", key: e => e.last }, { label: "Last failure", key: e => e.last_error_at || 0 }, { label: "" }]}
-  row=${e => html`<tr><td><span class="pill">${e.kind}</span> <span class="mono small">${e.where}</span></td><td class="num">${String(e.turns)}</td>
+  row=${e => html`<tr><td><${Tag}>${e.kind}<//> <span class="mono small">${e.where}</span></td><td class="num">${String(e.turns)}</td>
     <td class=${cx("num", e.rate > 0.2 && "bad")}>${`${e.failed} (${Math.round(100 * e.rate)}%)`}</td><td class="num">${dur(e.p50)}</td><td class="num">${dur(e.p95)}</td>
     <td class="muted"><${When} t=${e.last} /></td><td class="small why-cell" title=${e.last_error || ""}>${e.last_error ? html`<${When} t=${e.last_error_at} />${`: ${e.last_error.slice(0, 140)}`}` : "—"}</td>
     <td class="right"><${Forget} kind="endpoint" k=${e.key} what=${e.where} /></td></tr>`} />` : html`<p class="muted">No turn in this time.</p>`;
@@ -103,7 +105,7 @@ function Disk() {
   return html`<${Card} title="Current disk usage" actions=${html`<span class="muted small">${at ? html`<span>measured <${Ago} t=${at} /></span>` : ""}</span>`}>
     <${Loaded} read=${read} wait=${html`<${Skeleton} lines=${4} />`} failed="The disk could not be measured">${d => {
       const max = Math.max(...d.disk.map(x => x.total), 1);
-      return html`<${SortableTable} memo="flux-sort-user-disk" first=${4} scroll rows=${d.disk} keyOf=${x => x.user}
+      return html`<${SortableTable} memo="flux-sort-user-disk" first=${4} rows=${d.disk} keyOf=${x => x.user}
         cols=${[{ label: "User", key: x => x.user, asc: true }, { label: "Home", key: x => x.home, num: true }, { label: "Loops", key: x => x.loops, num: true },
           { label: "Largest loop", key: x => x.largest ? x.largest.size : null }, { label: "Total", key: x => x.total, num: true }, { label: "" }]}
         row=${x => html`<tr><td class="strong">${x.user}</td><td class="num mono">${bytes(x.home)}</td><td class="num mono">${`${bytes(x.loops)} (${x.count})`}</td>

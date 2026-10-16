@@ -4,7 +4,8 @@
 import { Ago, cx, html, useChanges, useEffect, useState } from "../view.js";
 import { api, toast } from "../ui.js";
 import { me, setMe } from "../state.js";
-import { Bell as BellIcon } from "../components/Icons.js";
+import { ICONS } from "../components/Icons.js";
+import { Tag } from "../components/Tone.js";
 import { bellChanges, bellState, clearBell, seenAll } from "./bell.js";
 import { recall, remember } from "../stored.js";
 
@@ -22,7 +23,7 @@ function Bell() {
   useEffect(() => { const close = () => setOpen(false); document.addEventListener("click", close); return () => document.removeEventListener("click", close); }, []);
   const b = bellState(), canAsk = perm === "default";
   return html`<div class="bell-wrap"><button class="bell" title="Notifications" aria-label="Notifications" onClick=${e => { e.stopPropagation(); setOpen(!open); seenAll(); }}>
-      <${BellIcon} />${b.unread ? html`<span class="badge">${String(b.unread)}</span>` : ""}</button>
+      ${ICONS.bell()}${b.unread ? html`<${Tag} count k="var(--bad)" cls="unread">${String(b.unread)}<//>` : ""}</button>
     <div class="bell-menu" hidden=${!open} onClick=${e => e.stopPropagation()}><div class="bell-head"><strong>Notifications</strong>
         ${canAsk ? html`<button class="link" onClick=${async () => setPerm(await Notification.requestPermission())}>Allow desktop notifications</button>` : ""}
         ${b.list.length ? html`<button class="link" onClick=${clearBell}>Clear</button>` : ""}</div>
@@ -34,8 +35,9 @@ function Bell() {
 const THEMES = { system: "◐ System", light: "☀ Light", dark: "☾ Dark" };
 export const theme = () => recall("flux-theme", "system");
 export function applyTheme(t) {
-  if (t === "system") delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = t;
   remember("flux-theme", t);
+  // D1107: always named -- the chosen one, or the system's (index.html follows the system's as it changes)
+  document.documentElement.dataset.theme = t !== "system" ? t : matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 }
 
 /** D856: on a phone the theme, the name and Log out fold into one menu; the bell stays in the bar. */

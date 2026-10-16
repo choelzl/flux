@@ -3,9 +3,7 @@
 import { Empty, html } from "../view.js";
 import { plural } from "../format.js";
 import { RefreshCard } from "../components/RefreshCard.js";
-
-const Table = ({ heads, cls, children }) => html`<div class="scroll-x"><table class=${cls}>
-  <thead><tr>${heads.map(s => html`<th>${s}</th>`)}</tr></thead><tbody>${children}</tbody></table></div>`;
+import { Table } from "../components/Table.js";
 
 /** D1042: an evaluation's numbers as chips that wrap (the first six, the rest on demand) -- a long reading
     neither widens the table nor leaves a tall gap between rows. */

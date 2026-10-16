@@ -38,14 +38,14 @@ function Chain({ v, a, passes, shown }) {
 function Box({ b, i, y, BH, note, shown, v, a, task, isOpen, listed }) {
   const c = COLORS[b.kind] || COLORS.setup, kids = [];
   if (note) kids.push(html`<title>${`${b.title}: ${note}`}</title>`);
-  if (b.state === "run") kids.push(html`<rect x=${X - 5} y=${y - 5} width=${BW + 10} height=${BH + 10} rx="10" fill=${c} class="alt-glow" />`);
+  if (b.state === "run") kids.push(html`<rect x=${X - 5} y=${y - 5} width=${BW + 10} height=${BH + 10} rx="10" style=${`fill:${c}`} class="alt-glow" />`);
   kids.push(html`<rect x=${X} y=${y} width=${BW} height=${BH} rx="7" class=${`alt-box ${b.state}`} style=${`--k:${c}`} />`,
-    html`<rect x=${X} y=${y} width="5" height=${BH} rx="2" fill=${c} />`,
+    html`<rect x=${X} y=${y} width="5" height=${BH} rx="2" style=${`fill:${c}`} />`,
     html`<text x=${X + 14} y=${y + (note || b.steps ? 15 : BH / 2 + 4)} class="alt-box-title">${b.title}</text>`);
   let right = X + BW - 10;
   if (b.who) { kids.push(html`<rect x=${right - 22} y=${y + 6} width="22" height="14" rx="7" class="alt-ai-box-pill" />`, html`<text x=${right - 11} y=${y + 16} class="alt-ai-box-text">${b.who}</text>`); right -= 28; }
   // D1034: a critic judged this box's work -- no box of its own
-  if (b.critic) { kids.push(html`<rect x=${right - 38} y=${y + 6} width="38" height="14" rx="7" fill=${COLORS.critic} class="alt-critic-pill" />`, html`<text x=${right - 19} y=${y + 16} class="alt-pill-text">critic</text>`); right -= 44; }
+  if (b.critic) { kids.push(html`<rect x=${right - 38} y=${y + 6} width="38" height="14" rx="7" style=${`fill:${COLORS.critic}`} class="alt-critic-pill" />`, html`<text x=${right - 19} y=${y + 16} class="alt-pill-text">critic</text>`); right -= 44; }
   if (b.count > 1) { kids.push(html`<rect x=${right - 22} y=${y + 6} width="22" height="14" rx="7" class="alt-count-pill" />`, html`<text x=${right - 11} y=${y + 16} class="alt-count-text">${`×${b.count}`}</text>`); right -= 28; }
   // D1089: a check at work says how far it is -- "2 of 5 checks"
   const ofChecks = b.kind === "check" && b.state === "run" && b.steps ? /^(\d+) check/.exec(note) : null;

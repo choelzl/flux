@@ -14,8 +14,9 @@ import { DesignDetail } from "./Detail.js";
 import { Graphs } from "./Graphs.js";
 import { compare } from "./Compare.js";
 import { useLoop } from "../loop/context.js";
-import { Pill } from "../components/Tone.js";
-import { Tool, Tools } from "../components/Head.js";
+import { Pill, Tag } from "../components/Tone.js";
+import { Tool } from "../components/Head.js";
+import { Table } from "../components/Table.js";
 
 const fmt = v => v == null ? "" : v !== 0 && Math.abs(v) < 0.01 ? Number(v).toExponential(2)
   : Math.abs(v) >= 1000 || Number.isInteger(v) ? String(Math.round(v * 100) / 100) : String(Number(Number(v).toPrecision(4)));
@@ -28,12 +29,11 @@ export function Checked({ r }) {
   const rows = r.checked || [];
   if (!rows.length) return null;
   const chosen = String((r.passes || []).map(p => p.conclusion?.decision).filter(Boolean).at(-1) || "");
-  return html`<${Card} title=${`Checked, not measured (${rows.length})`} cls="checked-card"><div class="scroll-x"><table class="list compact checked-designs">
-    <thead><tr><th>Design</th><th>Checks</th><th>Why</th><th>When</th></tr></thead>
-    <tbody>${rows.map(u => html`<tr key=${u.name} class=${u.verdict === "failed" ? "failed" : ""}>
+  return html`<${Card} title=${`Checked, not measured (${rows.length})`} cls="checked-card"><${Table} cls="list compact checked-designs" heads=${["Design", "Checks", "Why", "When"]}>
+    ${rows.map(u => html`<tr key=${u.name} class=${u.verdict === "failed" ? "failed" : ""}>
       <td class="mono" title=${u.name}>${u.name === chosen ? "★ " : ""}${own(ctx, u.name)}</td>
       <td><${Pill} tone=${u.verdict === "failed" ? "bad" : u.verdict === "rejected" ? "warn" : "ok"}>${u.verdict === "failed" ? "failed" : u.verdict === "rejected" ? "rejected" : "passed"}<//>${u.name === chosen ? " · chosen" : ""}</td>
-      <td class="small">${(u.why || "").split("\n")[0] || "—"}</td><td class="muted small">${u.when ? html`<${Ago} t=${Date.parse(u.when) / 1000} />` : ""}</td></tr>`)}</tbody></table></div><//>`;
+      <td class="small">${(u.why || "").split("\n")[0] || "—"}</td><td class="muted small">${u.when ? html`<${Ago} t=${Date.parse(u.when) / 1000} />` : ""}</td></tr>`)}<//><//>`;
 }
 
 /** D1001, D1007: designs taken out of the evidence by hand, with why -- re-evaluated or restored, at rest. */
@@ -44,11 +44,11 @@ function Invalidated({ r, reload }) {
   const { name } = ctx, canChange = ctx.mine && !ctx.st?.running;
   const post = async (path, id) => (await loopApi(name).api(`/results/${path}`, { method: "POST", body: { id } })).ok;
   return html`<details class="invalidated-list"><summary>${`Invalidated by hand (${list.filter(x => !x.restored).length})`}</summary>
-    <table class="list compact"><tbody>${list.map(x => html`<tr class=${x.restored ? "muted" : ""}><td class="mono">${x.names.join(", ")}</td><td>${x.reason}</td>
+    <${Table}>${list.map(x => html`<tr class=${x.restored ? "muted" : ""}><td class="mono">${x.names.join(", ")}</td><td>${x.reason}</td>
       <td class="muted small">${`${x.by} · `}<${Ago} t=${Date.parse(x.at) / 1000} />${x.reevaluated ? html` · re-evaluated <${Ago} t=${Date.parse(x.reevaluated) / 1000} />` : ""}</td>
-      <td class="right">${x.restored ? html`<span class="pill">restored</span>` : canChange ? html`<div class="actions end">
+      <td class="right">${x.restored ? html`<${Tag}>restored<//>` : canChange ? html`<div class="actions end">
         <${Act} cls="small" title="Check and measure these designs again now (one run); the invalidated numbers stay history" onClick=${async () => { toast(await post("reevaluate", x.id), "ok"); ctx.goTab("Live"); }}>Re-evaluate<//>
-        <${Act} cls="small" title="Count the invalidated numbers again" onClick=${async () => { toast(await post("restore", x.id), "ok"); reload(); }}>Restore<//></div>` : ""}</td></tr>`)}</tbody></table></details>`;
+        <${Act} cls="small" title="Count the invalidated numbers again" onClick=${async () => { toast(await post("restore", x.id), "ok"); reload(); }}>Restore<//></div>` : ""}</td></tr>`)}<//></details>`;
 }
 
 /** The decision, in a line, above both views (D900: none, when no design meets every requirement). */
@@ -56,7 +56,7 @@ function DecisionLine({ r, names, comparison, onPick }) {
   const ctx = useLoop();
   const dec = r.designs.find(d => d.decision), near = r.designs.find(d => d.closest);
   const nameBtn = d => html`<button class="link mono strong" type="button" title=${d.name} aria-label=${`Open ${d.name}`} onClick=${() => onPick(d)}>${names.get(d)}</button>`;
-  return html`<div class="decision-line">${dec ? html`<span class="pill ok">★ decision</span>${nameBtn(dec)}${dec.part ? html`<span class="muted">${`part ${dec.part}`}</span>` : ""}
+  return html`<div class="decision-line">${dec ? html`<${Pill} tone="ok">decision<//>${nameBtn(dec)}${dec.part ? html`<span class="muted">${`part ${dec.part}`}</span>` : ""}
       <span class="muted">${`measured at ${dec.shown}`}</span>
       ${mainMeasurements(ctx, r.metrics, defaultMainMeasurements(r)).map(m => {
         const display = measurementText(dec, m, r.decision_measurements?.[m] ? () => r.decision_measurements[m] : comparison, fmt, relativeMeasurement(ctx, m));
@@ -88,9 +88,9 @@ export function ResultsTab({ r, view }) {
   };
   const detail = open ? html`<${DesignDetail} key=${keyOf(open)} d=${open} fmt=${fmt} reload=${reload} />` : html`<div class="detail"><${Empty} text="Select a design." /></div>`;
   return html`<${ViewerFrame} v=${full} title="Results"><div ref=${root}>
-    <${Card}><div class="results-head"><div><h2>Objective</h2><p class="muted">${r.objectives}${r.total > r.designs.length ? ` · the newest ${r.designs.length} of ${r.total} designs` : ""}</p></div>
-        <${Tools}><${ViewerTools} v=${full} title="Results" rawUrl=${`${base}/results${qs}${qs ? "&" : "?"}raw=true`} />${r.answer ? html`<${Tool} icon="download" label="Answer (JSON)" href=${`/api/apps/${enc(name)}/file?path=runs/answer.json&download=1${q}`} />` : ""}
-          <${Tool} icon="report" label="Report" href=${`${base}/report${qs}`} target="_blank" rel="noopener" /><//></div>
+    <${Card} cls="objective-card" title="Objective" meta=${`${r.objectives}${r.total > r.designs.length ? ` · the newest ${r.designs.length} of ${r.total} designs` : ""}`}
+        tools=${html`<${ViewerTools} v=${full} title="Results" rawUrl=${`${base}/results${qs}${qs ? "&" : "?"}raw=true`} />${r.answer ? html`<${Tool} icon="download" label="Answer (JSON)" href=${`/api/apps/${enc(name)}/file?path=runs/answer.json&download=1${q}`} />` : ""}
+          <${Tool} icon="report" label="Report" href=${`${base}/report${qs}`} target="_blank" rel="noopener" />`}>
       <${DecisionLine} r=${r} names=${names} comparison=${comparison} onPick=${pick} /><${Invalidated} r=${r} reload=${reload} /><//>
     ${seen.has("results") ? html`<div key="results" hidden=${view === "graphs"}><div class="split results"><${Card}><${ResultsTable} t=${{ r, names, unit, fmt, comparison, columns, values }} selected=${open && keyOf(open)}
             onOpen=${setOpen} onCompare=${pair => compare(ctx, r, pair, directions, fmt)} /><//><${Card} cls="detail-card">${detail}<//></div>

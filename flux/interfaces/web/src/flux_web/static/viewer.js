@@ -5,7 +5,7 @@
 
 import { html, useEffect, useLayoutEffect, useRef, useState } from "./view.js";
 import { restoreScroll, scrollState } from "./scroll.js";
-import { FullscreenView, openModal } from "./components/Modal.js";
+import { FullscreenHead, FullscreenView, openModal } from "./components/Modal.js";
 import { Toasts, useLayer } from "./notices.js";
 import { Tool } from "./components/Head.js";
 
@@ -31,7 +31,7 @@ export function ViewerFrame({ v, title = "Viewer", children }) {
       was.current = { before, back: document.activeElement };
       d.showModal();
       for (const [n, st] of before) restoreScroll(n, st);
-      d.querySelector(".fullscreen-head button")?.focus();
+      d.querySelector(".head .close")?.focus();
     } else {
       const now = placesOf(el), { before, back } = was.current || { before: new Map() };
       // fullscreen lifts some height and width limits; their place before still matters on the way back
@@ -53,7 +53,7 @@ export function ViewerFrame({ v, title = "Viewer", children }) {
   }, [v.full]);
   useEffect(() => () => { if (ref.current?.open) ref.current.close(); }, []);
   return html`<dialog ref=${ref} class=${v.full ? "dlg fullscreen-view" : "viewer-frame"} aria-label=${title} onCancel=${e => { e.preventDefault(); v.close(); }}>
-    ${v.full ? html`<div key="head" class="fullscreen-head"><h2>${title}</h2><button class="small" type="button" onClick=${v.close}>Close</button></div>` : ""}
+    ${v.full ? html`<${FullscreenHead} key="head" title=${title} close=${v.close} />` : ""}
     <div key="body" class=${v.full ? "fullscreen-content" : "viewer-frame-body"} ref=${body}>${children}</div>${v.full ? html`<${Toasts} key="toasts" at=${layer} />` : ""}</dialog>`;
 }
 
@@ -63,7 +63,7 @@ export function showRaw(text, title) {
   const close = () => { removeEventListener("hashchange", close); m.close(); };
   addEventListener("hashchange", close);
   m = openModal(html`<${FullscreenView} title=${title} close=${close}><pre class="raw-content">${String(text)}</pre><//>`,
-    { cls: "dlg fullscreen-view", label: title, onCancel: close, opened: el => el.querySelector("button").focus() });
+    { cls: "dlg fullscreen-view", label: title, onCancel: close, opened: el => el.querySelector(".head .close").focus() });
 }
 
 /** Raw (an address opened in a new tab, or a text shown) and Fullscreen for the view `v` frames -- tools (D1102), for

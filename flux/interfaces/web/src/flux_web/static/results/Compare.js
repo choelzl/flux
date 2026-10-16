@@ -8,6 +8,7 @@ import { directionOf } from "../charts/data.js";
 import { lineDiff } from "../diff.js";
 import { Diff } from "../components/Diff.js";
 import { VerdictPill } from "./columns.js";
+import { Table } from "../components/Table.js";
 
 function Comparison({ a, b, fa, fb, stages, directions, fmt }) {
   const rows = stages.flatMap(st => [...new Set([...Object.keys(a.stages[st] || {}), ...Object.keys(b.stages[st] || {})])]
@@ -22,8 +23,8 @@ function Comparison({ a, b, fa, fb, stages, directions, fmt }) {
   const ops = fa.artifact != null && fb.artifact != null ? lineDiff(fa.artifact, fb.artifact) : null;
   const changed = ops ? ops.filter(o => o[0] !== " ").length : 0;
   return html`<div class="compare"><p class="muted">Green: B is better.</p>
-    <table class="list compact"><thead><tr><th>stage</th><th>metric</th><th class="num">A <${VerdictPill} d=${a} /></th><th class="num">B <${VerdictPill} d=${b} /></th><th class="num">B − A</th></tr></thead>
-      <tbody>${rows.map(row => html`<tr key=${`${row.st}|${row.m}`}><td class="muted">${row.st}</td><td>${row.m}</td>${cell(row.va)}${cell(row.vb)}${delta(row)}</tr>`)}</tbody></table>
+    <${Table} heads=${["stage", "metric", { label: html`A <${VerdictPill} d=${a} />`, num: true }, { label: html`B <${VerdictPill} d=${b} />`, num: true }, { label: "B − A", num: true }]}>
+      ${rows.map(row => html`<tr key=${`${row.st}|${row.m}`}><td class="muted">${row.st}</td><td>${row.m}</td>${cell(row.va)}${cell(row.vb)}${delta(row)}</tr>`)}<//>
     <h3>Source${ops ? html`<span class="muted">${changed ? ` · ${plural(changed, "line")} differ` : " · the same"}</span>` : ""}</h3>
     ${ops ? (changed ? html`<${Diff} ops=${ops} />` : html`<${Empty} text="The two sources are the same." />`) : html`<${Empty} text="A source is missing." />`}</div>`;
 }

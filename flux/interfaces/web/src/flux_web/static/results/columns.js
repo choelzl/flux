@@ -6,6 +6,7 @@ import { cx, html, useState } from "../view.js";
 import { mainMeasurements, relativeMeasurement, resultPreferences } from "./preferences.js";
 import { useLoop } from "../loop/context.js";
 import { Pill } from "../components/Tone.js";
+import { Table } from "../components/Table.js";
 
 /** The columns of `metrics` and their controls: `visible()` in the order shown (a dictionary's aggregate first,
     then its tests), `hidden(m)`, `controls` (Hidden N, Tests ▸), `toggle(m, on)` (the picker's). */
@@ -128,9 +129,8 @@ export function MeasurementOptions({ metrics, groups = {}, defaults = metrics.sl
     prefs.save({ relativeMetrics: { ...(saved && typeof saved === "object" && !Array.isArray(saved) ? saved : {}), [m]: on } });
   };
   const off = !ctx.mine;
-  return html`<div class="scroll-x"><table class="list compact measurement-options">
-    <thead><tr><th>Metric</th><th>Visible</th><th>Main</th><th>%</th></tr></thead>
-    <tbody>${metrics.filter(m => !dictParent.has(m)).flatMap(m => [m, ...(dictTests.get(m) || [])]).map(metric => {     // D1014: tests under their row
+  return html`<${Table} cls="list compact measurement-options" heads=${["Metric", "Visible", "Main", "%"]}>
+    ${metrics.filter(m => !dictParent.has(m)).flatMap(m => [m, ...(dictTests.get(m) || [])]).map(metric => {     // D1014: tests under their row
       const parent = dictParent.get(metric), tests = dictTests.get(metric) || [], how = dicts[metric]?.aggregate, unfolded = open.has(metric);
       return html`<tr key=${metric} data-dict-of=${parent} class=${parent ? "dict-test" : ""} hidden=${!!parent && !open.has(parent)}>
         <td class="mono" title=${metric}>${tests.length ? html`<button type="button" class="link dict-fold" data-dict=${metric} aria-expanded=${String(unfolded)}
@@ -138,5 +138,5 @@ export function MeasurementOptions({ metrics, groups = {}, defaults = metrics.sl
           ${dicts[metric] ? html`<span class="muted small dict-how" title="set in the document (the measurement's aggregate:)">${` ${[how, tests.length ? `${tests.length} tests` : ""].filter(Boolean).join(" · ")}`}</span>` : ""}</td>
         <td><${CheckBox} off=${off} data-metric=${metric} aria-label=${`Show ${metric} column`} checked=${!columns.hidden(metric)} onChange=${on => columns.toggle(metric, on)} /></td>
         <td><${CheckBox} off=${off} data-main-metric=${metric} aria-label=${`Main metric ${metric}`} checked=${main.has(metric)} onChange=${on => pickMain(metric, on)} /></td>
-        <td><${CheckBox} off=${off} data-relative-metric=${metric} aria-label=${`Percent change for ${metric}`} checked=${relative.has(metric)} onChange=${on => pickRelative(metric, on)} /></td></tr>`; })}</tbody></table></div>`;
+        <td><${CheckBox} off=${off} data-relative-metric=${metric} aria-label=${`Percent change for ${metric}`} checked=${relative.has(metric)} onChange=${on => pickRelative(metric, on)} /></td></tr>`; })}<//>`;
 }

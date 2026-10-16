@@ -2,13 +2,14 @@
 // whose it is, its document and last activity, Start, Stop and Restart, Leave a shared one -- its tabs and sub-tabs,
 // and the agent's open question with the time left to answer it.
 
-import { html, useState } from "../view.js";
+import { Card, html, useState } from "../view.js";
 import { dur } from "../format.js";
 import { Act } from "../components/Act.js";
 import { Crumbs } from "../components/Crumbs.js";
 import { PageHead } from "../components/PageHead.js";
 import { Tabs } from "../components/Tabs.js";
 import { LastSaid, StatePill } from "../components/StatePill.js";
+import { Tag } from "../components/Tone.js";
 
 export { Crumbs, Tabs };
 
@@ -16,9 +17,9 @@ export { Crumbs, Tabs };
     restart asked already is red, pressed again (confirmed) now. */
 export function LoopHead({ name, info, st, perm, mine, canRun, acts }) {
   const stopNow = st.stop_requested && !st.restart_requested;
-  const whose = perm === "owner" ? "" : html`<span class=${`pill ${perm === "edit" || perm === "admin" ? "live" : ""}`}
+  const whose = perm === "owner" ? "" : html`<${Tag}
     title=${`You may view this loop${mine ? " and edit it" : ""}${canRun ? " and run it using its owner's credentials and limits" : ""}.`}>
-    ${`${info.owner}'s · ${perm === "admin" ? "an admin's edit" : mine ? "you may edit" : canRun ? "you may run" : "watching"}`}</span>`;
+    ${`${info.owner}'s · ${perm === "admin" ? "an admin's edit" : mine ? "you may edit" : canRun ? "you may run" : "watching"}`}<//>`;
   return html`<${PageHead} title=${html`<span>${name} <${StatePill} st=${st} />${whose}</span>`}
       sub=${html`<span>${info.document ? html`<span class="mono">${info.document}</span>` : ""} · <${LastSaid} st=${st} />${st.container ? html`<span class="muted">${` · sandbox ${st.container}`}</span>` : ""}</span>`}>
     ${acts.stop ? html`<${Act} cls=${stopNow ? "danger solid" : ""} title=${stopNow ? "Stop is scheduled. Press again to abandon the current pass." : "Stop after this pass"} onClick=${acts.stop}>Stop<//>` : ""}
@@ -33,8 +34,8 @@ export function LoopHead({ name, info, st, perm, mine, canRun, acts }) {
 export function AskBanner({ question, mine, send }) {
   const [ans, setAns] = useState("");
   const left = Math.max(0, Math.round(question.asked + question.wait_s - Date.now() / 1000));
-  return html`<section class="card ask"><div class="card-head"><h2>Agent asks</h2><span class="muted">${left ? `${dur(left)} left` : "timed out"}</span></div>
+  return html`<${Card} cls="ask" title="Agent asks" meta=${left ? `${dur(left)} left` : "timed out"}>
     <pre class="question">${question.question}</pre>
     ${mine ? html`<textarea rows="3" placeholder="Your answer" value=${ans} onInput=${e => setAns(e.currentTarget.value)} /><div class="form-actions">
-      <${Act} cls="primary" onClick=${async () => { const v = ans.trim(); if (v) await send(v); }}>Answer<//></div>` : ""}</section>`;
+      <${Act} cls="primary" onClick=${async () => { const v = ans.trim(); if (v) await send(v); }}>Answer<//></div>` : ""}<//>`;
 }

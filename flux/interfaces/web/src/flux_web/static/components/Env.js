@@ -6,22 +6,23 @@ import { bound } from "./Autosave.js";
 import { toast } from "../ui.js";
 import { Act } from "./Act.js";
 import { Pill } from "./Tone.js";
+import { Table } from "./Table.js";
 
 export function EnvTable({ rows, shadowed = new Set() }) {
   const mixed = rows.some(x => x.origin !== "server");
-  return html`<table class="list compact env"><thead><tr><th>Name</th><th>Value</th><th>${mixed ? "From" : ""}</th></tr></thead>
-    <tbody>${rows.map(x => html`<tr key=${x.name} class=${shadowed.has(x.name) ? "shadowed" : ""}><td class="mono">${x.name}</td>
+  return html`<${Table} cls="list compact env" heads=${["Name", "Value", mixed ? "From" : ""]}>
+    ${rows.map(x => html`<tr key=${x.name} class=${shadowed.has(x.name) ? "shadowed" : ""}><td class="mono">${x.name}</td>
       <td class="mono">${x.origin === "server" ? html`<span class="muted">From Server</span>` : x.secret ? html`<span class="muted">secret · set</span>` : x.value}</td>
-      <td class="muted">${x.origin === "server" ? "" : x.from}${shadowed.has(x.name) ? html`<${Pill} small tone="warn">overridden<//>` : ""}</td></tr>`)}</tbody></table>`;
+      <td class="muted">${x.origin === "server" ? "" : x.from}${shadowed.has(x.name) ? html`<${Pill} small tone="warn">overridden<//>` : ""}</td></tr>`)}<//>`;
 }
 
 const QUIET = { "data-lpignore": "true", "data-1p-ignore": "true", "data-form-type": "other" };     // D820: no password manager here
 /** `save({name, value, secret})` (value null: removed); `scope` names its fields. Without `save`, the list only. */
 export function EnvEditor({ rows, save, scope }) {
   const [secret, setSecret] = useState(false), [name, setName] = useState(""), [value, setValue] = useState("");
-  const list = rows.length ? html`<table class="list compact env"><tbody>${rows.map(x => html`<tr key=${x.name}><td class="mono">${x.name}</td>
+  const list = rows.length ? html`<${Table} cls="list compact env">${rows.map(x => html`<tr key=${x.name}><td class="mono">${x.name}</td>
       <td class="mono">${x.secret ? html`<span class="muted">secret · set</span>` : x.value}</td>
-      <td class="right">${save ? html`<${Act} cls="small" onClick=${async () => { await save({ name: x.name, value: null }); toast(`${x.name} removed`, "ok"); }}>Remove<//>` : ""}</td></tr>`)}</tbody></table>`
+      <td class="right">${save ? html`<${Act} cls="small" onClick=${async () => { await save({ name: x.name, value: null }); toast(`${x.name} removed`, "ok"); }}>Remove<//>` : ""}</td></tr>`)}<//>`
     : html`<p class="muted">None yet.</p>`;
   if (!save) return list;
   const add = async () => {

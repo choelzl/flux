@@ -122,7 +122,7 @@ export function NewByAgent({ draft = null, onDraft = () => {}, done }) {
   const edit = k => e => { state[k] = e.currentTarget.value; onDraft(); redraw(n => n + 1); };
   return html`<${Card}><div><p class="muted">An agent writes the problem and its files; nothing runs until you start it.</p>
     <div class="row"><label class="stack grow">Name<input placeholder="my_adder" class="full" id="ag-name" value=${state.id || ""} ref=${nameField} onInput=${edit("id")} /></label>
-      <label class="stack">Agent<${AgentPick} id="ag-who" onPick=${v => { who.current = v; }} /></label></div>
+      <label class="stack">Agent<${AgentPick} id="ag-who" ask onPick=${v => { who.current = v; }} /></label></div>
     <label class="stack">What should the loop do?<textarea rows="6" id="ag-ask" value=${state.statement || ""} ref=${askField} onInput=${edit("statement")}
       placeholder="What the loop should make, and what matters: e.g. a signed 8x8 multiplier in SystemVerilog, the smallest that makes 1 GHz placed on ASAP7, exact for every input." /></label>
     <h3>Files it should read</h3><${AttachBox} items=${items} onChange=${keep} />
@@ -147,7 +147,7 @@ export function ReviseByAgent({ name }) {
   };
   const stop = async () => { toast((await loopApi(name).api("/author/stop", { method: "POST" })).ok, "ok"); };
   return html`<${Card}><p class="muted">An agent edits the problem as you say; the record stays. The changes show below.</p>
-      <div class="row"><label class="stack">Agent<${AgentPick} id="ag-who" onPick=${v => { who.current = v; }} /></label></div>
+      <div class="row"><label class="stack">Agent<${AgentPick} id="ag-who" ask onPick=${v => { who.current = v; }} /></label></div>
       <label class="stack">What should change?<textarea rows="5" id="ag-ask" ref=${ask} value=${text} onInput=${e => setText(e.currentTarget.value)} placeholder="What should change: e.g. measure at 1.2 GHz too, add a check for the carry out, keep everything else." /></label>
       <h3>Files it should read</h3><${AttachBox} items=${items} onChange=${setItems} />
       <div class="form-actions"><${Act} cls="primary" onClick=${revise}>Revise the problem<//></div><//>
