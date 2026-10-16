@@ -103,7 +103,7 @@
       choices: [{ value: "rules", half: "rules", label: "Built-in" },
                 { value: "model", half: "model", label: "Built-in, then model review" }]
         .concat(agentChoices("Agent reviews the document")) },
-    orchestrate: { title: "Search", says: "Decides what to try next. Standard: the model picks the next part, rules pick the kind of work.",
+    orchestrate: { title: "Search", says: "Decides what to try next, by its policy. Default: the model picks the next part, rules pick the kind of work.",
       choices: [{ value: "default", half: "model", label: "Standard" },
                 { value: "rules", half: "rules", label: "Rules" },
                 { value: "model", half: "model", label: "Model" },
@@ -138,7 +138,7 @@
       choices: [{ value: "off", half: "off", label: "Off" },
                 { value: "model", half: "model", label: "Model" }]
         .concat(agentChoices("Agent critic")) },
-    measure: { title: "Measure", says: "Runs the measurements, cheapest first; a design that misses a cutoff is dropped.",
+    measure: { title: "Measure", says: "Runs the measurements, cheapest first; a design that misses a cutoff is dropped. Can compare cheap with costly.",
       fixed: "Configured in Check & Measure.",
       choices: [{ value: "stages", half: "fixed", label: "Measurements (fixed)" }] },
     calibrate: { title: "Calibrate", says: "Checks how well the cheap measurement predicts the costly one.",

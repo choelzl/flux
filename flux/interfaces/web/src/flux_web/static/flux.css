@@ -395,7 +395,6 @@ details.cfg-fold > summary { padding: 8px 0; font-weight: 600; }
 .cfg-panel .head { margin-bottom: 0; }
 .cfg-panel .cfg-grid2 { grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); }
 svg.cfg-cycle { display: block; width: 100%; height: auto; }
-.cfg-cycle .ring { fill: none; stroke: var(--line); stroke-width: 12; }
 .cfg-cycle .bx { stroke-width: 1.4; fill: color-mix(in srgb, var(--k) 13%, var(--panel)); stroke: var(--k); }
 .cfg-cycle .bx.off { fill: var(--panel); stroke: var(--muted); stroke-dasharray: 4 3; }
 .cfg-cycle .t { font: 600 12px var(--sans); fill: var(--ink); }
@@ -404,11 +403,13 @@ svg.cfg-cycle { display: block; width: 100%; height: auto; }
 .cfg-cycle .pill.ai rect { fill: color-mix(in srgb, var(--agent) 18%, var(--panel)); } .cfg-cycle .pill.ai text { fill: color-mix(in srgb, var(--agent) 75%, var(--ink)); }
 .cfg-cycle .pill.critic rect { fill: color-mix(in srgb, var(--work-critic) 22%, var(--panel)); } .cfg-cycle .pill.critic text { fill: color-mix(in srgb, var(--work-critic) 70%, var(--ink)); }
 .cfg-cycle .e { fill: none; stroke: var(--muted); stroke-width: 1.3; }
-.cfg-cycle .e.ring-e { stroke: color-mix(in srgb, var(--ink) 45%, var(--panel)); stroke-width: 1.8; }
+.cfg-cycle .e.ring-line { stroke: color-mix(in srgb, var(--ink) 32%, var(--panel)); stroke-width: 2; }
+.cfg-cycle .ring-heads .ah { fill: color-mix(in srgb, var(--ink) 45%, var(--panel)); }
+.cfg-cycle .grp rect { fill: color-mix(in srgb, var(--ink) 4%, var(--panel)); stroke: var(--line); }
+.cfg-cycle .lane { font: 600 10px var(--sans); fill: var(--muted); letter-spacing: .08em; }
 .cfg-cycle .e.soft { stroke-dasharray: 4 3; }
 .cfg-cycle .e.back { stroke: var(--bad); stroke-dasharray: 3 3; }
 .cfg-cycle .ah { fill: var(--muted); } .cfg-cycle .ah.back { fill: var(--bad); }
-.cfg-cycle .el { font: 10.5px var(--sans); fill: var(--muted); } .cfg-cycle .el.back { fill: var(--bad); }
 .cfg-cycle .hit { cursor: pointer; outline: none; }
 .cfg-cycle .hit:hover .bx { stroke-width: 2.4; }
 .cfg-cycle .hit.sel > .bx:first-of-type { stroke-width: 3; }

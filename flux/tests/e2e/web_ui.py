@@ -532,8 +532,14 @@ def flows(r: Run) -> None:
                 0 <= order[0] < order[1] < order[2] < order[3] and order[4] is True, str(order))
         b.click(".cfg-rail button[data-step=graph]")
         r.check("the drawing is its step's", b.wait("document.querySelector('.cfg-body svg.cfg-cycle [data-node=generate]')", timeout=10, what="the drawing") is not None)
-        b.js("document.querySelector('.cfg-cycle [data-node=dse]').dispatchEvent(new MouseEvent('click', {bubbles: true})); return 1")
-        b.wait("document.querySelector('.cfg-panel [data-fc-field=dse]')", timeout=10, what="the Search policy box")
+        nodes = b.js("return [...document.querySelectorAll('.cfg-cycle [data-node]')].map(n => n.dataset.node).sort()")
+        r.check("the Graph: five steps, Setup's four and the record; policy and calibration inside their steps (D1139)", nodes == sorted(
+            ["orchestrate", "generate", "test", "measure", "select", "validate", "plan", "knowledge", "feedback", "records"]), str(nodes))
+        b.js("document.querySelector('.cfg-cycle [data-node=measure]').dispatchEvent(new MouseEvent('click', {bubbles: true})); return 1")
+        r.check("Measure holds the cheap-with-costly comparison", b.wait("document.querySelector('.cfg-panel [role=group][aria-label=\"Compare cheap with costly\"] button.on')",
+                timeout=10, what="Measure's comparison") is not None)
+        b.js("document.querySelector('.cfg-cycle [data-node=orchestrate]').dispatchEvent(new MouseEvent('click', {bubbles: true})); return 1")
+        b.wait("document.querySelector('.cfg-panel [data-fc-field=dse]')", timeout=10, what="Search's policy")
         policy = b.js("const p = document.querySelector('[data-fc-field=dse]'); return [p.value, p.disabled, [...p.options].map(o => o.value), p.getBoundingClientRect().height]")
         r.check("Graph exposes DSE with the adaptive default and only its category's preferences", policy[0] == "none" and not policy[1]
                 and policy[3] > 0 and policy[2] == ["none", "adaptive", "explore", "improve", "tune", "finetune", "variations"], str(policy))
@@ -559,7 +565,7 @@ def flows(r: Run) -> None:
 
         def graph():
             r.page("#/app/dse_setting/settings/problem?step=graph", "document.querySelector('.cfg[data-step=graph] .cfg-cycle')", "the saved loop's Graph")
-            box("dse")
+            box("orchestrate")
             b.wait("document.querySelector('[data-fc-field=dse]')", what="the DSE dropdown")
 
         def saved_ok(what):
@@ -571,9 +577,9 @@ def flows(r: Run) -> None:
         r.check("a step's address opens it: ?step=graph (D1116)", b.js("return !!document.querySelector('.cfg-rail button.on[data-step=graph]')"))
         r.check("the DSE dropdown loads the saved preference", b.js("return document.querySelector('[data-fc-field=dse]').value") == "improve")
         r.check("a saved preference selects its category", b.js("return document.querySelector('[data-fc-field=dse-group]').value") == "preferences")
-        r.check("the drawing says the search policy", "improve" in b.js("return document.querySelector('.cfg-cycle [data-node=dse]').textContent"))
+        r.check("Search says its policy", "improve" in b.js("return document.querySelector('.cfg-cycle [data-node=orchestrate]').textContent"))
         b.js("const p = document.querySelector('[data-fc-field=dse]'); p.value = 'explore'; p.dispatchEvent(new Event('change')); return 1")
-        r.check("the drawing follows the dropdown", "explore" in b.js("return document.querySelector('.cfg-cycle [data-node=dse]').textContent"))
+        r.check("the drawing follows the dropdown", "explore" in b.js("return document.querySelector('.cfg-cycle [data-node=orchestrate]').textContent"))
         for value in ("explore", "none"):
             b.js("const p = document.querySelector('[data-fc-field=dse]'); p.value = arguments[0]; p.dispatchEvent(new Event('change')); return 1", value)
             saved_ok("the DSE setting saved")
@@ -617,7 +623,7 @@ def flows(r: Run) -> None:
         b.type("[aria-label='Setting']", "block")
         b.type("[aria-label='Its values']", "16, 32")
         b.click(".cfg-rail button[data-step=graph]")
-        box("dse")
+        box("orchestrate")
         category("algorithms")
         r.check("adding settings changes the algorithm explanation to a real search", "Runs over the settings in Extra" in r.text())
         r.check("category and policy fields fit the page", b.js("return document.documentElement.scrollWidth <= innerWidth + 1"))
@@ -3076,7 +3082,13 @@ def flows(r: Run) -> None:
                 who = "bob"
             r.page(h, "document.querySelector('.cfg .cfg-body')", h)
             time.sleep(1.0)
-            b.shot(out / f"bob-{h.strip('#/').replace('/', '-').replace('?', '-').replace('=', '-')}.png", full=True)
+            name = f"bob-{h.strip('#/').replace('/', '-').replace('?', '-').replace('=', '-')}"
+            b.shot(out / f"{name}.png", full=True)
+            if h.endswith("step=graph"):                                    # D1139: the Graph in dark too
+                b.js("document.documentElement.dataset.theme = 'dark'; return 1")
+                time.sleep(0.5)
+                b.shot(out / f"{name}-dark.png", full=True)
+                b.js("delete document.documentElement.dataset.theme; return 1")
         r.page("#/configure/upload", "document.querySelector('#up-name')", "Create or upload")    # D1129: the rows, where each goes
         b.attach("#main input.up-files", "\n".join(str(f) for f in sorted((r.files / "sw").iterdir()) if f.is_file()))
         time.sleep(1.0)
