@@ -114,16 +114,12 @@ class DraftMixin:
         if prior is None and (sg or "*") in state.best:
             # a part the gate refused or the critic sent back on an earlier step (D669)
             _score, prior, failure = state.best[sg or "*"]
-        if prior is not None and failure:
-            body, _schema = self.rewrite_prompt(sg, prior, failure, state)
-        else:
-            body, _schema = self.design_prompt(sg, "", state, getattr(attempt, "brief", "") or None, prior, failure)
+        body = self._agent_body(sg, state, getattr(attempt, "brief", "") or None, prior, failure, path)
         from .ideas import bind, capture, instructions, sidecar
 
         body += "\n\n" + instructions(path) + "\n\n" + LOOKUP_LINE
         brief = agent_brief(body=body, prefix=self.prompt_prefix(sg, state, agent=True) or "", artifact=path, workdir=workdir,
                             language=self.task.language or "text", part=sg or self.task.id,
-                            prior=prior.artifact if prior is not None else None, failure=failure,
                             questions=agent.questions,
                             library=library_section(self, library_queries(self.task, [p for p in self.parts if p.name == sg]), state),
                             workbench=workbench_section(self.task.workbench),
@@ -158,6 +154,8 @@ class DraftMixin:
 
             message += guidance(self, state, sg)
             message += "\n\n" + instructions(path)
+        elif prior is not None:
+            path.write_text(prior.artifact)            # D1105: the draft to rework is the file it writes, not pasted
         else:
             path.unlink(missing_ok=True)               # a fresh session creates the file
         told = state.__dict__.setdefault("_notes_told", {})          # D1023: notes a session has not heard lead its message
@@ -202,7 +200,8 @@ class DraftMixin:
         ids = capture(state, sg, notes, inherited=(prior.meta.get("idea_ids") or []) if prior is not None else [])
         if ids:
             meta["idea_ids"] = ids
-        if path.is_file():
+        unchanged = path.is_file() and prior is not None and path.read_text() == prior.artifact     # D1105: the draft it was given
+        if path.is_file() and not unchanged:
             cand = Candidate(name, path.read_text(), knobs=knobs, meta=meta, subgoal=sg)
             bind(state, cand)
             return cand, ""
@@ -211,11 +210,31 @@ class DraftMixin:
         printed = _printed_artifact(turn.text) if turn.ok and question_in(turn.text) is None else None
         if printed is not None:                                   # the agent printed the artifact instead (D848: only
             return Candidate(name, printed, knobs=knobs, meta=meta, subgoal=sg), ""   # code it fenced, not its prose)
+        if unchanged:
+            return None, f"the coding agent {agent.tool} left the draft unchanged ({path.name}): nothing new to judge"
         tail = ((turn.text or turn.stdout or "") + "\n" + (turn.stderr or "")).strip()[-2000:]
         still = (f" (still asking after {plural(len(asked), 'answer')})" if question_in(turn.text) is not None and asked
                  else " (it asked, and its questions are answered by nobody here)" if question_in(turn.text) is not None else "")
         return None, (f"the coding agent {agent.tool} exited {turn.rc} and wrote no {path.name}{still}"
                       + (f": {tail}" if tail else ""))
+
+    def _agent_body(self, sg: str | None, state: LoopState, human: str | None, prior: Any, failure: str, path: Path) -> str:
+        """D1105: what a design agent is told this turn -- the operator's notes, the orchestrator's brief, the pass's
+        direction and the job. Nothing it can read itself is pasted: a draft to rework is the artifact file, the loop's
+        words on it here (a refusal, or what this pass asks of it); what was tried, the ideas and the results are `flux loop`."""
+        from .direction import guidance
+
+        notes = state.notes_block()
+        human = (human or "") if not notes or notes not in (human or "") else (human or "").replace(notes, "")
+        parts = [notes, human, guidance(self, state, sg)]
+        target = f"part {sg}" if sg else f"task {self.task.id}"
+        if prior is not None:
+            parts.append(f"THE DRAFT TO REWORK for {target} ({prior.name}) is already in `{path}`: edit it there, or replace it. "
+                         "Rework it, or try a new approach when there is a plausible hypothesis worth measuring."
+                         + (f"\n\nWhat the loop said about it:\n{failure.strip()[:4000]}" if failure.strip() else ""))
+        else:
+            parts.append(f"Write {target} now.")
+        return "\n\n".join(p for p in parts if p)
 
     def _gate_says(self, path: Path, part: str | None, workdir: Path) -> tuple[bool, str]:
         """D1104: the loop's own gate on a file, as `flux probe gate` runs it, outside the agent's budget and log."""
@@ -395,8 +414,7 @@ class DraftMixin:
              "--table-max", str(int(self.task.budget.get("prototype_table_max") or TABLE_MAX))], "the prototype check") or (),
             {"python": sys.executable}))
         brief = agent_brief(body=prompt, prefix="", artifact=path, workdir=workdir, language="Python",
-                            part=f"{subgoal or self.task.id} (the prototype `design(...)`)", prior=None,
-                            failure=failure, questions=agent.questions,
+                            part=f"{subgoal or self.task.id} (the prototype `design(...)`)", questions=agent.questions,
                             library=library_section(self, library_queries(self.task, [p for p in self.parts if p.name == subgoal]), state),
                             workbench=workbench_section(self.task.workbench),
                             probes=probe_line([], budget, proto=True, allowed=agent.allowed),

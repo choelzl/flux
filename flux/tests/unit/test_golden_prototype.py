@@ -393,7 +393,7 @@ def test_independent_prototype_agent_does_not_receive_previous_design_sources(tm
     brief = Path(str(fake) + ".brief").read_text()
     assert "PROTOTYPE FIRST" in brief and "INTENT: arithmetic" in brief and "area_um2 100" in brief
     assert all(source not in brief for source in ("OLD_RTL_SOURCE", "PREVIOUS_BEST_SOURCE", "OLD_VERIFIED_SOURCE", "OLD_REFUSED_SOURCE", "OTHER_PART_SOURCE"))
-    assert "THE LAST DRAFT" not in brief and "Your prototype for" not in brief
+    assert "THE DRAFT TO REWORK" not in brief and "Your prototype for" not in brief
 
 
 def test_a_prototype_the_loop_cannot_spell_is_told_at_the_check(tmp_path):

@@ -41,11 +41,11 @@ def test_an_independent_pass_asks_for_a_new_design_not_an_edit(tmp_path, monkeyp
     asked = _turns(tmp_path)[0]["text"]
     directive = "Write a DISTINCT alternative" if dse == "variations" else "Write a NEW design that beats it"
     assert directive in asked and "THE STANDING DESIGN, digits#1" in asked
-    assert "do not edit or resend it" in asked and "THE LAST DRAFT" not in asked, "shown to beat, not handed over"
+    assert "do not edit or resend it" in asked and "THE DRAFT TO REWORK" not in asked, "shown to beat, not handed over"
     assert "INTENT: count in order" in asked and "MEASURED (test): score 1" in asked
     assert all(marker not in asked for marker in ("INCUMBENT_SOURCE_MARKER", "PREVIOUS_BEST_SOURCE_MARKER",
                                                  "PREVIOUS_PROTOTYPE_SOURCE_MARKER", "OTHER_DESIGN_SOURCE_MARKER"))
-    assert "digits#other" in asked and "score 0.5" in asked
+    assert "digits#other" not in asked and "flux loop tried" in asked, "what was tried is read with `flux loop`, not pasted (D1105)"
     assert asked.index(directive) < asked.index("STATIC_KNOWLEDGE")
     assert state.best["*"][1].artifact == "PREVIOUS_BEST_SOURCE_MARKER"
     assert state.proto_best["*"][1] == "PREVIOUS_PROTOTYPE_SOURCE_MARKER"
@@ -83,7 +83,7 @@ def test_a_measured_repeat_does_not_become_a_variations_repair_seed(tmp_path):
     _improve_step(prob, state, Improve(standing, "Try a distinct variation", dse="variations"))
     turns = _turns(tmp_path)
     assert len(turns) >= 2 and "already measured" in turns[1]["text"]
-    assert all(turn["mode"] == "first" and "THE LAST DRAFT" not in turn["text"] and DIGITS not in turn["text"]
+    assert all(turn["mode"] == "first" and "THE DRAFT TO REWORK" not in turn["text"] and DIGITS not in turn["text"]
                for turn in turns)
 
 
@@ -101,7 +101,7 @@ def test_a_draft_that_repeats_a_measured_design_is_refused_before_it_is_built(tm
     assert cand is None, "the agent wrote it again each time"
     assert any("is digits#7 again, already measured" in m for m in said), said
     first, again = _turns(tmp_path)[:2]
-    assert "TRIED SO FAR (1 design measured" in first["text"] and "digits#7" in first["text"]
+    assert "TRIED SO FAR" not in first["text"] and "flux loop tried" in first["text"], "read with `flux loop`, not pasted (D1105)"
     assert "This design is digits#7 again" in again["text"] and "Write a DIFFERENT design" in again["text"]
 
 

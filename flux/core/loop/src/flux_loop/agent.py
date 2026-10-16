@@ -1,6 +1,6 @@
 """A coding agent as the generator (D575): Claude Code, Codex CLI, OpenCode or any terminal
 tool that takes a brief and writes a file. The loop hands it a work directory, a brief
-(`PROMPT.md`: the design prompt, plus the prior artifact and failure on a repair) and a time
+(`PROMPT.md`: the design prompt; on a repair the draft is its file, the loop's verdict beside it) and a time
 limit, then reads the artifact and runs its own build, check and judge as for a model reply.
 
     generate: {agent: opencode}                                  # a preset
@@ -465,16 +465,15 @@ def library_section(problem: Any, question: str | list[str], state: Any = None) 
 
 
 def agent_brief(*, body: str, prefix: str, artifact: Path, workdir: Path, language: str, part: str,
-                prior: str | None, failure: str, questions: str = "decide", library: str = "",
+                questions: str = "decide", library: str = "",
                 workbench: str = "", probes: str = "", denied: bool = True) -> str:
     """The brief an agent reads: the current task first, then the contract and knowledge,
     the LIBRARY section, then what the loop expects of a terminal tool --
-    including whether its questions will be answered."""
+    including whether its questions will be answered. D1105: no draft pasted in -- a draft to rework
+    is the artifact file itself, and the body says so."""
     # the model half's reply shape (JSON with the artifact) is not how an agent answers: it writes the file
     prefix = "\n\n".join(p for p in prefix.split("\n\n") if not p.lstrip().startswith("REPLY SHAPE"))
     parts = [p for p in (body.strip(), prefix.strip(), library.strip(), workbench.strip()) if p]
-    if prior:
-        parts.append(f"THE LAST DRAFT (refused: {failure.strip()[:2000] or 'see above'}):\n```\n{prior}\n```")
     parts.append(
         f"HOW TO ANSWER. You are a coding agent working in `{workdir}`. Write the complete {language} "
         f"artifact for `{part}` to `{artifact}` (create the file; that file is what gets built and tested, "

@@ -84,7 +84,7 @@ def test_an_agent_brief_carries_the_library_section_with_paths(lib, tmp_path):
     prob = PromptProblem(task)
     section = library_section(prob, library_queries(task, task.parts), _state(tmp_path))
     brief = agent_brief(body="write it", prefix="", artifact=tmp_path / "a.sv", workdir=tmp_path, language="SystemVerilog",
-                        part="core", prior=None, failure="", library=section)
+                        part="core", library=section)
     assert "LIBRARY (" in brief and f"  {lib / 'recurrence.md'}" in brief
     assert brief.index("LIBRARY (") < brief.index("HOW TO ANSWER")
 

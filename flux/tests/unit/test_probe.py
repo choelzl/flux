@@ -92,7 +92,7 @@ def test_the_agent_options_and_the_brief():
     assert "`flux probe gate FILE`" in line and "`screen` 3, `place` 1" in line and "except verilator" in line
     assert "each on its own" in line and "--gate" in line
     brief = agent_brief(body="b", prefix="", artifact=Path("/w/a.sv"), workdir=Path("/w"), language="sv", part="p",
-                        prior=None, failure="", probes=line)
+                        probes=line)
     assert "raw tools: they are denied" in brief and "flux probe measure FILE --stage S [--stage T" in brief
     assert probe_line([], None) == ""
     free = agent_spec({"preset": "claude", "allow": "all"})              # the restriction lifted
@@ -100,7 +100,7 @@ def test_the_agent_options_and_the_brief():
     oc = json.loads(dict(agent_spec({"preset": "opencode", "allow": "all"}).config)["OPENCODE_CONFIG_CONTENT"])
     assert oc["permission"]["bash"] == {"*": "allow"}
     open_brief = agent_brief(body="b", prefix="", artifact=Path("/w/a.sv"), workdir=Path("/w"), language="sv", part="p",
-                             prior=None, failure="", probes=probe_line(["screen"], {"gate": 20}, allowed=free.allowed),
+                             probes=probe_line(["screen"], {"gate": 20}, allowed=free.allowed),
                              denied=False)
     assert "denied" not in open_brief and "flux probe gate FILE" in open_brief
 

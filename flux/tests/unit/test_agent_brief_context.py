@@ -61,7 +61,7 @@ def test_agent_task_precedes_a_large_static_prefix_and_keeps_contract_and_handof
     body = "THIS TURN: write a new algorithm. EXPLORE: take a reasoned risk."
     prefix = "CONTRACT: exact results.\n\nKNOWLEDGE: " + "large static context " * 6000 + "\n\nREPLY SHAPE: JSON"
     brief = agent_brief(body=body, prefix=prefix, artifact=tmp_path / "draft.py", workdir=tmp_path,
-                        language="Python", part="core", prior=None, failure="", library="LIBRARY: FULL DIGEST")
+                        language="Python", part="core", library="LIBRARY: FULL DIGEST")
     assert brief.startswith(body + "\n\nCONTRACT:")
     assert brief.index("EXPLORE:") < brief.index("KNOWLEDGE:") < brief.index("LIBRARY:")
     assert "REPLY SHAPE" not in brief and "HOW TO ANSWER" in brief and str(tmp_path / "draft.py") in brief

@@ -45,7 +45,7 @@ if role == "critic":
     n = len([ln for ln in (here / "turns.jsonl").read_text().splitlines() if '"critic"' in ln])
     doc = {"ok": False, "issues": ["the last line must be 9 with no newline after it"]} if n == 1 else {"ok": True}
     artifact.write_text(json.dumps(doc))
-elif mode == "first" and role == "gen" and "THE LAST DRAFT" not in text:
+elif mode == "first" and role == "gen" and "THE DRAFT TO REWORK" not in text:
     wrong = list(digits); wrong[3] = "x"                          # the gate's failure says what to fix
     artifact.write_text("\n".join(wrong) + "\n")
 elif mode == "first":
@@ -154,7 +154,7 @@ def test_an_agent_that_cannot_resume_gets_the_full_brief_again(tmp_path):
     assert out.decision is not None, out.refused
     first, repair = _turns(tmp_path)[:2]
     assert first["mode"] == repair["mode"] == "first" and repair["sid"] != first["sid"]
-    assert "THE LAST DRAFT" in repair["text"] and "FAIL line 4" in repair["text"] and "HOW TO ANSWER" in repair["text"]
+    assert "THE DRAFT TO REWORK" in repair["text"] and "FAIL line 4" in repair["text"] and "HOW TO ANSWER" in repair["text"]
     assert repair["cwd"] == first["cwd"], "the part's directory is stable across attempts"
     assert not any("resumed session" in m for m in said)
 

@@ -159,4 +159,4 @@ def test_no_record_yet_is_said_not_made(tmp_path, monkeypatch):
     (home / "problem.yaml").write_text(DOC)
     code, text = run("tried", "--loop", str(home))
     assert code == 2 and "not run" in text and not (home / "out" / "fresh.db").exists()
-    assert recall.LOOKUP_LINE.startswith("Read what this loop already knows")
+    assert recall.LOOKUP_LINE.startswith("WHAT THE LOOP KNOWS is not pasted here")

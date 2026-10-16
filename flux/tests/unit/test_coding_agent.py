@@ -28,7 +28,7 @@ assert "REPLY SHAPE" not in brief, "the model half's reply shape is not an agent
 with open(Path(sys.argv[0]).with_name("seen.txt"), "a") as f:   # beside the script: every brief this agent read
     f.write(brief + "\\n=====\\n")
 lines = [str(i) for i in range(10)]
-if "THE LAST DRAFT" not in brief:
+if "THE DRAFT TO REWORK" not in brief:
     lines[3] = "x"                       # the first draft gets line 4 wrong; the repair prompt names it
 if mode == "file":
     artifact.write_text("\\n".join(lines) + "\\n"); print("written")
@@ -62,7 +62,8 @@ def test_the_agent_writes_the_artifact_and_is_repaired_from_the_failure(tmp_path
     assert seen, "the agent read a brief"
     last = seen.split("=====")[-2]
     assert "HOW TO ANSWER" in last and "Write the complete text artifact" in last
-    assert "THE LAST DRAFT" in last and "FAIL line 4" in last, "the repair brief carries the prior and the failure"
+    assert "THE DRAFT TO REWORK" in last and "FAIL line 4" in last, "the repair brief names the draft's file and carries the failure"
+    assert "0\n1\n2\nx" not in last, "D1105: the draft itself is its file, not pasted"
     first = seen.split("=====")[0]
     assert "raw tools: they are denied" in first and "comes back to you" in first and "THE GATE" not in first, \
         "D673: the agent writes, the loop runs the gate and comes back with its output"
