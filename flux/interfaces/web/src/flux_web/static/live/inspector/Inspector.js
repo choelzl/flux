@@ -82,8 +82,8 @@ export function PassSummary({ p, nodes, a, N, head = true }) {
   const now = Date.now() / 1000, end = n => n.t1 ?? now;
   const top = nodes.filter(n => !n.parent || !nodes.includes(n.parent));
   const t0 = Math.min(...nodes.map(n => n.t0)), t1 = Math.max(...nodes.map(end));
-  const kinds = {};
-  for (const n of nodes) for (const [s0, s1] of ownSpans(n, end)) { const k = isAgent(n) ? "design" : phaseKind(n); kinds[k] = (kinds[k] || 0) + (s1 - s0); }
+  const kinds = {};   // D1153: an agent's time is the work it does -- a digest's Setup, an orchestrator's Search
+  for (const n of nodes) for (const [s0, s1] of ownSpans(n, end)) { const k = phaseKind(n); kinds[k] = (kinds[k] || 0) + (s1 - s0); }
   const total = Object.values(kinds).reduce((x, y) => x + y, 0) || 1, order = Object.keys(COLORS).filter(k => kinds[k]);
   const live = nodes.some(n => n.t1 == null), failed = nodes.some(n => n.failed);
   const cand = nodes.map(candidateOf).find(Boolean) || "";

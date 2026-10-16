@@ -891,6 +891,8 @@ ul.files li.ignored .file-link, ul.files li.ignored small { opacity: .55; }
 .alt-fold { border: 0; padding: 4px; border-radius: 0; background: transparent; color: var(--muted); }
 .alt-task { display: flex; width: 100%; align-items: center; gap: 7px; padding: 4px 8px; border: 0; border-radius: 0; text-align: left; background: transparent; font-size: var(--fs-md); }
 .alt-tree-row .alt-task { min-width: 0; }
+/* D1153: a tree row's pills as small as its count -- a step with its AI no taller than one without */
+.alt-task .tag { font-size: var(--fs-xs); line-height: 16px; padding: 0 6px; margin-right: 0; }
 /* D1075: the row tints on hover; its buttons not -- the global button:hover grey under it flickered */
 .alt-tree-row .alt-task:hover, .alt-tree-row .alt-fold:hover, .alt-box-tasks .alt-task:hover { background: transparent; }
 .alt-task.sel { background: transparent; }
