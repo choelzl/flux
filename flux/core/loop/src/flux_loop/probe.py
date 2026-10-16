@@ -32,17 +32,20 @@ def budget_of(budget: dict[str, int], key: str) -> int:
 
 
 def probe_context(task: Any, workdir: Path, part: str, budget: dict[str, int] | None,
-                  proto: list[str] | None = None) -> str:
-    """The turn's context file (a new log per turn); "" when probes are off."""
+                  proto: list[str] | None = None, *, record: str = "", campaign: str = "") -> str:
+    """The turn's context file (a new log per turn): what `flux probe` and `flux loop` read -- the
+    document, the part, the record and its campaign. Probes off (`budget` None): a budget of none,
+    so `flux loop` still finds its loop."""
     if budget is None:
-        return ""
+        budget = {"gate": 0, "stages": 0}
     root = workdir / ".flux-probes"
     root.mkdir(exist_ok=True)
     n = 1 + sum(1 for _ in root.glob("turn-*.json"))
     ctx = root / f"turn-{n:03d}.json"
     ctx.write_text(json.dumps({"doc": task.to_dict(), "home": task.home or ".", "part": part,
                                "budget": dict(budget), "log": str(root / f"turn-{n:03d}.jsonl"),
-                               "stages": [s.name for s in task.stages], "proto": proto or None}))
+                               "stages": [s.name for s in task.stages], "proto": proto or None,
+                               "record": record, "campaign": campaign}))
     return str(ctx)
 
 

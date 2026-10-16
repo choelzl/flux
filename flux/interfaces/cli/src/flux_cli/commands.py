@@ -879,6 +879,41 @@ def cmd_probe(args: argparse.Namespace) -> int:
     return code
 
 
+def cmd_loop(args: argparse.Namespace) -> int:
+    """`flux loop ideas|tried|results|design|diff|library|digest|gate|measure`: what a loop already
+    knows, read back (flux_loop.recall). Exit 0 answered, 1 a gate or stage failed / designs differ,
+    2 the loop, its record or the thing named is not there."""
+    from flux_loop import recall
+
+    what = args.loop_command
+    try:
+        w = recall.where(args.loop, args.db, args.campaign, getattr(args, "part", None))
+        if what in ("gate", "measure"):
+            code, text = (recall.gate(w, args.file) if what == "gate"
+                          else recall.measure(w, args.file, args.stage, gate_first=args.gate))
+            print(json.dumps({"exit": code, "report": text}, indent=1) if args.json else text)
+            return code
+        if what == "ideas":
+            got, say = recall.ideas(w, args.status), recall.ideas_text
+        elif what == "tried":
+            got, say = recall.tried(w, args.last, args.failed), recall.tried_text
+        elif what == "results":
+            got, say = recall.results(w, args.stage, args.top), recall.results_text
+        elif what == "design":
+            got, say = recall.design(w, args.name), (lambda g: g["text"])
+        elif what == "diff":
+            got, say = recall.diff(w, args.a, args.b, args.context), (lambda g: g["diff"] or f"{g['a']} and {g['b']} are the same")
+        elif what == "library":
+            got, say = recall.library(w, args.query, args.n), recall.library_text
+        else:
+            got, say = recall.digest(w, args.paper), (lambda g: f"[{g['paper']}] {g['source']}\n{g['digest']}")
+    except recall.NotHere as exc:
+        print(json.dumps({"error": str(exc)}) if getattr(args, "json", False) else str(exc))
+        return 2
+    print(json.dumps(got, indent=1, default=str) if args.json else say(got))
+    return 1 if what == "diff" and not got["same"] else 0
+
+
 def cmd_log(args: argparse.Namespace) -> int:
     """`flux log <record>`: the turns the run's transcript holds, one line each, or
     whole with `--turn K` / `--full`."""

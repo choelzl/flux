@@ -87,8 +87,9 @@ flux task run DOC --tui                  # the curses screen, for a person watch
   `flux status out/x.db`, `flux attach out/x.db --lines 40`, and `flux stop out/x.db` when the
   numbers are good enough (it stops at the pass boundary). `flux ask` runs the same way.
 - A rerun with the same `--db` resumes the record; a changed document opens a new campaign.
-- Exit codes: 0 decided, 1 nothing survived / an error (one line; `FLUX_DEBUG=1` for the
-  traceback), 2 a bad document or no record, 130 interrupted.
+- Exit codes: 0 a design meets every goal, 3 correct designs measured but none meets them (the
+  closest is reported), 1 nothing measured or the run could not start (one line; `FLUX_DEBUG=1`
+  for the traceback), 130 interrupted. `task check` exits 2 on a file that is not a document.
 
 ## Search and evolution
 
@@ -148,3 +149,10 @@ RTL directly rarely passes.
 - The clock in `--clock-ps` should match the goal (1000 MHz -> 1000 ps).
 - A stage's `needs:` lists every tool it runs (place runs Yosys first: `[yosys, openroad]`).
 - Don't edit the application code to change a question -- copy and change the document.
+
+## Related skills
+
+- `flux-loop-creator` -- writing and tuning a loop folder: every `problem.yaml` key that matters,
+  the folder layout, searches, sub-loops, worked examples.
+- `flux-loop-commands` -- what a loop's agents, models and step scripts can read and run while
+  it runs (ideas, tried designs, numbers, papers, `flux probe`), and the outside readers.

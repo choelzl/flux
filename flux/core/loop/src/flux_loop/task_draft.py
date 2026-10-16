@@ -18,6 +18,13 @@ from .types import Candidate, LoopState
 from .document import _leaf, _substitute
 from .task_knowledge import library_queries
 from .words import plural
+from .recall import LOOKUP_LINE
+
+
+def _where(state: LoopState) -> dict[str, str]:
+    """The record and campaign a turn's `flux loop` reads (its probe context)."""
+    rec = getattr(state, "records", None)
+    return {"record": str(getattr(state.request, "db", "") or ""), "campaign": str(getattr(rec, "campaign_id", "") or "")}
 
 
 class DraftMixin:
@@ -113,7 +120,7 @@ class DraftMixin:
             body, _schema = self.design_prompt(sg, "", state, getattr(attempt, "brief", "") or None, prior, failure)
         from .ideas import bind, capture, instructions, sidecar
 
-        body += "\n\n" + instructions(path)
+        body += "\n\n" + instructions(path) + "\n\n" + LOOKUP_LINE
         brief = agent_brief(body=body, prefix=self.prompt_prefix(sg, state, agent=True) or "", artifact=path, workdir=workdir,
                             language=self.task.language or "text", part=sg or self.task.id,
                             prior=prior.artifact if prior is not None else None, failure=failure,
@@ -123,7 +130,7 @@ class DraftMixin:
                             probes=probe_line([s.name for s in self.task.stages], budget, allowed=agent.allowed),
                             denied=set(agent.allowed) < set(DENIED))
         workbench_link(self.task.workbench, workdir)
-        probe_ctx = probe_context(self.task, workdir, sg or "", budget)
+        probe_ctx = probe_context(self.task, workdir, sg or "", budget, **_where(state))
         resume = sess.id if agent.resume and sess.id and prior is not None and failure else None
         message = ""
         if agent.resume and sess.id and sess.timed_out:
@@ -325,9 +332,9 @@ class DraftMixin:
                             denied=set(agent.allowed) < set(DENIED))
         from .ideas import capture, instructions, sidecar
 
-        brief += "\n" + instructions(path) + "\n"
+        brief += "\n" + instructions(path) + "\n" + LOOKUP_LINE + "\n"
         workbench_link(self.task.workbench, workdir)
-        probe_ctx = probe_context(self.task, workdir, subgoal or "", budget, proto=proto)
+        probe_ctx = probe_context(self.task, workdir, subgoal or "", budget, proto=proto, **_where(state))
         resume = sess.id if agent.resume and sess.id and code else None
         message = ""
         if resume:

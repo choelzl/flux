@@ -85,6 +85,18 @@ inside the loop, beside the lessons that `knowledge.lessons` draws from measured
 The loop provides the folder and never reads it. Commit it with the application if it is worth
 keeping.
 
+## Asking the loop: `flux loop`
+
+`flux loop tried|results|ideas|design|diff|library|digest|gate|measure` reads back what a loop
+already knows: each design tried and why it stopped, the measured designs ranked by the loop's own
+objectives, the ideas notebook with its evidence, any design's text and a diff of two, the papers
+with their digests, and the loop's gate or stages on a file. Inside an agent's turn it reads that
+turn's loop, part and campaign (the probe context `FLUX_PROBE` now names the record and campaign;
+the brief tells the agent the commands); a step script or a person names the loop with `--loop`.
+Every answer has `--json`. Reads add nothing to the record; inside a turn, `gate`/`measure` are
+probes on the turn's budget. [`skills/flux-loop-commands`](../skills/flux-loop-commands/SKILL.md)
+covers who can reach what.
+
 ## The model and the agentic halves
 
 A model is an OpenAI-compatible server ([D508](decisions.md)): a hosted LocalAI

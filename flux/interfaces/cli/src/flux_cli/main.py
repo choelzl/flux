@@ -14,7 +14,7 @@ import sys
 from .selftest import cmd_selftest
 from .tools import cmd_tools
 from .commands import (cmd_attach, cmd_report, cmd_run, cmd_status,
-                       cmd_stop, cmd_task_check, cmd_task_run, cmd_ask, cmd_consult, cmd_new, cmd_log, cmd_probe)
+                       cmd_stop, cmd_task_check, cmd_task_run, cmd_ask, cmd_consult, cmd_new, cmd_log, cmd_probe, cmd_loop)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -28,7 +28,7 @@ def build_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.RawDescriptionHelpFormatter)
     subparsers = parser.add_subparsers(
         dest="command", required=True, title="commands",
-        metavar="{new,ask,consult,task,probe,tools,prog,report,log,run,status,stop,attach,serve,user,login,agent,selftest}")
+        metavar="{new,ask,consult,task,loop,probe,tools,prog,report,log,run,status,stop,attach,serve,user,login,agent,selftest}")
 
     log_p = subparsers.add_parser(
         "log", help="Every model and coding-agent turn of a campaign's runs: prompts, replies, tool calls, errors.")
@@ -47,6 +47,56 @@ def build_parser() -> argparse.ArgumentParser:
                          help="A stage to measure (repeat for several: each on its own, side by side; default: the first).")
     probe_p.add_argument("--gate", action="store_true", help="measure: run the gate first.")
     probe_p.set_defaults(func=cmd_probe)
+
+    loop_p = subparsers.add_parser(
+        "loop", help="What a loop already knows, read back: ideas, designs tried, results, a design, papers; its gate on a file.",
+        description="Reads a loop's record and library. Inside an agent's turn it reads that turn's loop; "
+                    "elsewhere --loop (default: the current folder). Reads add nothing to the record.")
+    loop_sub = loop_p.add_subparsers(dest="loop_command", required=True)
+
+    def where_args(p: argparse.ArgumentParser, part: bool = True) -> None:
+        p.add_argument("--loop", default=None, help="The loop's folder or document (default: the agent turn's, else the current folder).")
+        p.add_argument("--db", default=None, help="The record (default: the loop's out/<id>.db).")
+        p.add_argument("--campaign", default=None, help="A campaign id or prefix (default: the loop's).")
+        if part:
+            p.add_argument("--part", default=None, help="One part (default: the turn's part, else every part / the whole).")
+        p.add_argument("--json", action="store_true", help="The answer as JSON.")
+
+    p = loop_sub.add_parser("ideas", help="The ideas notebook: each hypothesis, its status and the evidence on record.")
+    p.add_argument("--status", default=None, choices=["proposed", "checked", "measured", "failed", "interrupted"])
+    where_args(p)
+    p = loop_sub.add_parser("tried", help="The designs tried, oldest first: the stages each reached, its numbers or why it stopped.")
+    p.add_argument("--last", type=int, default=12, metavar="N", help="The last N designs (default 12; 0 for all).")
+    p.add_argument("--failed", action="store_true", help="Only those refused before any measurement.")
+    where_args(p)
+    p = loop_sub.add_parser("results", help="The measured designs at one stage, ranked by the loop's objectives.")
+    p.add_argument("--stage", default=None, help="The stage (default: the goal's, else the deepest measured).")
+    p.add_argument("--top", type=int, default=10, metavar="N", help="The best N (default 10; 0 for all).")
+    where_args(p)
+    p = loop_sub.add_parser("design", help="A design's text as the record keeps it (a name, or the start of one).")
+    p.add_argument("name")
+    where_args(p, part=False)
+    p = loop_sub.add_parser("diff", help="Two designs line by line; either may be a file.")
+    p.add_argument("a")
+    p.add_argument("b")
+    p.add_argument("--context", type=int, default=3, help="Lines of context (default 3).")
+    where_args(p, part=False)
+    p = loop_sub.add_parser("library", help="The library's papers, one line each; with QUERY the nearest, with their digests.")
+    p.add_argument("query", nargs="?", default="")
+    p.add_argument("--n", type=int, default=5, help="How many papers for a query (default 5).")
+    where_args(p, part=False)
+    p = loop_sub.add_parser("digest", help="One paper's digest (by file name or stem).")
+    p.add_argument("paper")
+    where_args(p, part=False)
+    p = loop_sub.add_parser("gate", help="The loop's own gate on a file (inside a turn: a probe, on its budget).")
+    p.add_argument("file")
+    where_args(p)
+    p = loop_sub.add_parser("measure", help="The loop's own stages on a file, each on its own (inside a turn: a probe).")
+    p.add_argument("file")
+    p.add_argument("--stage", action="append", default=None, help="A stage (repeatable; default: the first).")
+    p.add_argument("--gate", action="store_true", help="Run the gate first.")
+    where_args(p)
+    loop_p.set_defaults(func=cmd_loop)
 
     serve_p = subparsers.add_parser("serve", help="The web interface: accounts, applications, runs followed live (D683).")
     serve_p.add_argument("--host", default="127.0.0.1", help="Address to listen on (default 127.0.0.1; put a TLS proxy in front for others).")
