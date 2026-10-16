@@ -2943,6 +2943,14 @@ def flows(r: Run) -> None:
     from web_ui_lifecycle import lifecycle_flows
 
     lifecycle_flows(r, WATCH)
+    if os.environ.get("FLUX_E2E_GALLERY"):          # screenshots of Live for recorded journals, for review by eye
+        from web_ui_gallery import gallery_flows
+
+        gallery_flows(r)
+    if os.environ.get("FLUX_E2E_DEMO"):              # a demo server's loops, as they are
+        from web_ui_gallery import demo_review_flows
+
+        demo_review_flows(r)
 
     def screens():
         """FLUX_E2E_SHOTS=<dir>: whole-page screenshots of the pages one reviews by eye, to that folder."""
