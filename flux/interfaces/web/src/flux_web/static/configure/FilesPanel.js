@@ -5,13 +5,17 @@
 
 import { html, Notice, useChanges, useEffect, useRef, useState } from "../view.js";
 import { bytes, plural } from "../format.js";
-import { DropZone } from "../components/DropZone.js";
+import { Uploader, placedFiles } from "../components/Uploader.js";
 import { Tool } from "../components/Head.js";
-import { bound } from "../components/Autosave.js";
 
 /** The files, the missing ones, a new file, a drop; `more(f)` what a file's row says besides (tags, a toggle). */
 export function FilesBody({ store, more = null }) {
-  const [into, setInto] = useState("");
+  const [rows, setRows] = useState([]);
+  const add = () => {
+    if (rows.some(r => r.dest === "custom" && !r.custom.trim())) return;
+    store.add(placedFiles(rows), "");
+    setRows([]);
+  };
   useChanges(store);
   const { files, missing } = store.s;
   return html`<div class="files-panel">${files.length ? html`<ul class="files flist">${files.map(f => html`<li key=${f.path}>
@@ -20,8 +24,9 @@ export function FilesBody({ store, more = null }) {
         <${Tool} icon="close" danger label=${`Delete ${f.path}`} onClick=${() => store.remove(f)} /></li>`)}</ul>` : html`<p class="muted">No files.</p>`}
       ${missing.length ? html`<${Notice} key="missing" tone="bad" what="The document names these, and the loop does not have them:">
         ${" "}${missing.map((p, i) => html`${i ? ", " : ""}<a href="javascript:void 0" title="Write it here" onClick=${() => store.editor(p, "")}>${p}</a>`)}<//>` : ""}
-      <div class="row"><button class="small" type="button" onClick=${() => store.editor("", "")}>New file</button><input placeholder="folder (optional)" class="narrow-in" ...${bound(into, setInto)} /></div>
-      <${DropZone} label="Drop scripts, models or folders here" onFiles=${got => store.add(got, into.trim())} /></div>`;
+      <div class="row"><button class="small" type="button" onClick=${() => store.editor("", "")}>New file</button></div>
+      <${Uploader} rows=${rows} onChange=${setRows} label="Drop scripts, models, papers or folders" />
+      ${rows.length ? html`<div class="row"><button class="small primary" type="button" onClick=${add}>${`Add ${plural(placedFiles(rows).length, "file")}`}</button></div>` : ""}</div>`;
 }
 
 export function FilesPanel({ store }) {

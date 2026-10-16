@@ -10,24 +10,21 @@ import { bound } from "../components/Autosave.js";
 import { progressDialog } from "../components/Modal.js";
 import { Act } from "../components/Act.js";
 import { CodeEditor } from "../components/CodeEditor.js";
-import { DropZone } from "../components/DropZone.js";
+import { Uploader, placedFiles } from "../components/Uploader.js";
 import { PageHead } from "../components/PageHead.js";
 
 /** Create a loop from a starter document or uploaded files, a folder, or a single ZIP. */
 export function UploadForm() {
-  const [name, setName] = useState(""), [got, setGot] = useState({ files: [], dir: null, n: 0 });   // `n`: the pickers drawn anew (cleared)
-  const chose = (files, dir = null) => {
-    if (dir && !name) setName(dir.replace(/[^A-Za-z0-9_-]+/g, "_").slice(0, 60));
-    setGot(g => ({ files, dir, n: files.length ? g.n : g.n + 1 }));
-  };
-  // a chosen folder names every file under its own name: that name goes (D702: once, here)
-  const fromFolder = list => {
-    const picked = [...list].map(f => ({ file: f, path: f.webkitRelativePath || f.name })), top = new Set(picked.map(e => e.path.split("/")[0]));
-    return top.size === 1 && picked.every(e => e.path.includes("/")) ? picked.map(e => ({ ...e, path: e.path.split("/").slice(1).join("/") })) : picked;
+  const [name, setName] = useState(""), [rows, setRows] = useState([]);
+  const take = next => {                                     // a loop folder dropped names the loop, when it has no name yet
+    const loop = next.find(r => r.loop);
+    if (loop && !name) setName(loop.folder.replace(/[^A-Za-z0-9_-]+/g, "_").slice(0, 60));
+    setRows(next);
   };
   const create = async () => {
-    const n = name.trim(), chosen = got.files;
+    const n = name.trim(), chosen = placedFiles(rows);
     if (!n) { toast("Name the loop first.", "warn"); document.getElementById("up-name")?.focus(); return; }
+    if (rows.some(r => r.dest === "custom" && !r.custom.trim())) { toast("Name the folder a file goes to, or choose another place.", "warn"); return; }
     if (!chosen.length) {
       const made = await api("/apps/new-empty", { method: "POST", body: { name: n } });
       toast(`${made.name}: fill in its problem`, "ok");
@@ -44,14 +41,10 @@ export function UploadForm() {
       toast(pd.signal.aborted ? `The upload was cancelled: ${x.message}.` : `The upload failed: ${x.message}`, pd.signal.aborted ? "warn" : "bad", { timeout: 12000 });
     }
   };
-  const ready = got.files.length;
-  return html`<${Card}><div class="upload"><p class="muted">Start empty, or upload a problem.yaml and its files. A ZIP can contain the loop's folder; choose the ZIP on its own.</p>
+  return html`<${Card}><div class="upload">
     <label class="stack">Name<input placeholder="my_loop" pattern="[A-Za-z0-9_\\-]{1,60}" maxlength="60" class="full" id="up-name" autocomplete="off" ...${bound(name, setName)} /></label>
-    <${DropZone} label="Drop the loop's folder, its files or a .zip here" onFiles=${(files, dir) => chose(files, dir)} />
-    <div class="row"><div class="muted small">${ready ? `${plural(ready, "file")} ready` : "Without files: a starter problem.yaml, README and empty library/. Opens in the configurator."}${got.dir ? ` from ${got.dir}/` : ""}</div>
-      <button type="button" class="small" hidden=${!ready} onClick=${() => chose([])}>Clear files</button></div>
-    <div class="row" key=${got.n}><label class="stack">or choose files / a .zip<input type="file" multiple class="up-files" onChange=${e => chose([...e.currentTarget.files].map(f => ({ file: f, path: f.name })))} /></label>
-      <label class="stack">or a folder<input type="file" webkitdirectory multiple class="up-folder" onChange=${e => { const f = e.currentTarget.files; chose(fromFolder(f), f[0]?.webkitRelativePath.split("/")[0]); }} /></label></div>
+    <${Uploader} rows=${rows} onChange=${take} label="Drop the loop's folder, its files or a .zip" />
+    ${rows.length ? "" : html`<p class="muted small">Without files: a starter problem.yaml, README and empty library/, opened in the configurator.</p>`}
     <div class="form-actions"><${Act} cls="primary" onClick=${create}>Create loop<//></div></div><//>`;
 }
 

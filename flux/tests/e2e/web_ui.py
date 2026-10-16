@@ -774,9 +774,9 @@ def flows(r: Run) -> None:
         r.check("old empty-loop links select the combined form", b.js("return document.querySelector('.config-modes .on').textContent") == "Create or upload")
         paths = [str(r.files / "sw/problem.yaml")]
         b.attach("#main input[type=file]:not([webkitdirectory])", "\n".join(paths))
-        r.button("Clear files")
-        r.check("clearing files returns to empty-loop creation", b.js("return !document.querySelector('input[type=file]').files.length")
-                and "Without files:" in r.text())
+        r.check("a file added is a row with where it goes (D1129)", b.js("return [...document.querySelectorAll('.up-rows li')].map(l => l.querySelector('.mono').textContent)") == ["problem.yaml"])
+        r.button("Remove problem.yaml")
+        r.check("removing the files returns to empty-loop creation", b.js("return !document.querySelector('.up-rows li')") and "Without files:" in r.text())
         b.type("#up-name", "blank")
         r.button("Create loop")
         b.wait("location.hash.startsWith('#/app/blank/settings/problem') && document.querySelector('.cfg')", timeout=20, what="the empty loop's configurator")
@@ -2980,6 +2980,10 @@ def flows(r: Run) -> None:
             r.page(h, "document.querySelector('.cfg .cfg-body')", h)
             time.sleep(1.0)
             b.shot(out / f"bob-{h.strip('#/').replace('/', '-').replace('?', '-').replace('=', '-')}.png", full=True)
+        r.page("#/configure/upload", "document.querySelector('#up-name')", "Create or upload")    # D1129: the rows, where each goes
+        b.attach("#main input.up-files", "\n".join(str(f) for f in sorted((r.files / "sw").iterdir()) if f.is_file()))
+        time.sleep(1.0)
+        b.shot(out / "bob-configure-upload.png", full=True)
         r.check(f"screenshots in {out}", True)
     if os.environ.get("FLUX_E2E_SHOTS"):
         r.step("screens", screens)

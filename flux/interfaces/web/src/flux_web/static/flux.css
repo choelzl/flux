@@ -572,6 +572,12 @@ td .misses { color: var(--bad); }
   transition: background .12s, border-color .12s; }
 .dropzone .dz-ic { font-size: 18px; }
 .dropzone.over { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 9%, transparent); color: var(--ink); }
+/* D1129: the one upload place: the zone with its two buttons, a row per file or folder with where it goes */
+.uploader { display: grid; gap: 6px; }
+.uploader .dropzone { flex-wrap: wrap; margin: 0; position: relative; }
+.up-input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.up-rows li { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.up-place { display: inline-flex; gap: 6px; align-items: center; margin-left: auto; }
 pre.diff { font-family: var(--mono); font-size: 12.5px; line-height: 1.45; max-height: 60vh; overflow: auto; margin: 0;
   border: 1px solid var(--line); border-radius: 8px; background: var(--bg); padding: 4px 0; }
 pre.diff > div { padding: 0 10px 0 0; white-space: pre; }
