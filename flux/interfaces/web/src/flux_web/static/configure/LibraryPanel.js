@@ -94,7 +94,8 @@ export function Knowledge({ M, state, edit, store, who, opts, fixed, direct }) {
     state.knowledgeFiles = out.join(", ");
   };
   const toggle = p => edit(() => { if (isRead(p)) setReads([], [p]); else setReads([p]); });
-  const lib = files.filter(x => x.path.startsWith("library/")).length;
+  const inLib = files.filter(x => x.path.startsWith("library/")), hid = M.hiddenOf(state);
+  const libHidden = inLib.filter(x => hiddenBy(x.path, hid)).length, lib = inLib.length - libHidden;   // a hidden file is no paper read
   const readAdded = placed => edit(() => setReads(placed.filter(r => !r.loop && !r.zip && r.dest !== "library").map(r => {
     const into = r.dest === "custom" ? r.custom.trim().replace(/^\/+|\/+$/g, "") : r.dest, at = r.folder ? `${r.folder}/` : r.label;
     return into ? (r.folder ? `${into}/` : `${into}/${at}`) : at;
@@ -106,7 +107,7 @@ export function Knowledge({ M, state, edit, store, who, opts, fixed, direct }) {
         ${readRows(files, reads).map(r => hiddenBy(r.path, M.hiddenOf(state))      // D1159: hidden from AI, read by no prompt
           ? row(r.path, html`<code>${r.path}</code>`, "hidden from AI", false, null, true)
           : row(r.path, html`<code>${r.path}</code>`, r.missing ? "missing" : r.n ? `folder, ${plural(r.n, "file")}` : "", isRead(r.path), () => toggle(r.path), false))}
-        ${row("library/", html`<code>library/</code>`, lib ? `${plural(lib, "paper")}, digested` : "papers added there, digested", true, null, true)}
+        ${row("library/", html`<code>library/</code>`, (lib ? `${plural(lib, "paper")}, digested` : "papers added there, digested") + (libHidden ? `; ${libHidden} hidden from AI` : ""), true, null, true)}
         ${row("shared", html`<span>shared library</span>`, papers != null ? plural(papers, "paper") : "", true, null, true)}</ul>
       <${AddFiles} store=${store} rows=${up} setRows=${setUp} into="" label="Drop files or folders to read" then=${readAdded} />
       <${Text} area rows=${3} label="Text" k="knowledge-text" value=${state.knowledgeText} placeholder="What every prompt should know"

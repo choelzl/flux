@@ -142,7 +142,7 @@ def run_env(store: Store, user: User, app: str | None = None, views: dict[str, A
     # their names pass into the sandbox whatever they look like, and to every agent (D807)
     scopes = {s: {n: x["value"] for n, x in store.env(s, reveal=True).items()}
               for s in (*(() if user.external else ("global",)), f"user:{user.id}", *([f"loop:{user.name}:{app}"] if app else []))}
-    _agents(store, user, env, server, mine, web, names, scopes, views)
+    _agents(store, user, env, server, mine, names, scopes, views)
     shared: list[str] = []
     for vals in scopes.values():
         for name, value in vals.items():
@@ -374,7 +374,7 @@ def sandbox_env(env: dict[str, str], server_sandbox: bool, adv: dict[str, Any]) 
 
 
 def _agents(store: Store, user: User, env: dict[str, str], server: dict[str, str], mine: dict[str, str],
-            flux: dict[str, str], names: list[str], scopes: dict[str, dict[str, str]] | None = None, views: dict[str, Any] | None = None) -> None:
+            names: list[str], scopes: dict[str, dict[str, str]] | None = None, views: dict[str, Any] | None = None) -> None:
     """Each agent the server offers, as its runs get it (D807): its program (its folder on PATH, so
     the sandbox mounts it, D705), the admin's arguments and login files (D756, D760), and its own
     variables -- its endpoint, key and model as its kind reads them, and its variables, the server's
@@ -399,12 +399,12 @@ def _agents(store: Store, user: User, env: dict[str, str], server: dict[str, str
                 env["PATH"] = os.pathsep.join([folder, *[d for d in env.get("PATH", "").split(os.pathsep) if d]])
         if not a.builtin:
             added[a.name] = a.kind
-        own, eff = run_settings(a, *agent_scopes(store, user, a, machine, server, mine, flux, scopes), tuple(every))
+        own, eff = run_settings(a, *agent_scopes(store, user, a, machine, server, mine, scopes), tuple(every))
         if views is not None:
             views[a.name] = eff                                  # D923: the resolved configuration, its sources (no values shown)
         for k in a.prices():                                     # D835: the web's prices, not the machine's
             env.pop(k, None)
-        for k, v in run_prices(a, server, mine, flux).items():
+        for k, v in run_prices(a, server, mine).items():
             env[k] = v
             names.append(k)
         env.pop(a.at_once(), None)                               # D1027: the admin's limit alone, no one else's
@@ -431,7 +431,7 @@ def _agents(store: Store, user: User, env: dict[str, str], server: dict[str, str
 
 
 def agent_scopes(store: Store, user: User | None, a: Any, machine: dict[str, str], server: dict[str, str],
-                 mine: dict[str, str], flux: dict[str, str] | None, scopes: dict[str, dict[str, str]]) -> tuple[list[tuple[str, dict[str, str]]], dict[str, str]]:
+                 mine: dict[str, str], scopes: dict[str, dict[str, str]]) -> tuple[list[tuple[str, dict[str, str]]], dict[str, str]]:
     """Agent `a`'s layers for `user` (D922): the server's environment, the server's settings and
     variables (every agent's, then its own), the user's, the loop's (`scopes`, as `run_env` reads
     them), and its own variables (the server's, then the user's); `user` None: the server's alone (Admin)."""
@@ -441,7 +441,7 @@ def agent_scopes(store: Store, user: User | None, a: Any, machine: dict[str, str
     server_own = {} if external else {n: x["value"] for n, x in store.env(f"agent:{a.name}", reveal=True).items()}
     my_own = {n: x["value"] for n, x in store.env(f"agent:{a.name}:user:{user.id}", reveal=True).items()} if user else {}
     loop_vars = next((v for s, v in scopes.items() if s.startswith("loop:")), {})
-    layers = agent_layers(a, machine=machine, server=server, mine=mine, flux=flux, loop_vars=loop_vars,
+    layers = agent_layers(a, machine=machine, server=server, mine=mine, loop_vars=loop_vars,
                           server_vars={**({} if external else scopes.get("global", {})), **server_own},
                           my_vars={**(scopes.get(f"user:{user.id}", {}) if user else {}), **my_own})
     return layers, {**server_own, **my_own}

@@ -139,8 +139,13 @@ The presets send the brief on the agent's stdin, and a resumed session's message
 of any length reaches the agent. A `command` of your own gets it on stdin unless it names
 `{prompt}`, `{prompt_file}` or `{answer}`.
 
-OpenCode pointed at a LocalAI server reads its key from the environment
-(`"apiKey": "{env:FLUX_REMOTE_API_KEY}"` in `~/.config/opencode/opencode.json`). With a thinking
+A coding agent never uses Flux's own model: none of `FLUX_REMOTE_*`, `FLUX_LLM_*` or
+`OPENROUTER_API_KEY` reaches its turn. It runs on its own settings (`FLUX_<AGENT>_BASE_URL`,
+`_MODEL`, `_API_KEY`; its tab in the web) or, without them, on its own configuration and login.
+
+OpenCode pointed at a LocalAI server by its own configuration reads its key from the environment:
+set `FLUX_OPENCODE_API_KEY` (flux.env, or OpenCode's tab in the web) and write
+`"apiKey": "{env:FLUX_AGENT_API_KEY}"` in `~/.config/opencode/opencode.json`. With a thinking
 model served by LocalAI, tell OpenCode the model's limits and keep its reasoning short. Without
 that, it ended turn after turn on an empty reply, all of it reasoning, and never wrote the file:
 

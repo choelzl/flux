@@ -33,7 +33,7 @@ def _table(store: Any, user: Any) -> dict[str, tuple[float | None, float | None]
     flux = {k: src[k] for k in keys if src.get(k)}
     out = {"model": (_num(flux.get(keys[0])), _num(flux.get(keys[1])))}
     for a in registry(store).values():
-        got = run_prices(a, server, mine, flux)
+        got = run_prices(a, server, mine)
         pin, pout = a.prices()
         out[a.name] = (_num(got.get(pin)), _num(got.get(pout)))
     return {k: v for k, v in out.items() if v != (None, None)}

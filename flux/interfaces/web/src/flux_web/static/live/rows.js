@@ -181,6 +181,15 @@ export function lines(rows, v) {
   const draftsIn = n => { const t = triesIn(n); if (t) return t; const k = (kids.get(n.id) || []).map(r => r.node), i = k.findIndex(isDraft);
     return i >= 0 ? [{ lead: k[i], steps: k.filter((_, j) => j !== i) }] : null; };   // one draft: every other step is its
   const made = t => madeOf(t, aiOf.get(t.lead.id) || t.lead);
+  /** A draft its run never checked though it checks its drafts -- refused before it was built (a patch rejected, a
+      design measured already): another draft followed it, or the run ended failed after it. */
+  const unchecked = t => {
+    const lead = t.lead, sib = lead.parent?.kids || [], i = sib.indexOf(lead);
+    if (t.run || i < 0 || lead.t1 == null) return false;
+    const j = sib.findIndex((c, k) => k > i && isDraft(c)), isCheck = c => phaseKind(c) === "check";
+    if (sib.slice(i + 1, j < 0 ? undefined : j).some(isCheck) || !sib.some(isCheck)) return false;
+    return j >= 0 || (lead.parent.t1 != null && !!lead.parent.failed);
+  };
   const tryLine = (t, i, depth, onlyLine = false) => {
     const nodes = [t.lead, ...t.steps], all = nodes.flatMap(deep).map(ownView), key = `try:${t.lead.id}`;   // D1094
     const running = all.some(n => n.t1 == null), failedStep = t.steps.find(n => n.failed || n.rejected || J.marked(n.id));
@@ -188,14 +197,17 @@ export function lines(rows, v) {
     const collapsed = onlyLine || !under.length || v.isFolded(key, !running, all.some(n => holds(n.id)) && all[0]?.id !== selected);
     const opens = aiOf.get(t.lead.id) || t.lead, picked = all.some(n => n.id === selected) && (onlyLine || opens.id === selected || t.lead.id === selected);   // D1075
     const what = made(t);
-    const fail = failedStep ? (firstFailing(failedStep) ? (onlyLine ? firstFailing(failedStep) : `${checkWord(failedStep)}: ${firstFailing(failedStep)}`) : `${checkWord(failedStep)} failed`) : "";   // D1063; D1064
+    const unbuilt = !running && !failedStep && unchecked(t);
+    const fail = failedStep ? (firstFailing(failedStep) ? (onlyLine ? firstFailing(failedStep) : `${checkWord(failedStep)}: ${firstFailing(failedStep)}`) : `${checkWord(failedStep)} failed`)
+      : unbuilt ? "not built" : "";   // D1063; D1064
     opens.tryNo = t.lead.tryNo = t.part ? null : i;
-    opens.tryFailed = !running && failedStep && !opens.failed ? fail || "its check failed" : null;   // D1075: the panel says how the try ended
+    opens.tryFailed = !running && (failedStep || unbuilt) && !opens.failed ? fail || "its check failed" : null;   // D1075: the panel says how the try ended
     const shortMade = N.short(what), asPart = t.part && shortMade.startsWith(t.part.split(" ")[0]);   // D1066: "lo#1", not "lo #1"
     out.push({ type: "row", key: `try:${t.lead.id}`, depth, cls: "step try", k: COLORS[phaseKind(t.lead) || "design"] || COLORS.design,
       fold: under.length && !onlyLine ? fold(key, collapsed, t.part || `try ${i}`) : null,
       act: { task: opens }, btnCls: state(opens), picked, title: t.lead.name,
-      mark: running ? "spin" : !failedStep && (opens.timedOut || t.lead.timedOut) ? markOf(opens.timedOut ? opens : t.lead, J)
+      mark: running ? "spin" : unbuilt ? { tone: "warn", title: "refused before it was built" }
+        : !failedStep && (opens.timedOut || t.lead.timedOut) ? markOf(opens.timedOut ? opens : t.lead, J)
         : doneMark(!!failedStep || !!t.lead.failed, all.some(n => J.marked(n.id))),
       name: [asPart ? shortMade : t.part || `try ${i}`, what && !asPart ? { cls: "alt-what", text: ` ${shortMade}`, title: what } : "", fail ? { cls: "alt-what", text: ` · ${fail}` } : ""],
       pills: aiOf.has(t.lead.id) || AI.test(String(t.lead.params?.turn || t.lead.name)) ? [{ k: AGENT_COLOR, text: "AI" }] : [],

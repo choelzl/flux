@@ -39,7 +39,9 @@ export function apply(m, e) {
     if (!d) return {};
     d.t1 = e.t; d.seconds = e.seconds; d.output = e.output; d.interrupted = false;          // D928: its own end, not a settled one
     // D757: a tool that exited with an error failed, though its step went on
-    d.failed = e.failed || (String(d.name).startsWith("tool:") && e.output && e.output.exit != null && e.output.exit !== 0);
+    d.failed = e.failed || (String(d.name).startsWith("tool:") && e.output && e.output.exit != null && e.output.exit !== 0)
+      // a check that said an error ended failed: a journal from before its `failed` was written ("test: build" not built)
+      || (/^\s*test\s*:/i.test(String(d.name)) && !!e.output && !!e.output.error);
     // D997: an agent stopped at its time limit (exit 124) is a warning, not a failure
     d.timedOut = !!e.output && (!!e.output["timed out"] || isAgent(d) && Number(e.output.exit) === 124);   // D1053
     if (d.timedOut) d.failed = false;

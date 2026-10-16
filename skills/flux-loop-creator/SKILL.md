@@ -71,6 +71,13 @@ and `flux ...` / `fluxpreset ...` run in-process. `fluxpreset describe` lists th
 lint, golden, OpenROAD stages, program timing, ChampSim, pytest), so most RTL loops need no
 scripts of their own. `flux tools --json` is the catalog the web crafter offers.
 
+`golden` and `rtl ...` read Verilog/SystemVerilog only; `flux task check` refuses them in a loop
+whose `language:` is not RTL (and a Python-only preset -- `cases`, `bench`, `pytest` -- in an RTL
+loop). A **Python design against a golden model** is `fluxpreset cases {artifact} --call f
+--reference {home}/reference.py:f --random 200` (the reference module's `inputs(rng)` or `CASES`
+give the cases); C/C++ is `fluxpreset ccases ... --sig "long(long,long)"`; anything else is your
+own `{python} {home}/check.py {artifact}` printing `N failing`.
+
 **Placeholders** (an unknown `{x}` is refused at load): `{artifact}` the design file, `{home}`
 the document's folder, `{workdir}`, `{python}`, `{name}`, `{part}`, `{params}` (params.json),
 `{knob}` one setting, `{point}` all settings as JSON, `{failure}` and `{attempt}` (generators),

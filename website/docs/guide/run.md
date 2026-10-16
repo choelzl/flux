@@ -155,7 +155,9 @@ config file. `FLUX_REMOTE_API_KEY_FILE` keeps the key in a separate file.
 Coding agents must be installed and authenticated where Flux runs. Their executable overrides
 are `FLUX_CLAUDE_BIN`, `FLUX_CODEX_BIN`, and `FLUX_OPENCODE_BIN`. Flux's per-agent aliases are
 `FLUX_<NAME>_BASE_URL`, `FLUX_<NAME>_API_KEY`, `FLUX_<NAME>_MODEL`, and, for agents supporting it,
-`FLUX_<NAME>_OAUTH_TOKEN`. The web settings can configure agents without changing the document.
+`FLUX_<NAME>_OAUTH_TOKEN`. An agent never uses Flux's own model settings (`FLUX_REMOTE_*`):
+without its own, it runs on its own configuration file and login. The web settings can configure
+agents without changing the document.
 Keep credentials in your environment or account settings, not the loop's YAML.
 
 For detailed environment recipes, use the repository's

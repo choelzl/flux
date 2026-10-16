@@ -17,7 +17,7 @@ import { Pill, Said, Tag } from "../components/Tone.js";
 import { Check } from "../components/Check.js";
 
 /** D924: how an agent connects, and whether that was verified -- the words the Account and the authoring picker say. */
-export const MECHANISM = { key: "API key", provider: "provider config", login: "interactive login", endpoint: "endpoint, no key", none: "not detected" };
+export const MECHANISM = { key: "API key", provider: "provider config", login: "interactive login", endpoint: "endpoint, no key", none: "not configured" };
 export const VERIFIED = { untested: ["none", "untested"], ready: ["ok", "ready"], failed: ["bad", "failed"], changed: ["warn", "changed since test"] };
 const HOME_PH = { opencode: ".config/opencode", claude: ".claude/settings.json", codex: ".codex/config.toml" };
 const lines = a => (a || []).join("\n");

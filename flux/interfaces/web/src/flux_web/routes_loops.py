@@ -896,6 +896,7 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
             raise HTTPException(400, f"{name} has no problem {document!r}")
         home_ready(store, whose)
         env = {**run_env(store, whose, name), "FLUX_SANDBOX_APP": f"{whose.name}.{name}"}   # the owner's loop: its settings and logins (D769)
+        env["PYTHONDONTWRITEBYTECODE"] = "1"            # a check leaves no __pycache__ among the loop's files
         adv = advanced(store, whose.name, name)
         sandbox_env(env, sandbox, adv)
         machine_env(env, sandbox_config(store), adv)

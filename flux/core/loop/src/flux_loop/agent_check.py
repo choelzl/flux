@@ -83,6 +83,34 @@ def agents_used(task: Any) -> list[str]:
 _PROVIDER_KEY = re.compile(r"(?!FLUX_)[A-Z][A-Z0-9_]*_API_KEY|FLUX_AGENT_API_KEY")
 
 
+def opencode_config_file(env: dict[str, str]) -> str:
+    """The OpenCode configuration file `env`'s turn reads that names a provider or a model -- `OPENCODE_CONFIG`, else
+    its home's `~/.config/opencode/opencode.json(c)` (a web user's home is seeded with the server's) -- as said
+    (`~/...` in its home), or ""."""
+    home = Path(env.get("FLUX_SANDBOX_HOME") or env.get("HOME") or Path.home())    # a web user's own home (D744)
+    named = [Path(os.path.expanduser(env["OPENCODE_CONFIG"]))] if env.get("OPENCODE_CONFIG") else []
+    for p in (*named, *(home / ".config" / "opencode" / n for n in ("opencode.json", "opencode.jsonc", "config.json"))):
+        try:
+            text = p.read_text() if p.is_file() else ""
+        except OSError:
+            continue
+        if not text:
+            continue
+        try:
+            got = json.loads(text)
+        except ValueError:                           # jsonc: its whole-line comments dropped, a trailing comma kept out
+            try:
+                got = json.loads(re.sub(r",(\s*[}\]])", r"\1", "\n".join(x for x in text.splitlines() if not x.strip().startswith("//"))))
+            except ValueError:
+                continue
+        if isinstance(got, dict) and (got.get("provider") or got.get("model")):
+            try:
+                return "~/" + p.relative_to(home).as_posix()
+            except ValueError:
+                return str(p)
+    return ""
+
+
 def connection(kind: str, env: dict[str, str], eff: Any = None, files: list[str] | None = None) -> dict[str, Any]:
     """How the agent connects, as its turn's environment `env` says (D924) -- {"mechanism": key |
     provider | login | endpoint | none, "said", "source", "names"}; never a value."""
@@ -100,12 +128,17 @@ def connection(kind: str, env: dict[str, str], eff: Any = None, files: list[str]
         except ValueError:
             oc = {}
         provider = isinstance(oc, dict) and bool(oc.get("provider") or oc.get("model"))
+        own = "" if provider else opencode_config_file(env)
+        provider = provider or bool(own)
     else:
         keys = [k for k in (*LOGIN_KEYS[kind], *(("ANTHROPIC_AUTH_TOKEN",) if kind == "claude" else ())) if env.get(k)]
         provider = False
     sources = sorted({src.get(k, "the environment") for k in keys})
     also = f"; logged in too ({', '.join(files)})" if files else ""
     if provider:
+        if own:                                      # its own configuration file, as a home is seeded with
+            return {"mechanism": "provider", "names": [own, *keys], "source": own,
+                    "said": f"a provider in {own}" + (f" with a key ({', '.join(keys)})" if keys else "") + also}
         return {"mechanism": "provider", "names": ["OPENCODE_CONFIG_CONTENT", *keys], "source": ", ".join(sources) or "its settings",
                 "said": "a provider in its configuration" + (f" with a key ({', '.join(keys)})" if keys else "") + also}
     if keys:
@@ -117,7 +150,7 @@ def connection(kind: str, env: dict[str, str], eff: Any = None, files: list[str]
     if base and env.get(base):
         return {"mechanism": "endpoint", "names": [base], "source": src.get(base, "the environment"),
                 "said": f"an endpoint without a key ({base} · {src.get(base, 'the environment')})"}
-    return {"mechanism": "none", "names": [], "source": "", "said": "no key, provider configuration or login detected"}
+    return {"mechanism": "none", "names": [], "source": "", "said": "no key, provider configuration or login of its own"}
 
 
 def _program(name: str, env: dict[str, str], kind: str = "") -> str:

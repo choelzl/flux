@@ -53,8 +53,8 @@ def endpoint_of(store: Any, user: Any, group: str) -> dict[str, Any]:
     server = {} if external else store.server_settings(reveal=True)
     mine = store.settings(user, reveal=True) if user else {}
     machine = _machine(external)
-    flux = _flux_model(server, mine, machine, external)
     if group == "model":
+        flux = _flux_model(server, mine, machine, external)
         return {"base": flux["base"], "key": flux["key"], "auth": "", "anthropic": False}
     a = visible(store).get(group)
     if a is None:
@@ -62,9 +62,8 @@ def endpoint_of(store: Any, user: Any, group: str) -> dict[str, Any]:
     scopes = {} if external else {"global": {n: x["value"] for n, x in store.env("global", reveal=True).items()}}
     if user:
         scopes[f"user:{user.id}"] = {n: x["value"] for n, x in store.env(f"user:{user.id}", reveal=True).items()}
-    # the built-in OpenCode without an endpoint of its own runs on Flux's model (agent_layers)
-    fx = {"FLUX_REMOTE_BASE_URL": flux["base"], "FLUX_REMOTE_MODEL": "", "FLUX_REMOTE_API_KEY": flux["key"]}
-    _own, eff = run_settings(a, *agent_scopes(store, user, a, machine, server, mine, fx, scopes))
+    # D1170: an agent's own endpoint alone, never Flux's model's
+    _own, eff = run_settings(a, *agent_scopes(store, user, a, machine, server, mine, scopes))
     val = lambda f: str(eff.fields.get(f, {}).get("value") or "")   # noqa: E731
     return {"base": val("endpoint"), "key": val("key"), "auth": val("auth"), "anthropic": a.kind == "claude"}
 

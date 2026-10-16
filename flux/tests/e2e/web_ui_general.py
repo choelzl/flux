@@ -459,7 +459,7 @@ def general_flows(r, watch):
                      "activity": [{"t": now - 10, "k": "read", "text": "spec.md"}, {"t": now - 8, "k": "list", "text": "applications/mul8"},
                                   {"t": now - 5, "k": "ask", "text": "Which is right?\n- Signed (§2)\n- Unsigned (§4)", "options": ["Signed (§2)", "Unsigned (§4)"], "wait_s": 600}],
                      "question": {"question": "Which is right?\n- Signed (§2)\n- Unsigned (§4)", "options": ["Signed (§2)", "Unsigned (§4)"], "asked": now - 5, "wait_s": 600},
-                     "files": [{"path": "library/spec.md", "by": "yours"}]}
+                     "files": [{"path": "library/spec.md", "by": "yours"}, {"path": "library/held.json", "by": "yours", "hidden": True}]}
             decisions = {"from": "agent", "document": "problem.yaml", "first_stage": "synth", "decisions": [
                 {"step": "prompt", "what": "Statement from spec.md §2", "why": "the table in §2"},
                 {"step": "checks", "what": "Golden test with golden.py", "why": "the spec's equation"},
@@ -484,6 +484,13 @@ def general_flows(r, watch):
                         lines[:2] == ["read spec.md", "listed applications/mul8"] and lines[-1] == "waiting for your answer…"
                         and not any(x.startswith("asked") for x in lines), str(lines))
                 r.check("the new loop's files say who made them", "yours" in b.js("return document.querySelector('.aj-files').textContent"))
+                chips = b.js("return [...document.querySelectorAll('.aj-files .aj-file')].map(x => [x.querySelector('code').textContent, !!x.querySelector('.hidden-mark'), x.textContent.includes('hidden from AI')])")
+                r.check("a file given hidden from AI wears its lock and says so, the other not",
+                        chips == [["library/spec.md", False, False], ["library/held.json", True, True]], str(chips))
+                if os.environ.get("FLUX_E2E_SHOTS"):
+                    Path(os.environ["FLUX_E2E_SHOTS"]).mkdir(parents=True, exist_ok=True)
+                    b.js("document.querySelector('.aj-files').scrollIntoView({block: 'center'}); return 1")
+                    b.shot(Path(os.environ["FLUX_E2E_SHOTS"]) / "drafting-files-hidden.png")
                 r.check("Drafting is the strip with its details open, the question inline",
                         b.js("const a = document.querySelector('.aj'); return a.querySelector('.aj-toggle').getAttribute('aria-expanded') === 'true' && a.querySelector('.aj-now').textContent === 'waiting for your answer' && [...a.querySelectorAll('.qbox-choices button')].map(x => x.textContent).join('|') === 'Signed (§2)|Unsigned (§4)|You decide'"))
                 b.js("[...document.querySelectorAll('.qbox button')].find(x => x.textContent === 'Signed (§2)').click(); return 1")

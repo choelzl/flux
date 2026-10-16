@@ -49,6 +49,7 @@ open(os.path.join(d, "AUTHOR-BRIEF.md"), "w").write("the brief\n")
 open(os.path.join(d, "decisions.json"), "w").write(json.dumps([{"step": "prompt", "what": "Echo", "why": "you said " + answer}]))
 row("write", "problem.yaml")
 row("check", "the check passed", tone="ok")
+print("run it:", os.environ.get("FLUX_ASK_RUN_HINT", "flux task run " + os.path.join(d, "problem.yaml")), flush=True)
 '''
 
 
@@ -115,6 +116,25 @@ def test_the_author_asks_the_page_answers_and_the_draft_is_reviewed_and_made(ser
     assert started == [{**started[0], "passes": 1, "screen_only": True}], started
     assert c.get("/api/apps/drafted").json()["agent_draft"] is False
     assert c.get("/api/apps/drafted/author").json()["made"], "made: the Overview shows its authoring no more"
+
+
+def test_a_file_given_hidden_wears_its_lock_and_the_log_names_no_copy(server):
+    """The drafting files list says a file given hidden from AI is (D1159), while the author works and once it
+    ended; the log's last word is how the loop runs (Start), not the author's copy, removed after."""
+    _app, c, _tmp = server
+    r = c.post("/api/apps/new-by-agent", data={"name": "hush", "prompt": "echo", "author": "opencode", "ask_me": "true", "hidden": ["held.json"]},
+               files=[("files", ("spec.md", b"# the spec")), ("files", ("held.json", b"[1]"))], headers=H)
+    assert r.status_code == 200, r.text
+    st = _until(c, "hush", lambda s: s.get("question"))
+    rows = {f["path"]: f for f in st["files"]}
+    assert rows["library/held.json"] == {"path": "library/held.json", "by": "yours", "hidden": True}, rows
+    assert "hidden" not in rows["library/spec.md"], rows
+    assert c.post("/api/apps/hush/author/answer", json={"text": "Signed"}, headers=H).json()["ok"]
+    st = _until(c, "hush", lambda s: not s["running"])
+    rows = {f["path"]: f for f in st["files"]}
+    assert rows["library/held.json"].get("hidden") is True and "hidden" not in rows["library/spec.md"], rows
+    said = [ln for ln in st["log"] if ln.startswith("run it:")]
+    assert said == ["run it: Start, on the loop's page"], st["log"]
 
 
 def test_a_draft_without_decisions_reads_them_from_its_document(server):

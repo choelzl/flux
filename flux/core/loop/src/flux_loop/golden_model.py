@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
-__all__ = ["EXHAUSTIVE_MAX_BITS", "Golden", "golden_vectors", "load_golden", "ulp_distance"]
+__all__ = ["EXHAUSTIVE_MAX_BITS", "Golden", "golden_vectors", "load_golden", "source_module", "ulp_distance"]
 
 
 @dataclass(frozen=True)
@@ -145,14 +145,24 @@ def ulp_distance(a: int, b: int, bits: int) -> float:
     return float(abs(ordered(a) - ordered(b)))
 
 
+def source_module(path: str | Path, name: str) -> Any:
+    """The Python file at `path` run as a module named `name`, from its source: no `__pycache__` left beside a
+    loop's own files (a golden model checked from the web or a run)."""
+    p = Path(path)
+    spec = importlib.util.spec_from_file_location(name, p)
+    if spec is None:
+        raise ImportError(f"{p} is not a Python file")
+    mod = importlib.util.module_from_spec(spec)
+    exec(compile(p.read_bytes(), str(p), "exec", dont_inherit=True), mod.__dict__)
+    return mod
+
+
 def load_golden(path: str | Path) -> Golden:
     """golden.py's model: its PORTS, golden() and settings (D967: the test's, beside the vectors)."""
     p = Path(path)
-    spec = importlib.util.spec_from_file_location(f"golden_{abs(hash(str(p)))}", p)
-    if spec is None or not p.is_file():
+    if not p.is_file():
         raise SystemExit(f"golden model {p} is not a file")
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
+    mod = source_module(p, f"golden_{abs(hash(str(p)))}")
     try:
         return Golden.from_module(mod)
     except ValueError as exc:

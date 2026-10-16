@@ -194,6 +194,27 @@ def test_a_golden_model_that_cannot_run_is_refused_before_the_loop(tmp_path):
     assert task is not None and not why
 
 
+def test_checking_a_golden_leaves_no_bytecode_beside_it(tmp_path, monkeypatch):
+    """The web's Check left golden.cpython-*.pyc in a __pycache__ of the loop's folder, a file of its Files tab:
+    the golden is run from its source, wherever the loop imports it (the author's check, the harness, the proto)."""
+    import sys
+    from types import SimpleNamespace
+
+    from flux_loop.author import _golden_fault
+    from flux_loop.document import _gate
+    from flux_loop.golden_model import load_golden
+    from flux_loop.golden_proto import load
+
+    monkeypatch.setattr(sys, "dont_write_bytecode", False)
+    (tmp_path / "golden.py").write_text("PORTS = [{'name': 'a', 'dir': 'in', 'bits': 4, 'unsigned': True},\n"
+                                        "         {'name': 's', 'dir': 'out', 'bits': 4, 'unsigned': True}]\n"
+                                        "def golden(a):\n    return {'s': a}\n")
+    task = SimpleNamespace(gate=_gate("{python} -m flux_loop.golden_model {artifact} --golden {home}/golden.py"))
+    assert _golden_fault(task, tmp_path) == ""
+    assert load_golden(tmp_path / "golden.py").ports and load(tmp_path / "golden.py").ports
+    assert not (tmp_path / "__pycache__").exists(), sorted(p.name for p in tmp_path.iterdir())
+
+
 def test_a_golden_that_never_fills_its_declared_width_is_refused(tmp_path):
     """An unsigned output whose top bit no vector sets disagrees with its width (D622)."""
     from types import SimpleNamespace

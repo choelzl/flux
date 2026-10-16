@@ -264,12 +264,9 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
             for k in (*g["public"], *g["secret"]):
                 if server.get(k) or any(machine.get(x) for x in model_keys.get(k, (k,))):
                     out[k] = True
-        mine = store.settings(user)
-        flux = {} if mine.get("FLUX_REMOTE_BASE_URL") else {k: server.get(k) or machine.get(k, "") for k in GROUPS["model"]["public"]
-                                                              + GROUPS["model"]["secret"]}
         every = {"global": {n: x["value"] for n, x in store.env("global", reveal=True).items()}}
         for a in agents.values():
-            _own, eff = run_settings(a, *agent_scopes(store, None, a, machine, server, {}, flux, every))
+            _own, eff = run_settings(a, *agent_scopes(store, None, a, machine, server, {}, every))
             names = aliases(a.name, a.kind)
             for f in eff.fields:
                 k = names.get("key" if f == "auth" else f)
@@ -278,9 +275,8 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
             if server.get(a.timeout()):
                 out[a.timeout()] = True
             pin, pout = a.prices()
-            for k, fk in ((pin, "FLUX_REMOTE_PRICE_IN"), (pout, "FLUX_REMOTE_PRICE_OUT")):
-                if server.get(k) or (a.name == "opencode" and "endpoint" in eff.fields and eff.fields["endpoint"]["source"] == "Flux's model"
-                                     and (server.get(fk) or machine.get(fk))):
+            for k in (pin, pout):
+                if server.get(k):
                     out[k] = True
         return out
 

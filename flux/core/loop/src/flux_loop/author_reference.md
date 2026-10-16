@@ -175,6 +175,8 @@ an arbitrary script does not imply a language. List every stage's `metrics` and 
 - `fluxpreset golden {artifact} --golden {home}/golden.py` -- Verilator against a
   golden model; prints `N failing of M`; exits 3 when the module does not compile (the loop then
   treats it as a build failure, not a score). `--extra file.sv` for a leaf the module instantiates.
+  It and every `rtl ...` preset read Verilog/SystemVerilog only: in a `language: python` (or C,
+  C++, any software) loop they are refused -- see "A software design against a golden model" below.
 - `fluxpreset rtl measure {artifact} --stage synth|place|route --clock-ps P` -- OpenROAD-flow-scripts
   on ASAP7 run to that stage (`synth` times the netlist unplaced; `place` after placement; `route`
   after routing, adding `drc_errors= wirelength_um=`); prints `fmax_mhz= area_um2= power_w=
@@ -209,6 +211,19 @@ The gate and the stages are any commands: a Python script you write beside the d
 (`{python} {home}/check.py {artifact}` printing `N failing`), a test suite
 (`{python} -m pytest -q {home}/tests --rootdir {home}` with a `fail_re`), a simulator, a
 benchmark printing `name=value`. Write every script the document names.
+
+A software design against a golden model -- `language: python`, `c`, `cpp` -- is checked by
+`cases`/`ccases`, never by `golden` (Verilator would look for a `module` in the source and fail every try):
+
+- `fluxpreset cases {artifact} --call f --reference {home}/reference.py:f --random 200` -- calls the
+  design's `f` and the reference's `f` (plain Python) on the same cases and prints each mismatch, then
+  `N failing of M`. The reference module gives the cases: `inputs(rng)` (returns an argument tuple;
+  `--random N` calls it N times with a seeded `random.Random`), `CASES` (argument tuples), or
+  `--cases {home}/cases.json`. `--tol R` accepts floats within a relative R.
+- C or C++: `fluxpreset ccases {artifact} --call f --sig "long(long,long)" --reference {home}/reference.py:f --random 200`
+  (built as a shared library; scalar arguments; C++ declares `f` `extern "C"`).
+- Anything else (several functions, a class, files): your own script, `{python} {home}/check.py {artifact}`,
+  that imports the design, compares it with the golden and prints each failure and `N failing` last.
 
 A program (C, C++, Python) is measured by the preset `fluxpreset prog`; `--build` is one quoted command writing
 `{out}`, `--run` the command measured (empty: the built program; Python: `--run "{python} {artifact}"`):

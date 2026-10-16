@@ -3,7 +3,7 @@
 // once it ended), the agent, what it does now (its latest work line), the time it took, Stop, Details. Under it its
 // question (components/Ask.js) -- D1158: or, its check refused the draft, the refusal with Try again, Open in configurator
 // and a note to the agent, in the question's place -- and, a revision ended, what it changed. Details: its work as lines, the files (written
-// / yours), then folded its conversation (D1144: as Live draws an agent), what it was asked, its log and its stderr. One poll (`useAuthor`) follows it.
+// / yours, a lock on one hidden from AI), then folded its conversation (D1144: as Live draws an agent), what it was asked, its log and its stderr. One poll (`useAuthor`) follows it.
 
 import { Glyph, Notice, cx, html, useRef, useState } from "../view.js";
 import { appHref, loopApi, toast } from "../ui.js";
@@ -15,6 +15,7 @@ import { Ask, asks } from "./Ask.js";
 import { AgentTurn } from "../live/inspector/Chat.js";
 import { Diff } from "./Diff.js";
 import { Tag } from "./Tone.js";
+import { HiddenMark } from "../files/hidden.js";
 
 /** An author that ended without a document, said alike wherever its job is drawn: [what, why]. */
 const AUTHOR_FAILED = ["No document passed its checks.", "See its log: try again, or write it yourself."];
@@ -118,7 +119,7 @@ export function AuthorJob({ name, st, onStop = null, answer = null, retry = null
     ${changed ? html`<details class="aj-diff" open><summary>${`Changes to ${st.revise}`}</summary><${Diff} ops=${lineDiff(st.before, st.after)} /></details>` : ""}
     ${details ? html`<div class="aj-details">
       ${rows.length || running ? html`<${Lines} st=${st} rows=${rows} />` : ""}
-      ${st.files?.length ? html`<div class="aj-files">${st.files.map(x => html`<span key=${x.path} class="aj-file"><code>${x.path}</code>${x.by === "yours" ? html`<${Tag}>yours<//>` : html`<${Tag} k="var(--agent)">written<//>`}</span>`)}</div>` : ""}
+      ${st.files?.length ? html`<div class="aj-files">${st.files.map(x => html`<span key=${x.path} class="aj-file" data-hidden=${x.hidden ? "true" : null}>${x.hidden ? html`<${HiddenMark} path=${x.path} />` : ""}<code>${x.path}</code>${x.by === "yours" ? html`<${Tag}>yours<//>` : html`<${Tag} k="var(--agent)">written<//>`}${x.hidden ? html`<${Tag}>hidden from AI<//>` : ""}</span>`)}</div>` : ""}
       <div class="aj-folds">
         ${total ? html`<details data-author-section="conversation"><summary>${`conversation (${plural(total, "step")})`}</summary>
             <${AgentTurn} id=${`author-${name}-${st.started}`} fields=${Object.fromEntries(said.map(x => [x, f[x]]))} running=${running} t0=${st.started || 0} t1=${st.ended} /></details>`

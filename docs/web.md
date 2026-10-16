@@ -336,7 +336,9 @@ incomplete; no estimates.
 
 - **My agents and models:** per agent its login, **Test**, model, own variables, **Seconds per
   turn** (overrides the server's); variables for every agent; the agent by default (overrides the
-  admin's). Server values shown in grey. Naming your own endpoint in a group drops the server's
+  admin's). An agent never runs on Flux's model (the Flux tab): without an endpoint of its own it
+  uses its own configuration and login, and its card says "not configured" when it has none.
+  Server values shown in grey. Naming your own endpoint in a group drops the server's
   values of that group; your token prices count only with your own endpoint. **From endpoint**
   beside a Model turns its field into a menu of what the endpoint lists (`/models`; yours, else
   the server's you inherit; the key stays on the server); kept per group, here and in Admin.

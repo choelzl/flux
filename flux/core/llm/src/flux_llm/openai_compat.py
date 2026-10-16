@@ -148,8 +148,8 @@ def load_user_config(path: Path | None = None) -> list[str]:
         pass
     for w in said:
         print(f"flux: {path.name}: {w}", file=sys.stderr)
-    # coding agents (OpenCode's config reads {env:FLUX_REMOTE_API_KEY}) inherit the key from the
-    # environment, in memory only, never written anywhere (D669)
+    # a step's command that asks Flux's model inherits the key from the environment, in memory only,
+    # never written anywhere (D669); a coding agent gets none of it (D1170)
     if "FLUX_REMOTE_API_KEY" not in os.environ and os.environ.get("FLUX_REMOTE_API_KEY_FILE"):
         key = remote_api_key()
         if key:

@@ -65,7 +65,7 @@ export function Uploader({ rows, onChange, places = true, hideable = false, labe
       <input type="file" multiple ref=${filesIn} class="up-input up-files" tabindex="-1" aria-hidden="true" onChange=${e => { add([...e.currentTarget.files].map(f => ({ file: f, path: f.name }))); e.currentTarget.value = ""; }} />
       <input type="file" webkitdirectory multiple ref=${dirIn} class="up-input up-folder" tabindex="-1" aria-hidden="true" onChange=${e => { add([...e.currentTarget.files].map(f => ({ file: f, path: f.webkitRelativePath || f.name }))); e.currentTarget.value = ""; }} /></div>
     ${rows.length ? html`<ul class="files flist up-rows">${rows.map(r => html`<li key=${r.key}>
-        <span class="mono">${r.label}</span><small class="muted">${r.folder ? plural(r.files.length, "file") : bytes(r.files[0].file.size)}</small>
+        <span class="mono up-name">${r.label}</span><small class="muted up-size">${r.folder ? plural(r.files.length, "file") : bytes(r.files[0].file.size)}</small>
         ${r.loop ? html`<small class="muted">loop itself</small>` : r.zip && places ? html`<small class="muted">unpacked as loop</small>`
           : places ? html`<span class="up-place"><${Select} aria-label=${`Where ${r.label} goes`} value=${r.dest} options=${PLACES} onChange=${v => set(r, { dest: v })} />
             ${r.dest === "custom" ? html`<input class="narrow-in" aria-label="Folder" placeholder="folder" value=${r.custom} onInput=${e => set(r, { custom: e.currentTarget.value })} />` : ""}</span>` : ""}

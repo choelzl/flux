@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from typing import Any
 from flux_loop.words import plural
@@ -184,7 +185,8 @@ def cmd_task_check(args: argparse.Namespace) -> int:
         return 1
     from flux_loop.task import model_use
 
-    if model_use(task):                                  # the model a run would use, asked now
+    # the model a run would use, asked now -- not from inside an agent's turn, which has none of Flux's model (D1170)
+    if model_use(task) and not os.environ.get("FLUX_AGENT_TURN"):
         try:
             from flux_llm import OpenAIChatProposer, describe_model
 
@@ -608,8 +610,10 @@ def cmd_ask(args: argparse.Namespace) -> int:
     try:
         got = drive(ask, run_pass=run_pass, proposer=author_model, loop_proposer=loop_model() if args.replies else None)
     except _NoRun:
-        print(f"\nthe document is written and checked: {workdir / 'problem.yaml'}\n"
-              f"run it: flux task run {workdir / 'problem.yaml'}")
+        # a web author works in a copy of the loop, removed once its document is the loop's: the page says how to run it
+        web = os.environ.get("FLUX_ASK_RUN_HINT")
+        doc = "problem.yaml" if web else workdir / "problem.yaml"
+        print(f"\nthe document is written and checked: {doc}\nrun it: {web or f'flux task run {doc}'}")
         return 0
     if got["error"]:
         print(f"\nno runnable document after {plural(args.checks, 'repair')} -- the draft stays in {workdir}.\n"

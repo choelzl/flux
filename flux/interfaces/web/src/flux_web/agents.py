@@ -26,7 +26,7 @@ __all__ = ["BUILTIN", "KINDS", "Agent", "found", "registry", "run_prices", "run_
 KINDS: dict[str, dict[str, Any]] = {
     "opencode": {"label": "OpenCode", "login": "opencode auth login", "credentials": (".local/share/opencode/auth.json",),
                  "printed": None, "endpoint": "Endpoint URL",
-                 "hint": "Empty: its own configuration; the built-in OpenCode uses Flux's model."},
+                 "hint": "Empty: its own configuration (~/.config/opencode/opencode.json, its login)."},
     "claude": {"label": "Claude Code", "login": "claude setup-token", "credentials": (".claude/.credentials.json",),
                "printed": re.compile(r"sk-ant-oat\d+-[A-Za-z0-9_\-]{20,}"), "endpoint": "Endpoint URL",
                "hint": "Empty: its own login and model."},
@@ -210,14 +210,11 @@ def _resolved(agent: Agent, server: dict[str, str], mine: dict[str, str]) -> dic
     return {**{n: server[n] for n in names if server.get(n)}, **{n: mine[n] for n in names if mine.get(n) and n not in prices}}
 
 
-def run_prices(agent: Agent, server: dict[str, str], mine: dict[str, str], flux: dict[str, str]) -> dict[str, str]:
-    """`FLUX_<NAME>_PRICE_IN`/`_OUT` as a run gets them (D835): the agent's own, and the built-in
-    OpenCode on Flux's own model (no endpoint of its own) Flux's model's prices, unless it has its own."""
+def run_prices(agent: Agent, server: dict[str, str], mine: dict[str, str]) -> dict[str, str]:
+    """`FLUX_<NAME>_PRICE_IN`/`_OUT` as a run gets them (D835): the agent's own -- never Flux's
+    model's (D1170)."""
     vals = _resolved(agent, server, mine)
-    pin, pout = agent.prices()
-    if agent.name == "opencode" and not vals.get(agent.keys()["public"][0]) and not (vals.get(pin) or vals.get(pout)):
-        vals = {pin: flux.get("FLUX_REMOTE_PRICE_IN", ""), pout: flux.get("FLUX_REMOTE_PRICE_OUT", "")}
-    return {n: vals[n] for n in (pin, pout) if vals.get(n)}
+    return {n: vals[n] for n in agent.prices() if vals.get(n)}
 
 
 def run_timeout(agent: Agent, server: dict[str, str], mine: dict[str, str]) -> str:
@@ -237,13 +234,13 @@ FROM_SERVER = "From Server"
 
 
 def agent_layers(agent: Agent, *, machine: dict[str, str], server: dict[str, str], mine: dict[str, str],
-                 server_vars: dict[str, str], my_vars: dict[str, str], loop_vars: dict[str, str] | None = None,
-                 flux: dict[str, str] | None = None) -> list[tuple[str, dict[str, str]]]:
+                 server_vars: dict[str, str], my_vars: dict[str, str],
+                 loop_vars: dict[str, str] | None = None) -> list[tuple[str, dict[str, str]]]:
     """The scopes an agent's configuration comes from (D922), lowest first: the server's process
     (its environment, flux.env included), the server's settings and variables, the user's, the
     loop's. `server_vars`/`my_vars`: the variables for every agent, then this agent's own, merged.
-    A Claude login's token is only ever the user's own (D748). `flux`: Flux's own model, the
-    built-in OpenCode's when nothing names its endpoint (D696) -- the lowest layer."""
+    A Claude login's token is only ever the user's own (D748). D1170: never Flux's own model -- an
+    agent without settings of its own runs on its own configuration."""
     names = (*agent.keys()["public"][:2], *agent.keys()["secret"])
     token = f"FLUX_{agent.up}_OAUTH_TOKEN"
     # D945: the server's settings are just "From Server"; its machine environment (flux.env, the shell)
@@ -253,13 +250,6 @@ def agent_layers(agent: Agent, *, machine: dict[str, str], server: dict[str, str
            ("yours", {**my_vars, **{n: mine[n] for n in names if mine.get(n)}})]
     if loop_vars:
         out.append(("this loop's", dict(loop_vars)))
-    if agent.name == "opencode" and flux and flux.get("FLUX_REMOTE_BASE_URL"):
-        from flux_loop.agent_env import resolve
-
-        if "endpoint" not in resolve(agent.name, agent.kind, out).fields:
-            out.insert(0, ("Flux's model", {"FLUX_OPENCODE_BASE_URL": flux["FLUX_REMOTE_BASE_URL"],
-                                            "FLUX_OPENCODE_MODEL": flux.get("FLUX_REMOTE_MODEL", ""),
-                                            "FLUX_OPENCODE_API_KEY": flux.get("FLUX_REMOTE_API_KEY", "")}))
     return out
 
 

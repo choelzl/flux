@@ -103,6 +103,7 @@ def _generate_with_model(problem: Problem, subgoal: str | None, method: str,
                     out["built"] = "ok"
                 except BuildError as exc:
                     out["error"] = str(exc)[:4000]
+                    out["failed"] = True                 # D1046: the check ended, the design did not build
                     built = None
             if built is not None:
                 fails, summary = problem.fast_check(built, cand, subgoal, state)
@@ -234,6 +235,7 @@ def _generate_with_model(problem: Problem, subgoal: str | None, method: str,
                 record_failure(state, cand, "build", str(exc))
                 last_err = str(exc)[:600]
                 out["error"] = str(exc)[:4000]
+                out["failed"] = True
         if built is None:
             broke += 1
             if broke >= max(1, req.revert_after) and last_good and last_good != cand.artifact:

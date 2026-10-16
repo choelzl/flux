@@ -66,15 +66,9 @@ def golden_path(task: Any) -> Path | None:
 
 def load(path: Path) -> Any:
     """The golden model as the harness's `Golden`."""
-    import importlib.util
+    from .golden_model import Golden, source_module
 
-    from .golden_model import Golden
-
-    spec = importlib.util.spec_from_file_location(f"golden_{abs(hash(str(path)))}", path)
-    mod = importlib.util.module_from_spec(spec)
-    assert spec.loader is not None
-    spec.loader.exec_module(mod)
-    return Golden.from_module(mod)
+    return Golden.from_module(source_module(path, f"golden_{abs(hash(str(path)))}"))
 
 
 _RUNNER = r'''

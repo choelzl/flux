@@ -5,9 +5,11 @@ stages, its scripts) read them as ever, and what the gate says of a design still
 Each agent turn is told so in its brief, and each agent's own permission settings refuse the paths:
 
   Claude Code  `--settings` with `permissions.deny`: Read(...) and Edit(...) on each path (absolute, `//...`, and
-               relative to the turn's folder when it is inside it), Bash(...) on a command naming it
+               relative to the turn's folder when it is inside it), Bash(...) on a command naming it, and the Grep
+               and Glob tools (where a build has them; its Read rules hold for them only best-effort)
   OpenCode     its config (`OPENCODE_CONFIG_CONTENT`): `permission.read` and `permission.edit` patterns for the
-               path relative to its project, `permission.bash` patterns for a command naming it
+               path relative to its project, `permission.bash` patterns for a command naming it, and its `grep` and
+               `glob` tools denied: they honour no `read` rule (a grep over the folder printed a hidden file's lines)
   Codex        no per-path rule a user's config can say (its `deny_read` is an administrator's requirement): the
                brief's line only
 
@@ -85,10 +87,12 @@ def _commands(rel: str) -> list[str]:
 
 
 def claude_settings(hidden: Hidden, workdir: str | Path = "") -> dict[str, Any]:
-    """The `--settings` of a Claude Code turn: `permissions.deny` -- Read and Edit (which Grep and Glob honour, and
-    `cat`, `head` and the like in Bash) on each path, absolute (`//...`) and relative to the turn's folder when
-    inside it, and Bash on a command that names it."""
-    deny: list[str] = []
+    """The `--settings` of a Claude Code turn: `permissions.deny` -- Read and Edit (which `cat`, `head` and the
+    like in Bash honour) on each path, absolute (`//...`) and relative to the turn's folder when inside it, Bash on a
+    command that names it, and the Grep and Glob tools: Claude Code holds them to Read rules only best-effort, and
+    a search over the folder would list and quote the paths (D1169). Its shell's `grep` and `find` remain, under
+    the Bash and Read rules. (Claude Code 2.1's native build has neither tool: its searches go through Bash.)"""
+    deny: list[str] = ["Grep", "Glob"]
     for a, rel in hidden:
         forms = [f"/{a}"] + ([f"./{r}"] if (r := _rel_to(a, workdir)) else [])
         for f in forms:
@@ -101,7 +105,10 @@ def claude_settings(hidden: Hidden, workdir: str | Path = "") -> dict[str, Any]:
 def opencode_permission(hidden: Hidden) -> dict[str, Any]:
     """OpenCode's `permission` for the paths: `read` and `edit` match a file by its path relative to the project
     (the turn's folder, its git root, or `/`), so each path as its loop names it, at the start or after a folder;
-    `bash` a command that names it. The longest pattern wins, so each deny outranks the `*` allow."""
+    `bash` a command that names it. The longest pattern wins, so each deny outranks the `*` allow. Its `grep` and
+    `glob` tools are denied outright (D1169): OpenCode 1.18 checks them against their own rules, not `read`'s, by
+    the folder searched -- a grep over the loop's folder printed a hidden file's lines, a glob listed it. Its shell's
+    `grep` and `find` remain, under the `bash` rules."""
     files: dict[str, str] = {}
     bash: dict[str, str] = {}
     for _a, rel in hidden:
@@ -110,7 +117,8 @@ def opencode_permission(hidden: Hidden) -> dict[str, Any]:
             files[p] = "deny"
         for c in _commands(r):
             bash[c] = "deny"
-    return {"permission": {"read": {"*": "allow", **files}, "edit": {"*": "allow", **files}, "bash": bash}}
+    return {"permission": {"read": {"*": "allow", **files}, "edit": {"*": "allow", **files}, "bash": bash,
+                           "grep": "deny", "glob": "deny"}}
 
 
 def with_hidden(kind: str, cmd: list[str], env: dict[str, str], hidden: Hidden, workdir: str | Path) -> tuple[list[str], dict[str, str]]:
@@ -127,6 +135,9 @@ def with_hidden(kind: str, cmd: list[str], env: dict[str, str], hidden: Hidden, 
         add = opencode_permission(hidden)["permission"]
         perm = dict(base.get("permission") or {}) if isinstance(base, dict) else {}
         for key, rules in add.items():
+            if isinstance(rules, str):                     # a tool denied whole (grep, glob)
+                perm[key] = rules
+                continue
             had = perm.get(key)
             had = had if isinstance(had, dict) else ({"*": had} if isinstance(had, str) else {})
             perm[key] = {**had, **rules}

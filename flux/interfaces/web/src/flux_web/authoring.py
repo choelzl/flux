@@ -173,22 +173,42 @@ def _problem_files(root: Path) -> list[str]:
     return out
 
 
-def files_of(app_dir: Path, st: dict[str, Any]) -> list[dict[str, str]]:
+def _hidden_said(root: Path, st: dict[str, Any]) -> list[str]:
+    """The paths hidden from AI (D1159) as the job knows them: those given hidden, and those its document says."""
+    from .routes_hidden import said
+
+    doc = root / (st.get("revise") or "problem.yaml")
+    try:
+        text = doc.read_text(errors="replace") if doc.is_file() else ""
+    except OSError:
+        text = ""
+    return list(dict.fromkeys([*(str(p) for p in st.get("hidden") or []), *said(text)]))
+
+
+def files_of(app_dir: Path, st: dict[str, Any]) -> list[dict[str, Any]]:
     """The new loop's files and who made them (D1125): `yours` the files given to read, `written` what the author
-    wrote or changed; a revision's untouched files are left out."""
+    wrote or changed; a revision's untouched files are left out. A file hidden from AI says so (`hidden`, D1159)."""
+    from flux_knowledge.hidden import is_hidden
+
     yours = set(st.get("yours") or [])
-    if st.get("ended") is None:
-        work = _work_directory(app_dir, st)
+    running = st.get("ended") is None
+    root = _work_directory(app_dir, st) if running else app_dir
+    pats = [str(root.resolve() / p.strip().rstrip("/")) for p in _hidden_said(root, st) if p.strip()]
+    if running:
         rows = []
-        for rel in _problem_files(work) if work.is_dir() else []:
+        for rel in _problem_files(root) if root.is_dir() else []:
             mine = app_dir / rel
             if rel in yours:
                 rows.append({"path": rel, "by": "yours"})
-            elif not mine.is_file() or mine.read_bytes() != (work / rel).read_bytes():
+            elif not mine.is_file() or mine.read_bytes() != (root / rel).read_bytes():
                 rows.append({"path": rel, "by": "written"})
-        return rows
-    return ([{"path": p, "by": "written"} for p in st.get("written") or [] if p not in yours]
-            + [{"path": p, "by": "yours"} for p in sorted(yours) if (app_dir / p).is_file()])
+    else:
+        rows = ([{"path": p, "by": "written"} for p in st.get("written") or [] if p not in yours]
+                + [{"path": p, "by": "yours"} for p in sorted(yours) if (app_dir / p).is_file()])
+    for r in rows:
+        if pats and is_hidden(root / r["path"], pats):
+            r["hidden"] = True
+    return rows
 
 
 def decisions(app_dir: Path, document: str | None) -> dict[str, Any]:
@@ -409,7 +429,7 @@ class Authoring:
             fh.write(f"\n── {header} {time.strftime('%Y-%m-%d %H:%M:%S')} by {by} · {AUTHORS.get(author, author)} ──\n")
         log = open(f["log"], "ab")
         proc = subprocess.Popen(argv, cwd=str(work), stdout=log, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
-                                env=env, start_new_session=True)
+                                env={**env, "FLUX_ASK_RUN_HINT": "Start, on the loop's page"}, start_new_session=True)   # not the copy, removed after
         log.close()
         f["state"].write_text(json.dumps({**state, "pid": proc.pid, "started": time.time(), "ended": None, "author": author,
                                           "ask": ask, "by": by, "work_directory": work.name, "ask_me": bool(ask_me),

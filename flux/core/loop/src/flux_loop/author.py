@@ -766,7 +766,6 @@ def _golden_fault(task: Any, workdir: Path) -> str:
     """Why the golden model a `--golden` gate names cannot judge anything, or "" (D589): it
     must import, declare its ports, make its vectors (`golden()` called on every one) and
     answer every output port each time."""
-    import importlib.util
     import traceback
 
     from .golden_proto import golden_check
@@ -779,13 +778,9 @@ def _golden_fault(task: Any, workdir: Path) -> str:
     raw = cmd[cmd.index("--golden") + 1].replace("{home}", str(workdir))
     path = Path(raw)
     try:
-        from .golden_model import Golden, golden_vectors
+        from .golden_model import Golden, golden_vectors, source_module
 
-        spec = importlib.util.spec_from_file_location("authored_golden", path)
-        mod = importlib.util.module_from_spec(spec)
-        assert spec.loader is not None
-        spec.loader.exec_module(mod)
-        g = Golden.from_module(mod)
+        g = Golden.from_module(source_module(path, "authored_golden"))      # no __pycache__ in the loop's folder
         rows = golden_vectors(g)
     except Exception as exc:  # noqa: BLE001 -- the golden's own fault, said to its author
         tail = "".join(traceback.format_exception(exc)[-3:]).strip()

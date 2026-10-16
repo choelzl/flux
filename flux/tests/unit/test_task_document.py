@@ -734,6 +734,44 @@ def test_app_local_scripts_require_an_explicit_design_language():
     assert said.to_dict()["language"] == "verilog"
 
 
+@pytest.mark.parametrize("language, test, measure, refused", [
+    # the live draft (D1168): a Python loop gated by the RTL golden test failed every try
+    ("python", "fluxpreset golden {artifact} --golden {home}/golden.py", None, "fluxpreset cases"),
+    ("python", "{python} -W ignore -m flux_presets golden {artifact} --golden {home}/golden.py", None, "fluxpreset cases"),
+    ("python", "{python} -m flux_presets.golden {artifact} --golden g.py", None, "fluxpreset cases"),
+    ("python", "true", "fluxpreset rtl measure {artifact} --stage synth --clock-ps 1000", "fluxpreset cases"),
+    ("cpp", "fluxpreset rtl lint {artifact}", None, "fluxpreset ccases"),
+    ("vhdl", "fluxpreset golden {artifact} --golden g.py", None, "check.py"),
+    ("text", "fluxpreset golden {artifact} --golden g.py", None, "check.py"),
+    # the reverse: a preset that loads a Python design, in an RTL loop
+    ("systemverilog", "fluxpreset cases {artifact} --call f --reference r.py --random 10", None, "fluxpreset golden"),
+    ("verilog", "true", "fluxpreset bench {artifact} --call f", "fluxpreset golden"),
+    # accepted: the preset's own language, a script of the loop's, a preset of any language
+    ("systemverilog", "fluxpreset golden {artifact} --golden g.py", "fluxpreset rtl measure {artifact} --stage synth", None),
+    ("verilog", "fluxpreset rtl lint {artifact}", None, None),
+    ("python", "fluxpreset cases {artifact} --call f --reference r.py --random 10", "fluxpreset bench {artifact} --call f", None),
+    ("python", "{python} {home}/check.py {artifact}", None, None),
+    ("python", "fluxpreset complexity {artifact}", None, None),
+    ("cpp", "fluxpreset ccases {artifact} --call f --sig 'long(long)' --reference r.py", None, None),
+    (None, "fluxpreset golden {artifact} --golden g.py", None, None),     # unsaid: the preset says it (D832)
+])
+def test_a_preset_for_another_language_than_the_loops_is_refused(language, test, measure, refused):
+    """D1168: a check or a stage whose preset reads RTL (`fluxpreset golden`, `fluxpreset rtl ...`) in a loop
+    whose designs are not RTL -- or one that loads a Python design in an RTL loop -- would fail every try;
+    the document is refused, saying what checks a design of the loop's language."""
+    doc: dict = {"id": "t", "statement": "s", "objectives": [], "flow": {"test": {"t": test}},
+                 **({"language": language} if language else {})}
+    if measure:
+        doc["flow"]["measure"] = {"m": {"command": measure, "metrics": ["time_ms"]}}
+    if refused is None:
+        TaskSpec.from_dict(doc)
+        return
+    with pytest.raises(TaskError) as err:
+        TaskSpec.from_dict(doc)
+    assert ("flow.measure.m" if measure and test == "true" else "flow.test.t") in str(err.value)
+    assert f"language: {language}" in str(err.value) and refused in str(err.value)
+
+
 def test_a_rejection_asking_for_numbers_again_is_measured_by_an_r_pass_before_the_next_pass(tmp_path, monkeypatch):
     """D1043: a rejection standing on the record that asks for a measurement again is the next R pass:
     marked between the passes (half-way), the design checked and measured again, the rejection resolved."""

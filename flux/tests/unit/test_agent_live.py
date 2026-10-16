@@ -235,7 +235,7 @@ def test_a_turn_keeps_its_steps_for_the_record(tmp_path):
 
 def test_each_agent_gets_its_own_variables_not_the_others(tmp_path, monkeypatch):
     """D718: OpenCode's providers read ANTHROPIC_API_KEY and OPENAI_API_KEY by themselves; an
-    agent gets only its own group's variables, and Flux's."""
+    agent gets only its own group's variables -- and none of Flux's own model's (D1170)."""
     import os
 
     from flux_loop.agent import agent_spec
@@ -257,10 +257,12 @@ def test_each_agent_gets_its_own_variables_not_the_others(tmp_path, monkeypatch)
     oc = json.loads((tmp_path / "opencode.env").read_text())
     assert not {"ANTHROPIC_API_KEY", "ANTHROPIC_BASE_URL", "OPENAI_API_KEY", "CLAUDE_CODE_USE_BEDROCK"} & set(oc)
     # D922: Flux's alias is resolved, not handed on -- a key without an endpoint and a model makes no provider
-    assert "FLUX_OPENCODE_API_KEY" not in oc and oc["FLUX_REMOTE_API_KEY"] == "flux-key" and "OPENCODE_CONFIG_CONTENT" in oc
+    assert "FLUX_OPENCODE_API_KEY" not in oc and "OPENCODE_CONFIG_CONTENT" in oc
+    assert "FLUX_REMOTE_API_KEY" not in oc and oc["FLUX_AGENT_API_KEY"] == "oc-key", "its own key for its own configuration, not Flux's"
     assert "ANTHROPIC_API_KEY" not in json.loads((tmp_path / "opencode.version.env").read_text()), "its version asked with its own too"
     cl = json.loads((tmp_path / "claude.env").read_text())
     assert cl["ANTHROPIC_API_KEY"] == "claude-key" and "OPENAI_API_KEY" not in cl and "FLUX_OPENCODE_API_KEY" not in cl
+    assert "FLUX_REMOTE_API_KEY" not in cl
 
 
 

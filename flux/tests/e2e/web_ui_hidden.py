@@ -28,6 +28,11 @@ DOCUMENT = ("statement: Hidden from AI\nlanguage: python\n# the gate's own test,
             "flow:\n  test: \"{python} {home}/tests/check.py {artifact}\"\n")
 
 
+def put_hidden(r, name, path):
+    """`path` of loop `name` hidden from AI, as the Files tab's Hide does."""
+    return r.api(f"/apps/{name}/hidden", "PUT", {"path": path, "hidden": True})
+
+
 def hidden_flows(r, watch):
     b = r.b
 
@@ -125,6 +130,21 @@ def hidden_flows(r, watch):
         menu("notes.md", "Show to AI")
         b.wait(f"!({locked.replace('arguments[0]', repr('notes.md'))})", timeout=10, what="the lock gone from notes.md")
         r.check("nothing hidden at the end", hidden() is None, str(doc().get("flow")))
+
+        # Knowledge › Library counts the papers read: a hidden file in library/ is none
+        put(r, name, "library/paper.md", "# a paper\n")
+        put(r, name, "library/held.json", "[1]\n")
+        r.check("library/held.json hidden", put_hidden(r, name, "library/held.json")["status"] == 200)
+        r.page(f"#/app/{name}/settings/problem?step=graph", "document.querySelector('.cfg[data-step=graph] .cfg-cycle')", "the Graph")
+        b.js(open_box)
+        lib = "[...document.querySelectorAll('.cfg-panel [data-sec=library] .cfg-lib-reads li')].find(l => l.textContent.includes('library/'))"
+        b.wait(f"!!({lib})", timeout=10, what="the library/ row")
+        said = b.js(f"return {lib}.textContent.trim()")
+        r.check("library/ counts its papers, not a file hidden from AI", "1 paper, digested; 1 hidden from AI" in said, said)
+        if os.environ.get("FLUX_E2E_SHOTS"):
+            b.js("document.querySelector('.cfg-panel [data-sec=library]').scrollIntoView({block: 'start'}); return 1")
+            time.sleep(0.4)
+            b.shot(Path(os.environ["FLUX_E2E_SHOTS"]) / "hidden-library-count.png")
         r.page("#/", "document.querySelector('#main table.list, #main .empty')", "the loop list")
         r.check(f"{name}: removed", r.api(f"/apps/{name}", "DELETE")["status"] == 200)
         r.clean("hidden from AI")
@@ -226,6 +246,12 @@ def hidden_flows(r, watch):
             r.check("each file for the agent may be marked hidden from AI", b.js("return document.querySelectorAll('.attach .up-rows li .up-hide input').length") == 2)
             b.js("[...document.querySelectorAll('.attach .up-rows li')].find(l => l.textContent.includes('expected.txt')).querySelector('.up-hide input').click(); return 1")
             b.wait("[...document.querySelectorAll('.attach .up-rows li')].find(l => l.textContent.includes('expected.txt')).querySelector('.up-hide input').checked", what="marked")
+            lefts = b.js("return [...document.querySelectorAll('.attach .up-rows li')].map(l => [l.querySelector('.up-size'), l.querySelector('.up-hide')].map(x => Math.round(x.getBoundingClientRect().left)))")
+            r.check("the rows' sizes and switches line up, whatever their names' length", len({tuple(x) for x in lefts}) == 1, str(lefts))
+            if os.environ.get("FLUX_E2E_SHOTS"):
+                Path(os.environ["FLUX_E2E_SHOTS"]).mkdir(parents=True, exist_ok=True)
+                b.js("document.querySelector('.attach').scrollIntoView({block: 'center'}); return 1")
+                b.shot(Path(os.environ["FLUX_E2E_SHOTS"]) / "agent-files-to-read.png")
             r.button("Draft", ".ba-nav")
             sent = b.wait("window.__hiSent", timeout=20, what="the ask sent")
             hidden = [v for k, v in sent if k == "hidden"]

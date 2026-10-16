@@ -13,7 +13,7 @@ from typing import Any, TYPE_CHECKING
 
 from ..objective import Objectives
 from ..types import LoopRequest
-from .commands import _as_said, _check_placeholders, _command, _inferred_language
+from .commands import _as_said, _check_placeholders, _check_preset_languages, _command, _inferred_language
 from .flow import _flow
 from .gate import Gate, _gate, _gate_doc
 from .keys import DOCUMENT_FILE, DOCUMENT_KEYS, EXTENSIONS, TaskError, _INHERITED, _INTERNAL_KEYS, _LIFTED_KEYS
@@ -379,6 +379,7 @@ class TaskSpec:
         language = str(said_language or inferred or "text")
         ext = EXTENSIONS.get(language.lower(), "." + language.lower().replace(" ", ""))
         _check_placeholders(gate, stages, generator, space, baseline)
+        _check_preset_languages(gate, stages, language)
         skills, skills_said, skills_off = _skills(doc.get("skills"), base)
         skills = tuple(sk for sk in skills if not _is_hidden(sk, hidden))      # D1159
         bench_by = _bench_by(doc.get("bench_digest"))

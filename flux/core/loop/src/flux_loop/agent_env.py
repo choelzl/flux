@@ -142,9 +142,12 @@ def resolve(name: str, kind: str, layers: list[tuple[str, dict[str, str]]], *, b
                                                        "options": options, "models": {model: {"name": model}}}
             have["model"] = f"flux/{model}"
             eff.env["OPENCODE_CONFIG_CONTENT"] = json.dumps(have)
-        elif (base or key or model) and not (base and model):
-            said = ", ".join(al[f] for f in ("endpoint", "key", "model") if f in eff.fields)
-            eff.unused.append(f"{said}: OpenCode's provider needs an endpoint and a model -- its own configuration is used")
+        else:
+            if key:                                              # D1170: its own configuration reads it, {env:FLUX_AGENT_API_KEY}
+                eff.env["FLUX_AGENT_API_KEY"] = key
+            if base or model:
+                said = ", ".join(al[f] for f in ("endpoint", "model") if f in eff.fields)
+                eff.unused.append(f"{said}: OpenCode's provider needs an endpoint and a model -- its own configuration is used")
     elif model:
         eff.args = ("--model", model)
     return eff

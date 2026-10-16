@@ -421,7 +421,7 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
                 users.append({"user": u.name, "kind": u.role, "state": word[v["state"]], "when": v["test"].get("when"),
                               "by": v.get("by", "")})
             # D924: the server's own connection for it -- what every user without settings of their own gets (no values)
-            own, eff = run_settings(a, *agent_scopes(store, None, a, dict(os.environ), server, {}, None, every), tuple(reg))
+            own, eff = run_settings(a, *agent_scopes(store, None, a, dict(os.environ), server, {}, every), tuple(reg))
             conn = connection(a.kind, eff.apply({**os.environ, **own}), eff, [])
             # D935: the admin's Test of it, against the server's configuration as it is now
             st = server_test_of(name)

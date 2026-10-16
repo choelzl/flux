@@ -11,7 +11,6 @@ import json
 import shutil
 import tempfile
 import threading
-import time
 from pathlib import Path
 
 import yaml
@@ -59,9 +58,13 @@ def docs_flows(r):
             bg = lambda: b.js(f"return getComputedStyle({R}.host).backgroundColor")                     # noqa: E731
             light = bg()
             b.js("document.body.setAttribute('data-md-color-scheme', 'slate'); return 1")
-            time.sleep(0.2)
-            r.check("docs crafter: Material's dark scheme is the app's dark theme",
-                    b.js(f"return {R}.host.dataset.theme") == "dark" and bg() != light, f"{light} -> {bg()}")
+            try:                                    # the MutationObserver sets data-theme, then the style recomputes
+                b.wait(f"{R}.host.dataset.theme === 'dark' && getComputedStyle({R}.host).backgroundColor !== {json.dumps(light)}",
+                       what="the dark theme", timeout=10, said=f"[{R}.host.dataset.theme, getComputedStyle({R}.host).backgroundColor]")
+                ok, seen = True, ""
+            except AssertionError as x:
+                ok, seen = False, f"{light} -> {x}"
+            r.check("docs crafter: Material's dark scheme is the app's dark theme", ok, seen)
             b.js("document.body.setAttribute('data-md-color-scheme', 'default'); return 1")
 
             # a name and a statement typed, as a person does
@@ -74,8 +77,15 @@ def docs_flows(r):
             b.wait(f"{R}.querySelector('svg.cfg-cycle circle')", what="the Graph's circle")
             b.js(f"{R}.querySelector('g.hit[data-node=knowledge]').dispatchEvent(new MouseEvent('click', {{bubbles: true}})); return 1")
             b.wait(f"{R}.querySelector('.cfg-panel [data-sec=skills]') && {R}.querySelector('.cfg-panel [data-sec=hidden]')", what="Knowledge opened")
-            r.check("docs crafter: Knowledge offers the built-in skill",
-                    "flux-loop-commands" in b.js(f"return {R}.querySelector('.cfg-panel [data-sec=skills]').textContent"))
+            # the section is drawn before its built-in skills: they come from host.uses(), a promise asked after the
+            # first paint, so the list fills a frame or more later (longer with seven browsers side by side)
+            skills = f"{R}.querySelector('.cfg-panel [data-sec=skills]').textContent"
+            try:
+                b.wait(f"{skills}.includes('flux-loop-commands')", what="the built-in skill in Knowledge's Skills", timeout=20, said=skills)
+                ok, seen = True, ""
+            except AssertionError as x:
+                ok, seen = False, str(x)
+            r.check("docs crafter: Knowledge offers the built-in skill", ok, seen)
 
             go("save")
             b.wait(f"{R}.querySelector('.cfg-yaml-fold pre.cfg-yaml')", what="the Save step's document")

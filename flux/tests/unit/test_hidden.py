@@ -18,7 +18,7 @@ import yaml
 from flux_loop import TaskError, TaskSpec, load_task
 from flux_loop.agent import agent_spec, run_turn
 from flux_loop.hidden import (claude_settings, hidden_line, hidden_subs, opencode_permission, said_hidden,
-                              set_hidden_text, turn_hidden)
+                              set_hidden_text, turn_hidden, with_hidden)
 
 
 def _loop(tmp: Path, hidden: object = ("tests/",), **flow) -> Path:
@@ -118,9 +118,11 @@ def test_the_turns_hidden_paths_the_brief_line_and_each_agents_rules(tmp_path):
     deny = claude_settings(got, work)["permissions"]["deny"]
     assert f"Read(/{tests})" in deny and f"Read(/{tests}/**)" in deny and f"Edit(/{tests}/**)" in deny
     assert "Bash(* tests/*)" in deny and "Bash(*/tests/*)" in deny
+    assert "Grep" in deny and "Glob" in deny, "D1169: a search tool over the folder would list and quote them"
     perm = opencode_permission(got)["permission"]
     assert perm["read"]["*"] == "allow" and perm["read"]["tests/*"] == perm["read"]["*/tests/*"] == "deny"
     assert perm["edit"]["*/notes.md"] == "deny" and perm["bash"]["* tests/*"] == "deny"
+    assert perm["grep"] == perm["glob"] == "deny", "D1169: OpenCode's grep and glob honour no read rule"
     # a hidden file in the workbench is refused through the turn's link to it as well
     got = turn_hidden({"home": str(home), "hidden": json.dumps([[str(home / "workbench" / "notes" / "a.md"), "workbench/notes/a.md"]]),
                        "workbench": str(home / "workbench")}, (), work)
@@ -166,12 +168,15 @@ def test_each_agent_kind_is_given_the_rules_it_reads(tmp_path, kind, monkeypatch
         settings = json.loads(got["argv"][got["argv"].index("--settings") + 1])
         assert f"Read(/{tests}/**)" in settings["permissions"]["deny"]
         assert f"Read(/{home.resolve() / 'notes.md'})" in settings["permissions"]["deny"]
+        assert {"Grep", "Glob"} <= set(settings["permissions"]["deny"])
     else:
         assert "--settings" not in got["argv"]
     if kind == "opencode":
         cfg = json.loads(got["opencode"])
         assert cfg["permission"]["read"]["*/tests/*"] == "deny" and cfg["permission"]["edit"]["notes.md"] == "deny"
         assert cfg["permission"]["bash"]["make"] == "deny", "the loop's own denials stay"
+        assert cfg["permission"]["grep"] == cfg["permission"]["glob"] == "deny"
+        assert cfg["permission"]["external_directory"] == "allow", "the loop's own permissions stay"
     resumed = run_turn(spec, spec.resume, {**subs, "session": "s1", "answer": "Go on."}, workdir=work)
     assert resumed.rc == 0 and "OFF LIMITS" not in json.loads(rec.read_text())["stdin"], "a resumed session was told"
 
@@ -185,6 +190,22 @@ def test_an_agent_without_hidden_paths_is_given_nothing(tmp_path, monkeypatch):
     run_turn(spec, spec.argv, {"prompt": "Hi.", "workdir": str(work), "home": str(work)}, workdir=work)
     got = json.loads(rec.read_text())
     assert "--settings" not in got["argv"] and "OFF LIMITS" not in got["stdin"]
+
+
+def test_opencodes_grep_and_glob_are_denied_over_what_its_config_said():
+    """D1169: live, OpenCode 1.18's grep tool printed a hidden file's lines though `permission.read` refused the
+    file, and its glob listed it: with hidden paths both tools are denied whole, whatever the config said of them;
+    without any, the config is untouched."""
+    base = {"model": "m/x", "permission": {"grep": {"*": "allow"}, "glob": "allow", "bash": "allow"}}
+    env = {"OPENCODE_CONFIG_CONTENT": json.dumps(base)}
+    _cmd, got = with_hidden("opencode", ["opencode"], env, (("/l/tests", "tests"),), "/l")
+    cfg = json.loads(got["OPENCODE_CONFIG_CONTENT"])
+    assert cfg["model"] == "m/x" and cfg["permission"]["grep"] == cfg["permission"]["glob"] == "deny"
+    assert cfg["permission"]["bash"]["*"] == "allow" and cfg["permission"]["bash"]["* tests"] == "deny"
+    assert with_hidden("opencode", ["opencode"], env, (), "/l")[1] == env
+    cmd, _env = with_hidden("claude", ["claude", "-p"], {}, (("/l/tests", "tests"),), "/l")
+    deny = json.loads(cmd[cmd.index("--settings") + 1])["permissions"]["deny"]
+    assert deny[:2] == ["Grep", "Glob"] and "Read(//l/tests/**)" in deny
 
 
 def test_an_agents_own_hidden_paths_are_checked():

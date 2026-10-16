@@ -117,6 +117,32 @@ def test_opencode_accepts_a_provider_key_it_will_forward(tmp_path, monkeypatch):
     assert not got["ok"], "another kind's key, not given to it: not its connection"
 
 
+def test_opencode_configured_in_its_own_file_is_a_connection(server, tmp_path, monkeypatch):
+    """Account › OpenCode said "not detected" though its seeded ~/.config/opencode/opencode.json names a provider
+    (its key from a variable) and it worked: a provider in its own configuration file, in the user's home, is one."""
+    from flux_loop.agent_check import connection
+
+    c, store = server
+    fake = tmp_path / "opencode"
+    fake.write_text("#!/bin/sh\necho opencode 1.0\n")
+    fake.chmod(0o755)
+    monkeypatch.setenv("FLUX_OPENCODE_BIN", str(fake))
+    mine = lambda: next(a for a in c.get("/api/logins").json()["agents"] if a["id"] == "opencode")["connection"]  # noqa: E731
+    assert mine()["mechanism"] == "none"
+    conf = store.home_of(store.user(name="ian")) / ".config/opencode"
+    conf.mkdir(parents=True)
+    (conf / "opencode.json").write_text(json.dumps({"provider": {"localai": {"options": {"apiKey": "{env:LOCALAI_KEY}"}}},
+                                                    "model": "localai/qwen"}))
+    got = mine()
+    assert got["mechanism"] == "provider" and got["said"] == "a provider in ~/.config/opencode/opencode.json", got
+    home = tmp_path / "h"
+    (home / ".config/opencode").mkdir(parents=True)
+    (home / ".config/opencode/opencode.jsonc").write_text('{\n  // mine\n  "provider": {"x": {}},\n}\n')
+    assert connection("opencode", {"HOME": str(home)})["mechanism"] == "provider", "jsonc, its comments and a trailing comma"
+    (home / ".config/opencode/opencode.jsonc").write_text('{"permission": {}}')
+    assert connection("opencode", {"HOME": str(home)})["mechanism"] == "none", "a file that names no provider is none"
+
+
 def test_inherited_settings_are_said_by_origin_never_by_value(server, monkeypatch):
     """D925 (A9): what a user's runs take from the server -- its settings, its own environment -- is
     sent as origin alone; the server's timeout counts, the machine's does not (D893); a login token

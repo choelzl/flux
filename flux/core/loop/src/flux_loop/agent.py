@@ -334,6 +334,9 @@ def _merged(base: Any, over: Any) -> Any:
 _AGENT_VARS = {"claude": ("ANTHROPIC_", "CLAUDE_CODE_", "FLUX_CLAUDE_"),
                "codex": ("OPENAI_", "CODEX_", "FLUX_CODEX_"),
                "opencode": ("OPENCODE_", "FLUX_OPENCODE_")}
+#: D1170: Flux's own model -- its endpoint, model, key and options -- is Flux's alone: a coding agent
+#: gets none of it (its own settings, `FLUX_<NAME>_*`, or its own configuration file instead).
+FLUX_MODEL_VARS = ("FLUX_REMOTE_", "FLUX_LLM_", "OPENROUTER_API_KEY")
 
 
 def _own_env(spec: AgentSpec, env: dict[str, str], program: str = "") -> dict[str, str]:
@@ -342,6 +345,7 @@ def _own_env(spec: AgentSpec, env: dict[str, str], program: str = "") -> dict[st
     without any agent's own set, then with its own (`FLUX_<NAME>_ENV`, a JSON object: its
     endpoint, key, model, variables, as the web's settings made them). The kind is its preset's,
     else the program's name; a program Flux does not know keeps everything but the agents' sets.
+    D1170: a coding agent gets nothing of Flux's own model (`FLUX_MODEL_VARS`) but what its own set names.
     D922: Flux's aliases (FLUX_<NAME>_BASE_URL, ...) translated by the one resolver, whatever set them."""
     return agent_config(spec.tool, spec.kind or spec.tool, env, program)[0]
 
@@ -358,6 +362,8 @@ def agent_config(name: str, kind: str, env: dict[str, str], program: str = "") -
     if who is not None:
         theirs = tuple(p for k, ps in _AGENT_VARS.items() if k != who for p in ps)
         out = {k: v for k, v in out.items() if not k.startswith(theirs) or k in shared}
+        out = {k: v for k, v in out.items() if not k.startswith(FLUX_MODEL_VARS)}
+        out["FLUX_AGENT_TURN"] = name             # D1170: what it runs (`flux task check`) asks no model of Flux's
     try:
         own = json.loads(env.get(f"FLUX_{name.upper()}_ENV") or "{}")
     except ValueError:

@@ -217,6 +217,49 @@ class Store:
                 db.execute("UPDATE user_groups SET server_access = (SELECT MIN(credential_mode = 'internal') "
                            "FROM users WHERE group_id = user_groups.id) WHERE server_access IS NULL AND "
                            "(SELECT COUNT(DISTINCT credential_mode) FROM users WHERE group_id = user_groups.id) = 1")
+        self._migrate_opencode_model()
+
+    #: D1170: the settings the built-in OpenCode took from Flux's model, while it had no endpoint of its own.
+    _OPENCODE_FROM_FLUX = (("FLUX_REMOTE_BASE_URL", "FLUX_OPENCODE_BASE_URL"), ("FLUX_REMOTE_MODEL", "FLUX_OPENCODE_MODEL"),
+                           ("FLUX_REMOTE_API_KEY", "FLUX_OPENCODE_API_KEY"), ("FLUX_REMOTE_PRICE_IN", "FLUX_OPENCODE_PRICE_IN"),
+                           ("FLUX_REMOTE_PRICE_OUT", "FLUX_OPENCODE_PRICE_OUT"))
+
+    def _migrate_opencode_model(self) -> None:
+        """D1170, once: OpenCode no longer runs on Flux's model. Where it did -- Flux's model set (an
+        endpoint and a model) and no endpoint of OpenCode's own named anywhere -- Flux's model's
+        settings are copied into OpenCode's own, the server's and each user's, as they are stored (a
+        key stays encrypted: Fernet binds no name), so its runs keep their model. Nothing is said of
+        a value."""
+        with self._db() as db:
+            if db.execute("SELECT 1 FROM server WHERE key = 'migrated:opencode-model'").fetchone():
+                return
+            server = {r["key"].split(":", 1)[1]: json.loads(r["value"])
+                      for r in db.execute("SELECT key, value FROM server WHERE key LIKE 'setting:%'").fetchall()}
+            # its endpoint named by the machine (flux.env) or the server: the fallback never applied
+            oc_server = bool(os.environ.get("FLUX_OPENCODE_BASE_URL") or server.get("FLUX_OPENCODE_BASE_URL"))
+            if not oc_server and server.get("FLUX_REMOTE_BASE_URL") and server.get("FLUX_REMOTE_MODEL"):
+                for src, dst in self._OPENCODE_FROM_FLUX:
+                    if server.get(src) and not server.get(dst):
+                        db.execute("INSERT OR REPLACE INTO server VALUES (?, ?)", (f"setting:{dst}", json.dumps(server[src])))
+            for u in db.execute("SELECT id, credential_mode, group_id FROM users").fetchall():
+                mine = {r["key"]: r["value"] for r in db.execute("SELECT key, value FROM settings WHERE user_id = ?", (u["id"],))}
+                if mine.get("FLUX_OPENCODE_BASE_URL"):
+                    continue
+                g = db.execute("SELECT server_access FROM user_groups WHERE id = ?", (u["group_id"],)).fetchone()
+                access = g["server_access"] if g is not None else None
+                external = (u["credential_mode"] == "external") if access is None else not access     # as `_user` reads it
+                theirs = {} if external else server              # D734: an external user inherits nothing
+                if not external and oc_server:
+                    continue                                     # the server's own OpenCode endpoint was theirs
+                base = mine.get("FLUX_REMOTE_BASE_URL") or theirs.get("FLUX_REMOTE_BASE_URL")
+                model = mine.get("FLUX_REMOTE_MODEL") if mine.get("FLUX_REMOTE_BASE_URL") else \
+                    (mine.get("FLUX_REMOTE_MODEL") or theirs.get("FLUX_REMOTE_MODEL"))
+                if not (base and model):
+                    continue
+                for src, dst in self._OPENCODE_FROM_FLUX:
+                    if mine.get(src) and not mine.get(dst):
+                        db.execute("INSERT OR REPLACE INTO settings VALUES (?, ?, ?)", (u["id"], dst, mine[src]))
+            db.execute("INSERT OR REPLACE INTO server VALUES ('migrated:opencode-model', '1')")
 
     def _db(self) -> sqlite3.Connection:
         con = sqlite3.connect(self.path, timeout=30)

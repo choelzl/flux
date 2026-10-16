@@ -239,3 +239,30 @@ def test_the_workbench_digest_is_one_setup_row_its_agent_its_pill(tmp_path, old)
       const rows = sc.rows.filter(r => sc.membership.get(r.node.id) === 1), setup = V.flowBoxes(rows, 1, false).find(b => b.key === "setup");
       return { tree: lines(sc.rows, v).tree().map(said).filter(l => /^Setup ·/.test(l[0])), runs: setup.runs.map(n => n.id) }; }""")
     assert passed == {"tree": [["Setup · workbench", "AI", 3]], "runs": [2]}
+
+
+def _unbuilt_journal(failed_flag):
+    """A generation whose builds all failed (D1046) and whose patches were refused before a build: the live run of
+    popcount_live, cut down. `failed_flag`: the build check's own `failed` (False: a journal from before it was set)."""
+    st = lambda i, t, name, why, parent=None: {"ev": "start", "id": i, "t": t, "parent": parent, "name": name, "why": why, "params": {}}  # noqa: E731
+    en = lambda i, t, failed=False, output=None: {"ev": "end", "id": i, "t": t, "seconds": 1, "failed": failed, "output": output or {}}  # noqa: E731
+    err = {"error": "no `module <name>` in the source"}
+    build = lambda i, t: [st(i, t, "test: build x", "x#1", 1), st(i + 1, t + 0.1, "tool:fluxpreset golden", "test x#1", i),  # noqa: E731
+                          en(i + 1, t + 0.5, output={"exit": 3, "failing": 0}), en(i, t + 0.6, failed_flag, err)]
+    return ([{"t": 0, "ev": "hello", "pid": 1}, {"t": 0.5, "ev": "mark", "name": "pass", "why": '{"n": 1}'},
+             st(1, 1, "generation: x", "drafts, each checked"), st(2, 1.1, "generate: x", "attempt 1", 1), en(2, 2)]
+            + build(3, 2.1) + [st(5, 3, "repair: x", "attempt 2", 1), en(5, 4), st(6, 4.1, "repair: x", "attempt 3", 1), en(6, 5)]
+            + build(7, 5.1) + [st(9, 6, "repair: x", "attempt 4", 1), en(9, 7), en(1, 7.5, True)])
+
+
+@pytest.mark.parametrize("failed_flag", [True, False])
+def test_a_try_not_built_or_refused_is_no_tick(tmp_path, failed_flag):
+    """Live showed tries 11-14 and Check with ✓ while every build failed: the build check ended without `failed`
+    (its `error` said it), and a patch refused before a build left its try with nothing to fail. A build that
+    failed is the try's ✗; a draft its run never built, while it builds the others, is "!" (not built)."""
+    got = views(tmp_path, _unbuilt_journal(failed_flag), """({ lines, sc, v }) => lines(sc.rows, v).tree()
+      .filter(l => l.type === "row" && /^(try|Check|Design)/.test(l.name.map(s => typeof s === "string" ? s : s.b || s.text || "").join("").trim()))
+      .map(l => [l.name.map(s => typeof s === "string" ? s : s.b || s.text || "").join("").trim(), l.mark.tone])""")
+    assert got == [["Design whole", "bad"], ["try 4 · not built", "warn"], ["try 3 #1 · build x: golden failed", "bad"],
+                   ["try 2 · not built", "warn"], ["try 1 #1 · build x: golden failed", "bad"]], got
+    assert not any(n.startswith("Check") for n, _t in got), "no check passed: none is the Check box's"

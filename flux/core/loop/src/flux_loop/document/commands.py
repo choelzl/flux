@@ -78,6 +78,66 @@ def _inferred_language(gate: Any, stages: Any) -> str | None:
     return "systemverilog" if found <= hdl and "systemverilog" in found else (next(iter(found)) if len(found) == 1 else None)
 
 
+#: The languages the RTL presets read (Verilator, Yosys, OpenROAD take Verilog and SystemVerilog)
+RTL_LANGUAGES = frozenset({"systemverilog", "verilog", "sv", "v"})
+
+
+def _preset_of(cmd: Iterable[str]) -> tuple[str, dict[str, Any]] | None:
+    """The preset a command runs, as said (`fluxpreset golden`), and its catalog entry: the entry
+    whose leading words the command's are, the longest (`fluxpreset rtl measure` over `fluxpreset rtl`)."""
+    toks = _as_said(cmd)
+    if not toks or toks[0] != "fluxpreset":
+        return None
+    from ..toolbox import presets
+
+    best: tuple[list[str], dict[str, Any]] | None = None
+    for t in presets():
+        head = _words_before_params(str(t.get("run") or ""))
+        if len(head) > 1 and toks[:len(head)] == head and (best is None or len(head) > len(best[0])):
+            best = (head, t)
+    return (" ".join(best[0]), best[1]) if best else None
+
+
+def _software_check(language: str) -> str:
+    """What checks a design in `language` against a golden model, for a refusal to name."""
+    script = "your own script, `{python} {home}/check.py {artifact}`, that prints each failure and `N failing` last"
+    if language == "python":
+        return ("for a Python design, `fluxpreset cases {artifact} --call <function> --reference "
+                "{home}/reference.py:<function> --random 200` (the reference is a plain Python function; its module's "
+                "`inputs(rng)` makes the random cases, or `CASES` lists them), or " + script)
+    if language in ("c", "cpp", "c++"):
+        return ("for a C or C++ design, `fluxpreset ccases {artifact} --call <function> --sig \"long(long,long)\" "
+                "--reference {home}/reference.py:<function> --random 200`, or " + script)
+    return f"for a {language} design, " + script
+
+
+def _check_preset_languages(gate: "Gate | None", stages: Iterable["Stage"], language: str) -> None:
+    """A preset that reads RTL in a loop whose designs are not RTL, or a Python-only one in an RTL
+    loop, is refused here: it would fail every try ("no `module <name>`"), and the loop would read
+    that as the design's fault (D1168)."""
+    lang = (language or "").lower()
+    cmds: list[tuple[str, Iterable[str]]] = []
+    if gate is not None:
+        cmds += [(f"flow.test.{c.name}", c.run) for c in gate]
+    cmds += [(f"flow.measure.{r.name}", r.command) for r in stages if r.command]
+    for what, cmd in cmds:
+        found = _preset_of(cmd)
+        if found is None:
+            continue
+        said, entry = found
+        langs = {str(x).lower() for x in entry.get("languages") or ()}
+        if langs and langs <= RTL_LANGUAGES and lang not in RTL_LANGUAGES:
+            raise TaskError(f"{what} runs `{said}`, which reads Verilog or SystemVerilog (it builds the design with "
+                            f"Verilator or Yosys), but the loop's designs are `language: {language}`: it would fail "
+                            f"every try. Check them with {_software_check(lang)}; or say `language: systemverilog` "
+                            "if the designs are RTL")
+        if langs == {"python"} and lang in RTL_LANGUAGES:
+            raise TaskError(f"{what} runs `{said}`, which loads a Python design, but the loop's designs are "
+                            f"`language: {language}`: it would fail every try. Check RTL against a golden model with "
+                            "`fluxpreset golden {artifact} --golden {home}/golden.py`; or say `language: python` if "
+                            "the designs are Python")
+
+
 def _command(raw: Any, what: str) -> tuple[str, ...] | None:
     """A command the document says (D580): argv tokens as a list, or one string split like
     a shell would. A command whose head is `flux` runs this flux (`{python} -m

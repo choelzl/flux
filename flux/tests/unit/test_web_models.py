@@ -60,10 +60,8 @@ def test_a_run_gets_the_servers_models_unless_its_user_names_their_own(server, m
     env = run_env(store, bob_u)
     assert env["FLUX_REMOTE_BASE_URL"] == "https://llm.example/v1" and env["FLUX_REMOTE_API_KEY"] == "server-key"
     assert env["FLUX_LLM_REMOTE"] == "1" and "FLUX_REMOTE_API_KEY_FILE" not in env, "the web's key wins over the file"
-    oc = json.loads(own(env, "opencode")["OPENCODE_CONFIG_CONTENT"])
-    assert oc["model"] == "flux/qwen" and oc["provider"]["flux"]["options"]["baseURL"] == "https://llm.example/v1"
-    assert oc["provider"]["flux"]["options"]["apiKey"] == "{env:FLUX_AGENT_API_KEY}" and own(env, "opencode")["FLUX_AGENT_API_KEY"] == "server-key", \
-        "OpenCode: Flux's model when it has none of its own; the key by variable, not in the config"
+    assert "OPENCODE_CONFIG_CONTENT" not in own(env, "opencode") and "FLUX_AGENT_API_KEY" not in own(env, "opencode"), \
+        "D1170: OpenCode without settings of its own runs on its own configuration, never Flux's model"
     # D922: the model goes in the agent's own set as FLUX_<NAME>_MODEL; its turn makes it --model
     assert own(env, "claude")["FLUX_CLAUDE_MODEL"] == "opus" and own(env, "codex")["FLUX_CODEX_MODEL"] == "gpt-x"
     assert "FLUX_CLAUDE_ARGS" not in env and "FLUX_CLAUDE_MODEL" not in env
@@ -74,16 +72,15 @@ def test_a_run_gets_the_servers_models_unless_its_user_names_their_own(server, m
     env = run_env(store, bob_u)
     assert env["FLUX_REMOTE_BASE_URL"] == "https://mine.example/v1" and "FLUX_REMOTE_API_KEY" not in env and "FLUX_REMOTE_API_KEY_FILE" not in env
     assert own(env, "claude")["ANTHROPIC_API_KEY"] == "sk-server", "another group keeps the server's"
-    oc = json.loads(own(env, "opencode")["OPENCODE_CONFIG_CONTENT"])
-    assert oc["model"] == "flux/small" and "apiKey" not in oc["provider"]["flux"]["options"]
-    # OpenCode's own settings over Flux's model's
+    assert "OPENCODE_CONFIG_CONTENT" not in own(env, "opencode")
+    # OpenCode's own settings: a provider, the key by variable, not in the config
     store.set_server_setting("FLUX_OPENCODE_BASE_URL", "https://oc.example/v1")
     store.set_server_setting("FLUX_OPENCODE_MODEL", "coder")
     store.set_server_setting("FLUX_OPENCODE_API_KEY", "oc-key")
     env = run_env(store, store.user(name="ada"))
     oc = json.loads(own(env, "opencode")["OPENCODE_CONFIG_CONTENT"])
     assert oc["model"] == "flux/coder" and oc["provider"]["flux"]["options"]["baseURL"] == "https://oc.example/v1"
-    assert own(env, "opencode")["FLUX_AGENT_API_KEY"] == "oc-key"
+    assert own(env, "opencode")["FLUX_AGENT_API_KEY"] == "oc-key" and oc["provider"]["flux"]["options"]["apiKey"] == "{env:FLUX_AGENT_API_KEY}"
 
 
 def test_each_agent_has_its_own_settings_and_variables_and_an_added_one_its_kind(server, tmp_path):
@@ -163,7 +160,7 @@ def test_the_configurator_lists_edits_and_deletes_the_loops_own_files(server):
 
 def test_prices_are_the_admins_unless_a_user_names_their_own_endpoint(server, monkeypatch):
     """D835: the admin prices Flux's model and each agent; a user's own prices count only with an
-    endpoint of their own; the built-in OpenCode on Flux's model takes Flux's model's prices."""
+    endpoint of their own; an agent never takes Flux's model's prices (D1170)."""
     for k in ("FLUX_REMOTE_PRICE_IN", "FLUX_REMOTE_PRICE_OUT", "FLUX_OPENCODE_PRICE_IN", "FLUX_CLAUDE_PRICE_IN"):
         monkeypatch.delenv(k, raising=False)
     app, store = server
@@ -181,13 +178,13 @@ def test_prices_are_the_admins_unless_a_user_names_their_own_endpoint(server, mo
     env = run_env(store, store.user(name="bob"))
     assert (env["FLUX_REMOTE_PRICE_IN"], env["FLUX_REMOTE_PRICE_OUT"]) == ("0.5", "1.5"), "the admin's, on the admin's endpoint"
     assert (env["FLUX_CLAUDE_PRICE_IN"], env["FLUX_CLAUDE_PRICE_OUT"]) == ("3", "15")
-    assert (env["FLUX_OPENCODE_PRICE_IN"], env["FLUX_OPENCODE_PRICE_OUT"]) == ("0.5", "1.5"), "OpenCode on Flux's model"
+    assert "FLUX_OPENCODE_PRICE_IN" not in env and "FLUX_OPENCODE_PRICE_OUT" not in env, "never Flux's model's prices"
     # his own endpoints: his prices, and none of the admin's
     bob.put("/api/settings", json={"values": {"FLUX_REMOTE_BASE_URL": "https://mine.example/v1", "FLUX_CLAUDE_BASE_URL": "https://c.example"}}, headers=H)
     env = run_env(store, store.user(name="bob"))
     assert env["FLUX_REMOTE_PRICE_IN"] == "0" and "FLUX_REMOTE_PRICE_OUT" not in env
     assert env["FLUX_CLAUDE_PRICE_IN"] == "0" and "FLUX_CLAUDE_PRICE_OUT" not in env
-    assert env["FLUX_OPENCODE_PRICE_IN"] == "0", "OpenCode on his model: his price"
+    assert "FLUX_OPENCODE_PRICE_IN" not in env, "his price for Flux's model is not OpenCode's"
     # a variable cannot stand in for a price
     assert bob.put("/api/env", json={"name": "FLUX_CLAUDE_PRICE_IN", "value": "0"}, headers=H).status_code == 400
 

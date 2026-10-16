@@ -1497,3 +1497,6 @@ ul.files li > .hidden-mark { margin-left: -4px; }
 .cfg-hide-add { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 .cfg-hide-add input { flex: 1 1 160px; min-width: 0; }
 .up-rows .up-hide { white-space: nowrap; }
+/* the name takes the room, so each row's size, switch and remove line up at the right */
+.up-rows li > .up-name { flex: 1 1 12ch; min-width: 0; overflow-wrap: anywhere; }
+.up-rows li > .up-size { min-width: 7ch; text-align: right; }
