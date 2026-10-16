@@ -1,9 +1,9 @@
 // Flux web, a loop's page (D697, D990, D991, D993, D1009, D1025, D1095): Talk -- conversations with an agent or the
 // model about the loop (each keeps its own reply context; the newest, the one replied to and a running one open,
-// older ones folded unless chosen), an answer's thinking and commands, Reply, a new chat; while the loop runs, a
-// note to it (the agent's open question answered there).
+// older ones folded unless chosen), an answer's thinking and commands, Reply, a new chat; the agent's open question
+// on its card at the top (D1131); while the loop runs, a note to it.
 
-import { Ago, Card, Empty, Glyph, html, Skeleton, useLayoutEffect, useRef, useState } from "../view.js";
+import { Ago, Card, Empty, Glyph, html, Skeleton, useEffect, useLayoutEffect, useRef, useState } from "../view.js";
 import { api, dialog, loopApi, toast } from "../ui.js";
 import { dur, plural } from "../format.js";
 import { me } from "../state.js";
@@ -63,13 +63,20 @@ function Thread({ turns, folded, t, open }) {
     ${turns.map(a => html`<${Turn} key=${a.id} a=${a} t=${t} open=${open} />`)}<//>`;
 }
 
-/** The drawer's body: `steer` -- {el, asking}: the note to a running loop (its composer), or null --
-    above the conversations; `steerOpen` -- {get, set}: whether it is unfolded, kept by the page. */
-export function Talk({ name, mine, canAsk, steer, steerOpen, open: shown = true }) {
+/** The drawer's body: `ask` the agent's question (its card) or null, scrolled to and its answer focused when
+    `askAt` changes; `steer` the note to a running loop (its composer) or null -- both above the conversations;
+    `steerOpen` -- {get, set}: whether the note is unfolded, kept by the page. */
+export function Talk({ name, mine, canAsk, ask = null, askAt = 0, steer, steerOpen, open: shown = true }) {
   const [list, setList] = useState(null), [offline, setOffline] = useState(false), [reply, setReply] = useState(null), [sending, setSending] = useState(false);
   const [folds, setFolds] = useState({ collapsed: new Set(), expanded: new Set() }), [who, setWho] = useState(""), [replyAuthor, setReplyAuthor] = useState(null);
   const history = useRef(null), q = useRef(null), open = useRef(new Map()).current;
   const [draft, setDraft] = useState("");                     // what is being written, kept while the drawer is closed
+  const asked = useRef(null);
+  useEffect(() => {
+    if (!askAt) return;
+    requestAnimationFrame(() => { asked.current?.scrollIntoView({ block: "nearest" }); asked.current?.querySelector("input")?.focus({ preventScroll: true }); });
+  }, [askAt]);
+  const askCard = ask ? html`<div class="talk-ask" ref=${asked}>${ask}</div>` : "";
   // read while the drawer is open, again while an answer runs; closed, what was read stays for its next opening
   const poll = usePoll(async live => {
     if (!shown) return null;
@@ -88,7 +95,7 @@ export function Talk({ name, mine, canAsk, steer, steerOpen, open: shown = true 
     restoreScroll(history.current, place.current.at);
     for (const el of history.current.querySelectorAll("[data-ask-log]")) restoreScroll(el, place.current.logs.get(el.dataset.askLog), { follow: true });
   });
-  if (!list) return html`${offline ? html`<p class="ask-offline muted small">Reconnecting to the server…</p>` : ""}<${Skeleton} lines=${4} />`;
+  if (!list) return html`${offline ? html`<p class="ask-offline muted small">Reconnecting to the server…</p>` : ""}${askCard}<${Skeleton} lines=${4} />`;
   const busy = list.some(a => a.running), current = list.find(a => a.id === reply) || null;
   const send = async () => {
     const text = draft.trim();
@@ -116,8 +123,8 @@ export function Talk({ name, mine, canAsk, steer, steerOpen, open: shown = true 
   // D990: the newest conversation, the one replied to and a running one stay open; older ones fold
   const folded = (turns, i) => { const id = turns[0].thread_id || turns[0].id; return folds.collapsed.has(id) || (!folds.expanded.has(id) && !(i === 0 || turns.some(a => a.id === current?.id) || turns.some(a => a.running))); };
   return html`${offline ? html`<p class="ask-offline muted small">Reconnecting to the server…</p>` : ""}
-    <div class="ask-history" ref=${history}>${steer ? html`<details class="steer-card card" open=${steerOpen.get() || null} onToggle=${e => steerOpen.set(e.currentTarget.open)}>
-        <summary>${steer.asking ? "The loop is waiting for your answer" : "Send a note to the running loop"}</summary><p class="muted small">Notes join the loop’s next prompt.</p>${steer.el}</details>` : ""}
+    <div class="ask-history" ref=${history}>${askCard}${steer ? html`<details class="steer-card card" open=${steerOpen.get() || null} onToggle=${e => steerOpen.set(e.currentTarget.open)}>
+        <summary>Send a note to the running loop</summary><p class="muted small">Notes join the loop’s next prompt.</p>${steer}</details>` : ""}
       ${ordered.length ? ordered.map((turns, i) => html`<${Thread} key=${turns[0].thread_id || turns[0].id} turns=${turns} folded=${folded(turns, i)} t=${t} open=${open} />`) : html`<${Card}><${Empty} text="No conversations yet." /><//>`}</div>
     ${canAsk ? html`<div class="ask-compose"><div class="ask-compose-head"><span class="ask-reply-context" title=${current?.question}>${current ? `Reply to: ${current.question}` : "New conversation"}</span>
         ${current ? html`<button type="button" class="small ask-new" disabled=${sending} onClick=${() => { setReply(null); requestAnimationFrame(() => q.current?.focus()); }}>New chat</button>` : ""}</div>

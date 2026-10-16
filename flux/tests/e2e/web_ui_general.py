@@ -125,7 +125,7 @@ def general_flows(r, watch):
                 if (path !== base && path !== base + '/state') return response;
                 const data = await response.json(), state = path === base ? data.state : data;
                 Object.assign(state,{last_active:1000,failed:true,error:['Fixture failure notice']});
-                if(window.__overviewQuestion) Object.assign(state,{running:true,question:{question:'Fixture agent question',asked:Date.now()/1000,wait_s:3600}});
+                if(window.__overviewQuestion) Object.assign(state,{running:true,question:{question:'Fixture agent question?\\n- Signed\\n- Unsigned',asked:Date.now()/1000,wait_s:3600}});
                 return reply(data);
               }; return 1;"""
 
@@ -245,7 +245,14 @@ def general_flows(r, watch):
                 r.api(path, "PUT", {**expected, "columns": [[], []]})
                 b.js("window.__overviewQuestion=true; return 1")
                 page()
-                r.check("hiding every large card preserves errors and agent questions", b.js("return !document.querySelector('.grid-2.ov .card') && document.querySelector('.why-failed') && document.querySelector('.card.ask .question')?.textContent==='Fixture agent question'"))
+                r.check("hiding every large card preserves errors and agent questions", b.js("return !document.querySelector('.grid-2.ov .card') && document.querySelector('.why-failed') && document.querySelector('.qline .qline-text')?.textContent==='The agent asks: Fixture agent question?'"))
+                # D1131: the question is a line on the page, asked once -- its card in Talk, its choices as buttons
+                b.click(".qline button")
+                b.wait("document.querySelector('.drawer.open .talk-ask .qbox')", what="the question's card in Talk")
+                r.check("Answer opens Talk at the question's card: its choices, You decide, a free answer; the note line only notes",
+                        b.js("const q = document.querySelector('.drawer.open .talk-ask .qbox'); return [...q.querySelectorAll('.qbox-choices button')].map(x => x.textContent).join('|') === 'Signed|Unsigned|You decide'"
+                             " && q.querySelector('.qbox-head').textContent.includes('decides itself in 60 min') && !!q.querySelector('.qbox-in') && !document.querySelector('.composer-ask, .card.ask')"))
+                b.js("document.dispatchEvent(new KeyboardEvent('keydown', {key: 'Escape'})); return 1")
                 b.js("window.__overviewQuestion=false; return 1")
                 r.api(path, "PUT", expected)
                 r.page("#/account", "document.querySelector('#main h1')?.textContent==='Account'", "account layout settings")
@@ -365,7 +372,8 @@ def general_flows(r, watch):
         with loop(r, "ui-author-progress") as name:
             now = b.js("return Date.now()/1000")
             state = {"ever": True, "running": True, "started": now - 90, "observed": now, "elapsed_s": 90,
-                     "author": "claude", "by": "bob", "revise": "problem.yaml", "prompt": "Create reliable timing tests",
+                     "author": "claude", "by": "bob", "now": "writing check.py",
+                     "activity": [{"t": now - 60, "k": "read", "text": "spec.md"}, {"t": now - 30, "k": "write", "text": "problem.yaml"}], "revise": "problem.yaml", "prompt": "Create reliable timing tests",
                      "log_at": now, "log": [f"Creation log line {i}" for i in range(100)],
                      "progress": {"phase": "agent: claude", "updated": now, "fields": {"output": "10 lines, the last 2s ago",
                          "status": "Reading the input specification", "stderr": "DEBUG: connection ready", "steps total": 2,
@@ -387,38 +395,44 @@ def general_flows(r, watch):
                 state.last_active=1000; return reply(data);
               }; return 1;""", name, state)
             try:
-                r.page(f"#/app/{name}", "document.querySelector('.author-agent-status')", "creation agent progress")
-                r.check("a revision stays visible after earlier loop runs", b.js("return !!document.querySelector('.card.authoring') && document.querySelector('.author-activity').textContent.includes('agent: claude')"))
-                r.check("author status distinguishes process life, runtime and agent output age", b.js("const c=document.querySelector('.card.authoring'); return c.querySelector('.author-heartbeat').textContent.includes('process is alive') && c.querySelector('.author-activity').textContent.includes('1m 30s') && c.querySelector('.author-output-age').textContent.includes('last 2s ago')"))
-                r.check("live author tools and debug stderr are shown without a failure", b.js("const c=document.querySelector('.card.authoring'); return c.querySelector('.cv-tool').textContent.includes('check.py') && c.textContent.includes('DEBUG: connection ready') && !c.querySelector('.callout.bad')"))
+                r.page(f"#/app/{name}", "document.querySelector('.aj .aj-strip')", "creation agent progress")
+                # D1131: the Overview shows the strip alone -- the agent, what it does now, the time it took, Stop, Details
+                r.check("the Overview's strip: the agent, its latest line, the time, Stop; the details closed",
+                        b.js("const a=document.querySelector('.aj'); return a.querySelector('.aj-who').textContent==='claude' && a.querySelector('.aj-now').textContent==='writing check.py' && a.querySelector('.aj-time').textContent==='1m 30s'"
+                             " && [...a.querySelectorAll('.aj-strip button')].some(x=>x.textContent==='Stop') && !a.querySelector('.aj-details') && !/process is alive|Agent output|Log last updated/.test(a.textContent)"))
+                b.click(".aj .aj-toggle")
+                r.check("its details: the work as lines, debug stderr folded, no failure",
+                        b.js("const a=document.querySelector('.aj'); return [...a.querySelectorAll('.aj-line')].map(l=>l.textContent.trim()).join('|')==='read spec.md|wrote problem.yaml|writing check.py…' && a.querySelector('[data-author-section=stderr]').textContent.includes('DEBUG: connection ready') && !a.querySelector('.notice.t-bad')"))
+                b.click(".aj [data-author-section=conversation] summary")
+                r.check("live author tools are in its conversation", b.js("return document.querySelector('.aj .cv-tool').textContent.includes('check.py')"))
                 # D1030: the thinking and commands before an answer are one dashed line, opened on a click
                 r.check("the work between answers is one folded line that says what it holds",
-                        b.js("const w=document.querySelector('.authoring .cv-work'); return !!w && !w.open && /\\d+ steps?/.test(w.querySelector('summary').textContent) && /command/.test(w.querySelector('summary').textContent)"))
-                b.click(".authoring .cv-work summary")
-                b.click(".authoring .cv-think summary")
-                b.click(".authoring [data-author-section=log] summary")
-                b.click(".authoring [data-author-section=prompt] summary")
-                b.js("document.querySelector('.authoring .cv-thought').scrollTop=53; document.querySelector('.author-log').scrollTop=36; window.__authorState.progress.fields.steps[0].text+='\\nAnother test case'; window.__authorState.progress.fields.status='Writing checker and measurement scripts'; return 1")
-                b.wait("document.querySelector('.author-agent-status')?.textContent==='Writing checker and measurement scripts'", timeout=15, what="author live update")
-                r.check("author polling preserves thinking/log scroll and open details", b.js("const c=document.querySelector('.card.authoring'); return c.querySelector('.cv-think').open && Math.abs(c.querySelector('.cv-thought').scrollTop-53)<=2 && c.querySelector('[data-author-section=log]').open && Math.abs(c.querySelector('.author-log').scrollTop-36)<=2 && c.querySelector('[data-author-section=prompt]').open"))
+                        b.js("const w=document.querySelector('.aj .cv-work'); return !!w && !w.open && /\\d+ steps?/.test(w.querySelector('summary').textContent) && /command/.test(w.querySelector('summary').textContent)"))
+                b.click(".aj .cv-work summary")
+                b.click(".aj .cv-think summary")
+                b.click(".aj [data-author-section=log] summary")
+                b.click(".aj [data-author-section=prompt] summary")
+                b.js("document.querySelector('.aj .cv-thought').scrollTop=53; document.querySelector('.aj-log').scrollTop=36; window.__authorState.progress.fields.steps[0].text+='\\nAnother test case'; window.__authorState.now='writing measure.py'; return 1")
+                b.wait("document.querySelector('.aj-now')?.textContent==='writing measure.py'", timeout=15, what="author live update")
+                r.check("author polling preserves thinking/log scroll and open details", b.js("const c=document.querySelector('.aj'); return !!c.querySelector('.aj-details') && c.querySelector('.cv-think').open && Math.abs(c.querySelector('.cv-thought').scrollTop-53)<=2 && c.querySelector('[data-author-section=log]').open && Math.abs(c.querySelector('.aj-log').scrollTop-36)<=2 && c.querySelector('[data-author-section=prompt]').open"))
                 b.js("window.__authorFailed=true; return 1")
-                b.wait("document.querySelector('.author-connection')", timeout=15, what="author status outage")
-                r.check("a failed status read warns and keeps prior output without claiming a fresh heartbeat", b.js("return document.querySelector('.author-connection').textContent.includes('Reconnecting') && !!document.querySelector('.authoring .cv-tool') && !document.querySelector('.author-heartbeat')"))
-                b.js("window.__authorFailed=false; window.__authorState.progress.fields.status='Model endpoint unavailable; retrying HTTP 502'; return 1")
-                b.wait("document.querySelector('.author-agent-status')?.textContent.includes('HTTP 502') && !document.querySelector('.author-connection')", timeout=15, what="author status recovery")
+                b.wait("document.querySelector('.aj-reconnect')", timeout=15, what="author status outage")
+                r.check("a failed status read warns and keeps prior output", b.js("return document.querySelector('.aj-reconnect').textContent.includes('Reconnecting') && !!document.querySelector('.aj .cv-tool')"))
+                b.js("window.__authorFailed=false; window.__authorState.now='Model endpoint unavailable; retrying HTTP 502'; return 1")
+                b.wait("document.querySelector('.aj-now')?.textContent.includes('HTTP 502') && !document.querySelector('.aj-reconnect')", timeout=15, what="author status recovery")
                 r.check("polling resumes automatically and surfaces endpoint retries", True)
                 b.cmd("WebDriver:SetWindowRect", {"width": 390, "height": 900})
                 r.check("creation feedback fits a phone", b.js("return document.documentElement.scrollWidth<=innerWidth+1"))
                 b.js("window.__authorState.running=false; window.__authorState.ok=false; window.__authorState.rc=1; window.__authorState.ended=Date.now()/1000; return 1")
-                b.wait("document.querySelector('.authoring .pill.t-bad')", timeout=15, what="failed author remains visible")
-                r.check("a failed revision is retained even when an older problem document exists", b.js("return document.querySelector('.card.authoring').textContent.includes('No document that passes its checks') && !document.querySelector('.author-heartbeat')"))
+                b.wait("document.querySelector('.aj[data-author-state=bad]')", timeout=15, what="failed author remains visible")
+                r.check("a failed revision is retained even when an older problem document exists", b.js("return document.querySelector('.aj .aj-now').textContent.includes('No document that passes its checks') && !document.querySelector('.aj .aj-line.now')"))
                 b.js("window.__authorState.running=true; window.__authorState.ended=null; window.__authorState.ok=false; return 1")
-                r.page(f"#/app/{name}", "document.querySelector('.author-heartbeat')", "agent restarted fixture")
+                r.page(f"#/app/{name}", "document.querySelector('.aj[data-author-state=run]')", "agent restarted fixture")
                 b.js("window.__authorDeferred=true; return 1")
                 b.wait("typeof window.__authorRelease==='function'", timeout=15, what="pending author poll")
                 r.page("#/account", "document.querySelector('#main h1')?.textContent==='Account'", "leave agent progress")
                 b.ajs("const done=arguments[arguments.length-1]; window.__authorRelease(); requestAnimationFrame(()=>requestAnimationFrame(()=>done(true)))")
-                r.check("a late author status cannot change another page", b.js("return document.querySelector('#main h1').textContent==='Account' && !document.querySelector('.card.authoring')"))
+                r.check("a late author status cannot change another page", b.js("return document.querySelector('#main h1').textContent==='Account' && !document.querySelector('.aj')"))
                 r.clean("creation agent progress")
             finally:
                 b.cmd("WebDriver:SetWindowRect", {"width": 1280, "height": 900})
@@ -462,13 +476,15 @@ def general_flows(r, watch):
               };
               localStorage.setItem('flux-byagent:bob', JSON.stringify({name: arguments[0], stage: 1, kept: {}, who: 'opencode', askMe: true})); return 1;""", name, state, decisions)
             try:
-                r.page("#/configure/agent", "document.querySelector('.ba-question')", "Drafting with a question")
-                lines = b.js("return [...document.querySelectorAll('.ba-log .ba-line')].map(l => l.textContent.trim())")
+                r.page("#/configure/agent", "document.querySelector('.aj .qbox')", "Drafting with a question")
+                lines = b.js("return [...document.querySelectorAll('.aj-lines .aj-line')].map(l => l.textContent.trim())")
                 r.check("Drafting shows its work as lines, the open question as the card, what it does now",
                         lines[:2] == ["read spec.md", "listed applications/mul8"] and lines[-1] == "waiting for your answer…"
                         and not any(x.startswith("asked") for x in lines), str(lines))
-                r.check("the new loop's files say who made them", "yours" in b.js("return document.querySelector('.ba-files').textContent"))
-                b.js("[...document.querySelectorAll('.ba-question button')].find(x => x.textContent === 'Signed (§2)').click(); return 1")
+                r.check("the new loop's files say who made them", "yours" in b.js("return document.querySelector('.aj-files').textContent"))
+                r.check("Drafting is the strip with its details open, the question inline",
+                        b.js("const a = document.querySelector('.aj'); return a.querySelector('.aj-toggle').getAttribute('aria-expanded') === 'true' && a.querySelector('.aj-now').textContent === 'waiting for your answer' && [...a.querySelectorAll('.qbox-choices button')].map(x => x.textContent).join('|') === 'Signed (§2)|Unsigned (§4)|You decide'"))
+                b.js("[...document.querySelectorAll('.qbox button')].find(x => x.textContent === 'Signed (§2)').click(); return 1")
                 b.wait("window.__baSent.length === 1", what="the answer sent")
                 r.check("an answer is one of its choices, sent to the agent", b.js("return window.__baSent[0]") == ["/author/answer", {"text": "Signed (§2)"}])
                 b.js("Object.assign(window.__baState, {running: false, ok: true, ended: Date.now()/1000, document: 'problem.yaml', question: null, now: ''});"

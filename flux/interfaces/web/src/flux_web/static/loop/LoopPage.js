@@ -1,5 +1,6 @@
-// Flux web, a loop's page (D692, D701, D713, D758, D892, D916, D917, D919, D1095): one component -- where it is, its
-// head, its tabs and sub-tabs, the agent's question, the tab's body (loop/Bodies.js), the Talk drawer. The loop's
+// Flux web, a loop's page (D692, D701, D713, D758, D892, D916, D917, D919, D1095, D1131): one component -- where it
+// is, its head, the agent's question as a line (its card in Talk), its tabs and sub-tabs, the tab's body
+// (loop/Bodies.js), the Talk drawer. The loop's
 // state is asked every 5 s (never while a request is out, nothing while the page is hidden); the Overview of a
 // running loop is read again once a minute.
 
@@ -15,7 +16,8 @@ import { Talk } from "./Talk.js";
 import { Drawer } from "./Drawer.js";
 import { CheckButton, NotRun } from "./Cards.js";
 import { Composer } from "./Notes.js";
-import { AskBanner, Crumbs, LoopHead, Tabs } from "./Head.js";
+import { Crumbs, LoopHead, Tabs } from "./Head.js";
+import { Ask, AskLine } from "../components/Ask.js";
 import { LoopContext } from "./context.js";
 import { AgentsBody, FilesBody, IdeasBody, LiveBody, OverviewBody, ResultsBody, SettingsBody } from "./Bodies.js";
 
@@ -53,6 +55,7 @@ export function LoopPage({ name, owner, info, path }) {
   const [tick, setTick] = useState(0);                                // the body read again in place
   const [talk, setTalk] = useState({ open: first.ask, opened: first.ask });   // the drawer's body mounted once first opened
   const [notesSent, setNotesSent] = useState(0);
+  const [askAt, setAskAt] = useState(0);                              // the line's Answer: Talk opened at the card
   const [liveReady, setLiveReady] = useState(false);
   const now = useRef({}), results = useRef(null);                   // D916: the Results tab's read, while it stays chosen
   const subsOf = t => (SUBS[t] || []).filter(([k]) => !(t === "Settings" && k === "problem" && !mine));
@@ -87,7 +90,7 @@ export function LoopPage({ name, owner, info, path }) {
   }, []);
   const store = useMemo(() => createStore(ctx), []);
   // Talk (loop/Talk.js): conversations keep their own reply context; loop notes still join the next design prompt
-  const steerOpen = useMemo(() => ({ open: false, get() { return this.open || !!now.current.question; }, set(o) { this.open = o; } }), []);
+  const steerOpen = useMemo(() => ({ open: false, get() { return this.open; }, set(o) { this.open = o; } }), []);
 
   // every 5 s, one at a time; D917: a hidden tab asks nothing (it catches up when shown)
   const beat = useRef(0);
@@ -138,17 +141,21 @@ export function LoopPage({ name, owner, info, path }) {
         : html`<${SettingsBody} key=${k} />`;
     }
   };
-  const steer = mine && st.running ? { asking: !!question, el: html`<${Composer} name=${name} mine=${mine} question=${question} send=${ctx.sendNote} n=${notesSent} />` } : null;
+  const steer = mine && st.running ? html`<${Composer} name=${name} mine=${mine} send=${ctx.sendNote} n=${notesSent} />` : null;
   const toggle = open => setTalk(t => ({ open, opened: t.opened || open }));
+  // D919, D1131: the agent's question -- a line on every tab, answered on its card in Talk (by a note, as before)
+  const asking = question && st.running ? question : null;
+  const answerIn = () => { toggle(true); setAskAt(k => k + 1); };
   return html`<${LoopContext.Provider} value=${ctx}><div><${Crumbs} parts=${[["Loops", "#/"], owner && owner !== me.name ? [owner, null] : null, [name, appHref(owner, name)], at.tab !== "Overview" ? [at.tab, null] : null,
       sub && sub !== (subs[0] || [""])[0] ? [subs.find(([k]) => k === sub)[1], null] : null]} /></div>
     <div><${LoopHead} name=${name} info=${info} st=${st} perm=${perm} mine=${mine} canRun=${canRun} acts=${acts} /></div>
-    <div>${question && st.running ? html`<${AskBanner} key=${`${question.asked}\n${question.question}`} question=${question} mine=${mine} send=${ctx.sendNote} />` : ""}</div>
+    <div>${asking ? html`<${AskLine} q=${asking} open=${answerIn} label=${mine ? "Answer" : "Read"} />` : ""}</div>
     <div><${Tabs} items=${TABS.map(t => [t, t])} on=${at.tab} pick=${t => ctx.goTab(t)} /></div>
     <div class="subrow">${subs.length > 1 ? html`<${Tabs} cls="subtabs views" items=${subs} on=${sub} pick=${k => setAt(a => ({ ...a, sub: k, mode: "" }))} />` : ""}
       ${at.tab === "Live" && liveReady ? html`<${Controls} store=${store} />` : ""}
       ${mode ? html`<${ModeTabs} name=${name} mode=${mode} pick=${pickMode} small=${true} />${canRun && info.document ? html`<${CheckButton} name=${name} />` : ""}` : ""}</div>
     <div>${body()}</div>
-    <${Drawer} open=${talk.open} asking=${!!(question && st.running)} toggle=${toggle}>
-      ${talk.opened ? html`<${Talk} name=${name} mine=${mine} canAsk=${canAsk} steer=${steer} steerOpen=${steerOpen} open=${talk.open} />` : ""}<//><//>`;
+    <${Drawer} open=${talk.open} asking=${!!asking} toggle=${toggle}>
+      ${talk.opened ? html`<${Talk} name=${name} mine=${mine} canAsk=${canAsk} steer=${steer} steerOpen=${steerOpen} open=${talk.open} askAt=${askAt}
+        ask=${asking ? html`<${Ask} q=${asking} send=${mine ? ctx.sendNote : null} />` : null} />` : ""}<//><//>`;
 }

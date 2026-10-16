@@ -236,11 +236,11 @@ ul.bench .first { color: var(--muted); font-size: 12.5px; }
 /* ---- output (D1102): one frame for what a tool, an agent or a person wrote -- the page's ground, a thin line, 8 px
    corners, one monospace size; three heights: short (a value, a prompt), normal (a log), tall (the inspector);
    a person's or an agent's words in the text font */
-pre.log, .val, pre.question, pre.conclusion, .cv-body, .login-out, .why-lines, pre.digest-text, .idea-error pre {
+pre.log, .val, pre.conclusion, .cv-body, .login-out, .why-lines, pre.digest-text, .idea-error pre {
   background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; margin: 6px 0 0; color: var(--ink);
   font: 12.3px/1.5 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; overflow: auto; max-height: 320px; }
-pre.val.small, pre.log.small, pre.conclusion, .composer-ask pre.question, .idea-error pre { max-height: 160px; }
-pre.question, pre.digest-text, .cv-thought { font: 13px/1.5 var(--sans); }
+pre.val.small, pre.log.small, pre.conclusion, .idea-error pre { max-height: 160px; }
+pre.digest-text, .cv-thought { font: 13px/1.5 var(--sans); }
 
 /* ---- the live tree and details */
 /* D723: the tasks as a graph, and the Tree | Graph switch */
@@ -267,7 +267,6 @@ table.compact td, table.compact th { padding: 4px 8px; font-size: 12.5px; }
 .tool.busy::after { display: none; } .tool.busy svg { opacity: .4; }
 .blk { margin-top: 8px; }
 pre.val.tall { max-height: 60vh; }
-.card.ask { border-color: color-mix(in srgb, var(--warn) 55%, transparent); background: color-mix(in srgb, var(--warn) 5%, var(--panel)); }
 .notes .note { border-top: 1px solid var(--line); padding: 8px 0; }
 
 /* ---- notices, dialogs, the bell */
@@ -686,10 +685,8 @@ fieldset.set-group { align-content: start; }
 .logview.mini { max-height: 300px; min-height: 160px; font-size: 11.8px; }
 .composer { position: static; margin-top: 4px; background: var(--panel); border: 1px solid var(--line);
   border-radius: 12px; box-shadow: 0 -4px 18px rgba(0, 0, 0, .08); padding: 8px 10px; display: grid; gap: 6px; }
-.composer.asking { border-color: var(--warn); box-shadow: 0 -4px 18px color-mix(in srgb, var(--warn) 25%, transparent); }
 .composer-row { display: flex; gap: 8px; align-items: flex-end; }
 .composer-in { flex: 1; resize: none; min-height: 38px; max-height: 180px; line-height: 1.45; padding: 8px 10px; }
-.composer-ask:empty { display: none; }
 .composer-hist { max-height: 220px; overflow: auto; border-bottom: 1px solid var(--line); padding-bottom: 6px; }
 table.env td { vertical-align: top; overflow-wrap: anywhere; }
 table.env tr.shadowed td { text-decoration: line-through; opacity: .6; }
@@ -826,10 +823,48 @@ dialog.fullscreen-view > .head { flex: none; }
 ul.files li.ignored a, ul.files li.ignored small { opacity: .55; }
 .ignored-toggle { font-size: 12.5px; color: var(--muted); }
 
-/* D704 */
-.author-activity { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-top: 10px; }
-.author-activity strong, .authoring .author-agent-status { overflow-wrap: anywhere; }
-.authoring .cv-live-box { margin: 10px 0; }
+/* D704, D1131: an agent at work on a problem (components/AuthorJob.js) -- the strip, then its details */
+.aj { display: grid; gap: 10px; }
+.card .aj { margin: 0; box-shadow: none; }
+.aj > .notice { margin: 0; }
+.aj-strip { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.aj-strip > .g { flex-shrink: 0; }
+.aj-who { font-weight: 600; flex-shrink: 0; }
+.aj-who::after { content: "·"; margin-left: 8px; color: var(--muted); font-weight: 400; }
+.aj-now { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.aj-now.bad { color: var(--bad); }
+.aj-time { font-size: 12px; flex-shrink: 0; }
+.aj-strip button { flex-shrink: 0; }
+.aj-details { display: grid; gap: 10px; border-top: 1px solid var(--line); padding-top: 10px; min-width: 0; }
+.aj-lines { list-style: none; margin: 0; padding: 0; display: grid; gap: 5px; }
+.aj-line { display: flex; gap: 8px; align-items: flex-start; line-height: 1.45; min-width: 0; }
+.aj-line > .g { margin-top: 3px; }
+.aj-line > span { min-width: 0; overflow-wrap: anywhere; }
+.aj-line .mono { font-size: 12.5px; }
+.aj-line.now { color: var(--muted); }
+.aj-line.k-ask > span { color: color-mix(in srgb, var(--agent) 72%, var(--ink)); }
+.aj-files { display: flex; flex-wrap: wrap; gap: 6px 14px; }
+.aj-file { display: inline-flex; gap: 6px; align-items: center; min-width: 0; }
+.aj-file code { min-width: 0; overflow-wrap: anywhere; }
+.aj-folds { display: flex; flex-wrap: wrap; gap: 4px 18px; min-width: 0; }
+.aj-folds > details { min-width: 0; }
+.aj-folds > details[open] { flex-basis: 100%; }
+.aj-folds summary, .aj-diff summary { cursor: pointer; font-size: 13px; color: var(--muted); }
+.aj-folds .cv-live-box { margin: 8px 0 0; }
+
+/* D919, D1131: an agent's question (components/Ask.js) -- the line on a loop's page, the card in Talk or inline */
+.qline, .qbox { border-radius: 8px; border: 1px solid color-mix(in srgb, var(--agent) 35%, var(--line)); background: color-mix(in srgb, var(--agent) 7%, var(--panel)); }
+.qline { display: flex; align-items: center; gap: 10px; padding: 5px 6px 5px 12px; margin: 0 0 12px; min-width: 0; }
+.qline-mark { font-weight: 700; color: var(--agent); flex-shrink: 0; }
+.qline-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qline-text b, .qbox-head b { font-weight: 600; color: color-mix(in srgb, var(--agent) 72%, var(--ink)); }
+.qline > small, .qline > button { flex-shrink: 0; }
+.qbox { display: grid; gap: 8px; padding: 10px 12px; min-width: 0; }
+.qbox-text { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.qbox-choices { display: flex; gap: 6px; flex-wrap: wrap; }
+.qbox-free { display: flex; gap: 8px; align-items: center; }
+.qbox-free input { flex: 1; min-width: 0; width: auto; }
+.talk-ask { min-width: 0; }
 .alt-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin: 0 0 12px; }
 .subrow .alt-controls { flex: 1; justify-content: flex-end; margin-left: auto; }
 .alt-selectors { display: flex; flex-wrap: wrap; gap: 12px; margin-left: auto; }

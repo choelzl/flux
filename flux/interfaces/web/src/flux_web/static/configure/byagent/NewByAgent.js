@@ -1,14 +1,15 @@
 // Flux web, New loop › Agent (D704, D912, D1122-D1125): ask, watch it draft, review its decisions, check, make.
 // Ask: the name, who drafts it (the agents offered for Ask), what the loop should do, the files to read, whether it
 // may ask; it always starts from nothing, with its skills, the shared library and the bundled loops to read.
-// Drafting: its work as lines, its question answered here, the new loop's files. Review: its decisions by the
+// Drafting: its job (components/AuthorJob.js, details open: its work as lines, the new loop's files), its question
+// answered here (components/Ask.js). Review: its decisions by the
 // configurator's steps -- Keep, or Change in the configurator at that step -- and a change asked of the agent, shown
 // as a diff. Ready: `flux task check` on the draft, one cheap pass if wanted, then the loop is made. The loop exists
 // from the draft on (a draft in its meta until it is made); this browser remembers which, so the flow resumes.
 
 import { Card, Notice, Skeleton, html, useEffect, useRef, useState } from "../../view.js";
 import { api, apiUpload, appHref, confirmDialog, loopApi, toast } from "../../ui.js";
-import { dur, plural } from "../../format.js";
+import { plural } from "../../format.js";
 import { me } from "../../state.js";
 import { lineDiff } from "../../diff.js";
 import { recallJson, remember } from "../../stored.js";
@@ -23,13 +24,23 @@ import { Diff } from "../../components/Diff.js";
 import { Head } from "../../components/Head.js";
 import { Code } from "../../components/Markdown.js";
 import { Pill, Tag } from "../../components/Tone.js";
-import { Activity, Failed, NewFiles, Question, useAuthor, useStyle } from "./parts.js";
+import { AuthorJob, authorActs, useAuthor } from "../../components/AuthorJob.js";
 import { STEPS as CONFIG_STEPS } from "../model.js";
 
 const STAGES = ["Ask", "Drafting", "Review", "Ready"];
 /** The configurator's steps a decision belongs to (its ids: the configure route's `?step=`). */
 const STEPS = CONFIG_STEPS.filter(s => s.id !== "save").map(s => [s.id, s.title]);
 const flowKey = () => `flux-byagent:${me.name || ""}`;
+
+let styled = false;
+/** The flow's stylesheet, once (beside flux.css: its own rules, `ba-`). */
+function useStyle() {
+  if (styled) return;
+  styled = true;
+  const link = document.createElement("link");
+  link.rel = "stylesheet"; link.href = "/static/configure/byagent/byagent.css";
+  document.head.appendChild(link);
+}
 
 /** The files an agent reads, sent with what it is told -- D1075: with their progress. */
 async function withFiles(url, fd, items) {
@@ -76,15 +87,9 @@ function Ask({ state, items, setItems, edit, who, askMe, setAskMe, draft: start 
 /** 2. Drafting. */
 function Drafting({ name, st, poll, review }) {
   if (!st) return html`<${Card}><${Skeleton} lines=${4} /><//>`;
-  const stop = async () => { toast((await loopApi(name).api("/author/stop", { method: "POST" })).ok, "ok"); poll.soon(500); };
-  const state = st.running ? html`<${Pill} tone="run">${`drafting · ${dur(st.elapsed_s) || "0s"}`}<//>` : st.ok ? html`<${Pill} tone="ok">drafted<//>` : html`<${Pill} tone="bad">failed<//>`;
-  return html`<div class="ba-grid"><section class="card ba-main"><${Head} title=${st.author || "The agent"}>${state}<//>
-      <${Activity} st=${st} />
-      <${Question} name=${name} q=${st.question} onAnswered=${() => poll.soon(300)} />
-      <${Failed} st=${st} /></section>
-    <${Card} title="Files in the new loop" cls="ba-side"><${NewFiles} files=${st.files} /><//></div>
-    <div class="form-actions ba-nav">${st.running ? html`<${Act} cls="danger" onClick=${stop}>Stop<//>` : ""}
-      <span class="grow" /><button type="button" class="primary" disabled=${!(st.ok && !st.running)} onClick=${review}>Review the draft</button></div>`;
+  const acts = authorActs(name, ms => poll.soon(ms));
+  return html`<${AuthorJob} name=${name} st=${st} onStop=${acts.stop} answer=${acts.answer} open />
+    <div class="form-actions ba-nav"><span class="grow" /><button type="button" class="primary" disabled=${!(st.ok && !st.running)} onClick=${review}>Review the draft</button></div>`;
 }
 
 /** One decision: what, why, Keep or Change (the configurator at its step). */
@@ -99,7 +104,7 @@ function Decision({ d, i, kept, keep, name }) {
 /** 3. Review. */
 function Review({ name, st, poll, flow, save, who, askMe, check }) {
   const [got, setGot] = useState(null), [doc, setDoc] = useState(null), [ask, setAsk] = useState(""), [view, setView] = useState("doc");
-  const kept = flow.kept || {}, revising = st?.running;
+  const kept = flow.kept || {}, revising = st?.running, acts = authorActs(name, ms => poll.soon(ms));
   const read = async () => {
     const d = await loopApi(name).api("/author/decisions");
     setGot(d);
@@ -125,7 +130,7 @@ function Review({ name, st, poll, flow, save, who, askMe, check }) {
       <div class="ba-change"><input id="ba-change" class="grow" placeholder="Ask for a change: “also cap power at 2 mW”" value=${ask} disabled=${revising}
         onInput=${e => setAsk(e.currentTarget.value)} onKeyDown=${e => { if (e.key === "Enter") { e.preventDefault(); send(); } }} />
         <${Act} onClick=${send} disabled=${revising}>Send<//></div>
-      ${revising || st?.revise ? html`<div class="ba-revising"><${Activity} st=${st} limit=${5} /><${Question} name=${name} q=${st.question} onAnswered=${() => poll.soon(300)} /><${Failed} st=${st} /></div>` : ""}</section>
+      ${revising || st?.revise ? html`<${AuthorJob} name=${name} st=${st} onStop=${acts.stop} answer=${acts.answer} diff=${false} />` : ""}</section>
     <section class="card ba-side ba-doc"><${Head} title=${got.document || "problem.yaml"} mono actions=${changed ? html`<${Choice} small label="Show" value=${view} onChange=${setView}
         options=${[["doc", "Document"], ["diff", "The change"]]} />` : null}><${Tag}>draft<//><//>
       ${changed && view === "diff" ? html`<${Diff} ops=${lineDiff(st.before, st.after)} />` : html`<${Code} text=${doc} lang="yaml" cls="val tall code ba-yaml" />`}</section></div>

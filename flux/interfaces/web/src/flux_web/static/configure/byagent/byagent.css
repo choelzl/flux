@@ -1,5 +1,5 @@
-/* Flux web, New loop › Agent and Revise by agent (D1122): the stages, the author's lines, its question, the
-   decisions. Colours are flux.css's tokens (the agent's pink: --agent); nothing here is themed twice. */
+/* Flux web, New loop › Agent (D1122): the stages, what it can use, the decisions (the author's job and its
+   question: flux.css, .aj and .qbox). Colours are flux.css's tokens (the agent's pink: --agent); nothing here is themed twice. */
 
 .ba-flow { display: grid; gap: 12px; }
 .ba-stages { justify-self: start; }
@@ -21,28 +21,8 @@
 .ba-uses-list li { position: relative; padding-left: 16px; }
 .ba-uses-list li::before { content: ""; position: absolute; left: 2px; top: .62em; width: 6px; height: 6px; border-radius: 50%; background: var(--agent); }
 
-/* the author's work, a line each, the run glyph on what it does now */
-.ba-log { list-style: none; margin: 0; padding: 0; display: grid; gap: 5px; }
-.ba-line { display: flex; gap: 8px; align-items: flex-start; line-height: 1.45; min-width: 0; }
-.ba-line > .g { margin-top: 3px; }
-.ba-line > span { min-width: 0; overflow-wrap: anywhere; }
-.ba-line .mono { font-size: 12.5px; }
-.ba-line.now { color: var(--muted); }
-.ba-line.k-ask > span { color: color-mix(in srgb, var(--agent) 72%, var(--ink)); }
-
-/* its question: the answers as buttons, a free answer */
-.ba-question { display: grid; gap: 8px; padding: 10px 12px; border-radius: 8px; border: 1px solid color-mix(in srgb, var(--agent) 35%, var(--line));
-  background: color-mix(in srgb, var(--agent) 7%, var(--panel)); }
-.ba-q-head { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
-.ba-q-text { margin: 0; white-space: pre-wrap; }
-.ba-q-answers { display: flex; gap: 6px; flex-wrap: wrap; }
-.ba-q-free, .ba-change { display: flex; gap: 8px; align-items: center; }
-.ba-q-free input, .ba-change input { flex: 1; min-width: 0; }
-
-/* the new loop's files */
-.ba-files { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
-.ba-files li { display: flex; justify-content: space-between; gap: 8px; align-items: center; min-width: 0; }
-.ba-files code { min-width: 0; overflow-wrap: anywhere; }
+.ba-change { display: flex; gap: 8px; align-items: center; }
+.ba-change input { flex: 1; min-width: 0; }
 
 /* the decisions, grouped by the configurator's steps */
 .ba-group { display: grid; gap: 6px; }
@@ -52,7 +32,6 @@
 .ba-decision b { font-weight: 600; overflow-wrap: anywhere; }
 .ba-decision .ba-acts { display: flex; gap: 6px; align-items: center; grid-row: span 2; }
 .ba-decision .why { font-size: 12.5px; }
-.ba-revising { display: grid; gap: 8px; padding-top: 8px; border-top: 1px solid var(--line); }
 .ba-doc { display: grid; gap: 10px; position: sticky; top: 12px; }
 .ba-doc pre.ba-yaml, .ba-doc pre.diff { margin: 0; max-height: 64vh; overflow: auto; }
 .ba-doc pre.ba-yaml { white-space: pre-wrap; overflow-wrap: anywhere; }

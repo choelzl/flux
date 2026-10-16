@@ -1,14 +1,13 @@
-// Flux web, a loop's page (D697, D758, D1095): a note to a running loop -- one line, as a chat's: Enter sends,
-// Shift+Enter breaks the line; when the agent asks, the line says so and answers it -- and the notes sent so far
-// under it, each removable by whoever may edit the loop.
+// Flux web, a loop's page (D697, D758, D1095, D1131): a note to a running loop -- one line, as a chat's: Enter sends,
+// Shift+Enter breaks the line -- and the notes sent so far under it, each removable by whoever may edit the loop.
+// The agent's question is answered on its own card (components/Ask.js), not here.
 
-import { Ago, cx, html, useEffect, useLayoutEffect, useRef, useState } from "../view.js";
+import { Ago, html, useEffect, useLayoutEffect, useRef, useState } from "../view.js";
 import { enc, loopApi, toast } from "../ui.js";
-import { dur, questionLeft } from "../format.js";
 import { Bin } from "../components/Bin.js";
 
-/** `question` the agent's open one (or null); `send(text)` sends a note or an answer; `n` changes when one was sent. */
-export function Composer({ name, mine, question, send, n }) {
+/** `send(text)` sends a note; `n` changes when one was sent. */
+export function Composer({ name, mine, send, n }) {
   const [notes, setNotes] = useState([]), [busy, setBusy] = useState(false), [text, setText] = useState(""), ta = useRef(null);
   const read = () => loopApi(name).api("/notes").then(setNotes).catch(() => {});
   useEffect(() => { read(); }, [n]);
@@ -21,13 +20,11 @@ export function Composer({ name, mine, question, send, n }) {
     try { await send(said); setText(""); read(); } catch (x) { toast(x.message, "bad"); } finally { setBusy(false); }
   };
   const remove = async x => { await loopApi(name).api(`/notes/${enc(x.id)}`, { method: "DELETE" }); toast("The note is removed", "ok"); read(); };
-  const left = questionLeft(question);
-  return html`<div class=${cx("composer", question && "asking")}>
-    <div class="composer-ask">${question ? html`<strong>Agent asks</strong><span class="muted">${left ? ` · ${dur(left)} left` : " · timed out"}</span><pre class="question">${question.question}</pre>` : ""}</div>
+  return html`<div class="composer">
     <div class="composer-row"><textarea rows="1" class="composer-in" aria-label="A note to the loop" ref=${ta} value=${text} onInput=${e => setText(e.currentTarget.value)}
-        placeholder=${question ? "Your answer to the agent (Enter sends)" : "A note to the loop: it joins the next prompt (Enter sends, Shift+Enter for a new line)"}
+        placeholder="A note to the loop: it joins the next prompt (Enter sends, Shift+Enter for a new line)"
         onKeyDown=${e => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); go(); } }} />
-      <button class="primary" type="button" disabled=${busy} onClick=${go}>${question ? "Answer" : "Send"}</button></div>
+      <button class="primary" type="button" disabled=${busy} onClick=${go}>Send</button></div>
     <div class="composer-hist"><div class="notes">${notes.slice(-20).reverse().map(x => html`<div key=${x.id} class="note has-bin"><small class="muted">${x.by} · <${Ago} t=${x.t} /></small><div>${x.text}</div>
       ${mine ? html`<${Bin} what="note" title="Remove this note?" said="It goes from the page, and from the loop if it has not read it yet; what the loop read already stays in its record." remove=${() => remove(x)} />` : ""}</div>`)}</div></div></div>`;
 }

@@ -7,7 +7,7 @@ import { loopApi } from "../ui.js";
 import { me } from "../state.js";
 import { Loaded, useLoad } from "../components/Load.js";
 import { NoResults, Reading } from "./Cards.js";
-import { AuthorBox } from "./Authoring.js";
+import { OverviewAuthor } from "../components/AuthorJob.js";
 import { loadOverviewLayout } from "../overview/layout.js";
 import { Overview } from "../overview/Overview.js";
 import { Checked, ResultsTab } from "../results/Tab.js";
@@ -23,8 +23,8 @@ import { Failed } from "../components/Tone.js";
 const In = ({ read, children }) => html`<${Loaded} read=${read} wait=${html`<${Reading} />`} card=${true}>${children}<//>`;
 
 /** The loop's front page (D692): state, designs, the decision against the limits, the best so far per objective,
-    the latest notes and the agents' newest workbench entries; above it the card of an agent writing its problem
-    (D704), and Start while it has not run. */
+    the latest notes and the agents' newest workbench entries; above it the strip of an agent writing its problem
+    (D704, D1131), and Start while it has not run. */
 export function OverviewBody({ tick, notRun }) {
   const ctx = useLoop();
   const { name } = ctx;
@@ -35,7 +35,7 @@ export function OverviewBody({ tick, notRun }) {
     const needsIdeas = prefs.layout.stats.includes("ideas") || prefs.layout.columns.flat().includes("ideas");
     return { r, notes, bench, use, prefs, author, ideas: needsIdeas ? await loopApi(name).api("/ideas").catch(() => null) : null };
   }, ctx.name, tick);
-  return html`<${In} read=${read}>${d => html`${d.author.ever ? html`<${AuthorBox} name=${name} mine=${ctx.mine} first=${d.author} />` : ""}${notRun}
+  return html`<${In} read=${read}>${d => html`${d.author.ever ? html`<${OverviewAuthor} name=${name} mine=${ctx.mine} first=${d.author} />` : ""}${notRun}
     <${Overview} r=${d.r} notes=${d.notes} bench=${d.bench} use=${d.use} prefs=${d.prefs} ideas=${d.ideas} />`}<//>`;
 }
 
