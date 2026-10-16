@@ -116,6 +116,27 @@ def test_flux_task_check_is_the_authors_check(tmp_path, capsys):
     assert "REFUSED" not in capsys.readouterr().out
 
 
+def test_the_check_as_the_brief_spells_it_from_inside_the_folder(tmp_path, capsys, monkeypatch):
+    """Live (D1164): the agent ran `task check .` as its brief says, and every check was REFUSED -- the folder "." was
+    found in every dotted string ("statement, contract, flow.test name the loop folder by its absolute path"), and a
+    YAML error read `problemthe loop folderyaml`; the check after its turn, given the folder's absolute path, passed."""
+    from flux_cli.main import main
+
+    work = tmp_path / "w"
+    work.mkdir()
+    (work / "AUTHOR-BRIEF.md").write_text("the brief\n")
+    (work / "check.py").write_text(CHECK)
+    (work / "problem.yaml").write_text(yaml.safe_dump(DOC))                       # "The digits 0 to 9, one per line."
+    monkeypatch.chdir(work)
+    assert check_problem(Path("problem.yaml"), tools=False)[2] == ""
+    capsys.readouterr()
+    assert main(["task", "check", ".", "--no-sandbox"]) == 0
+    assert "REFUSED" not in capsys.readouterr().out
+    (work / "problem.yaml").write_text("statement: a: b\n")
+    why = check_problem(Path("problem.yaml"), tools=False)[2]
+    assert "`problem.yaml` is not YAML" in why and "the loop folder" not in why, why
+
+
 def test_the_agents_brief_tells_it_to_run_the_check_until_it_passes(tmp_path):
     ask = Ask(prompt="digits", workdir=tmp_path, author="opencode")
     text = brief(ask, inline=False)

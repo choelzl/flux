@@ -35,6 +35,10 @@ theme:
         icon: material/brightness-4
         name: Switch to light mode
 
+# the loop crafter page runs the web app's configurator: its modules published from flux_web/static
+hooks:
+  - hooks.py
+
 markdown_extensions:
   - admonition
   - attr_list

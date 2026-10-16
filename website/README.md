@@ -12,7 +12,8 @@ explain configuration choices in the guide and put field defaults and less commo
 |---|---|
 | `mkdocs.yml` | the site configuration and the navigation |
 | `docs/index.md`, `docs/guide/` | the home page, runnable first-loop tutorial, configuration/search guides, crafter, and parameter/run references |
-| `docs/assets/` | the loop crafter: its model (`crafter-model.js`, shared with the web app's configurator), its page (`crafter.js`, `crafter.css`) and the tool catalog it reads (`tools.json` = `flux tools --json`) |
+| `docs/assets/` | the loop crafter: its model (`crafter-model.js`, shared with the web app's configurator), its page's script (`crafter-app.js`, which mounts the web app's configurator with no server), `crafter.css` and the tool catalog it reads (`tools.json` = `flux tools --json`) |
+| `hooks.py` | publishes the web app's modules the crafter imports (`flux/interfaces/web/src/flux_web/static`) at `assets/app/`, straight from the app's folder |
 | `overrides/` | theme overrides (the footer) |
 | `site/` | the build output (git-ignored) |
 

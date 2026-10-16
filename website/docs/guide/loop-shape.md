@@ -107,10 +107,10 @@ A model or agent can invent algorithms and architectures without a predefined kn
 The default guidance is adaptive: reasoned risks are welcome, and exploration can happen
 before the incumbent stalls. Select the emphasis using the existing `dse` setting:
 
-In the loop configurator, open **Graph** and the **Search** box (on the docs page, above the drawing): pick a **Kind**, then a **Policy**.
+In the loop configurator (the web app's, or the [loop crafter](loop-crafter.md) page, the same one),
+open **Graph** and click the **Search** box on the circle: pick a **Kind**, then a **Policy**.
 The kind filters the second dropdown; it is only a UI filter and adds no document setting.
-Changing kind selects that kind's first policy. A saved policy opens in its own kind,
-and the search box in the drawing offers the same kinds.
+Changing kind selects that kind's first policy, and a saved policy opens in its own kind.
 
 | Category | Without settings in Extra | With a declared space of settings |
 |---|---|---|

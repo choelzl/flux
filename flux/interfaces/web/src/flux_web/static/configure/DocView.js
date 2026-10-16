@@ -28,7 +28,8 @@ function copyText(text) {
   if (navigator.clipboard?.writeText) return navigator.clipboard.writeText(text).then(() => toast("Copied", "ok"), () => toast("The browser did not copy it: select the text", "warn"));
   toast("The browser does not copy here: select the text", "warn");
 }
-function download(text, file) {
+/** `text` saved by the browser as `file`'s name. */
+export function download(text, file) {
   const a = document.createElement("a");
   a.href = URL.createObjectURL(new Blob([text], { type: "text/yaml" }));
   a.download = file.split("/").pop();

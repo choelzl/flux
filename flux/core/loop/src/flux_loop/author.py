@@ -404,6 +404,28 @@ _LOOKS = {"cat": "read", "head": "read", "tail": "read", "less": "read", "more":
           "file": "read", "ls": "list", "find": "list", "tree": "list", "grep": "search", "rg": "search"}
 
 
+_CHECK_RUN = re.compile(r"(?:\bflux_cli|\bflux)\s+task\s+check\b")
+
+
+def _check_ran(step: dict[str, Any]) -> tuple[str, str] | None:
+    """(words, tone) when an agent's shell call ran the loop's check (D1155) -- its verdict, not "ran cd /tmp/...": a
+    refused check's command exits fine as a tool call, so the lines showed every refusal ticked (D1165)."""
+    if str(step.get("name") or "").lower() not in ("bash", "shell", "exec", "run", "command"):
+        return None
+    cmd = str((step.get("input") or {}).get("command") or step.get("call") or "")
+    if not _CHECK_RUN.search(cmd):
+        return None
+    if "out" not in step:
+        return "ran the check", "ok"
+    out = str(step.get("out") or "")
+    bad = re.search(r"^\s*(REFUSED: |not a task: )(.*)$", out, re.M)
+    if bad:
+        return f"the check refused it: {bad.group(2).strip()[:300]}", "bad"
+    if step.get("error"):
+        return "the check did not run: " + (out.strip().splitlines() or ["(no output)"])[-1][:300], "bad"
+    return "ran the check: it passed", "ok"
+
+
 def _what(step: dict[str, Any]) -> tuple[str, str]:
     """(kind, words) of an agent's tool call: read, wrote or ran, and its file or command."""
     name = str(step.get("name") or "tool")
@@ -465,8 +487,12 @@ class Activity:
             if st.get("k") == "tool":
                 if "out" not in st and not final:
                     break                              # not finished: said once it is
-                k, text = _what(st)
-                self.add(k, text, **({"tone": "bad"} if st.get("error") else {}))
+                ran = _check_ran(st)
+                if ran:
+                    self.add("check", ran[0], tone=ran[1])
+                else:
+                    k, text = _what(st)
+                    self.add(k, text, **({"tone": "bad"} if st.get("error") else {}))
             token["seen"] = base + i + 1
 
 
@@ -819,7 +845,7 @@ def check_problem(path: Path, *, draft: bool = True, tools: bool = True, inputs:
     from .document import TaskError, load_task
     from .task import PromptProblem
 
-    path = Path(path)
+    path = Path(path).absolute()                      # `task check .`: the folder "." would be in every dotted word
     workdir = path.parent
     try:
         doc = yaml.safe_load(path.read_text())

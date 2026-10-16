@@ -3247,6 +3247,10 @@ def flows(r: Run) -> None:
     from web_ui_hidden import hidden_flows           # D1159: paths hidden from the agents
 
     hidden_flows(r, WATCH)
+
+    from web_ui_docs import docs_flows               # the docs' loop crafter: the configurator with no server
+
+    docs_flows(r)
     if os.environ.get("FLUX_E2E_GALLERY"):          # screenshots of Live for recorded journals, for review by eye
         from web_ui_gallery import gallery_flows
 

@@ -293,29 +293,6 @@ def test_the_wizard_has_six_steps_and_old_steps_land_on_theirs():
     assert set(out["steps"]) <= set(range(5)) and {0, 1, 2} <= set(out["steps"])
 
 
-def test_the_crafters_docs_tokens_are_the_apps():
-    """D941: on the docs page the crafter wears the web app's colours -- crafter.css's token set for
-    Material's light and dark schemes is flux.css's light and dark :root, value for value."""
-    import re
-
-    def tokens(block: str) -> dict[str, str]:
-        return {k: v.strip() for k, v in re.findall(r"(--[a-z-]+):\s*([^;]+);", block)}
-
-    flux = (REPO / "flux/interfaces/web/src/flux_web/static/flux.css").read_text()
-    crafter = (ASSETS / "crafter.css").read_text()
-    app_light = tokens(re.search(r":root \{(.*?)\}", flux, re.S).group(1))
-    app_dark = tokens(re.search(r':root\[data-theme="dark"\] \{(.*?)\}', flux, re.S).group(1))
-    docs_light = tokens(re.search(r"\[data-md-color-scheme\] \.flux-crafter \{(.*?)\}", crafter, re.S).group(1))
-    docs_dark = tokens(re.search(r'\[data-md-color-scheme="slate"\] \.flux-crafter \{(.*?)\}', crafter, re.S).group(1))
-    assert {"--ink", "--muted", "--line", "--panel", "--bg", "--soft", "--accent", "--accent-ink", "--ok", "--bad", "--warn"} <= set(docs_light) & set(docs_dark)
-    for app, docs in ((app_light, docs_light), (app_dark, docs_dark)):
-        assert {k: v for k, v in docs.items() if k in app} == {k: app[k] for k in docs if k in app}
-    # D1120: the agent is pink everywhere; D1146: the drawing's halves are the app's --half-* (copied, compared above)
-    halves = {f"--half-{h}" for h in ("rules", "model", "agent", "fixed", "off")}
-    assert halves <= set(docs_light) & set(docs_dark)
-    assert docs_light["--half-agent"] == app_light["--agent"] and docs_dark["--half-agent"] == app_dark["--agent"]
-
-
 def test_an_added_agent_called_custom_is_one_choice_however_often_the_agents_are_set():
     """D946: the configurator's marker for an agent with its own settings was "agent:custom", spared
     when the choices were rebuilt -- an agent added as `custom` came back once more on every visit."""

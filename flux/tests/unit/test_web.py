@@ -170,7 +170,6 @@ def test_the_configurator_reads_a_document_back_and_saves_it_with_what_it_keeps(
     assert "make x faster" in text and "Kept as written" in text and "n: 5" in text
     assert bob.put("/api/apps/x/document", json={"text": "params: {n: 1}\n", "kept": ["params"]}, headers=H).status_code == 400, \
         "a kept key the configurator also wrote is refused"
-    assert TestClient(app).get("/crafter-assets/crafter.js").status_code == 200
     assert TestClient(app).get("/crafter-assets/crafter-model.js").status_code == 200
     assert TestClient(app).get("/crafter-assets/tools.json").json()
 

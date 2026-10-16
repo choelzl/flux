@@ -546,13 +546,16 @@ def test_the_estimates_say_what_task_check_says(tmp_path):
 
 
 def test_the_crafter_page_mounts_the_builder_and_links_its_guides():
-    """The interactive form lives on its own page beside the written guides."""
+    """The interactive form lives on its own page beside the written guides: the web app's configurator,
+    mounted by crafter-app.js (a module), over the model (D1166)."""
     guide = REPO / "website/docs/guide"
     page = (guide / "loop-crafter.md").read_text()
     assert 'id="flux-crafter"' in page
-    for asset in ("crafter-model.js", "crafter.js", "crafter.css"):
+    for asset in ("crafter-model.js", "crafter-app.js", "crafter.css"):
         assert f'"../../assets/{asset}"' in page
         assert (ASSETS / asset).is_file()
+    assert '<script type="module" src="../../assets/crafter-app.js">' in page
+    assert not (ASSETS / "crafter.js").exists(), "one configurator: the docs' own crafter.js is gone"
     links = set(re.findall(r"\]\(([^)]+)\)", page))
     assert {"tutorial.md", "build-your-own.md", "parameters.md"} <= links
     for link in links:
@@ -614,7 +617,7 @@ def _literals(text: str) -> set[str]:
 
 def test_the_docs_crafter_and_the_web_configurator_say_the_models_words():
     """D1146: a label, hint, placeholder or option both views show is the model's (WORDS, STEP_TITLES), so the
-    docs' crafter.js and the web's configure/ cannot drift apart: neither spells one out itself. Single words
+    docs' page (crafter-app.js, which mounts the web's configure/) and the configurator cannot drift apart: neither spells one out itself. Single words
     ("Name", "Kind") are left to each view; a phrase is guarded. The web's step list (model.js STEPS, there before
     the model loads) keeps the model's titles, in order."""
     r = subprocess.run(["node", "-e", WORDS_JS, str(ASSETS / "crafter-model.js")], capture_output=True, text=True, timeout=60)
@@ -623,7 +626,7 @@ def test_the_docs_crafter_and_the_web_configurator_say_the_models_words():
     guarded = {s for s in _said(got["words"]) | set(got["steps"]) if re.search(r"[A-Za-z]", s) and re.search(r"[^A-Za-z]", s)}
     assert {"Time limit, s", "Clock (MHz)", "higher is better", "Estimate first", "decoder, datapath", "Check & Measure",
             "Save draft"} <= guarded
-    views = [ASSETS / "crafter.js", *sorted(CONFIGURE.glob("*.js"))]
+    views = [ASSETS / "crafter-app.js", *sorted(CONFIGURE.glob("*.js"))]
     for path in views:
         text = path.read_text()
         own = guarded - set(got["steps"]) if path.name == "model.js" else guarded
@@ -633,4 +636,6 @@ def test_the_docs_crafter_and_the_web_configurator_say_the_models_words():
     assert [t for _, t in steps] == got["steps"]
     # who works a box: the model's whoOptions, the web's who.js only hands it on
     assert "switch (box)" not in (CONFIGURE / "who.js").read_text()
-    assert "whoWorks(" in (ASSETS / "crafter.js").read_text() and "M.whoWorks(" in (CONFIGURE / "Cycle.js").read_text()
+    assert "M.whoWorks(" in (CONFIGURE / "Cycle.js").read_text()
+    # the docs' page is the configurator itself, not a view of its own
+    assert 'from "./app/configure/Configurator.js"' in (ASSETS / "crafter-app.js").read_text()

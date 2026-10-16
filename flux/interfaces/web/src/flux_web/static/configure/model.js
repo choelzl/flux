@@ -1,9 +1,9 @@
 // Flux web, configure (D686, D934, D1116): the configurator's model -- website/docs/assets/crafter-model.js, the docs
 // page's too: the document written from a state (`buildYaml`), what is wrong with it (`check`), a document read back
 // (`fromDoc`) and the vocabulary. Loaded once, where a configurator is drawn (not on every page), with the tool catalog
-// (/crafter-assets/tools.json) and the server's agents in its choices.
+// (tools.json) and the agents in its choices, from where it runs (host.js: the server, or the docs page).
 
-import { api } from "../ui.js";
+import { host } from "./host.js";
 import { crafterCatalog, setCrafterCatalog } from "../state.js";
 import { useEffect, useState } from "../view.js";
 
@@ -15,16 +15,16 @@ const script = src => new Promise((ok, no) => {
 });
 
 /** D934: the server's agents in every box's choices -- asked by the first configurator, then again behind each. */
-const agentsOf = M => api("/agents").then(list => M.setAgents(list.filter(a => a.id !== "model").map(a => ({ name: a.id, label: a.label }))), () => {});
+const agentsOf = M => host.agents().then(list => M.setAgents(list.filter(a => a.id !== "model").map(a => ({ name: a.id, label: a.label }))), () => {});
 
 /** The model, its catalog and agents set: a promise of it (null when its script does not load). */
 function loadModel() {
   if (loading) { loading.then(M => M && agentsOf(M)); return loading; }
   loading = (async () => {
-    if (!window.FluxCrafterModel) await script("/crafter-assets/crafter-model.js");
+    if (!window.FluxCrafterModel) await script(`${host.assets}/crafter-model.js`);
     const M = window.FluxCrafterModel;
     window.FluxCrafter = window.FluxCrafter || M;          // configure/Views.js's agent draft starts from its base()
-    if (!crafterCatalog) setCrafterCatalog(await fetch("/crafter-assets/tools.json").then(r => r.json()).catch(() => []));
+    if (!crafterCatalog) setCrafterCatalog(await fetch(`${host.assets}/tools.json`).then(r => r.json()).catch(() => []));
     M.setCatalog(crafterCatalog);
     await agentsOf(M);
     return M;

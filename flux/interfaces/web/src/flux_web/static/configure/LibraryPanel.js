@@ -11,7 +11,7 @@
 //     removed here -- the loop's checks and measurements still use them.
 
 import { html, useChanges, useEffect, useState } from "../view.js";
-import { api } from "../ui.js";
+import { host } from "./host.js";
 import { plural } from "../format.js";
 import { Uploader, placedFiles } from "../components/Uploader.js";
 import { Choice } from "../components/Tabs.js";
@@ -23,7 +23,7 @@ import { HiddenMark, hiddenBy } from "../files/hidden.js";
 
 const NO_STORE = { subscribe: () => () => {}, s: { files: [] } };
 let uses = null;                                         // the shared library's papers and Flux's own skills, asked once
-const usesOnce = () => (uses = uses || api("/new-by-agent/uses").catch(() => null));
+const usesOnce = () => (uses = uses || Promise.resolve().then(host.uses).catch(() => null));
 const SKILL = /^skills\/([^/]+)\/SKILL\.md$/;
 /** Folders the Library's list leaves out: the loop's papers (their own row) and its skills (their own section). */
 const NOT_READ = ["library/", "skills/"];

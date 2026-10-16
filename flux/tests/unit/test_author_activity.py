@@ -152,3 +152,25 @@ def test_the_skills_are_placed_where_every_agent_looks(tmp_path):
     assert names == list(AUTHOR_SKILLS)
     for d in (".claude/skills", ".opencode/skills", ".agents/skills"):
         assert (tmp_path / d / "flux-loop-creator" / "SKILL.md").is_file()
+
+
+def test_the_agents_own_check_is_a_line_with_its_verdict(tmp_path):
+    """Live (D1165): OpenCode ran `<python> -m flux_cli task check .` five times in its turn, each REFUSED, and the
+    lines read "✓ ran cd /tmp/.../popcount_live && /nix/st..." -- a refused check's command exits fine as a tool call."""
+    from flux_loop.author import Activity
+
+    a = Activity(tmp_path)
+    cmd = f"cd {tmp_path} && {sys.executable} -m flux_cli task check . --no-sandbox"
+    steps = [{"k": "tool", "name": "bash", "call": "bash: " + cmd[:100], "input": {"command": cmd}, "error": False,
+              "out": "task x: ...\n  REFUSED: statement names the loop folder by its absolute path\n"},
+             {"k": "tool", "name": "bash", "call": "bash: " + cmd[:100], "input": {"command": cmd}, "error": False,
+              "out": "not a task: `problem.yaml` is not YAML\n"},
+             {"k": "tool", "name": "bash", "call": "bash: " + cmd[:100], "input": {"command": cmd}, "error": False,
+              "out": "task x: ...\n  tools: present for every stage\n"},
+             {"k": "tool", "name": "bash", "call": "bash: ls -la", "input": {"command": "ls -la"}, "error": False, "out": "x"}]
+    token = a.phase_start("agent: opencode", "problem", {})
+    a.phase_end(token, "agent: opencode", 1.0, False, {"steps": steps})
+    rows = _rows(tmp_path)
+    assert [(r["k"], r.get("tone")) for r in rows] == [("check", "bad"), ("check", "bad"), ("check", "ok"), ("list", None)], rows
+    assert rows[0]["text"] == "the check refused it: statement names the loop folder by its absolute path"
+    assert rows[1]["text"] == "the check refused it: `problem.yaml` is not YAML" and rows[2]["text"] == "ran the check: it passed"
