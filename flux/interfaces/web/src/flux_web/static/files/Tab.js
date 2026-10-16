@@ -34,7 +34,7 @@ function useFiles(ctx, refreshList = async () => {}) {
   const dirty = () => !!draft.current?.ed && draft.current.ed.textarea.value !== draft.current.saved;
   async function settled() {
     if (!dirty()) return true;
-    const choice = await dialog(`Unsaved changes to ${draft.current.path}`, html`<p>Save them first, discard them, or go back to the file.</p>`,
+    const choice = await dialog(`Unsaved changes to ${draft.current.path}`, html`<p>Save, discard, or go back.</p>`,
       [["Cancel", null], ["Discard", "discard", "danger"], ["Save", "save", "primary"]]);
     if (choice === "save") return await save();
     if (choice === "discard") { draft.current = null; return true; }
@@ -59,7 +59,7 @@ function useFiles(ctx, refreshList = async () => {}) {
       return true;
     } catch (x) {
       if (x.status !== 409) { toast(x.message, "bad"); return false; }
-      const go = await dialog(`${d.path} changed since you opened it`, html`<p>${`${x.message}. Reload it (your edit is dropped), or save yours over it.`}</p>`,
+      const go = await dialog(`${d.path} changed since you opened it`, html`<p>${`${x.message}. Reload (drops your edit), or save over it.`}</p>`,
         [["Cancel", null], ["Reload", "reload"], ["Save over it", "over", "danger"]]);
       if (go === "over") return save(true);
       if (go === "reload") await open(d.path, false, true);
@@ -81,13 +81,13 @@ function useFiles(ctx, refreshList = async () => {}) {
       const dir = parentOf(it.path);
       const to = await askPath(name, `Rename ${baseOf(it.path)}`, "New name", baseOf(it.path), "Rename", v => joinP(dir, v));
       if (to == null || to === baseOf(it.path)) return;
-      if (!to || to.includes("/")) { toast("A name, without /: Move puts it in another folder.", "warn"); return; }
+      if (!to || to.includes("/")) { toast("No / in a name: use Move.", "warn"); return; }
       await moveTo(it, joinP(dir, to));
     },
     async move(it) {
       if (!await settled()) return;
       const leaf = baseOf(it.path), clean = v => v.replace(/^\/+|\/+$/g, "");
-      const to = await askPath(name, `Move ${leaf}`, "Into folder (empty: the loop's own folder; a new one is made)", parentOf(it.path), "Move", v => joinP(clean(v), leaf));
+      const to = await askPath(name, `Move ${leaf}`, "Into folder (empty: loop folder; made if new)", parentOf(it.path), "Move", v => joinP(clean(v), leaf));
       if (to == null) return;
       const dest = joinP(clean(to), leaf);
       if (dest !== it.path) await moveTo(it, dest);
@@ -98,8 +98,8 @@ function useFiles(ctx, refreshList = async () => {}) {
       const s = folder ? await api(itemUrl(it.path, "/size")).catch(() => null) : null;
       const ok = await dialog(`Delete ${baseOf(it.path)}?`, html`<p class="mono path-preview">${`${name}/${it.path}`}</p>
         ${folder ? html`<p>${`The folder and everything in it${s ? `: ${s.partial ? "at least " : ""}${plural(s.files, "file")}, ${plural(s.folders, "folder")}, ${bytes(s.bytes)}.` : "."}`}</p>`
-          : it.kind === "link" ? html`<p>${`The link only: what it points to (${it.target}) stays.`}</p>` : ""}
-        <${Notice} tone="bad" what="It cannot be undone" />`, [["Cancel", false], [folder ? "Delete the folder" : "Delete", true, "danger solid"]]);
+          : it.kind === "link" ? html`<p>${`Only the link: ${it.target} stays.`}</p>` : ""}
+        <${Notice} tone="bad" what="Cannot be undone" />`, [["Cancel", false], [folder ? "Delete folder" : "Delete", true, "danger solid"]]);
       if (!ok) return;
       try {
         await loopApi(name).api(`/file?path=${enc(it.path)}${folder ? "&recursive=true" : ""}&revision=${enc(it.revision)}`, { method: "DELETE" });
@@ -142,10 +142,10 @@ function Viewer({ f, showIgnored }) {
   const onEditor = ed => { f.draft.current = ed && editable ? { path, ed, saved: got.text, rev: got.rev || here?.revision || "" } : null; };
   return html`<${ViewerFrame} v=${view} title=${path}><div class="viewer">${got === null ? html`<${Skeleton} lines=${8} />` : html`${head}${
     got.error ? html`<${Failed} what=${`${path || (dir ? name : path)} could not be opened`} why=${got.error} retry=${() => f.open(path, dir, true)} />`
-    : got.list ? (got.list.length ? html`<${FileList} list=${got.list} open=${f.open} />` : html`<${Empty} text="An empty folder." />`)
-    : got.binary ? html`<${Empty} text="A binary file." action=${html`<a class="btn small" href=${fileUrl(path, true)}>Download</a>`} />`
+    : got.list ? (got.list.length ? html`<${FileList} list=${got.list} open=${f.open} />` : html`<${Empty} text="Empty folder." />`)
+    : got.binary ? html`<${Empty} text="Binary file." action=${html`<a class="btn small" href=${fileUrl(path, true)}>Download</a>`} />`
     : html`${got.cut ? html`<${Notice} tone="warn" cls="truncated" what=${`Showing the first ${bytes(new TextEncoder().encode(got.text).length)} of ${bytes(got.size)}`}
-          why="too large to show or edit here whole. Download has all of it." />` : ""}
+          why="too large to edit here. Download has it all." />` : ""}
         <${CodeEditor} key=${`${path}#${sel.n}`} text=${got.text} lang=${langOf(path)} readonly=${!editable} onEditor=${onEditor} />`}`}</div><//>`;
 }
 
@@ -167,7 +167,7 @@ function Adder() {
     const n = await sendFiles(name, chosen.map(f => ({ file: f, path: f.name })), { folder: into() });
     toast(`Added ${plural(n, "file")}`, "ok"); drawBody();
   };
-  return html`<div><${DropZone} label="Drop files or folders to add them" onFiles=${drop} /><details class="adder"><summary>Add files</summary>
+  return html`<div><${DropZone} label="Drop files or folders" onFiles=${drop} /><details class="adder"><summary>Add files</summary>
     <label class="stack">Files or a .zip<input type="file" multiple onChange=${e => setChosen([...e.currentTarget.files])} /></label><label class="stack">Into folder<input placeholder="folder (optional)" ...${bound(folder, setFolder)} /></label>
     <${Act} cls="small primary" onClick=${add}>Add<//></details></div>`;
 }
@@ -183,8 +183,8 @@ export function FilesTab({ root }) {
   const rootList = () => loopApi(ctx.name).api(`/files${showIgnored() ? "?ignored=true" : ""}`);
   const f = useFiles(ctx, async () => setList(await rootList()));      // D908: after a rename, move or delete
   useEffect(() => { if (ctx.info.document) f.open(ctx.info.document, false, true); }, []);
-  const ignored = html`<label class="check small ignored-toggle" title="Files .gitignore leaves out, and names starting with .">
-    <input type="checkbox" id="show-ignored" checked=${showIgnored()} onChange=${e => { remember("flux-show-ignored", e.currentTarget.checked ? "1" : "0"); ctx.drawBody(); }} />show ignored files</label>`;
+  const ignored = html`<label class="check small ignored-toggle" title=".gitignore'd and dot files">
+    <input type="checkbox" id="show-ignored" checked=${showIgnored()} onChange=${e => { remember("flux-show-ignored", e.currentTarget.checked ? "1" : "0"); ctx.drawBody(); }} />show ignored</label>`;
   return html`<div class="grid-app"><${Card} title="Files" cls="files-card" actions=${ignored}><div class="files-list"><${FileList} list=${list} open=${f.open} /></div>${ctx.mine ? html`<${Adder} />` : ""}<//>
     <${Card} cls="viewer-card"><${Viewer} f=${f} showIgnored=${showIgnored()} /><//></div>`;
 }
@@ -194,7 +194,7 @@ export function WorkbenchTab({ bench }) {
   const ctx = useLoop();
   const f = useFiles(ctx);
   const groups = ["tools", "notes", ""].map(kind => [kind, bench.filter(b => b.kind === kind || (kind === "" && !["tools", "notes"].includes(b.kind)))]).filter(([, items]) => items.length);
-  return html`<div class="grid-app"><${Card} title="Agents' workbench">${bench.length ? groups.map(([kind, items]) => html`<div key=${kind} class="bench-group"><h3>${kind || "other"}</h3>
+  return html`<div class="grid-app"><${Card} title="Workbench">${bench.length ? groups.map(([kind, items]) => html`<div key=${kind} class="bench-group"><h3>${kind || "other"}</h3>
       <ul class="bench">${items.map(b => html`<li key=${b.path}><a href="javascript:void 0" onClick=${() => f.open(b.path, false)}>${baseOf(b.path)}</a>
         <small class="muted"> <${Ago} t=${b.mtime} /></small>${b.first ? html`<div class="first">${b.first}</div>` : ""}</li>`)}</ul></div>`) : html`<${Empty} text="Empty." />`}<//>
     <${Card} cls="viewer-card"><${Viewer} f=${f} showIgnored=${showIgnored()} /><//></div>`;

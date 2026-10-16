@@ -31,7 +31,7 @@ export function waits(q, long = false) {
 
 /** The slim line: the question's asking line, the time left, Answer (`open`). */
 export const AskLine = ({ q, open, label = "Answer" }) => html`<div class="qline" role="status">
-  <span class="qline-mark" aria-hidden="true">?</span><span class="qline-text"><b>The agent asks:</b> ${asks(q.question)}</span>
+  <span class="qline-mark" aria-hidden="true">?</span><span class="qline-text"><b>Agent asks:</b> ${asks(q.question)}</span>
   ${waits(q) ? html`<small class="muted">${waits(q)}</small>` : ""}<button type="button" class="small primary" onClick=${open}>${label}</button></div>`;
 
 /** The card: `send(text)` answers (null: read only). */
@@ -40,16 +40,16 @@ export function Ask({ q, send = null, cls = "" }) {
   useEffect(() => setText(""), [q?.asked, q?.question]);
   if (!q) return null;
   const answer = async v => {
-    if (!v.trim()) { toast("Write the answer, or pick one.", "warn"); return; }
+    if (!v.trim()) { toast("Write or pick an answer.", "warn"); return; }
     await send(v.trim());
     setText("");
   };
   const body = String(q.question).split("\n").filter(l => !OPTION.test(l)).join("\n").trim() || q.question, left = waits(q, true);
   return html`<div class=${cx("qbox", cls)} role="group" aria-label="The agent asks">
-    <div class="qbox-head"><b>The agent asks</b>${left ? html`<small class="muted">${` · ${left}`}</small>` : ""}</div>
+    <div class="qbox-head"><b>Agent asks</b>${left ? html`<small class="muted">${` · ${left}`}</small>` : ""}</div>
     <p class="qbox-text">${body}</p>
     ${send ? html`<div class="qbox-choices">${choicesOf(q).map(o => html`<${Act} key=${o} cls="small" onClick=${() => answer(o)}>${o}<//>`)}
         <${Act} cls="small" onClick=${() => answer(YOU_DECIDE)}>You decide<//></div>
-      <div class="qbox-free"><input class="grow qbox-in" aria-label="Your answer" placeholder="Or write the answer" value=${text} onInput=${e => setText(e.currentTarget.value)}
+      <div class="qbox-free"><input class="grow qbox-in" aria-label="Your answer" placeholder="Or write an answer" value=${text} onInput=${e => setText(e.currentTarget.value)}
         onKeyDown=${e => { if (e.key === "Enter" && !e.isComposing) { e.preventDefault(); answer(text).catch(x => toast(x.message, "bad")); } }} /><${Act} cls="small primary" onClick=${() => answer(text)}>Answer<//></div>` : ""}</div>`;
 }

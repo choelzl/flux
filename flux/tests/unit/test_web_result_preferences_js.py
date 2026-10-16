@@ -65,7 +65,7 @@ first.save({hiddenMetrics: ['failed']});
 second.save({hiddenMetrics: ['also failed']});
 await flushResultPreferences();
 assert.equal(notices.length, 2);
-assert.ok(notices.every(n => n[0].includes('were not saved: test refusal')));
+assert.ok(notices.every(n => n[0].includes('not saved: test refusal')));
 assert.deepEqual(first.read().hiddenMetrics, ['old']);
 fail = false;
 await first.save({hiddenMetrics: []});

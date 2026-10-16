@@ -16,7 +16,7 @@ import { Diff } from "./Diff.js";
 import { Tag } from "./Tone.js";
 
 /** An author that ended without a document, said alike wherever its job is drawn: [what, why]. */
-export const AUTHOR_FAILED = ["No document that passes its checks.", "Its log says why: try again, or write the document yourself."];
+export const AUTHOR_FAILED = ["No document passed its checks.", "See its log: try again, or write it yourself."];
 
 /** The author's job on loop `name` as /author says it, read again every 2 s while it runs; `n` reads it anew; `first`
     what was read already (then read again only while it runs). A read that fails keeps what was read, said to be
@@ -79,21 +79,21 @@ export function AuthorJob({ name, st, onStop = null, answer = null, open = false
   if (!st || !(st.ever || st.connection_error)) return null;
   const running = !!st.running, f = st.progress?.fields || {}, rows = linesOf(st), failed = st.ever && !running && !st.ok && !st.connection_error;
   const tone = running ? "run" : st.connection_error ? "warn" : st.ok ? "ok" : "bad";
-  const now = running ? st.now || f.status || (rows.length ? plainSaid(rows[rows.length - 1]) : "") || st.progress?.phase || "starting the agent"
-    : st.connection_error && !st.ever ? "reconnecting…" : st.ok ? (st.revise ? `done: ${st.revise} revised and checked` : "done: the document checked and saved") : AUTHOR_FAILED[0];
+  const now = running ? st.now || f.status || (rows.length ? plainSaid(rows[rows.length - 1]) : "") || st.progress?.phase || "starting"
+    : st.connection_error && !st.ever ? "reconnecting…" : st.ok ? (st.revise ? `done: ${st.revise} revised and checked` : "done: checked and saved") : AUTHOR_FAILED[0];
   const steps = f.steps || [f["thinking (live tail)"] ? { k: "think", text: f["thinking (live tail)"] } : null, f["reply (live tail)"] ? { k: "text", text: f["reply (live tail)"] } : null].filter(Boolean);
   const total = f["steps total"] || steps.length;
   const changed = diff && !running && st.revise && st.before && st.after && st.before !== st.after;
   return html`<section class=${cx("card aj", cls)} data-author-state=${tone} data-author-finished=${!st.connection_error && !running && st.ok ? "true" : null}>
     <div class="aj-strip"><${Glyph} tone=${tone} label=${running ? "running" : st.ok ? "done" : st.connection_error ? "reconnecting" : "failed"} />
-      <b class="aj-who">${st.author || "The agent"}</b><span class=${cx("aj-now", failed && "bad")} title=${failed ? AUTHOR_FAILED[1] : null}>${now}</span>
+      <b class="aj-who">${st.author || "Agent"}</b><span class=${cx("aj-now", failed && "bad")} title=${failed ? AUTHOR_FAILED[1] : null}>${now}</span>
       <span class="aj-time mono muted">${st.ever ? dur(st.elapsed_s ?? 0) || "0s" : ""}</span>
       ${running && onStop ? html`<${Act} cls="small danger" onClick=${onStop}>Stop<//>` : ""}
       <button type="button" class="small aj-toggle" aria-expanded=${String(details)} onClick=${() => setDetails(!details)}>${details ? "Details ▴" : "Details ▾"}</button></div>
-    ${st.connection_error ? html`<${Notice} tone="warn" cls="aj-reconnect" what="Reconnecting to the agent's status" why=${st.connection_error} />` : ""}
+    ${st.connection_error ? html`<${Notice} tone="warn" cls="aj-reconnect" what="Reconnecting" why=${st.connection_error} />` : ""}
     ${f["rate limit"] ? html`<${Notice} tone="warn" what="Rate limit" why=${f["rate limit"]} />` : ""}
     ${st.question ? html`<${Ask} q=${st.question} send=${answer} />` : ""}
-    ${changed ? html`<details class="aj-diff" open><summary>${`What it changed in ${st.revise}`}</summary><${Diff} ops=${lineDiff(st.before, st.after)} /></details>` : ""}
+    ${changed ? html`<details class="aj-diff" open><summary>${`Changes to ${st.revise}`}</summary><${Diff} ops=${lineDiff(st.before, st.after)} /></details>` : ""}
     ${details ? html`<div class="aj-details">
       ${rows.length || running ? html`<${Lines} st=${st} rows=${rows} />` : ""}
       ${st.files?.length ? html`<div class="aj-files">${st.files.map(x => html`<span key=${x.path} class="aj-file"><code>${x.path}</code>${x.by === "yours" ? html`<${Tag}>yours<//>` : html`<${Tag} k="var(--agent)">written<//>`}</span>`)}</div>` : ""}
@@ -101,7 +101,7 @@ export function AuthorJob({ name, st, onStop = null, answer = null, open = false
         ${steps.length ? html`<details data-author-section="conversation"><summary>${`conversation (${plural(total, "step")})`}</summary>
             <${Conversation} steps=${steps} k=${`author-${name}-${st.started}`} offset=${Math.max(0, total - steps.length)} live=${running} scroll /></details>`
           : f["tool calls"] ? html`<details data-author-section="conversation"><summary>conversation</summary><pre class="val small">${f["tool calls"]}</pre></details>` : ""}
-        ${st.prompt ? html`<details data-author-section="prompt"><summary>what it was asked</summary><pre class="val small">${st.prompt}</pre></details>` : ""}
+        ${st.prompt ? html`<details data-author-section="prompt"><summary>prompt</summary><pre class="val small">${st.prompt}</pre></details>` : ""}
         <details data-author-section="log"><summary>log</summary><pre class="log small aj-log" data-k="author-log">${(st.log || []).join("\n") || "Nothing logged yet."}</pre></details>
         ${f.stderr ? html`<details data-author-section="stderr"><summary>stderr</summary><pre class="log small" data-k="author-stderr">${f.stderr}</pre></details>` : ""}</div></div>` : ""}</section>`;
 }

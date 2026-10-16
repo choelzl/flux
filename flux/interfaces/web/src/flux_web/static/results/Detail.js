@@ -28,10 +28,10 @@ function RejectForm({ d, fmt, live, v, set }) {
       ${rows.map(x => html`<tr key=${x.k}><td><input type="checkbox" checked=${x.k in v.ticked} onChange=${e => tick(x, e.currentTarget.checked)} /></td>
           <td class="mono">${`${x.stage} · ${x.metric}`}</td><td class="mono num">${fmt(x.v)}</td>
           <td><${Select} class="reject-how" aria-label=${`${x.stage} ${x.metric}: measure again or clear`} onChange=${to => choose(x, to)} options=${[["again", "measure again"], ["clear", "clear"]]} /></td></tr>`)}<//>` : ""}
-    <p class="muted small">Ticked: measured again (the new number replaces this one) or cleared (struck through). None ticked: the result is only marked.</p>
+    <p class="muted small">Ticked: measured again or cleared (struck through). None ticked: only marked.</p>
     <label class="row-inline"><input type="checkbox" class="reject-hide" disabled=${live} checked=${v.hide} onChange=${e => set({ hide: e.currentTarget.checked })} />
-      <span>Also hide the design<small class="muted">${live ? " -- stop the loop first: hiding takes it out of the evidence" : " -- out of the tables, listed under Invalidated by hand"}</small></span></label>
-    ${live ? html`<p class="note small">The loop is running: what is measured again is measured before its next pass (R).</p>` : ""}</div>`;
+      <span>Also hide the design<small class="muted">${live ? " -- stop the loop first" : " -- listed under Invalidated by hand"}</small></span></label>
+    ${live ? html`<p class="note small">Running: measured again before the next pass.</p>` : ""}</div>`;
 }
 /** What the form says: why, hidden, the measurements cleared and the stages measured again. */
 function readReject(v) {
@@ -64,13 +64,13 @@ export function DesignDetail({ d, fmt, reload }) {
   };
   const restore = async () => { toast((await loopApi(name).api("/results/unreject", { method: "POST", body: { id: d.rejected.id } })).ok, "ok"); reload(); };
   return html`<${ViewerFrame} v=${view} title=${d.name}><div class="detail">
-    <${Head} cls="detail-head" title=${d.name} mono tools=${html`${mine && !d.reference_only && !d.rejected ? html`<${Tool} icon="reject" label="Reject… (it stays shown, never chosen)" danger cls="reject-design" onClick=${reject} />` : ""}
+    <${Head} cls="detail-head" title=${d.name} mono tools=${html`${mine && !d.reference_only && !d.rejected ? html`<${Tool} icon="reject" label="Reject… (shown, never chosen)" danger cls="reject-design" onClick=${reject} />` : ""}
         <${ViewerTools} v=${view} title=${d.name} rawText=${JSON.stringify(full, null, 2)} />`}>
       <${VerdictPill} d=${d} />${d.decision ? html`<${Pill} tone="ok">decision<//>` : ""}${d.part ? html`<span class="muted">${`part ${d.part}`}</span>` : ""}<//>
     ${d.rejected ? html`<div class="blk rejected-blk"><h3>Rejected</h3><p>${d.rejected.why}</p>
       <p class="muted small">${`${byCritic(d.rejected.by) ? "critic" : d.rejected.by} · `}<${Ago} t=${Date.parse(d.rejected.at) / 1000} />${(d.cleared || []).length ? ` · cleared ${d.cleared.map(c => `${c.stage} ${c.metric}`).join(", ")}` : ""}</p>
       ${(d.rejected.again || []).length ? html`<${Pill} tone="none">${running ? "measured again before the next pass" : "to be measured again"}<//>` : ""}
-      ${mine ? html`<${Act} cls="small" title="It counts again as it was measured" onClick=${restore}>Restore<//>` : ""}</div>` : ""}
+      ${mine ? html`<${Act} cls="small" title="Counts again" onClick=${restore}>Restore<//>` : ""}</div>` : ""}
     ${d.why.length ? html`<div class="blk"><h3>${d.verdict === "pending" ? "Waiting for" : "Not met"}</h3><ul class="misses">${d.why.map(w => html`<li>${w}</li>`)}</ul></div>` : ""}
     ${stages.length ? html`<div key="measured" class="blk"><h3>Measurements</h3><${Table} heads=${["stage", ...metrics.map(label => ({ label, num: true }))]}>
       ${stages.map(([st, m]) => html`<tr><td>${st}</td>${metrics.map(k => html`<td class="mono num">${fmt(m[k])}</td>`)}</tr>`)}<//></div>` : ""}

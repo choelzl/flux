@@ -46,8 +46,8 @@ function Invalidated({ r, reload }) {
     <${Table}>${list.map(x => html`<tr class=${x.restored ? "muted" : ""}><td class="mono">${x.names.join(", ")}</td><td>${x.reason}</td>
       <td class="muted small">${`${x.by} · `}<${Ago} t=${Date.parse(x.at) / 1000} />${x.reevaluated ? html` · re-evaluated <${Ago} t=${Date.parse(x.reevaluated) / 1000} />` : ""}</td>
       <td class="right">${x.restored ? html`<${Tag}>restored<//>` : canChange ? html`<div class="actions end">
-        <${Act} cls="small" title="Check and measure these designs again now (one run); the invalidated numbers stay history" onClick=${async () => { toast(await post("reevaluate", x.id), "ok"); ctx.goTab("Live"); }}>Re-evaluate<//>
-        <${Act} cls="small" title="Count the invalidated numbers again" onClick=${async () => { toast(await post("restore", x.id), "ok"); reload(); }}>Restore<//></div>` : ""}</td></tr>`)}<//></details>`;
+        <${Act} cls="small" title="Check and measure them again now (one run)" onClick=${async () => { toast(await post("reevaluate", x.id), "ok"); ctx.goTab("Live"); }}>Re-evaluate<//>
+        <${Act} cls="small" title="Count them again" onClick=${async () => { toast(await post("restore", x.id), "ok"); reload(); }}>Restore<//></div>` : ""}</td></tr>`)}<//></details>`;
 }
 
 /** The decision, in a line, above both views (D900: none, when no design meets every requirement). */
@@ -87,7 +87,7 @@ export function ResultsTab({ r, view }) {
   };
   const detail = open ? html`<${DesignDetail} key=${keyOf(open)} d=${open} fmt=${num} reload=${reload} />` : html`<div class="detail"><${Empty} text="Select a design." /></div>`;
   return html`<${ViewerFrame} v=${full} title="Results"><div ref=${root}>
-    <${Card} cls="objective-card" title="Objective" meta=${`${r.objectives}${r.total > r.designs.length ? ` · the newest ${r.designs.length} of ${r.total} designs` : ""}`}
+    <${Card} cls="objective-card" title="Objective" meta=${`${r.objectives}${r.total > r.designs.length ? ` · newest ${r.designs.length} of ${r.total}` : ""}`}
         tools=${html`<${ViewerTools} v=${full} title="Results" rawUrl=${`${base}/results${qs}${qs ? "&" : "?"}raw=true`} />${r.answer ? html`<${Tool} icon="download" label="Answer (JSON)" href=${`/api/apps/${enc(name)}/file?path=runs/answer.json&download=1${q}`} />` : ""}
           <${Tool} icon="report" label="Report" href=${`${base}/report${qs}`} target="_blank" rel="noopener" />`}>
       <${DecisionLine} r=${r} names=${names} comparison=${comparison} onPick=${pick} /><${Invalidated} r=${r} reload=${reload} /><//>

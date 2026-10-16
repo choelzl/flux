@@ -33,7 +33,7 @@ export function Graphs({ r, directions, onPick, detail }) {
       scope: groups.length ? (groups.includes(p.scope) ? p.scope : "whole") : "" };
   });
   const set = patch => { const next = { ...g, ...patch }; setG(next); prefs.save({ graphs: next }); };
-  if (!nums.length) return html`<${Card}><${Empty} text="No metric measured to chart." /><//>`;
+  if (!nums.length) return html`<${Card}><${Empty} text="No measured metric." /><//>`;
   const stageOpts = [["", "deepest stage"], ...stageNames.map(s => [s, s])];     // D1015: one name for the default
   const metricSelect = (value, onChange) => html`<select onChange=${e => onChange(e.currentTarget.value)}>${folded(nums).map(([k, ms]) => {
     const tests = ms.filter(m => m !== k), opt = (m, label) => html`<option value=${m} selected=${m === value}>${label}</option>`;
@@ -45,17 +45,17 @@ export function Graphs({ r, directions, onPick, detail }) {
   return html`<div class="graphs">
     <${Card} cls="graphs-ctl"><div>${groups.length ? html`<div class="bar scope"><span class="muted">Compare within</span>
         <${Choice} small label="Scope" value=${g.scope} onChange=${k => set({ scope: k })} options=${scopesOf(groups)} /></div>` : ""}</div>
-      <p class="muted small graphs-note">${`Measured search designs are drawn (${r.designs.filter(d => !d.baseline).length}); baseline measurements are gray reference lines. The table's filter does not apply. `}
-        The best so far and the front count only designs that meet every requirement${groups.length ? ", within the scope" : ""}.</p>
+      <p class="muted small graphs-note">${`${r.designs.filter(d => !d.baseline).length} search designs; gray lines are baselines. `}
+        Best so far and the front count only designs meeting all requirements${groups.length ? ", within the scope" : ""}.</p>
       <${Legend} S=${styles} front rejected=${r.designs.some(d => d.verdict === "rejected")} pending=${r.designs.some(d => d.verdict === "pending")} baseline=${r.designs.some(d => d.baseline)} /><//>
     <div class="grid-2 charts">
       <${Card} title="Pareto front"><div><div class="chart-ctl">
           <label>x ${metricSelect(g.x, v => set({ x: v }))}</label><label>y ${metricSelect(g.y, v => set({ y: v }))}</label>
           <label>stage <${Select} options=${stageOpts} value=${g.paretoStage} onChange=${v => set({ paretoStage: v })} /></label>
           <button type="button" class=${cx("small chip pareto-focus", g.paretoFocus && "on")} aria-pressed=${String(g.paretoFocus)} disabled=${nums.length < 2}
-            title=${g.paretoFocus ? "Show the full measurement range" : "Fit axes to the feasible Pareto front; distant points may be outside the view"}
+            title=${g.paretoFocus ? "Full range" : "Fit axes to the feasible front"}
             onClick=${() => set({ paretoFocus: !g.paretoFocus })}>Focus</button></div>
-        ${nums.length < 2 ? html`<${Empty} text="A front needs two measured metrics." />`
+        ${nums.length < 2 ? html`<${Empty} text="Needs two measured metrics." />`
           : html`<${ParetoChart} designs=${r.designs} xm=${g.x} ym=${g.y} stage=${g.paretoStage} objectives=${directions} onPick=${onPick} styles=${styles} scope=${g.scope} legend=${false} focus=${g.paretoFocus} />`}</div><//>
       <${Card} title="Improvement by design"><div><div class="chart-ctl">
           <div class="chips">${folded(nums).map(([k, ms]) => {

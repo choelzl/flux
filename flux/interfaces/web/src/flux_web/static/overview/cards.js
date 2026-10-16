@@ -43,48 +43,48 @@ export function overviewCards(o) {
     // D1094: every pass begun, a failed one too -- as many as the tree shows; those that decided nothing said apart
     passes: a => { const ps = r.passes || [], n = Math.max(r.passes_begun || 0, ps.length), none = n - ps.length;
       return html`<${Stat} ...${a} label="Passes" value=${String(n)} sub=${html`${none ? `${none} without a decision · ` : ""}${ps.length ? html`last decided <${Ago} t=${ps.at(-1).when} />` : n ? "none decided" : ""}`} />`; },
-    usage: a => html`<${Stat} ...${a} label="Models and agents" value=${total ? plural(total.turns, "turn") : "—"} onClick=${go("Agents")}
+    usage: a => html`<${Stat} ...${a} label="Agents" value=${total ? plural(total.turns, "turn") : "—"} onClick=${go("Agents")}
       sub=${total ? `${dur(total.seconds) || "0s"}${total.counted ? ` · ${fmtTok(total.tokens_in)} → ${fmtTok(total.tokens_out)} tokens` : ""}${total.cost_usd ? ` · $${total.cost_usd.toFixed(2)}` : ""}` : "Usage unavailable"} />`,
     objective: a => html`<${Stat} ...${a} label="Objective" value=${html`<span class="obj-line">${r.objectives || "—"}</span>`} />`,
     tokens_in: a => html`<${Stat} ...${a} label="Tokens in" value=${tokens(total?.tokens_in)} sub=${partial} onClick=${go("Agents")} />`,
     tokens_out: a => html`<${Stat} ...${a} label="Tokens out" value=${tokens(total?.tokens_out)} sub=${partial} onClick=${go("Agents")} />`,
-    cost: a => html`<${Stat} ...${a} label="Model and agent cost" value=${total?.cost_usd != null ? `$${total.cost_usd.toFixed(2)}` : "—"} sub="At the configured prices" onClick=${go("Agents")} />`,
+    cost: a => html`<${Stat} ...${a} label="Cost" value=${total?.cost_usd != null ? `$${total.cost_usd.toFixed(2)}` : "—"} sub="At set prices" onClick=${go("Agents")} />`,
     primary_metric: a => html`<${Stat} ...${a} label=${metric || "Main metric"} value=${primary?.text || "—"} onClick=${go("Results")}
       sub=${dec ? `${dec.name}${unit[metric] ? ` · ${unit[metric]}` : ""}` : "No selected design"} />`,
     reference_change: a => html`<${Stat} ...${a} label="Change vs reference" value=${percent(change?.percent)} onClick=${go("Results")}
       sub=${metric ? `${metric} · ${change?.reference?.kind || "no reference"}` : "Select a main metric"} />`,
     acceptance: a => html`<${Stat} ...${a} label="Acceptance rate" value=${count ? `${Number((100 * counts.accepted / count).toFixed(1))}%` : "—"} onClick=${go("Results")}
       sub=${count ? `${counts.accepted} of ${count} measured designs` : "No designs measured"} />`,
-    runtime: a => html`<${Stat} ...${a} label="Active run time" value=${st.running && st.since ? dur(Math.max(0, Date.now() / 1000 - st.since)) || "0s" : "—"}
+    runtime: a => html`<${Stat} ...${a} label="Run time" value=${st.running && st.since ? dur(Math.max(0, Date.now() / 1000 - st.since)) || "0s" : "—"}
       sub=${st.running ? "Current run" : "No active run"} onClick=${go("Live")} />`,
-    model_time: a => html`<${Stat} ...${a} label="Model and agent time" value=${total ? dur(total.seconds) || "0s" : "—"} sub=${total ? "Total time across turns" : "Usage unavailable"} onClick=${go("Agents")} />`,
+    model_time: a => html`<${Stat} ...${a} label="Agent time" value=${total ? dur(total.seconds) || "0s" : "—"} sub=${total ? "All turns" : "Usage unavailable"} onClick=${go("Agents")} />`,
     goals: a => html`<${Stat} ...${a} label="Goals met" value=${limits.length && dec ? `${limits.filter(l => l.met === true).length} / ${limits.length}` : "—"} onClick=${go("Results")}
-      sub=${!limits.length ? "No goals configured" : dec ? "For the selected design" : "No selected design"} />`,
+      sub=${!limits.length ? "No goals" : dec ? "Selected design" : "No selected design"} />`,
     ideas: a => html`<${Stat} ...${a} label="Ideas" value=${notebook ? String(notebook.length) : "—"} onClick=${go("Results", "ideas")}
-      sub=${notebook ? ["proposed", "measured", "failed", "interrupted", "checked"].map(s => { const n = notebook.filter(i => i.status === s).length; return n ? `${n} ${s}` : ""; }).filter(Boolean).join(" · ") || "No ideas recorded" : "Ideas unavailable"} />`,
+      sub=${notebook ? ["proposed", "measured", "failed", "interrupted", "checked"].map(s => { const n = notebook.filter(i => i.status === s).length; return n ? `${n} ${s}` : ""; }).filter(Boolean).join(" · ") || "No ideas" : "Ideas unavailable"} />`,
   };
   const cards = {
     decision: a => html`<${DecisionCard} a=${a} r=${r} main=${main} comparison=${comparison} unit=${unit} />`,
     best: a => html`<${Card} ...${a} title="Best so far">${objs.length ? objs.map(ob => html`<${BestChart} rows=${designPoints(designs, ob)} obj=${ob} passes=${r.passes} groups=${groupList(designs)} />`)
-      : html`<${Empty} text="Select a main metric in Settings → Measurements to chart." />`}<//>`,
+      : html`<${Empty} text="Pick a main metric in Settings → Measurements." />`}<//>`,
     last_pass: a => html`<${LastPass} a=${a} r=${r} />`,
     notes: a => notes.length ? html`<${Card} ...${a} title="Latest notes"><div class="notes">${notes.slice(-5).reverse().map(n => html`<div key=${n.id} class="note has-bin">
         <small class="muted">${n.by} · <${Ago} t=${n.t} /></small><div>${n.text}</div>
-        ${ctx.mine ? html`<${Bin} what="note" title="Remove this note?" said="It goes from the page, and from the loop if it has not read it yet; what the loop read already stays in its record."
-          remove=${async () => { await loopApi(ctx.name).api(`/notes/${enc(n.id)}`, { method: "DELETE" }); toast("The note is removed", "ok"); ctx.drawBody(); }} />` : ""}</div>`)}</div><//>` : null,
-    workbench: a => bench.length ? html`<${Card} ...${a} title="Agents' workbench"><ul class="bench">${bench.slice(0, 5).map(b => html`<li key=${b.path}>
+        ${ctx.mine ? html`<${Bin} what="note" title="Remove this note?" said="Removed unless the loop read it already."
+          remove=${async () => { await loopApi(ctx.name).api(`/notes/${enc(n.id)}`, { method: "DELETE" }); toast("Note removed", "ok"); ctx.drawBody(); }} />` : ""}</div>`)}</div><//>` : null,
+    workbench: a => bench.length ? html`<${Card} ...${a} title="Workbench"><ul class="bench">${bench.slice(0, 5).map(b => html`<li key=${b.path}>
         <a href="javascript:void 0" onClick=${go("Files", "workbench")}>${b.path.split("/").pop()}</a><small class="muted"> <${Ago} t=${b.mtime} /></small>
         ${b.first ? html`<div class="first">${b.first}</div>` : ""}</li>`)}</ul><//>` : null,
-    usage: a => html`<${Card} ...${a} title="Models and agents" actions=${button("Agents", "Agents")}>${total ? html`
+    usage: a => html`<${Card} ...${a} title="Agents" actions=${button("Agents", "Agents")}>${total ? html`
         <p>${`${plural(total.turns, "turn")} · ${dur(total.seconds) || "0s"}`}</p>
-        <p>${total.counted ? `${fmtTok(total.tokens_in)} tokens in · ${fmtTok(total.tokens_out)} tokens out` : "No token usage reported."}</p>
-        ${total.partial ? html`<p class="muted small">${`${plural(total.partial, "turn")} with incomplete usage.`}</p>` : ""}
-        ${total.cost_usd ? html`<p>${`$${total.cost_usd.toFixed(2)} at the configured prices.`}</p>` : ""}` : html`<${Empty} text="Usage unavailable." />`}<//>`,
+        <p>${total.counted ? `${fmtTok(total.tokens_in)} tokens in · ${fmtTok(total.tokens_out)} tokens out` : "No tokens reported."}</p>
+        ${total.partial ? html`<p class="muted small">${`${plural(total.partial, "turn")} partial.`}</p>` : ""}
+        ${total.cost_usd ? html`<p>${`$${total.cost_usd.toFixed(2)}`}</p>` : ""}` : html`<${Empty} text="Usage unavailable." />`}<//>`,
     ideas: a => {
       const recent = (notebook || []).map((idea, index) => ({ idea, index, latest: (idea.evaluations || []).at(-1) }))
         .sort((a, b) => (Date.parse(b.latest?.at || b.idea.created || "") || 0) - (Date.parse(a.latest?.at || a.idea.created || "") || 0) || b.index - a.index).slice(0, 5);
       return html`<${Card} ...${a} title="Ideas" actions=${button("All ideas", "Results", "ideas")}>${!notebook ? html`<${Empty} text="Ideas could not be loaded." />`
-        : !recent.length ? html`<${Empty} text="No ideas recorded yet." />`
+        : !recent.length ? html`<${Empty} text="No ideas yet." />`
         : html`<ul class="overview-ideas">${recent.map(({ idea, latest }) => {
           const metrics = Object.entries(latest?.metrics || {}).filter(([, value]) => Number.isFinite(value));
           const evidence = latest ? [`Pass ${latest.pass ?? "—"}`, latest.stage, latest.status,
@@ -106,21 +106,21 @@ export function overviewCards(o) {
       const stage = (r.stages || []).includes(prefs.paretoStage) ? prefs.paretoStage : "";
       return html`<${Card} ...${a} title="Pareto front" actions=${button("Graphs", "Results", "graphs")}>${metrics.length >= 2
         ? html`<${ParetoChart} designs=${designs} xm=${x} ym=${y} stage=${stage} objectives=${directions} onPick=${go("Results", "graphs")} scope=${scope} focus=${prefs.paretoFocus === true} />`
-        : html`<${Empty} text="Two measured metrics are needed for a Pareto front." />`}<//>`;
+        : html`<${Empty} text="Needs two measured metrics." />`}<//>`;
     },
-    references: a => html`<${Card} ...${a} title="Reference comparison" actions=${button("Measurements", "Settings", "loop")}>${dec && main.length
+    references: a => html`<${Card} ...${a} title="Reference" actions=${button("Measurements", "Settings", "loop")}>${dec && main.length
       ? html`<${SummaryTable} heads=${["Metric", "Selected", "Reference", "Change"]}>${main.map(m => {
         const ref = reference(m), source = ref?.reference;
         return html`<tr data-reference-metric=${m}><td>${m}${unit[m] ? html`<small class="muted">${` · ${unit[m]}`}</small>` : ""}</td>
           <${ValueCell} v=${measured(ref?.value)} /><${ValueCell} v=${measured(source?.value)} title=${source ? `${source.kind}${source.name ? ` · ${source.name}` : ""}` : "No reference"} />
           <${ValueCell} v=${percent(ref?.percent)} title=${source ? `Percent change from ${source.kind}; baseline first, percentile fallback` : "No reference"} /></tr>`; })}<//>`
-      : html`<${Empty} text=${dec ? "Select main metrics in Settings → Measurements." : "No selected design to compare."} />`}<//>`,
-    goals: a => html`<${Card} ...${a} title="Goal status" actions=${button("Results", "Results")}>${limits.length
+      : html`<${Empty} text=${dec ? "Pick main metrics in Settings → Measurements." : "No selected design."} />`}<//>`,
+    goals: a => html`<${Card} ...${a} title="Goals" actions=${button("Results", "Results")}>${limits.length
       ? html`<${SummaryTable} heads=${["Metric", "Goal", "Selected", "Status"]}>${limits.map(l => html`<tr key=${`${l.metric}|${l.stage}`}>
           <td title=${l.stage ? `Judged at ${l.stage}` : ""}>${l.metric}${unit[l.metric] ? html`<small class="muted">${` · ${unit[l.metric]}`}</small>` : ""}</td>
           <${ValueCell} v=${`${l.direction === "maximize" ? "≥" : "≤"} ${measured(l.goal)}`} /><${ValueCell} v=${measured(l.value)} />
           <td class="num"><${Pill} tone=${l.met === true ? "ok" : l.met === false ? "bad" : "none"}>${l.met === true ? "met" : l.met === false ? "missed" : "unmeasured"}<//></td></tr>`)}<//>`
-      : html`<${Empty} text="No measurement goals configured." />`}<//>`,
+      : html`<${Empty} text="No goals." />`}<//>`,
     recent_designs: a => {
       const recent = designs.filter(d => !d.baseline && !d.reference_only).slice()
         .sort((a, b) => (Date.parse(b.last || b.first || "") || 0) - (Date.parse(a.last || a.first || "") || 0)
@@ -131,18 +131,18 @@ export function overviewCards(o) {
             <td><button type="button" class="link mono" title=${`${d.name} · ${d.shown}`} onClick=${go("Results")}>${labels.get(d)}</button></td>
             <td class="num"><${VerdictBadge} verdict=${d.verdict} reason=${(d.why || []).join("; ")} /></td>
             ${main.map(m => { const v = measurementText(d, m, comparison, num, relativeMeasurement(ctx, m)); return html`<${ValueCell} v=${v.text || "—"} title=${v.title} />`; })}</tr>`)}<//>`
-        : html`<${Empty} text="No search designs measured yet." />`}<//>`;
+        : html`<${Empty} text="No designs measured yet." />`}<//>`;
     },
     pass_history: a => html`<${Card} ...${a} title="Recent passes" actions=${button("History", "Live", "history")}>${(r.passes || []).length
       ? html`<ol class="overview-pass-history">${r.passes.slice(-5).reverse().map(p => {
         const c = p.conclusion, pick = typeof c === "object" && c ? c.decision : null, said = typeof pick === "object" && pick ? pick.name : pick;
         return html`<li><small class="muted"><${Ago} t=${p.when} /></small><div>${said ? own(ctx, said) : "No decision"}</div>${c?.decided_by ? html`<small class="muted">${c.decided_by}</small>` : ""}</li>`; })}</ol>`
-      : html`<${Empty} text="No completed passes on record." />`}<//>`,
-    usage_breakdown: a => html`<${Card} ...${a} title="Usage by model and agent" actions=${button("Agents", "Agents")}>${use?.by?.length
+      : html`<${Empty} text="No passes yet." />`}<//>`,
+    usage_breakdown: a => html`<${Card} ...${a} title="Usage by agent" actions=${button("Agents", "Agents")}>${use?.by?.length
       ? html`<${SummaryTable} heads=${["Who", "Turns", "Time", "Tokens in", "Tokens out", "Cost"]}>${use.by.map(b => html`<tr key=${`${b.who}|${b.kind}`}>
-          <td>${b.who}<div class="muted small">${b.kind}${b.partial ? " · partial usage" : ""}</div></td><${ValueCell} v=${String(b.turns)} /><${ValueCell} v=${dur(b.seconds) || "0s"} />
+          <td>${b.who}<div class="muted small">${b.kind}${b.partial ? " · partial" : ""}</div></td><${ValueCell} v=${String(b.turns)} /><${ValueCell} v=${dur(b.seconds) || "0s"} />
           <${ValueCell} v=${b.counted ? fmtTok(b.tokens_in) : "—"} /><${ValueCell} v=${b.counted ? fmtTok(b.tokens_out) : "—"} /><${ValueCell} v=${b.cost_usd != null ? `$${b.cost_usd.toFixed(2)}` : "—"} /></tr>`)}<//>`
-      : html`<${Empty} text="No model or agent usage recorded." />`}<//>`,
+      : html`<${Empty} text="No usage yet." />`}<//>`,
   };
   return { stats, cards };
 }

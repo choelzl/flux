@@ -13,7 +13,7 @@ import { Pill } from "../components/Tone.js";
 import { Tabs } from "../components/Tabs.js";
 
 const SETTING_LABELS = { FLUX_REMOTE_BASE_URL: "Endpoint URL", FLUX_REMOTE_MODEL: "Model", FLUX_LLM_TIMEOUT_S: "Seconds per request",
-  FLUX_REMOTE_AT_ONCE: "Requests at once on its endpoint (every loop; 0: no limit)", FLUX_REMOTE_API_KEY: "Key", FLUX_DEFAULT_AGENT: "Agent" };
+  FLUX_REMOTE_AT_ONCE: "Requests at once (all loops; 0: no limit)", FLUX_REMOTE_API_KEY: "Key", FLUX_DEFAULT_AGENT: "Agent" };
 
 /** One setting: its field, Overridden when one's own value stands where the server's would apply, Clear, the mark. */
 function Field({ k, f, values, setValue }) {
@@ -70,23 +70,23 @@ export function SettingsForm({ st, server = null, save, scope, agentEnv = null, 
   const pick = t => { setCur(t); remember(memo, t); };
   const groups = st.groups.map(g => {
     const keys = [...g.public, ...g.secret], own = keys.some(k => values[k]), prices = g.prices || [];
-    const note = server && values[g.endpoint] ? "your own endpoint: none of the server's values of this group are used"
+    const note = server && values[g.endpoint] ? "your own endpoint: server values unused"
       : server && keys.some(k => server[k]) && !own ? "Server settings apply" : "";
     const vars = g.agent && agentEnv ? agentEnv(g.agent) : null, panel = panels[g.agent || g.id] || null;
     // D823: an agent's model and its own variables fold away, open by themselves when something is set
     const setHere = keys.filter(k => values[k] || (server && server[k])).length;
     const rows = html`${g.hint ? html`<p class="muted small">${g.hint}</p>` : ""}${note ? html`<p class="small hint-line">${note}</p>` : ""}
       <div class="grid-2 set-fields">${g.public.filter(k => !prices.includes(k)).map(row)}${g.secret.map(row)}${prices.length === 2 ? priceRow(prices) : ""}</div>
-      ${server && prices.length && g.endpoint ? html`<p class="muted small price-said">${endpointOf(prices[0]) ? "" : "Your prices count with your own endpoint."}</p>` : ""}`;
+      ${server && prices.length && g.endpoint ? html`<p class="muted small price-said">${endpointOf(prices[0]) ? "" : "Prices apply with your own endpoint."}</p>` : ""}`;
     const nVars = vars ? vars.rows.length + (vars.server || []).length : 0;
     return { g, own, tab: g.tab || g.label, el: html`<fieldset key=${g.id || g.label} class=${"set-group" + (panel ? " with-panel" : "")} hidden=${(g.tab || g.label) !== cur}><legend>${g.label}</legend>${panel || ""}
       ${g.agent ? fold("Model", setHere, setHere > 0, rows) : rows}
       ${vars ? fold("Variables (this agent only)", nVars, nVars > 0, html`<${EnvEditor} rows=${vars.rows} save=${vars.save} scope=${`${scope}-${g.agent}`} />
         ${vars.server && vars.server.length ? html`<div><p class="muted small">Server's, under yours:</p>
-          <${EnvTable} rows=${vars.server.map(x => ({ ...x, from: "the server" }))} shadowed=${new Set(vars.rows.map(x => x.name))} /></div>` : ""}`) : ""}</fieldset>` };
+          <${EnvTable} rows=${vars.server.map(x => ({ ...x, from: "server" }))} shadowed=${new Set(vars.rows.map(x => x.name))} /></div>` : ""}`) : ""}</fieldset>` };
   });
   return html`<${Tabs} cls="subtabs set-tabs" on=${cur} pick=${pick} items=${tabs.map(t => groups.some(x => x.tab === t && x.own)
-      ? [t, t, html`<span class="set-dot" aria-label="set"> •</span>`, "has settings of its own"] : [t, t])} />
+      ? [t, t, html`<span class="set-dot" aria-label="set"> •</span>`, "own settings"] : [t, t])} />
     <div class="set-groups">${groups.map(x => x.el)}
       ${extraTabs.map(x => html`<div class="set-extra" key=${x.tab} hidden=${x.tab !== cur}>${x.el}</div>`)}</div>`;
 }

@@ -32,7 +32,7 @@ export function resultPreferences(ctx) {
           try { target.result_preferences = (await api(path)).preferences; }
           catch (_) { target.result_preferences = previous; }
         }
-        toast(`Project preferences were not saved: ${error.message}`, "bad");
+        toast(`Preferences not saved: ${error.message}`, "bad");
       }
     });
     return preferenceWrites;
@@ -101,9 +101,9 @@ export function designLabels(designs, appName) {
 export function measurementText(d, metric, compare, fmt, relative) {
   const { value, reference, percent } = compare(d, metric);
   const delta = percent == null ? "—" : `${percent > 0 ? "+" : ""}${Number(percent.toFixed(1))}%`;
-  const ref = reference ? `${reference.kind}${reference.name ? ` (${reference.name})` : ""} ${fmt(reference.value)} at ${d.shown}${reference.count ? ` (${reference.count} accepted design${reference.count === 1 ? "" : "s"})` : ""}` : "no matching baseline or accepted measurements";
+  const ref = reference ? `${reference.kind}${reference.name ? ` (${reference.name})` : ""} ${fmt(reference.value)} at ${d.shown}${reference.count ? ` (${reference.count} accepted design${reference.count === 1 ? "" : "s"})` : ""}` : "no baseline or accepted designs";
   return { text: relative ? delta : value == null ? "" : fmt(value),
-    title: `${metric}: ${value == null ? "not measured" : fmt(value)} · ${delta} from ${ref}${reference?.value === 0 ? " (zero reference; percent change is undefined)" : ""}` };
+    title: `${metric}: ${value == null ? "not measured" : fmt(value)} · ${delta} from ${ref}${reference?.value === 0 ? " (zero reference)" : ""}` };
 }
 
 /** The columns' header labels (D1014, D1015): a dictionary's column is its own name, folded or not;

@@ -11,10 +11,10 @@ const GROUPS = [["Users and sign-in", ["login", "login refused", "add user", "ch
     "invite user", "password set from a link", "create group", "rename group", "group server access", "view as user", "return from view as"]],
   ["Runs", ["start", "stop", "restart", "restart requested", "restart failed", "note", "note removed", "stop all", "restart all",
     "restart all requested", "starts paused", "running limit", "kill container"]],
-  ["Loops and their files", ["loop by an agent", "answered the author", "loop made from an agent's draft", "configure", "write document", "problem revised by an agent",
+  ["Loops and files", ["loop by an agent", "answered the author", "loop made from an agent's draft", "configure", "write document", "problem revised by an agent",
     "edit", "upload", "add files", "delete file", "move file", "delete app", "reset app", "asked about a loop", "invalidated a design", "restored a design", "rejected a result", "restored a rejected result", "queued an idea", "unqueued an idea", "clone loop", "empty loop",
     "document migrated", "rename loop", "transfer loop"]],
-  ["Sharing and loop settings", ["share", "left a share", "variable", "settings", "advanced settings", "sandbox mounts"]],
+  ["Sharing and settings", ["share", "left a share", "variable", "settings", "advanced settings", "sandbox mounts"]],
   ["Agents", ["agent added", "agent removed", "agent renamed", "agent settings", "agent login", "agent test", "offered for Ask", "not offered for Ask"]],
   // D885: the scheduled clean-up and its settings are the server's
   ["Server", ["server settings", "sandbox settings", "clean cache", "application refreshed", "maintenance",
@@ -30,11 +30,11 @@ export function Audit({ audit }) {
   const got = audit.filter(x => (!what || groupOf(x.action) === what) && (!who || (x.user || NOONE) === who) && (!f || String(x.detail || "").toLowerCase().includes(f)));
   // D733: a group only -- one kind alone is never what is looked for; the rows keep their kind
   const groups = [...GROUPS.map(([g]) => g), "Other"].map(g => [g, kinds.filter(([k]) => groupOf(k) === g)]).filter(([, ks]) => ks.length);
-  return html`<${Card} title="Audit trail"><div class="toolbar">
-      <select aria-label="What" onChange=${e => setWhat(e.currentTarget.value)}><option value="">${`Every kind (${audit.length})`}</option>
+  return html`<${Card} title="Audit"><div class="toolbar">
+      <select aria-label="What" onChange=${e => setWhat(e.currentTarget.value)}><option value="">${`All (${audit.length})`}</option>
         ${groups.map(([g, ks]) => html`<option value=${g} title=${ks.map(([k, c]) => `${k} (${c})`).join(", ")}>${`${g} (${ks.reduce((t, [, c]) => t + c, 0)})`}</option>`)}</select>
       <${Select} aria-label="Who" value=${who} onChange=${setWho} none=${`Everyone (${audit.length})`} options=${tally(x => x.user || NOONE).map(([v, n]) => [v, `${v === NOONE ? "no user" : v} (${n})`])} />
-      <input placeholder="search the details" class="filter" value=${find} onInput=${e => setFind(e.currentTarget.value)} />
+      <input placeholder="search" class="filter" value=${find} onInput=${e => setFind(e.currentTarget.value)} />
       <span class="muted">${got.length === audit.length ? `${audit.length} entries` : `${got.length} of ${audit.length} entries`}</span></div>
     <${Table} cls="list" heads=${["When", "Who", "What", "Detail"]}>
       ${got.length ? got.map(x => html`<tr key=${`${x.t}|${x.action}|${x.user}`}><td class="muted"><${Ago} t=${x.t} /></td><td>${x.user || ""}</td>

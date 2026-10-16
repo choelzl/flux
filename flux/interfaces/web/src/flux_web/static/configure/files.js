@@ -30,7 +30,7 @@ export function filesStore(name, yamlOf, { staged = new Map(), namedOf = null, o
   /** A file written or edited in a dialog: its path (fixed once it has one) and its text. */
   async function editor(path, text) {
     let ed = null;
-    const got = await dialog(path ? `Edit ${path}` : "A new file", ({ v, set }) => html`<div class="file-edit"><label class="stack">Path in the loop<input class="file-path full" value=${v.p}
+    const got = await dialog(path ? `Edit ${path}` : "New file", ({ v, set }) => html`<div class="file-edit"><label class="stack">Path<input class="file-path full" value=${v.p}
         placeholder="check.py, scripts/bench.sh" readonly=${!!path} onInput=${e => set({ p: e.currentTarget.value })} /></label>
       <${CodeEditor} text=${text || ""} lang=${langOf(path || "")} onEditor=${e => { if (e) ed = e; }} /></div>`,
       [["Cancel", null], ["Save", v => ({ p: v.p.trim(), text: ed.textarea.value }), "primary"]], { p: path || "" });
@@ -42,15 +42,15 @@ export function filesStore(name, yamlOf, { staged = new Map(), namedOf = null, o
     draw();
   }
   async function open(f) {
-    if (!name) { const x = staged.get(f.path); if (x.text != null) return editor(f.path, x.text); toast("A dropped file is kept as it is.", "info"); return; }
+    if (!name) { const x = staged.get(f.path); if (x.text != null) return editor(f.path, x.text); toast("Dropped files are kept as they are.", "info"); return; }
     const r = await loopApi(name).request(`/file?path=${enc(f.path)}`);       // D907: an error is said, not taken for a binary
-    if (!(r.headers.get("content-type") || "").startsWith("text/")) { toast("A binary file: replace it by dropping a new one.", "info"); return; }
+    if (!(r.headers.get("content-type") || "").startsWith("text/")) { toast("Binary file: drop a new one to replace it.", "info"); return; }
     if (r.headers.get("x-flux-truncated")) { toast(`${f.path} is too large to edit here (${bytes(+r.headers.get("x-flux-size"))}): download it from Files.`, "info"); return; }
     editor(f.path, await r.text());
   }
   async function remove(f) {
     if (!name) { staged.delete(f.path); draw(); return; }
-    if (!await confirmDialog(`Delete ${f.path}?`, ["It cannot be undone", "the document may still name it"], { ok: "Delete", danger: true })) return;
+    if (!await confirmDialog(`Delete ${f.path}?`, ["Cannot be undone", "the document may still name it"], { ok: "Delete", danger: true })) return;
     await loopApi(name).api(`/file?path=${enc(f.path)}`, { method: "DELETE" }); toast(`${f.path} deleted`, "ok"); draw();
   }
   /** Files dropped, into `folder` when one is named. */

@@ -14,16 +14,16 @@ export function sums(M, state, { files = 0, missing = 0, errors = 0, calm = fals
   const f = state.flow || {}, lang = M.language(state, true) || M.impliedLanguage(state);
   const r = M.resolve(state), words = M.describeObjectives(r.objectives);
   const knobs = M.knobNames(state), bp = state.baseline || {};
-  const design = M.paramOnly(state) ? "settings only, nothing designs" : f.generate === "command" ? "a script designs" : f.generate === "catalog" ? "your designs, one by one"
-    : isAgent(f.generate) ? `${agentWord(M, f.generate)} designs` : "a model designs";
+  const design = M.paramOnly(state) ? "settings only" : f.generate === "command" ? "script designs" : f.generate === "catalog" ? "files, one by one"
+    : isAgent(f.generate) ? `${agentWord(M, f.generate)} designs` : "model designs";
   return {
     prompt: [missing ? `${plural(missing, "file")} missing` : "", String(state.id || "").trim() || "unnamed", lang || "any language", missing ? "" : plural(files, "file")].filter(Boolean).join(" · "),
     checks: `${plural(r.checks.length, "check")} · ${plural(r.stages.length, "measurement")}`,
-    objective: words[0] || "nothing to decide by yet",
+    objective: words[0] || "no objective yet",
     graph: design,
     extra: [M.parameterSearch(state) ? `searches ${plural(knobs.length, "setting")}` : "no search",
       state.partsMode === "decompose" ? "parts as it decides" : M.hasParts(state) ? plural(M.list(state.parts).length, "part") : "one design",
-      bp.mode && bp.mode !== "off" ? "a baseline first" : ""].filter(Boolean).join(" · "),
+      bp.mode && bp.mode !== "off" ? "baseline first" : ""].filter(Boolean).join(" · "),
     save: errors ? `${plural(errors, "thing")} to ${calm ? "do" : "fix"}` : isNew ? "ready to create" : "ready to save",
   };
 }

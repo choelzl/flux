@@ -69,6 +69,6 @@ export function Timeline({ v, a }) {
       ${cuts.map(([kind, t]) => html`<rect x=${X(t) - .75} y=${T + lanes.indexOf(kind) * lane + 3} width="1.5" height=${lane - 6} class="alt-cut" pointer-events="none" />`)}
       ${agents.map(({ kind, t0: s0, t1: s1 }) => html`<rect x=${X(s0)} y=${T + lanes.indexOf(kind) * lane + lane - 7} width=${Math.max(3, X(s1) - X(s0))} height="4" rx="1" style=${`fill:${AGENT_COLOR}`} class="agent-time" pointer-events="none" />`)}
     </svg>
-    ${agents.length ? html`<p class="muted small tl-legend"><span><i class="sw" style=${`background:${AGENT_COLOR}`} />Agent activity within the work</span></p>` : ""}
+    ${agents.length ? html`<p class="muted small tl-legend"><span><i class="sw" style=${`background:${AGENT_COLOR}`} />Agent activity</span></p>` : ""}
     ${v.choice ? html`<${Choice} v=${v} a=${a} />` : ""}</div>`;
 }

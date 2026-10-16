@@ -38,9 +38,9 @@ export function useColumns(ctx, metrics, groups = {}) {
   const open = names.length > 0 && names.every(name => selection(name).expanded);
   const controls = html`<div class="measurement-columns">
     <button type="button" class="small show-hidden-columns" hidden=${!nHidden} aria-pressed=${String(state.showHidden && !!nHidden)}
-      title=${state.showHidden ? "Hide ignored measurement columns" : "Show ignored measurement columns"} onClick=${() => update(n => { n.showHidden = !n.showHidden; })}>${`Hidden ${nHidden}`}</button>
+      title=${state.showHidden ? "Hide hidden columns" : "Show hidden columns"} onClick=${() => update(n => { n.showHidden = !n.showHidden; })}>${`Hidden ${nHidden}`}</button>
     <div class="dictionary-controls">${names.length ? html`<button type="button" class=${cx("small dictionary-expand", open && "on")} aria-pressed=${String(open)}
-      title=${open ? "Fold every dictionary to its aggregate" : `Show every dictionary's tests (${tests})`}
+      title=${open ? "Fold dictionaries" : `Show all tests (${tests})`}
       onClick=${() => update(n => { for (const name of names) n.choices[name] = { ...selection(name), expanded: !open }; })}>${`Tests ${open ? "▾" : "▸"}`}</button>` : ""}</div></div>`;
   return {
     controls,
@@ -70,7 +70,7 @@ export function useValuesMode(ctx) {
   const prefs = ctx && resultPreferences(ctx), saved = prefs?.read() || {};
   const [mode, setMode] = useState(saved.valuesMode === "relative" ? "relative" : "absolute");
   const toggle = html`<button type="button" class="small relative-values" aria-label="Relative measurements" aria-pressed=${String(mode !== "absolute")}
-    title="Switch between absolute values and percent changes for every measurement in the table. Percent change uses a matching baseline, otherwise P90 performance of accepted designs in the same group and stage. Hover for the reference and absolute measurement."
+    title="Absolute values or percent change (from the baseline, else the P90 of accepted designs). Hover a cell for its reference."
     onClick=${() => { const next = mode === "relative" ? "absolute" : "relative"; prefs?.save({ valuesMode: next }); setMode(next); }}>${mode === "relative" ? "Relative" : "Absolute"}</button>`;
   return { relative: mode === "relative", mode, toggle };
 }
@@ -135,7 +135,7 @@ export function MeasurementOptions({ metrics, groups = {}, defaults = metrics.sl
       return html`<tr key=${metric} data-dict-of=${parent} class=${parent ? "dict-test" : ""} hidden=${!!parent && !open.has(parent)}>
         <td class="mono" title=${metric}>${tests.length ? html`<button type="button" class="link dict-fold" data-dict=${metric} aria-expanded=${String(unfolded)}
             title=${`Show ${metric}'s ${tests.length} tests`} onClick=${() => setOpen(flip(open, metric, !unfolded))}>${unfolded ? "▾" : "▸"}</button> ` : ""}${parent ? metric.slice(parent.length + 1) : metric}
-          ${dicts[metric] ? html`<span class="muted small dict-how" title="set in the document (the measurement's aggregate:)">${` ${[how, tests.length ? `${tests.length} tests` : ""].filter(Boolean).join(" · ")}`}</span>` : ""}</td>
+          ${dicts[metric] ? html`<span class="muted small dict-how" title="set in the document">${` ${[how, tests.length ? `${tests.length} tests` : ""].filter(Boolean).join(" · ")}`}</span>` : ""}</td>
         <td><${CheckBox} off=${off} data-metric=${metric} aria-label=${`Show ${metric} column`} checked=${!columns.hidden(metric)} onChange=${on => columns.toggle(metric, on)} /></td>
         <td><${CheckBox} off=${off} data-main-metric=${metric} aria-label=${`Main metric ${metric}`} checked=${main.has(metric)} onChange=${on => pickMain(metric, on)} /></td>
         <td><${CheckBox} off=${off} data-relative-metric=${metric} aria-label=${`Percent change for ${metric}`} checked=${relative.has(metric)} onChange=${on => pickRelative(metric, on)} /></td></tr>`; })}<//>`;

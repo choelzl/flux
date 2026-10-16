@@ -58,11 +58,11 @@ const StageBar = ({ stage, reach, go }) => html`<${Steps} cls="row ba-stages" la
 function Uses() {
   const [u, setU] = useState(null);
   useEffect(() => { api("/new-by-agent/uses").then(setU, () => setU({})); }, []);
-  return html`<${Card} title="What it can use" cls="ba-uses"><ul class="ba-uses-list">
-    <li>Your files, in the loop's <code>library/</code></li>
-    ${u?.papers ? html`<li>${`The shared library: ${plural(u.papers, "paper")}, digested`}</li>` : ""}
+  return html`<${Card} title="It can use" cls="ba-uses"><ul class="ba-uses-list">
+    <li>Files, in <code>library/</code></li>
+    ${u?.papers ? html`<li>${`Shared library: ${plural(u.papers, "paper")}`}</li>` : ""}
     ${u?.skills?.length ? html`<li>Skills: ${u.skills.join(", ")}</li>` : ""}
-    ${u?.bundled?.length ? html`<li title=${u.bundled.join(", ")}>The bundled loops, read only</li>` : ""}</ul><//>`;
+    ${u?.bundled?.length ? html`<li title=${u.bundled.join(", ")}>Bundled loops, read only</li>` : ""}</ul><//>`;
 }
 
 /** 1. Ask. */
@@ -75,13 +75,13 @@ function Ask({ state, items, setItems, edit, who, askMe, setAskMe, draft: start 
   };
   return html`<div class="ba-grid"><${Card} cls="ba-main">
       <div class="row"><label class="stack grow">Name<input placeholder="my_adder" class="full" id="ag-name" value=${state.id || ""} ref=${nameField} onInput=${edit("id")} /></label>
-        <label class="stack">Who drafts it<${AgentPick} id="ag-who" ask onPick=${v => { who.current = v; }} /></label></div>
+        <label class="stack">Agent<${AgentPick} id="ag-who" ask onPick=${v => { who.current = v; }} /></label></div>
       <label class="stack">What should the loop do?<textarea rows="6" id="ag-ask" value=${state.statement || ""} ref=${askField} onInput=${edit("statement")}
-        placeholder="What the loop should make, and what matters: e.g. a signed 8x8 multiplier in SystemVerilog, the smallest that makes 1 GHz placed on ASAP7, exact for every input." /></label>
-      <h3>Files it should read</h3><${AttachBox} items=${items} onChange=${setItems} />
-      <label class="check"><input type="checkbox" id="ag-ask-me" checked=${askMe} onChange=${e => setAskMe(e.currentTarget.checked)} />Ask me when it is unclear</label><//>
+        placeholder="e.g. a signed 8x8 multiplier in SystemVerilog, the smallest that makes 1 GHz placed on ASAP7, exact for every input." /></label>
+      <h3>Files to read</h3><${AttachBox} items=${items} onChange=${setItems} />
+      <label class="check"><input type="checkbox" id="ag-ask-me" checked=${askMe} onChange=${e => setAskMe(e.currentTarget.checked)} />Ask me when unclear</label><//>
     <${Uses} /></div>
-    <div class="form-actions ba-nav"><span class="grow" /><${Act} cls="primary" onClick=${go}>Draft the loop<//></div>`;
+    <div class="form-actions ba-nav"><span class="grow" /><${Act} cls="primary" onClick=${go}>Draft<//></div>`;
 }
 
 /** 2. Drafting. */
@@ -89,7 +89,7 @@ function Drafting({ name, st, poll, review }) {
   if (!st) return html`<${Card}><${Skeleton} lines=${4} /><//>`;
   const acts = authorActs(name, ms => poll.soon(ms));
   return html`<${AuthorJob} name=${name} st=${st} onStop=${acts.stop} answer=${acts.answer} open />
-    <div class="form-actions ba-nav"><span class="grow" /><button type="button" class="primary" disabled=${!(st.ok && !st.running)} onClick=${review}>Review the draft</button></div>`;
+    <div class="form-actions ba-nav"><span class="grow" /><button type="button" class="primary" disabled=${!(st.ok && !st.running)} onClick=${review}>Review</button></div>`;
 }
 
 /** One decision: what, why, Keep or Change (the configurator at its step). */
@@ -122,7 +122,7 @@ function Review({ name, st, poll, flow, save, who, askMe, check }) {
   };
   const changed = st?.revise && st.before && st.after && st.before !== st.after && !revising;
   return html`<div class="ba-grid wide"><section class="card ba-main">
-      ${got.from === "document" ? html`<p class="muted small">Read from the document: the agent wrote no reasons.</p>` : ""}
+      ${got.from === "document" ? html`<p class="muted small">From the document: no reasons given.</p>` : ""}
       ${STEPS.map(([id, label]) => {
         const mine = got.decisions.map((d, i) => [d, i]).filter(([d]) => d.step === id);
         return mine.length ? html`<div class="ba-group" key=${id}><h3>${label}</h3>${mine.map(([d, i]) => html`<${Decision} key=${i} d=${d} i=${i} kept=${kept} keep=${keep} name=${name} />`)}</div>` : "";
@@ -132,11 +132,11 @@ function Review({ name, st, poll, flow, save, who, askMe, check }) {
         <${Act} onClick=${send} disabled=${revising}>Send<//></div>
       ${revising || st?.revise ? html`<${AuthorJob} name=${name} st=${st} onStop=${acts.stop} answer=${acts.answer} diff=${false} />` : ""}</section>
     <section class="card ba-side ba-doc"><${Head} title=${got.document || "problem.yaml"} mono actions=${changed ? html`<${Choice} small label="Show" value=${view} onChange=${setView}
-        options=${[["doc", "Document"], ["diff", "The change"]]} />` : null}><${Tag}>draft<//><//>
+        options=${[["doc", "Document"], ["diff", "Change"]]} />` : null}><${Tag}>draft<//><//>
       ${changed && view === "diff" ? html`<${Diff} ops=${lineDiff(st.before, st.after)} />` : html`<${Code} text=${doc} lang="yaml" cls="val tall code ba-yaml" />`}</section></div>
     <div class="form-actions ba-nav"><span class="muted small">${`${n} of ${plural(all, "decision")} kept`}</span><span class="grow" />
       <button type="button" disabled=${revising || n === all} onClick=${() => save({ kept: Object.fromEntries(got.decisions.map((_, i) => [i, kept[i] || true])) })}>Keep the rest</button>
-      <button type="button" class="primary" disabled=${revising || n < all} onClick=${check}>Check it</button></div>`;
+      <button type="button" class="primary" disabled=${revising || n < all} onClick=${check}>Check</button></div>`;
 }
 
 /** What `flux task check` said that matters: what is missing or refused, else that it passed. */
@@ -158,15 +158,15 @@ function Ready({ name, back, made }) {
     toast(r.ok, "ok"); made(); location.hash = then;
   };
   const check = html`<code>flux task check</code>`;
-  const lines = [!res ? ["run", "", html`${check} on the draft…`] : res.ok ? ["ok", "", html`${check} passed: the document loads, its files and tools are here.`]
+  const lines = [!res ? ["run", "", html`${check} on the draft…`] : res.ok ? ["ok", "", html`${check} passed: document, files and tools ready.`]
     : ["bad", "", html`${check} failed${said.length ? ":" : "."}`], ...said.map(l => [/WILL SKIP/.test(l) ? "warn" : "bad", "", html`<span class="mono">${l}</span>`])];
   return html`<div class="ba-grid"><${Card} cls="ba-main"><${Checklist} cls="ba-check" items=${lines} />
-      ${res ? html`<details><summary class="muted small">What it printed</summary><pre class="log small">${res.output}</pre></details>` : ""}
-      <label class="check"><input type="checkbox" id="ba-first-pass" checked=${first} onChange=${e => setFirst(e.currentTarget.checked)} />${`Run one cheap pass when it is made${stage ? ` (${stage} only)` : ""}`}</label><//>
-    <${Notice} tone="none" cls="ba-side" what=${`Made as ${name} in your loops.`} why="Anything can change later in the configurator." /></div>
+      ${res ? html`<details><summary class="muted small">Output</summary><pre class="log small">${res.output}</pre></details>` : ""}
+      <label class="check"><input type="checkbox" id="ba-first-pass" checked=${first} onChange=${e => setFirst(e.currentTarget.checked)} />${`Run one cheap pass first${stage ? ` (${stage} only)` : ""}`}</label><//>
+    <${Notice} tone="none" cls="ba-side" what=${`Made as ${name}.`} why="Change anything later in the configurator." /></div>
     <div class="form-actions ba-nav"><button type="button" onClick=${back}>Back</button><span class="grow" />
-      <${Act} onClick=${() => make(false, `${appHref(null, name)}/settings/problem`)}>Open in the configurator<//>
-      <${Act} cls="primary" disabled=${!res} onClick=${() => make(first && res?.ok, `${appHref(null, name)}`)}>Make the loop<//></div>`;
+      <${Act} onClick=${() => make(false, `${appHref(null, name)}/settings/problem`)}>Open in configurator<//>
+      <${Act} cls="primary" disabled=${!res} onClick=${() => make(first && res?.ok, `${appHref(null, name)}`)}>Make loop<//></div>`;
 }
 
 /** A new loop whose problem an agent drafts (D704, D1122). D912: the one draft -- its name and statement are what the
@@ -198,7 +198,7 @@ export function NewByAgent({ draft = null, onDraft = () => {}, done = () => {} }
     setItems([]); onDraft();
   };
   const discard = async () => {
-    if (!await confirmDialog(`Discard the draft ${flow.name}?`, ["The drafted loop goes", "its document and files"], { ok: "Discard", danger: true })) return;
+    if (!await confirmDialog(`Discard draft ${flow.name}?`, ["The drafted loop is deleted", "with its document and files"], { ok: "Discard", danger: true })) return;
     if (st?.running) await loopApi(flow.name).api("/author/stop", { method: "POST" }).catch(() => {});
     await loopApi(flow.name).request("", { method: "DELETE" }).catch(e => toast(e.message, "warn"));
     Object.assign(state, flow.ask || {}); onDraft();             // its ask back in the form (its files went with it)
@@ -213,6 +213,6 @@ export function NewByAgent({ draft = null, onDraft = () => {}, done = () => {} }
     : stage === 2 ? html`<${Review} name=${flow.name} st=${st} poll=${poll} flow=${flow} save=${save} who=${flow.who || ""} askMe=${flow.askMe ?? true} check=${() => go(3)} />`
     : html`<${Ready} name=${flow.name} back=${() => go(2)} made=${() => save({ name: null, stage: 0, kept: {} })} />`;
   return html`<div class="ba-flow"><${StageBar} stage=${stage >= 2 && !ready ? 1 : stage} reach=${reach} go=${go} />
-    ${flow.name ? html`<p class="muted small ba-draft-line">${"The draft "}<b class="mono">${flow.name}</b>${" · "}<button type="button" class="link" onClick=${discard}>Discard the draft</button></p>` : ""}
+    ${flow.name ? html`<p class="muted small ba-draft-line">${"Draft "}<b class="mono">${flow.name}</b>${" · "}<button type="button" class="link" onClick=${discard}>Discard draft</button></p>` : ""}
     ${body}</div>`;
 }

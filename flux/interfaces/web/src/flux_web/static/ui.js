@@ -157,9 +157,8 @@ async function createFromText(name, filename, text) {
     return true;
   } catch (x) {
     if (x.status !== 409) throw x;
-    const go = await dialog(`${name} exists`, html`<p>${`A loop named ${name} already exists. Creating does not replace it: `
-      + "open it (and change it there, with a diff before saving), or choose another name."}</p>`,
-      [["Choose another name", false, "primary"], ["Open it", true]]);
+    const go = await dialog(`${name} exists`, html`<p>${`A loop named ${name} exists. Open it, or choose another name.`}</p>`,
+      [["Other name", false, "primary"], ["Open", true]]);
     if (go) location.hash = `#/app/${enc(name)}`;
     return false;
   }

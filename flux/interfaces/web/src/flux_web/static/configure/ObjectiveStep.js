@@ -30,7 +30,7 @@ export function ObjectiveStep({ M, state, edit }) {
   const move = (i, d) => edit(() => { const j = i + d; [objs[i], objs[j]] = [objs[j], objs[i]]; });
   return html`<div class="cfg-bar"><span class="muted small">Decide</span>
       <${Choice} small label="How designs are compared" value=${tradeoff ? "tradeoff" : "order"} onChange=${setMode}
-        options=${[["order", "In order"], ["tradeoff", "A trade-off"]]} /></div>
+        options=${[["order", "In order"], ["tradeoff", "Trade-off"]]} /></div>
     <section class="cfg-sec"><h3>${tradeoff ? "Balanced together" : "Most important first"}</h3>
       <div class="cfg-rows">${objs.map((o, i) => {
         const higher = up(o), u = unit(o.metric);

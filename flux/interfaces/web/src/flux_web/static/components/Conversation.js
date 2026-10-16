@@ -57,7 +57,7 @@ export function Conversation({ steps, k = "", offset = 0, live = false, scroll =
     // open while a step in it is open
     const open = convOpen.has(id) || work.some((_x, n) => convOpen.has(`${k}:${offset + first + n}`));
     items.push(html`<details key=${id} class=${cx("cv-work", now && "live", failed && "bad")} open=${open} onToggle=${remember(id)}>
-      <summary title="Its thinking and commands: click to open"><span class="cv-work-said">${now ? html`<${Glyph} tone="run" />` : ""}${now ? `working · ${said}` : said}</span></summary>
+      <summary title="Thinking and commands"><span class="cv-work-said">${now ? html`<${Glyph} tone="run" />` : ""}${now ? `working · ${said}` : said}</span></summary>
       <div class="cv-work-steps">${work.map((x, n) => html`<${Step} key=${`${k}:${offset + first + n}`} st=${x} id=${`${k}:${offset + first + n}`} live=${live && first + n === steps.length - 1} />`)}</div></details>`);
     i = j;
   }

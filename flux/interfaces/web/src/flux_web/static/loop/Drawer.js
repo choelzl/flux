@@ -41,9 +41,9 @@ export function Drawer({ open, asking, toggle, children }) {
   return html`<button class=${cx("ask-fab", open && "on", asking && "asking")} type="button" onClick=${() => toggle(!open)}>Talk</button>
     <aside class=${cx("drawer", open && "open")} aria-label="Talk to this loop" ref=${aside} style=${`--talk-width:${Math.max(LEAST, shown)}px`}>
       <div class="drawer-resize" role="separator" tabindex=${open ? 0 : -1} aria-label="Resize Talk panel" aria-orientation="vertical" ref=${handle}
-        title="Drag to resize. Arrow keys resize; Home restores the minimum width." aria-valuemin=${Math.min(LEAST, wide)} aria-valuemax=${wide} aria-valuenow=${shown}
+        title="Drag or use arrow keys to resize" aria-valuemin=${Math.min(LEAST, wide)} aria-valuemax=${wide} aria-valuenow=${shown}
         onPointerDown=${down} onPointerMove=${e => { if (drag.current?.id === e.pointerId) size(drag.current.width + drag.current.x - e.clientX); }}
         onPointerUp=${end} onPointerCancel=${end} onLostPointerCapture=${end} onKeyDown=${keys} />
-      <${Head} title="Talk to this loop" tools=${html`<${Close} onClick=${() => toggle(false)} />`} />
+      <${Head} title="Talk" tools=${html`<${Close} onClick=${() => toggle(false)} />`} />
       <div class="drawer-body">${children}</div></aside>`;
 }

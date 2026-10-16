@@ -10,9 +10,9 @@ export const hasPermissions = (settings = {}) => me.role === "admin" && ["sandbo
 export function PermissionChoice({ settings = {}, id = "keep-permissions", keep = false, set }) {
   if (!hasPermissions(settings)) return null;
   return html`<div class="stack permission-choice wrap-any"><label class="check"><input type="checkbox" id=${id} checked=${keep} onChange=${e => set(e.currentTarget.checked)} />Keep special permissions</label>
-    <ul class="small">${"sandbox" in settings ? html`<li>${`Sandbox override: ${settings.sandbox ? "on" : "off (runs on the host)"}`}</li>` : ""}
+    <ul class="small">${"sandbox" in settings ? html`<li>${`Sandbox override: ${settings.sandbox ? "on" : "off (host)"}`}</li>` : ""}
       ${(settings.mounts || []).map(m => html`<li><code class="wrap-normal">${`${m.host} → ${m.inside}`}</code>${` (${m.mode === "rw" ? "read/write" : "read-only"})`}</li>`)}
-      ${"allow" in settings ? html`<li>${`Additional network allowlist: ${(settings.allow || []).join(", ") || "none"}`}</li>` : ""}
+      ${"allow" in settings ? html`<li>${`Extra network allowlist: ${(settings.allow || []).join(", ") || "none"}`}</li>` : ""}
       ${"raw_network" in settings ? html`<li>${`Raw TCP/UDP: ${settings.raw_network ? "on" : "off"}`}</li>` : ""}</ul>
-    <p class="muted small">If checked, these overrides also apply to the new owner or clone. Other admin settings reset.</p></div>`;
+    <p class="muted small">Checked: these carry over. Other admin settings reset.</p></div>`;
 }

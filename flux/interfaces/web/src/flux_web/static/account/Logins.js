@@ -45,10 +45,10 @@ function Terminal({ session, onEnded }) {
   const key = (label, k, title) => html`<button type="button" class="small" title=${title} onClick=${() => send({ key: k })}>${label}</button>`;
   const enter = () => { send({ text: line, key: "enter" }); setLine(""); };
   const running = !!st?.running;
-  return html`<div class="login-term"><div class="login-head"><strong class="login-what">${!st ? "" : st.running ? `Logging ${st.agent} in…` : st.agent ? `${st.agent}: the login ended${st.rc ? ` (exit ${st.rc})` : ""}` : ""}</strong>
+  return html`<div class="login-term"><div class="login-head"><strong class="login-what">${!st ? "" : st.running ? `Logging ${st.agent} in…` : st.agent ? `${st.agent}: login ended${st.rc ? ` (exit ${st.rc})` : ""}` : ""}</strong>
       <span class="grow" /><button type="button" class="small danger" hidden=${!running} onClick=${async () => { await api("/logins/session/stop", { method: "POST" }); again.current(300); }}>Stop</button></div>
     <pre class="login-out" aria-live="polite" ref=${out}><${Linked} text=${text} /></pre>
-    <div class="row login-row" hidden=${!running}><input placeholder="type here, then Send (or a key below)" class="login-in" aria-label="Input to the login" value=${line}
+    <div class="row login-row" hidden=${!running}><input placeholder="type, then Send" class="login-in" aria-label="Input to the login" value=${line}
         onInput=${e => setLine(e.currentTarget.value)} onKeyDown=${e => { if (e.key === "Enter") { e.preventDefault(); enter(); } }} />
       <${Act} cls="primary small" onClick=${async () => { await send({ text: line, key: "enter" }); setLine(""); }}>Send<//></div>
     <div class="row login-keys" hidden=${!running}>${key("↑", "up", "Up")}${key("↓", "down", "Down")}${key("Enter", "enter", "Enter")}${key("Esc", "escape", "Escape")}${key("Tab", "tab", "Tab")}${key("Ctrl-C", "ctrl-c", "Interrupt")}</div></div>`;
@@ -57,7 +57,7 @@ function Terminal({ session, onEnded }) {
 /** D924: three states apart -- installation, connection (how, from where; never a value), verification. */
 function AgentLogin({ a, test, login }) {
   const c = a.connection || { mechanism: "none", said: "" }, v = a.verified || { state: "untested" };
-  const ver = a.testing ? ["run", "testing"] : v.state === "ready" && v.by === "admin" ? ["ok", "ready (tested by the admin for everyone)"] : VERIFIED[v.state] || VERIFIED.untested;   // D935
+  const ver = a.testing ? ["run", "testing"] : v.state === "ready" && v.by === "admin" ? ["ok", "ready (tested by admin)"] : VERIFIED[v.state] || VERIFIED.untested;   // D935
   const pill = s => VERIFIED[s] || VERIFIED.untested;
   return html`<div class="agent-conn" data-agent=${a.id}><dl class="agent-states">
       <dt>Installation</dt><dd><${Pill} tone=${a.program ? "ok" : "bad"}>${a.program ? "installed" : "missing"}<//></dd>
@@ -65,15 +65,15 @@ function AgentLogin({ a, test, login }) {
         ${Object.keys(a.fields || {}).length ? html`<span class="muted small agent-sources">${Object.entries(a.fields).map(([f, x]) => `${FIELD_WORD[f] || f}: ${x.source}`).join(" · ")}</span>` : ""}</dd>
       <dt>Verification</dt><dd><${Pill} tone=${ver[0]} title=${v.when ? `tested ${when(v.when)}` : ""}>${ver[1]}<//>
         ${v.state === "ready" && v.when ? html`<span class="muted small">${when(v.when)}</span>` : ""}${v.state === "failed" && v.said ? html`<${Said} tone="bad" cls="small">${v.said}<//>` : ""}
-        ${v.state === "changed" ? html`<span class="muted small">its endpoint, model or credential is not what was tested</span>` : ""}</dd></dl>
+        ${v.state === "changed" ? html`<span class="muted small">endpoint, model or credential changed since test</span>` : ""}</dd></dl>
     ${(a.conflicts || []).length || (a.unused || []).length ? html`<ul class="small hint-line agent-notes">${[...(a.conflicts || []), ...(a.unused || [])].map(x => html`<li>${x}</li>`)}</ul>` : ""}
-    <div class="actions">${a.testing ? html`<span class="muted small">testing…</span>` : html`<${Act} cls="primary small" title="Ask it one short question, as your loops run it" onClick=${() => test(a)}>Test connection<//>`}</div>
-    ${(a.loops || []).length ? html`<div class="small"><span class="muted">Loops whose variables set it otherwise:</span><ul class="agent-loops">${a.loops.map(x => html`<li key=${x.loop}><span class="mono">${x.loop}</span>
-      <${Pill} tone=${pill(x.state)[0]}>${pill(x.state)[1]}<//>${a.testing ? "" : html` <${Act} cls="small" title="Its variables give this agent another configuration there" onClick=${() => test(a, x.loop)}>Test for this loop<//>`}</li>`)}</ul></div>` : ""}
-    ${a.tested?.steps?.length ? html`<details key="tested" class="set-fold"><summary>Last test's steps</summary><ul class="agent-steps small">${a.tested.steps.map(s => html`<li key=${s.step} class=${s.ok ? "" : "bad"}>
+    <div class="actions">${a.testing ? html`<span class="muted small">testing…</span>` : html`<${Act} cls="primary small" title="Ask one short question" onClick=${() => test(a)}>Test<//>`}</div>
+    ${(a.loops || []).length ? html`<div class="small"><span class="muted">Loops that override it:</span><ul class="agent-loops">${a.loops.map(x => html`<li key=${x.loop}><span class="mono">${x.loop}</span>
+      <${Pill} tone=${pill(x.state)[0]}>${pill(x.state)[1]}<//>${a.testing ? "" : html` <${Act} cls="small" title="Configured differently there" onClick=${() => test(a, x.loop)}>Test for this loop<//>`}</li>`)}</ul></div>` : ""}
+    ${a.tested?.steps?.length ? html`<details key="tested" class="set-fold"><summary>Last test</summary><ul class="agent-steps small">${a.tested.steps.map(s => html`<li key=${s.step} class=${s.ok ? "" : "bad"}>
       <span class="mono">${s.ok ? "✓ " : "✗ "}</span><strong>${s.step}</strong> ${s.said}</li>`)}</ul></details>` : ""}
     <details class="set-fold agent-login-fold"><summary>Interactive login<span class="muted small">${a.logged_in ? " · logged in" : " · optional"}</span></summary>
-      <p class="muted small">One way to connect: its own login, kept in your Flux home. Not needed with a key or a provider configuration.</p>
+      <p class="muted small">Its own login, kept in your Flux home. Not needed with a key or provider config.</p>
       <div class="row"><code class="small" title=${a.command}>${a.command.replace(/^\S*\//, "")}</code><${Act} cls="small" onClick=${() => login(a)}>${a.logged_in ? "Log in again" : "Log in"}<//></div></details></div>`;
 }
 
@@ -85,7 +85,7 @@ export function useLogins() {
     if (!got) return;
     // D751: an agent is used in your loops once its test passed; D768: a login that ended well is tested at once, on the server
     for (const a of got.agents) if (testing.current.has(a.id) && !a.testing && a.tested)
-      toast(a.tested.ok ? `${a.label} is ready for your loops` : `${a.label}'s Test failed: see its steps`, a.tested.ok ? "ok" : "warn");
+      toast(a.tested.ok ? `${a.label} is ready` : `${a.label} failed its test: see its steps`, a.tested.ok ? "ok" : "warn");
     testing.current = new Set(got.agents.filter(a => a.testing).map(a => a.id));
     setLg(got);
     if (got.session?.running && !session) setSession(n => n + 1);
@@ -93,9 +93,9 @@ export function useLogins() {
   useEffect(() => { read(); }, []);
   useEffect(() => { if (!lg || !testing.current.size) return; const t = setTimeout(read, 2000); return () => clearTimeout(t); }, [lg]);
   const test = async (a, loop = "") => {
-    toast(`Testing ${a.label}${loop ? ` for ${loop}` : ""}: it is asked one short question…`, "info");
+    toast(`Testing ${a.label}${loop ? ` for ${loop}` : ""}…`, "info");
     const got = await api(`/agents/${a.id}/test${loop ? `?loop=${enc(loop)}` : ""}`, { method: "POST" });
-    toast(got.ok ? `${a.label} is ready${loop ? ` for ${loop}` : " for your loops"}` : `${a.label} is not ready: see its steps`, got.ok ? "ok" : "warn");
+    toast(got.ok ? `${a.label} is ready${loop ? ` for ${loop}` : ""}` : `${a.label} is not ready: see its steps`, got.ok ? "ok" : "warn");
     await read();
   };
   const login = async a => { await api(`/logins/${a.id}`, { method: "POST" }); setSession(n => n + 1); };

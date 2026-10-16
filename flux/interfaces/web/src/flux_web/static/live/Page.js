@@ -35,8 +35,8 @@ export function Controls({ store }) {
   const passes = scope?.passes || [], current = scope?.current || [];
   return html`<div class="alt-controls">
     <button type="button" class=${cx("small", s.following && "on")} hidden=${!ctx.st.running} aria-pressed=${String(s.following)}
-      title=${s.following ? "Pause automatic task selection" : "Follow the latest task in the current pass"} onClick=${a.follow}>${s.following ? "Following" : "Follow"}</button>
-    <button type="button" class="small" hidden=${!(s.journal?.model.before || s.journal?.model.cut) || s.startId !== "current"} title="Load every pass of this start" onClick=${a.earlier}>Earlier passes</button>
+      title=${s.following ? "Stop following" : "Follow the latest task"} onClick=${a.follow}>${s.following ? "Following" : "Follow"}</button>
+    <button type="button" class="small" hidden=${!(s.journal?.model.before || s.journal?.model.cut) || s.startId !== "current"} title="Load all passes of this start" onClick=${a.earlier}>Earlier passes</button>
     <div class="alt-selectors">
       <label>Start <${Select} aria-label="Live start" value=${s.startId} onChange=${a.setStart}
         options=${[["current", "Current start"], ...s.history.starts.filter(x => !x.running).map(x => [x.id, `${when(x.started)} · ${x.rc == null ? "ended" : "exit " + x.rc}`])]} /></label>
@@ -56,7 +56,7 @@ function Summary({ v, s }) {
   return html`<div class="alt-summary"><strong>${name === "Pass 0" ? "Pass 0 · baseline" : name}</strong>
     <span class="muted small">${`${rows.length} tasks`}</span>
     ${["running", "done", "failed", "retried", "rejected", "interrupted", "timeout"].map(st => [st, count(st)]).filter(([, n]) => n)
-      .map(([st, n]) => html`<${Pill} small tone=${COUNT_TONE[st]} cls=${`alt-count ${st}`} title=${`All tasks in this scope: ${n} ${st}`}><b>${n}</b>${` ${st === "timeout" ? "out of time" : st}`}<//>`)}</div>`;
+      .map(([st, n]) => html`<${Pill} small tone=${COUNT_TONE[st]} cls=${`alt-count ${st}`} title=${`${n} ${st} in this scope`}><b>${n}</b>${` ${st === "timeout" ? "out of time" : st}`}<//>`)}</div>`;
 }
 
 /** The page once its journal is open (a model to read). */
@@ -128,7 +128,7 @@ function Body({ store }) {
     e.preventDefault(); a.step(e.key === "ArrowUp" ? -1 : 1);
   };
   const content = s.loadMessage ? html`<${Empty} text=${s.loadMessage} />`
-    : !v.rows.length ? html`<${Empty} text=${s.startId === "current" && ctx.st.running ? "Waiting for tasks from this start…" : "No tasks recorded for this selection."} />`
+    : !v.rows.length ? html`<${Empty} text=${s.startId === "current" && ctx.st.running ? "Waiting for tasks…" : "No tasks here."} />`
     : mode === "graph" ? html`<${Graph} v=${v} a=${a} />` : mode === "timeline" ? html`<${Timeline} v=${v} a=${a} />`
     : html`<div class="alt-tree" role="group" aria-label="Tasks as a tree"><${Lines} lines=${treeLines} a=${a} located=${v.located} /></div>`;
   const more = mode === "tree" && v.scopeRows.length > v.rows.length;
@@ -142,7 +142,7 @@ function Body({ store }) {
           ${more ? html`<button class="small alt-more" type="button" onClick=${a.more}>${`Earlier tasks (${v.scopeRows.length - v.rows.length})`}</button>` : ""}</div></section>
       <section class="card alt-inspector-card">
         <div class="alt-detail-actions">
-          <button type="button" class="small" disabled=${!s.boxView && v.selected == null} title="Reveal and highlight the selected task in the list" onClick=${a.locate}>Locate</button>
+          <button type="button" class="small" disabled=${!s.boxView && v.selected == null} title="Show the selected task in the list" onClick=${a.locate}>Locate</button>
           <a class="btn small alt-log-link" title="The start's whole output" href=${logHref}>Full log</a></div>
         <div class="alt-inspector-host" tabindex="-1" ref=${host}
           onClickCapture=${e => { if (e.target.closest("summary")) a.pause(); }} onWheelCapture=${e => { if (e.deltaY < 0) a.pause(); }}>

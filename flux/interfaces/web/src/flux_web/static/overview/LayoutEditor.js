@@ -27,7 +27,7 @@ function List({ ids, catalog, column, used, edit, moveOut }) {
           ${btn("↓", `Move ${catalog[id]} down`, () => edit(n => { [n[i + 1], n[i]] = [n[i], n[i + 1]]; }), i === ids.length - 1)}
           ${small ? "" : btn(column === 0 ? "→" : "←", `Move ${catalog[id]} to column ${2 - column}`, () => moveOut(id))}
           ${btn("×", `Remove ${catalog[id]}`, () => edit(n => { n.splice(i, 1); }), small && ids.length <= 3)}</div></li>`)
-      : html`<li class="overview-layout-empty muted small">No cards in this column.</li>`}</ol>
+      : html`<li class="overview-layout-empty muted small">No cards.</li>`}</ol>
     <div class="overview-layout-row overview-layout-add"><${Select} aria-label=${small ? "Add small card" : `Add card to column ${column + 1}`} value=${adding} onChange=${setToAdd} options=${available} />
       ${btn("Add", small ? "Add small card" : `Add card to column ${column + 1}`, () => edit(n => { n.push(adding); }), !available.length || (small && ids.length >= 5))}</div></div>`;
 }
@@ -59,17 +59,17 @@ export function LayoutEditor({ prefs, example, save, cancel }) {
     try { await save(draft); } catch (e) { setError(e.message); setSaving(false); }
   };
   const heading = (title, count, sub = false) => html`<div class="overview-layout-heading">${sub ? html`<h4>${title}</h4>` : html`<h3>${title}</h3>`}<span class="overview-layout-count">${count}</span></div>`;
-  return html`<h2 id="overview-layout-title">Overview layout</h2><p>Applies to every loop in your account, across browsers.</p>
+  return html`<h2 id="overview-layout-title">Overview layout</h2><p>Applies to all loops, in every browser.</p>
     <div class="overview-customizer"><div class="overview-layout-editor" ref=${content} inert=${saving}>
         <section class="overview-layout-section" aria-label="Top cards">${heading("Top cards", `${draft.stats.length} / 5`)}
-          <p class="muted small">Choose 3–5 cards, ordered left to right.</p><${List} ids=${draft.stats} catalog=${prefs.small_cards} used=${draft.stats} edit=${editStats} /></section>
+          <p class="muted small">3–5 cards, left to right.</p><${List} ids=${draft.stats} catalog=${prefs.small_cards} used=${draft.stats} edit=${editStats} /></section>
         <section class="overview-layout-section" aria-label="Main cards">${heading("Main cards", `${draft.columns.flat().length} selected`)}
-          <p class="muted small">Order top to bottom. Use ← / → to move between columns.</p>
+          <p class="muted small">Top to bottom; ← / → moves between columns.</p>
           <div class="overview-layout-columns">${draft.columns.map((ids, c) => html`<section class="overview-layout-column" aria-label=${`${c === 0 ? "Left" : "Right"} column`}>
             ${heading(c === 0 ? "Left column" : "Right column", ids.length, true)}<${List} ids=${ids} catalog=${prefs.large_cards} column=${c} used=${draft.columns.flat()} edit=${editColumn(c)} moveOut=${moveOut(c)} /></section>`)}</div>
-          <p class="muted small overview-layout-mobile-note">On phones, the left column appears first.</p></section></div>
+          <p class="muted small overview-layout-mobile-note">On phones, the left column comes first.</p></section></div>
       <section class="overview-preview-panel" aria-label="Overview preview with mock data"><div class="overview-layout-heading"><h3>Preview</h3><${Tag}>Mock Data<//></div>
-        <p class="muted small">Sample values illustrate the layout. Your loops are unchanged until you save.</p>
+        <p class="muted small">Sample values; nothing changes until you save.</p>
         <div class="overview-layout-preview" inert><${LoopContext.Provider} value=${{ ...MOCK_CTX, st: example.state }}><${Overview} r=${example.results} notes=${example.notes} bench=${example.workbench}
           use=${example.usage} prefs=${{ layout: draft }} ideas=${example.ideas} /><//></div></section></div>
     <p class="err" role="alert">${error}</p>

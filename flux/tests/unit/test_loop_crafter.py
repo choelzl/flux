@@ -142,7 +142,7 @@ out.readback = {papers: c.fromDoc({id: "r", statement: "s", flow: {knowledge: {f
 out.boxes = Object.fromEntries(Object.keys(c.BOXES).map(b => [b, {title: c.BOXES[b].title, says: c.BOXES[b].says,
                                                                  flow: c.FLOW_BOXES.includes(b), values: c.BOXES[b].choices.map(x => x.value)}]));
 out.fixed = Object.fromEntries(["test", "measure", "records", "select", "critique", "calibrate"].map(b => [b, c.isFixed(b)]));
-out.defaults = {orchestrate: c.BOXES.orchestrate.choices[0].label, knowledge: c.BOXES.knowledge.choices[0].label,
+out.defaults = {orchestrate: c.BOXES.orchestrate.says, knowledge: c.BOXES.knowledge.choices[0].label.toLowerCase(),
                 lessons: c.BOXES.lessons.choices[0].value, flowBoxes: c.FLOW_BOXES};
 
 // the defaults, as `flux task check` says them: an otherwise empty problem with one check
@@ -351,10 +351,10 @@ process.stdout.write(JSON.stringify({yaml: c.buildYaml(s), hint: c.dseHint(s)}))
             assert isinstance(orchestrator, ModelSearch) and orchestrator.agent == policy.split(":", 1)[1]
     elif policy in ("sweep", "montecarlo", "anneal", "gradient", "genetic"):
         assert orchestrator.dse == policy and orchestrator.coding["timeout_s"] == 321
-        assert "does not run a finite-space search" in out["hint"]
+        assert "no search runs" in out["hint"]
     else:
         assert orchestrator.name == ("llm" if policy == "model" else "agent")
-        assert "separately chooses who writes" in out["hint"]
+        assert "Design chooses who writes" in out["hint"]
 
 
 def _errors(case):

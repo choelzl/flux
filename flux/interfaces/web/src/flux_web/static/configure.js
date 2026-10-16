@@ -24,8 +24,8 @@ function Ways({ name, owner, first, base }) {
 function ConfigureRoute({ name = null, owner = null, mode = "configurator" }) {
   const isNew = !name;
   if (isNew && !can("create_loops")) return html`<${Card} title="New loop">Your account cannot create, upload or clone loops.<//>`;
-  const sub = isNew ? "Start empty, upload a loop, build it with the configurator, or have an agent write it."
-    : "Change the problem with the configurator, edit the document and its files directly, or have an agent revise it.";
+  const sub = isNew ? "Start empty, upload, configure, or have an agent write it."
+    : "Configure, edit files, or have an agent revise it.";
   return html`<${Crumbs} parts=${isNew ? [["Loops", "#/"], ["New loop", null]] : [["Loops", "#/"], owner && owner !== me.name ? [owner, null] : null, [name, appHref(owner, name)], ["Configure", null]]} />
     <div class="configure-head"><${PageHead} title=${isNew ? "New loop" : html`<span>Configure <a href=${appHref(owner, name)}>${name}</a></span>`} sub=${sub} /></div>
     <${Ways} name=${name} owner=${owner} first=${mode} base=${isNew ? "#/configure" : `${appHref(owner, name)}/settings/problem`} />`;

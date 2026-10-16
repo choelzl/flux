@@ -22,8 +22,8 @@ const STRETCH = ["search", "design", "check", "measure"];
 const doneMark = (failed, partial) => ({ tone: failed ? "bad" : partial ? "warn" : "ok", title: partial && !failed ? "a step under it failed" : null });
 const markOf = (n, J) => n.t1 == null ? "spin"
   : n.interrupted ? { tone: "warn", title: "interrupted" }
-  : n.timedOut ? { tone: "warn", title: "stopped at its time limit" }
-  : n.rejected ? { tone: "warn", title: "rejected: the critic's word is guidance, not a failure" }
+  : n.timedOut ? { tone: "warn", title: "time limit" }
+  : n.rejected ? { tone: "warn", title: "rejected by the critic (guidance, not a failure)" }
   : doneMark(n.failed, J.marked(n.id));
 
 /** The lines of `rows` (tasks with their parent's id when it is among them). `v`: what the view knows --

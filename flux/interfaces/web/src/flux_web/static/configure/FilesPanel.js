@@ -20,9 +20,9 @@ export function FilesBody({ store, more = null }) {
   const { files, missing } = store.s;
   return html`<div class="files-panel">${files.length ? html`<ul class="files flist">${files.map(f => html`<li key=${f.path}>
         <a href="javascript:void 0" onClick=${() => store.open(f)}><span class="ic">·</span>${f.path}</a>
-        <small class="muted">${bytes(f.size)}${f.staged ? " · with the new loop" : ""}</small>${more ? more(f) : ""}
+        <small class="muted">${bytes(f.size)}${f.staged ? " · staged" : ""}</small>${more ? more(f) : ""}
         <${Tool} icon="close" danger label=${`Delete ${f.path}`} onClick=${() => store.remove(f)} /></li>`)}</ul>` : html`<p class="muted">No files.</p>`}
-      ${missing.length ? html`<${Notice} key="missing" tone="bad" what="The document names these, and the loop does not have them:">
+      ${missing.length ? html`<${Notice} key="missing" tone="bad" what="Named but missing:">
         ${" "}${missing.map((p, i) => html`${i ? ", " : ""}<a href="javascript:void 0" title="Write it here" onClick=${() => store.editor(p, "")}>${p}</a>`)}<//>` : ""}
       <div class="row"><button class="small" type="button" onClick=${() => store.editor("", "")}>New file</button></div>
       <${Uploader} rows=${rows} onChange=${setRows} label="Drop scripts, models, papers or folders" />
@@ -34,7 +34,7 @@ export function FilesPanel({ store }) {
   useChanges(store);
   const { files, missing } = store.s;
   useEffect(() => { if ((files.length || missing.length) && fold.current) fold.current.open = true; }, [files.length, missing.length]);
-  return html`<details class="card files-card files-fold" ref=${fold}><summary><strong>Files that go with it</strong>
-      <span class="muted small">${` · ${plural(files.length, "file")}` + (missing.length ? ` · ${missing.length} named and missing` : "")}</span></summary>
+  return html`<details class="card files-card files-fold" ref=${fold}><summary><strong>Files</strong>
+      <span class="muted small">${` · ${plural(files.length, "file")}` + (missing.length ? ` · ${missing.length} missing` : "")}</span></summary>
     <${FilesBody} store=${store} /></details>`;
 }

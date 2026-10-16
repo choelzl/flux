@@ -114,9 +114,9 @@ and the search box in the drawing offers the same categories.
 
 | Category | Without settings in Extra | With a declared space of settings |
 |---|---|---|
-| Exploration and tuning | Guide the orchestrator's direction and design, repair and prototype prompts | A configured model proposes legal points with the selected emphasis |
-| Search algorithms | Use the algorithm's emphasis as prompt and direction guidance | Run the selected finite-space algorithm; no model is needed for the walk |
-| Model or agent | Choose who decides the next job and search direction | That model or agent proposes legal points from the space and measured history |
+| Guidance | Guide the orchestrator's direction and design, repair and prototype prompts | A configured model proposes legal points with the selected emphasis |
+| Algorithms | Use the algorithm's emphasis as prompt and direction guidance | Run the selected finite-space algorithm; no model is needed for the walk |
+| AI | Choose who decides the next job and search direction | That model or agent proposes legal points from the space and measured history |
 
 The default is adaptive. Without a knob space, a preference is saved as
 `flow.orchestrate.dse`; with settings defined in **Extra**, it selects the search policy.

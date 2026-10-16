@@ -24,7 +24,7 @@ export { ReviseByAgent } from "./byagent/ReviseByAgent.js";
 export function confirmDiff(file, before, after, problem = "") {
   const ops = lineDiff(before, after), { added, removed } = diffCounts(ops);
   return dialog(`Save ${file}?`, html`${problem ? html`<${Notice} tone="bad" what="This document does not load:" why=${problem}>
-      <p class="small">A start or a check of it will be refused until it is fixed.</p><//>` : ""}
+      <p class="small">Start and Check refuse it until it is fixed.</p><//>` : ""}
     <p class="muted">${`${plural(added, "line")} added, ${removed} removed.`}</p><${Diff} ops=${ops} />`,
     [["Cancel", false], problem ? ["Save anyway", true, "danger"] : ["Save", true, "primary"]]);
 }
@@ -47,7 +47,7 @@ export function DirectEdit({ name }) {
   if (!got) return html`<${Card}><${Skeleton} lines=${6} /><//>`;
   const save = async () => {
     const text = ed.current.textarea.value, path = (typed ?? got.doc ?? "problem.yaml").trim();
-    if (text === before.current) { toast("Nothing changes.", "info"); return; }
+    if (text === before.current) { toast("No change.", "info"); return; }
     const v = path === got.doc ? await loopApi(name).api("/validate", { method: "POST", body: { text } }).catch(() => ({ ok: true })) : { ok: true };
     if (!await confirmDiff(path, before.current, text, v.ok ? "" : v.error)) return;
     await loopApi(name).api(`/file?path=${enc(path)}`, { method: "PUT", body: { text } });
@@ -56,7 +56,7 @@ export function DirectEdit({ name }) {
     toast(err ? `${path} saved, but the loader refuses it: ${err}` : `${path} saved`, err ? "warn" : "ok");
   };
   return html`<${Card}><div class="row"><label class="stack">Document<input class="mono w-280" value=${typed ?? (got.doc || "problem.yaml")} readonly=${!!got.doc} onInput=${e => setTyped(e.currentTarget.value)} /></label></div>
-      ${refused ? html`<${Notice} tone="bad" what="The loader refuses the document as it stands:" why=${refused} />` : ""}
+      ${refused ? html`<${Notice} tone="bad" what="The document does not load:" why=${refused} />` : ""}
       <${CodeEditor} text=${got.text} lang="yaml" onEditor=${e => { ed.current = e; }} />
       <div class="form-actions"><${Act} cls="primary" onClick=${save}>Save<//></div><//>
     <${FilesPanel} store=${store} />`;
@@ -68,9 +68,8 @@ async function cloneDialog(name, owner) {
   const permissions = me.role === "admin" ? (await L.api("/env")).advanced : {};
   const keep = hasPermissions(permissions);
   const body = ({ v, set }) => html`<div class="stack"><label class="stack">New loop name<input value=${v.to} class="mono" id="clone-to" autocomplete="off" onInput=${e => set({ to: e.currentTarget.value })} /></label>
-    <label class="check"><input type="checkbox" id="clone-wb" checked=${v.workbench} onChange=${e => set({ workbench: e.currentTarget.checked })} />with its workbench (the agents' notes and tools)</label>
-    <p class="muted small">${"Copies the problem, not its runs, sharing or environment variables. " + (keep ? "Special permissions reset unless you keep them below. "
-      : "Admin overrides (mounts, sandbox exemptions and network settings) are not copied. ") + "The clone uses your account and server defaults, with any permissions you choose to keep."}</p>
+    <label class="check"><input type="checkbox" id="clone-wb" checked=${v.workbench} onChange=${e => set({ workbench: e.currentTarget.checked })} />with workbench (agents' notes and tools)</label>
+    <p class="muted small">${"Copies the problem, not runs, sharing or variables. " + (keep ? "Special permissions reset unless kept below." : "Admin overrides are not copied.")}</p>
     <${PermissionChoice} settings=${permissions} id="clone-keep-permissions" keep=${v.keep_permissions} set=${on => set({ keep_permissions: on })} /></div>`;
   const go = await dialog(`Clone ${owner && owner !== me.name ? owner + "'s " : ""}${name}`, body, [["Cancel", null],
     ["Clone", v => ({ ...v, to: v.to.trim() }), "primary"]], { to: `${name}-2`, workbench: false, keep_permissions: false });
@@ -85,7 +84,7 @@ export function CloneForm() {
   if (!loops) return html`<${Card}><${Skeleton} lines=${4} /><//>`;
   if (!loops.length) return html`<${Card}><${Empty} text="No loop to clone yet." /><//>`;
   const key = l => JSON.stringify([l.owner && l.owner !== me.name ? l.owner : "", l.name || l.app]), chosen = picked ?? key(loops[0]);
-  return html`<${Card}><p class="muted">A new loop from one you have: its problem, not its runs.</p>
+  return html`<${Card}><p class="muted">Copies a loop's problem, not its runs.</p>
     <label class="stack">Clone<${Select} id="clone-from" aria-label="The loop to clone" value=${chosen} onChange=${setPicked}
       options=${loops.map(l => { const [o, n] = JSON.parse(key(l)); return [key(l), `${o ? o + " / " : ""}${n}`]; })} /></label>
     <div class="form-actions"><${Act} cls="primary" onClick=${() => { const [o, n] = JSON.parse(chosen); return cloneDialog(n, o || null); }}>Clone…<//></div><//>`;

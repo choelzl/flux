@@ -26,9 +26,9 @@ function LoopActions({ l, name, owner, href }) {
   if (owner && !canRun) return html`<${Tag}>${l.perm === "edit" ? "can edit" : "watching"}<//>`;
   if (l.running) {
     const stopNow = !!l.stop_requested && !l.restart_requested, restartNow = !!l.restart_requested;
-    return html`<${Act} cls=${`small${stopNow ? " danger solid" : ""}`} title=${stopNow ? "Stop is scheduled. Press again to abandon the current pass." : "Stop after this pass"}
+    return html`<${Act} cls=${`small${stopNow ? " danger solid" : ""}`} title=${stopNow ? "Stop scheduled: press again to abandon the pass." : "Stop after this pass"}
         onClick=${() => stopLoop(name, stopNow, owner).then(redrawn)}>Stop<//>
-      ${canRun ? html`<${Act} cls=${`small${restartNow ? " danger solid" : ""}`} title=${restartNow ? "Restart is scheduled. Press again to abandon the current pass." : "Restart after this pass with the same run settings"}
+      ${canRun ? html`<${Act} cls=${`small${restartNow ? " danger solid" : ""}`} title=${restartNow ? "Restart scheduled: press again to abandon the pass." : "Restart after this pass"}
         onClick=${() => restartLoop(name, restartNow, owner).then(redrawn)}>Restart<//>` : ""}`;
   }
   return html`${canRun ? html`<${Act} cls="small primary" onClick=${async () => { if (await startLoop(name, owner)) location.hash = href; }}>Start<//>` : ""}
@@ -42,19 +42,19 @@ function Best({ l, name, owner }) {
   return mainMeasurements(at, s.metrics || Object.keys(s.best.measurements || { [s.best.metric]: s.best.value }), s.main_metrics || [s.best.metric]).map(metric => {
     const m = s.best.measurements?.[metric] || (metric === s.best.metric ? s.best : { value: null });
     const display = measurementText({ shown: s.best.stage || "" }, metric, () => m, num, relativeMeasurement(at, metric));
-    return html`<div class=${m.meets === false ? "misses" : m.meets === true ? "meets" : ""} data-summary-metric=${metric} title=${`the decision, ${s.best.design} · ${display.title}`}>
+    return html`<div class=${m.meets === false ? "misses" : m.meets === true ? "meets" : ""} data-summary-metric=${metric} title=${`decision, ${s.best.design} · ${display.title}`}>
       <span class="muted">${metric + " "}</span>${display.text || "—"}</div>`;
   });
 }
 
 export function LoopsTable({ loops, who = false, memo = "flux-sort-loops" }) {
-  if (!loops.length) return html`<${Empty} text="No loop yet." />`;
+  if (!loops.length) return html`<${Empty} text="No loops yet." />`;
   const cols = [
     ...(who ? [{ label: "User", key: l => l.owner || "", asc: true }] : []),
     { label: "Loop", key: l => l.name || l.app, asc: true },
     { label: "State", key: STATE_RANK },
     { label: "Activity", key: l => l.running ? [1, l.since || 0] : l.last_active ? [0, l.last_active] : null },
-    { label: "Designs", key: l => sm(l).designs ? [sm(l).this_run || 0, sm(l).designs] : null, num: true, title: "this run / every run" },
+    { label: "Designs", key: l => sm(l).designs ? [sm(l).this_run || 0, sm(l).designs] : null, num: true, title: "this run / all runs" },
     { label: "Best", key: l => sm(l).best ? l.name || l.app : null, asc: true, title: "a decision first, by name" },
     { label: "" }];
   const row = l => {
@@ -63,7 +63,7 @@ export function LoopsTable({ loops, who = false, memo = "flux-sort-loops" }) {
     return html`<tr class="clickable" onClick=${e => { if (!e.target.closest("a, button")) location.hash = href; }}>
       ${who ? html`<td>${l.owner}</td>` : ""}<td><a href=${href} class="strong">${name}</a></td>
       <td><${StatePill} st=${l} />${l.question ? html`<${Pill} tone="warn">asks<//>` : ""}</td><td class="muted"><${LastSaid} st=${l} /></td>
-      <td class="num mono" title=${s.designs ? `${s.this_run || 0} this run, ${s.designs} over every run, ${s.accepted} accepted` : null}>
+      <td class="num mono" title=${s.designs ? `${s.this_run || 0} this run, ${s.designs} in all, ${s.accepted} accepted` : null}>
         ${s.designs ? html`${String(s.this_run || 0)}<span class="muted">${` / ${s.designs}`}</span>` : html`<span class="muted">—</span>`}</td>
       <td class="mono loop-main-measurements"><${Best} l=${l} name=${name} owner=${owner} /></td>
       <td class="right"><div class="actions end"><${LoopActions} l=${l} name=${name} owner=${owner} href=${href} /></div></td></tr>`;

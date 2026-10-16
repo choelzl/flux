@@ -15,12 +15,12 @@ export function readiness(msgs, { named, files, checked, calm }) {
   const errors = msgs.filter(m => m.level === "error").length;
   const rows = [[errors ? (calm ? "todo" : "error") : "ok", "Document", errors ? `${plural(errors, "thing")} to ${calm ? "do" : "fix"}, below` : "complete"]];
   const missing = files ? files.missing : null;
-  if (missing) rows.push([missing.length ? "error" : "ok", "Files", missing.length ? `missing ${missing.join(", ")} (Prompt › Files)` : named.length === 1 ? `${named[0]} present` : named.length ? `all ${named.length} named files present` : "none named"]);
+  if (missing) rows.push([missing.length ? "error" : "ok", "Files", missing.length ? `missing ${missing.join(", ")} (Prompt › Files)` : named.length === 1 ? `${named[0]} present` : named.length ? `all ${named.length} present` : "none named"]);
   else if (named.length) rows.push(["note", "Files", `put ${named.join(", ")} beside the document`]);
   const ck = checked || ["note", "not checked yet"];
   rows.push([ck[0], "Checked", ck[1]]);
   const go = !errors && !(missing || []).length && ck[0] === "ok";
-  rows.push([go ? "ok" : "note", "Ready to run", go ? "yes: Start it" : ck[0] === "error" ? "not until the check passes" : "after a Check passes"]);
+  rows.push([go ? "ok" : "note", "Ready to run", go ? "yes" : "after a Check passes"]);
   return rows;
 }
 
@@ -33,7 +33,7 @@ function Changes({ changes, yaml }) {
       e => { if (n === asked.current) setGot(html`<p class="muted">${`The changes could not be read: ${e.message || e}`}</p>`); }), got ? 500 : 0);
     return () => clearTimeout(t);
   }, [open, yaml]);
-  return html`<details class="cfg-fold cfg-diff-fold" onToggle=${e => setOpen(e.currentTarget.open)}><summary>Changes <span class="muted">against the saved document</span></summary>
+  return html`<details class="cfg-fold cfg-diff-fold" onToggle=${e => setOpen(e.currentTarget.open)}><summary>Changes <span class="muted">vs saved</span></summary>
     <div class="cfg-diff">${open ? got || html`<${Notice} tone="run" what="Reading the changes…" />` : ""}</div></details>`;
 }
 

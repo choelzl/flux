@@ -22,7 +22,7 @@ export function AgentsTab({ turns, use }) {
       <${Card}>${turns.length ? html`<${Table} cls="list" box="rows-scroll agent-turns" heads=${["Who", "When", "Took", { label: "Tokens", num: true, title: "tokens in → out" },
           { label: "Tools", num: true, title: "tool calls" }, ""]}>
         ${turns.slice().reverse().map(t => html`<${TurnRow} key=${t.k} t=${t} picked=${picked === t} onPick=${setPicked} />`)}<//>`
-        : html`<${Empty} text="No model or agent turn yet." />`}<//>
+        : html`<${Empty} text="No turns yet." />`}<//>
       <${Card} cls="detail-card">${picked ? html`<${Loaded} read=${read} wait=${html`<div class="detail"><${Skeleton} lines=${5} /></div>`} failed="The turn could not be read">
           ${full => html`<${TurnDetail} key=${picked.k} full=${full} k=${picked.k} />`}<//>` : html`<div class="detail"><${Empty} text="Select a turn." /></div>`}<//>
     </div>`;

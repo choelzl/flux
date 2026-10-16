@@ -19,4 +19,4 @@ export const LastSaid = ({ st }) => st.running
 /** D856: the page's connection to a loop, said only while it is not connected -- a green "live" beside an idle loop
     read as running; `state` "" (connecting), "live", "reconnecting" or "off" (a past start reads no stream). */
 export const StreamPill = ({ state }) => state === "live" || state === "off" ? null
-  : html`<${Pill} tone="run" small cls="stream" title="The page's connection to the loop">${state ? "reconnecting" : "connecting"}<//>`;
+  : html`<${Pill} tone="run" small cls="stream" title="Connection to the loop">${state ? "reconnecting" : "connecting"}<//>`;

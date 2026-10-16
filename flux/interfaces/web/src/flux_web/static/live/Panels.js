@@ -25,7 +25,7 @@ export function BoxPanel({ v, a, box }) {
           <${Facts} list=${Object.entries(b.notes[0].output || {}).filter(([k]) => k !== "scopes").map(([k, x]) => [k, said(x)])} /></div>`
       : b?.notes?.length ? html`<div class="alt-steps">${b.notes.map(n => html`<div class="alt-step-row note"><span>${noteName(n)}</span>
           ${Object.keys(n.output || {}).length ? html`<span class="mono muted small">${Object.entries(n.output).map(([k, x]) => `${k} ${said(x)}`).join(" · ")}</span>` : ""}</div>`)}</div>`
-      : html`<p class="muted">${b?.done ? "Baseline stored as a reference." : later ? "Nothing was recorded for it in this pass." : "Not started yet."}</p>`}
+      : html`<p class="muted">${b?.done ? "Baseline stored as a reference." : later ? "Nothing recorded in this pass." : "Not started yet."}</p>`}
     ${v.boxView.key === "record" && b?.done ? html`<${PassSummary} p=${v.boxView.p} nodes=${box.nodes} a=${a} N=${v.N} head=${false} />` : ""}
     ${config != null && !b?.runs.length && !b?.notes?.length ? html`<section><div class="alt-label">${`Set to · ${v.problem?.document || "problem.yaml"}`}</div>
         <pre class="val tall" data-k="configuration">${typeof config === "string" ? config : asYaml(config)}</pre></section>`

@@ -64,11 +64,11 @@ function StageFields({ M, state, st, lang, edit }) {
       ${custom ? html`<${Text} label="Numbers it prints" value=${st.metrics} placeholder="time_ms, score" hint="as name=value" set=${v => edit(() => { st.metrics = v; })} />
         <${Text} label="Tools it needs" value=${st.needs} placeholder="yosys, openroad" set=${v => edit(() => { st.needs = v; })} />` : ""}
       <${Text} label="Time limit, s" value=${st.timeout} placeholder="600" set=${v => edit(() => { st.timeout = v; })} />
-      <${Pick} label="Estimate first" value=${est.kind} set=${v => edit(() => { est.kind = v; })}
-        options=${[["off", "no"], ["surrogate", "fitted from past runs"], ["command", "my script"], ["model", "the model"]]} />
+      <${Pick} label="Estimate first" hint=${est.kind === "surrogate" ? "fitted from past runs" : ""} value=${est.kind} set=${v => edit(() => { est.kind = v; })}
+        options=${[["off", "no"], ["surrogate", "fitted"], ["command", "script"], ["model", "model"]]} />
       ${est.kind !== "off" ? html`<${Text} label="Skip when it misses by, %" value=${est.margin} placeholder="5" set=${v => edit(() => { est.margin = v; })} />` : ""}
       ${est.kind === "command" ? html`<${Text} label="Estimate command" mono value=${est.command} placeholder="{python} {home}/estimate.py {artifact}" set=${v => edit(() => { est.command = v; })} />` : ""}</div>
-    ${custom ? html`<div class="cfg-sub"><h4>Dictionaries <span class="muted">a set of tests printed as JSON: timings={"parse": 12}</span></h4>
+    ${custom ? html`<div class="cfg-sub"><h4>Dictionaries <span class="muted">printed as JSON: timings={"parse": 12}</span></h4>
       ${dicts.map((m, j) => html`<div class="cfg-orow" key=${j}>
         <input aria-label="Dictionary name" placeholder="timings" value=${m.name} onInput=${e => edit(() => { m.name = e.currentTarget.value; })} />
         <${Select} aria-label="Direction" value=${m.direction || "minimize"} options=${[["minimize", "lower is better"], ["maximize", "higher is better"]]} onChange=${v => edit(() => { m.direction = v; })} />
@@ -80,7 +80,7 @@ function StageFields({ M, state, st, lang, edit }) {
       ${st.gates.map((g, j) => html`<div class="cfg-orow" key=${j}><span class="ix">${j ? "and" : ""}</span>
         ${dicts.length ? html`<input aria-label="Number" value=${g.metric} placeholder="timings.test" onInput=${e => edit(() => { g.metric = e.currentTarget.value; })} />`
           : html`<${Select} aria-label="Number" value=${g.metric} options=${(rep.includes(g.metric) || !g.metric ? [] : [g.metric]).concat(rep)} onChange=${v => edit(() => { g.metric = v; })} />`}
-        <${Select} aria-label="Rule" value=${g.rule} options=${[["at", "is below"], ["below", "is above"], ["within", "is further from the best than, %"]]} onChange=${v => edit(() => { g.rule = v; })} />
+        <${Select} aria-label="Rule" value=${g.rule} options=${[["at", "is below"], ["below", "is above"], ["within", "trails the best by, %"]]} onChange=${v => edit(() => { g.rule = v; })} />
         <input aria-label=${g.rule === "within" ? "Percent" : "Value"} class="narrow" value=${g.value} onInput=${e => edit(() => { g.value = e.currentTarget.value; })} />
         <${Tool} icon="close" label="Remove the cutoff" onClick=${() => edit(() => { st.gates.splice(j, 1); })} /></div>`)}
       <button type="button" class="small" onClick=${() => edit(() => { st.gates.push({ metric: rep[0] || "", rule: "at", value: "" }); })}>+ Cutoff</button></div>`;
@@ -104,22 +104,22 @@ export function ChecksStep({ M, state, edit, agent }) {
   });
   const crit = M.criticsOf(state).test, kinds = whoOptions(M, "critique", crit, agent);
   return html`${M.catalog().length ? "" : html`<${Notice} tone="warn" what="The tool list did not load:" why="only Custom checks and measurements are offered." />`}
-    <section class="cfg-sec"><h3>Checks <span class="muted">in order; the first that fails sends the design back</span></h3>
+    <section class="cfg-sec"><h3>Checks <span class="muted">in order; a failure sends the design back</span></h3>
       <div class="cfg-rows">${state.checks.map((c, i) => {
         const ty = M.checkType(c.type);
         return html`<${XRow} key=${i} i=${i + 1} title=${r.checks[i].name} line=${r.checks[i].run || "(its command)"} open=${open === c} toggle=${toggle(c)}
-          tags=${html`<${Tag}>${ty?.preset ? "Flux preset" : ty?.key === "test" ? "test script" : "your command"}<//>${c.timeout ? html`<${Tag}>${c.timeout} s<//>` : ""}`}
+          tags=${html`<${Tag}>${ty?.preset ? "preset" : ty?.key === "test" ? "test script" : "command"}<//>${c.timeout ? html`<${Tag}>${c.timeout} s<//>` : ""}`}
           acts=${html`<${Acts} list=${state.checks} i=${i} edit=${edit} what=${r.checks[i].name} />`}><${CheckFields} M=${M} state=${state} c=${c} lang=${lang} edit=${edit} /><//>`;
       })}</div>
       <div class="cfg-bar"><button type="button" class="small" onClick=${addCheck}>+ Check</button><span class="grow" />
-        <span class="muted small">A critic on each design that passed</span>
+        <span class="muted small">Critic on passing designs</span>
         <${Who} label="The critic on a design that passed" options=${kinds} on=${whoOn(kinds, crit)}
           pick=${k => edit(() => { M.setCritic(state, "test", kinds.find(o => o.k === k).value()); })} /></div></section>
     <section class="cfg-sec"><h3>Measurements <span class="muted">cheapest first</span></h3>
       <div class="cfg-rows">${state.stages.map((st, i) => {
         const rs = r.stages[i], t = M.toolOf(st.tool), est = st.estimate && st.estimate.kind && st.estimate.kind !== "off";
         const clock = rs.clock_ps && /^\d+$/.test(String(rs.clock_ps)) ? ` at ${Math.round(1e6 / Number(rs.clock_ps))} MHz` : "";
-        return html`<${XRow} key=${i} i=${i + 1} title=${rs.name} line=${`${t && !M.isCustom(st.tool) ? t.title : "your command"}${clock} · ${rs.reports.join(", ") || "no numbers yet"}`}
+        return html`<${XRow} key=${i} i=${i + 1} title=${rs.name} line=${`${t && !M.isCustom(st.tool) ? t.title : "command"}${clock} · ${rs.reports.join(", ") || "no numbers yet"}`}
           open=${open === st} toggle=${toggle(st)} tags=${html`${est ? html`<${Tag}>estimated first<//>` : ""}${st.gates.length ? html`<${Tag}>cutoff<//>` : ""}`}
           acts=${html`<${Acts} list=${state.stages} i=${i} edit=${edit} what=${rs.name} />`}><${StageFields} M=${M} state=${state} st=${st} lang=${lang} edit=${edit} /><//>`;
       })}</div>

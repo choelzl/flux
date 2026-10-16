@@ -484,8 +484,8 @@ def flows(r: Run) -> None:
         b.wait("document.querySelector('#who') && document.querySelector('#who').textContent.includes('bob')", what="bob logged in")
         b.js(WATCH)
         r.check("a name logs in whatever its case and spaces", True)
-        b.wait("document.querySelector('#main').innerText.includes('No loop yet.')", timeout=30, what="the empty list")
-        r.check("the empty list says so, without buttons in the middle", "No loop yet." in r.text()
+        b.wait("document.querySelector('#main').innerText.includes('No loops yet.')", timeout=30, what="the empty list")
+        r.check("the empty list says so, without buttons in the middle", "No loops yet." in r.text()
                 and not b.js("return !!document.querySelector('.empty a.btn, .empty button')"))
         r.clean("loops page")
     r.step("login", login_as_typed_on_a_phone)
@@ -493,7 +493,7 @@ def flows(r: Run) -> None:
     def new_loop_tabs():
         r.page("#/configure", "document.querySelector('.tabs')", "the New loop page")
         tabs = b.js("return [...document.querySelectorAll('#main .tabs [role=tab]')].map(t => t.textContent)")
-        r.check("New loop combines empty creation and upload", tabs == ["Create or upload", "Configurator", "Agent", "Clone a loop"], str(tabs))
+        r.check("New loop combines empty creation and upload", tabs == ["Create or upload", "Configurator", "Agent", "Clone"], str(tabs))
         r.check("New loop has no folder panel (D827)", not b.js("return !!document.querySelector('details.folder-roles')"))
         b.wait("document.querySelector('.cfg .cfg-rail')", what="the configurator")
         r.clean("New loop › Configurator")
@@ -592,7 +592,7 @@ def flows(r: Run) -> None:
         category("algorithms")
         choices = b.js("return [...document.querySelector('[data-fc-field=dse]').options].map(o => o.value)")
         r.check("the algorithm category filters the policy dropdown", choices == ["sweep", "montecarlo", "anneal", "gradient", "genetic", "pareto"], str(choices))
-        r.check("algorithms explain guidance without a parameter space", "does not run a finite-space search" in r.text())
+        r.check("algorithms explain guidance without a parameter space", "no search runs" in r.text())
         b.js("const p = document.querySelector('[data-fc-field=dse]'); p.value = 'gradient'; p.dispatchEvent(new Event('change')); return 1")
         saved_ok("algorithm emphasis saved")
         saved = json.loads(r.api("/apps/dse_setting/document")["body"])
@@ -604,7 +604,7 @@ def flows(r: Run) -> None:
         r.check("changing the category picks its first policy", b.js("return ['dse-group', 'dse'].map(k => document.querySelector('[data-fc-field=' + k + ']').value)") == ["delegated", "model"])
         r.check("model and agent choices have their own category", b.js("return [...document.querySelector('[data-fc-field=dse]').options].every(o => o.value === 'model' || o.value.startsWith('agent:'))"))
         b.js("const p = document.querySelector('[data-fc-field=dse]'); p.value = 'agent:codex'; p.dispatchEvent(new Event('change')); return 1")
-        r.check("agent selection explains its setup and separate generation", "Requires the selected agent" in r.text() and "separately chooses who writes" in r.text())
+        r.check("agent selection explains its setup and separate generation", "Needs the agent installed" in r.text() and "Design chooses who writes" in r.text())
         saved_ok("agent orchestrator saved")
         saved = json.loads(r.api("/apps/dse_setting/document")["body"])
         r.check("without a space the selected agent becomes the orchestrator", saved["raw"]["flow"]["orchestrate"] == {"by": "codex"}
@@ -656,10 +656,10 @@ def flows(r: Run) -> None:
             if source == "command":
                 setv("baseline-command", expected["command"])
             if source == "metrics":
-                r.button("+ Add baseline metric", ".cfg-body")
+                r.button("+ Metric", ".cfg-body")
                 setv("baseline-metric-0", "cost")
                 setv("baseline-value-0", "0")
-                r.button("+ Add baseline metric", ".cfg-body")
+                r.button("+ Metric", ".cfg-body")
                 setv("baseline-metric-1", "time_ms")
                 setv("baseline-value-1", "2.5")
                 setv("baseline-stage-1", "measure")
@@ -722,7 +722,7 @@ def flows(r: Run) -> None:
         r.check("a create refused says why beside its button, on Prompt, the name focused (D912)",
                 "name" in said and b.js("return document.activeElement && document.activeElement.dataset.fcField === 'id'")
                 and b.js("return !!document.querySelector('.cfg[data-step=prompt]') && !!document.querySelector('.cfg-nav .cfg-status.t-bad').offsetParent"), said)
-        b.js(click, ".draft-line button", "Discard the draft")
+        b.js(click, ".draft-line button", "Discard draft")
         r.dialog_button("Discard")
         b.wait("!document.querySelector('.draft-line button')", timeout=10, what="the draft discarded")
         r.clean("draft across modes")
@@ -961,7 +961,7 @@ def flows(r: Run) -> None:
                             " cell('w-baseline', 0).innerText.trim(), document.querySelector('table.designs tbody input').checked]")
             r.check("relative uses baseline first and excludes failed designs from percentile references",
                     relative[0] == "-22.5%" and "baseline (w-baseline" in relative[1] and "31" in relative[1]
-                    and relative[2] == "+9.1%" and relative[3] == "—" and "no matching baseline or accepted measurements" in relative[4]
+                    and relative[2] == "+9.1%" and relative[3] == "—" and "no baseline or accepted designs" in relative[4]
                     and relative[5] == "0%" and relative[6], str(relative))
             r.check("relative percentile references ignore pending designs and describe their accepted population", b.js("const row = [...document.querySelectorAll('table.designs tbody tr')].find(r => r.innerText.includes('enc-22')); const cells = row.querySelectorAll('td.num'); return cells[0].innerText === '-20%' && cells[0].title.includes('P10 10') && cells[0].title.includes('1 accepted design)') && cells[1].innerText === '-26.7%' && cells[1].title.includes('P90 1500')"))
             b.click(".bar .relative-values")
@@ -1153,7 +1153,7 @@ def flows(r: Run) -> None:
         warning = b.js("return document.querySelector('dialog[open]').innerText")
         r.check("the reset warning names every folder and says it cannot be undone",
                 all(f"{root / n}/" in warning for n in ("out", "runs", "workbench", ".author-work"))
-                and f"{r.data}/cache/flux/apps/bob.resettable/" in warning and "cannot be undone" in warning, warning)
+                and f"{r.data}/cache/flux/apps/bob.resettable/" in warning and "Cannot be undone" in warning, warning)
         r.check("the warning says source files and settings stay", "source files" in warning and "sharing stay" in warning)
         r.check("folder paths fit the dialog", b.js("""const d = document.querySelector('dialog[open]');
             return d.scrollWidth <= d.clientWidth + 1"""))
@@ -1164,7 +1164,7 @@ def flows(r: Run) -> None:
         r.check("reset defaults to clearing generated data", b.js("return [...document.querySelectorAll('dialog[open] [data-reset-keep]')].every(i => !i.checked)"))
         b.click("[data-reset-keep=workbench]")
         b.click("[data-reset-keep=history]")
-        r.check("keep choices update the folder warning and explain retained history", b.js("const d = document.querySelector('dialog[open]'); const folders = d.querySelector('.reset-folders').textContent; return !folders.includes('/workbench/') && !folders.includes('/out/') && !folders.includes('/runs/') && d.textContent.includes('saved run history stay')"))
+        r.check("keep choices update the folder warning and explain retained history", b.js("const d = document.querySelector('dialog[open]'); const folders = d.querySelector('.reset-folders').textContent; return !folders.includes('/workbench/') && !folders.includes('/out/') && !folders.includes('/runs/') && d.textContent.includes('history stay')"))
         b.click("[data-reset-keep=history]")
         r.dialog_button("Reset")
         b.wait("!document.querySelector('dialog[open]') && [...document.querySelectorAll('.toast')].some(x => x.textContent.includes('resettable reset'))",
@@ -1351,7 +1351,7 @@ def flows(r: Run) -> None:
         r.check("Delete on archive/", b.js(pick, ".viewer-head .actions-menu", "Delete…") == "ok")
         said = b.wait("document.querySelector('dialog.dlg[open]') && document.querySelector('dialog.dlg[open]').innerText.includes(' file') && document.querySelector('dialog.dlg[open]').innerText", what="the delete dialog")
         r.check("deleting a folder says everything in it goes", "everything in it" in said and "1 file, 1 folder" in said, said[:200])
-        r.dialog_button("Delete the folder")
+        r.dialog_button("Delete folder")
         b.wait("![...document.querySelectorAll('.files-card ul.files li')].some(l => l.innerText.includes('archive/'))", what="archive/ gone")
         r.check("the folder is deleted", not exists("archive"))
         # D907: a file gone since the list is said, with a retry -- not shown as a binary file
@@ -1382,7 +1382,7 @@ def flows(r: Run) -> None:
         press = f"const b = [...{dlg}.querySelectorAll('button')].find(x => x.textContent === arguments[0]); b.click(); return 1"
         for step, (target, label, value, button) in enumerate((("phone.txt", "Rename…", "phone 2.txt", "Rename"),
                                                                 ("phone 2.txt", "Move…", "pocket", "Move"),
-                                                                ("pocket/", "Delete…", None, "Delete the folder"))):
+                                                                ("pocket/", "Delete…", None, "Delete folder"))):
             b.wait(f"!!{row}".replace("arguments[0]", f"'{target}'"), what=f"{target} listed at 390")
             b.js(open_row, target)
             b.wait(f"(() => {{ const c = {head} && {head}.querySelector('.path-crumbs'); return c && c.innerText.endsWith('{target.rstrip('/')}') && {head}.querySelector('.actions-menu'); }})()",
@@ -1434,7 +1434,7 @@ def flows(r: Run) -> None:
         r.check("before saving, a document that does not load is said (D757)", "does not load" in said, said[:200])
         r.dialog_button("Save anyway")
         b.wait("document.querySelector('#main .notice.t-bad')", what="the loader's refusal")
-        r.check("a refused document is said on saving", "loader refuses" in b.js("return document.querySelector('#main .notice.t-bad').textContent"))
+        r.check("a refused document is said on saving", "does not load" in b.js("return document.querySelector('#main .notice.t-bad').textContent"))
         b.js("document.querySelectorAll('.toast .x').forEach(x => x.click()); window.__e2e.bad.splice(0); return 1")   # the warning was the point
         b.js(edit, "statement: >- broken", "statement: >-")
         r.button("Save")
@@ -1446,19 +1446,19 @@ def flows(r: Run) -> None:
     def create_a_taken_name():
         """D906: creating a loop under a name taken replaces nothing: Open it, or choose another name."""
         before = r.api("/apps/sw/file?path=problem.yaml")["body"]
-        r.page("#/new", "document.querySelector('#main input[placeholder=\"application name\"]')", "Write a problem document")
-        b.type("#main input[placeholder=\"application name\"]", "sw")
+        r.page("#/new", "document.querySelector('#main input.new-name')", "Write a problem document")
+        b.type("#main input.new-name", "sw")
         b.js("const t = document.querySelector('#main .editor textarea'); t.value = 'statement: another\\n'; t.dispatchEvent(new Event('input')); return 1")
         r.button("Create")
         said = b.wait("document.querySelector('dialog.dlg[open]') && document.querySelector('dialog.dlg[open]').innerText", what="the taken name said")
-        r.check("a taken name is said, with Open it and Choose another name", "already exists" in said and "Open it" in said
-                and "Choose another name" in said, said[:200])
-        r.dialog_button("Choose another name")
+        r.check("a taken name is said, with Open and Other name", "exists" in said and "Open" in said
+                and "Other name" in said, said[:200])
+        r.dialog_button("Other name")
         b.wait("!document.querySelector('dialog.dlg[open]')", what="the dialog closed")
         r.check("choosing another name stays on the form", b.js("return location.hash") == "#/new")
         r.check("the existing loop's document is unchanged", r.api("/apps/sw/file?path=problem.yaml")["body"] == before)
         r.button("Create")
-        r.dialog_button("Open it")
+        r.dialog_button("Open")
         b.wait("location.hash === '#/app/sw'", what="the existing loop opened")
         r.check("Open it opens the existing loop", True)
         r.clean("create a taken name")
@@ -2054,8 +2054,8 @@ def flows(r: Run) -> None:
             b.wait("!document.querySelector('#main .skeleton')", timeout=30, what=f"admin {t or 'loops'} loaded")
             r.clean(f"admin › {t or 'loops'}")
         r.page("#/admin/resources", "document.querySelector('#main .tchart')", "the resources over time")
-        r.check("every loop's tokens per second, in and out, over time (D838)", "Tokens in per second" in r.text()
-                and "Tokens out (generated) per second" in r.text())
+        r.check("every loop's tokens per second, in and out, over time (D838)", "Tokens in /s" in r.text()
+                and "Tokens out /s" in r.text())
         r.check("the resources page has no notes on how sizes and samples are kept",
                 "kept for a minute" not in r.text() and "the highest in each step" not in r.text())
         said = b.js("""const svg = document.querySelector('#main .tchart-svg'); if (!svg) return null;
@@ -2070,11 +2070,11 @@ def flows(r: Run) -> None:
         r.page("#/admin/models", "document.querySelector('.set-tabs')", "the model settings")
         tabs = b.js("return [...document.querySelectorAll('.set-tabs [role=tab]')].map(t => t.textContent.replace(' •', ''))")
         r.check("the model settings have a tab per tool, an agent's where it is installed, no Other (D721, D807, D817)",
-                tabs[:1] == ["Flux"] and "Other" not in tabs and tabs[-2:] == ["Every agent", "+ Add an agent"]
+                tabs[:1] == ["Flux"] and "Other" not in tabs and tabs[-2:] == ["All agents", "+ Add agent"]
                 and set(tabs[1:-3]) <= {"OpenCode", "Claude Code", "Codex"}, str(tabs))
-        r.button("Every agent", ".set-tabs")
+        r.button("All agents", ".set-tabs")
         shown = b.js("return [...document.querySelectorAll('.set-group')].filter(f => f.offsetParent).map(f => f.querySelector('legend').textContent)")
-        r.check("a tab shows its own groups only", shown == ["Variables for every run and every agent"], str(shown))
+        r.check("a tab shows its own groups only", shown == ["Variables for all runs and agents"], str(shown))
         r.page("#/admin/audit", "document.querySelector('#insights-part select[aria-label=What]')", "the audit")   # D723
         opts = b.js("return [...document.querySelectorAll('#insights-part select[aria-label=What] option')].map(o => [o.value, o.textContent])")
         values = [v for v, _ in opts if v]
@@ -2097,14 +2097,14 @@ def flows(r: Run) -> None:
         group_of = "[...document.querySelectorAll('#main select')].find(x => x.getAttribute('aria-label') === arguments[0] + \"'s group\")"
         r.page("#/admin/users", "[...document.querySelectorAll('#main select')].some(x => (x.getAttribute('aria-label') || '').endsWith(\"'s group\"))", "the users and their groups")
         r.check("the admin sees each user's group", b.js(f"const k = {group_of}; return k && k.options[k.selectedIndex].textContent", "bob") == "Internal")
-        r.page("#/account", "[...document.querySelectorAll('h2')].some(x => x.textContent === 'My agents and models')", "an admin's account")
+        r.page("#/account", "[...document.querySelectorAll('h2')].some(x => x.textContent === 'Agents')", "an admin's account")
         r.check("every user logs their agents in, not only an external one (D747)", True)
         made = r.api("/users", "POST", {"name": "ex", "password": "ex has a long secret", "role": "external"})
         r.check("an external user is added", made["status"] == 200, str(made))
         r.login("ex", "ex has a long secret")
-        r.page("#/account", "[...document.querySelectorAll('h2')].some(x => x.textContent === 'My agents and models')", "an external user's account")
+        r.page("#/account", "[...document.querySelectorAll('h2')].some(x => x.textContent === 'Agents')", "an external user's account")
         rows = b.js("return [...document.querySelectorAll('.card table.list tbody tr')].map(t => t.children[0].textContent)")
-        r.check("an external user logs their agents in from their account", "My agents and models" in r.text(), str(rows))
+        r.check("an external user logs their agents in from their account", "Agents" in r.text(), str(rows))
         offered = b.js("return [...document.querySelectorAll('#main input')].map(i => i.placeholder).filter(p => /the server's/.test(p))")
         r.check("and is offered nothing of the server's", not offered and "Server settings apply" not in r.text(), str(offered))
         r.clean("external user")
@@ -2253,8 +2253,8 @@ def flows(r: Run) -> None:
         r.login("bob")
         r.api("/settings", "PUT", {"values": {"FLUX_CODEX_API_KEY": "sk-e2e-not-a-key"}})
         refused = r.api("/apps/fromex/asks", "POST", {"question": "why?", "author": "codex"})
-        r.check("an untested agent is refused, saying where to test it", refused["status"] == 409 and "My agents and models" in refused["body"], refused["body"][:200])
-        r.page("#/account", "[...document.querySelectorAll('h2')].some(x => x.textContent === 'My agents and models')", "Account")
+        r.check("an untested agent is refused, saying where to test it", refused["status"] == 409 and "Account › Agents" in refused["body"], refused["body"][:200])
+        r.page("#/account", "[...document.querySelectorAll('h2')].some(x => x.textContent === 'Agents')", "Account")
         b.wait("(document.querySelector('.agent-conn[data-agent=codex]') || {textContent: ''}).textContent.includes('untested')", timeout=20, what="Codex, untested")
         # D924: three states apart; a key set leads with the key, never with "not logged in"
         states = b.js("return [...document.querySelectorAll('.agent-conn[data-agent=codex] dl.agent-states dt')].map(x => x.textContent)")
@@ -2262,7 +2262,7 @@ def flows(r: Run) -> None:
         r.check("Installation, Connection and Verification shown apart (D924)", states == ["Installation", "Connection", "Verification"], str(states))
         r.check("a key set: the connection is the API key, from the account, no secret (D924)",
                 conn.startswith("API key") and "yours" in conn and "sk-e2e" not in conn and "not logged in" not in r.text(), conn)
-        b.js("[...document.querySelectorAll('.agent-conn[data-agent=codex] button')].find(x => x.textContent.trim() === 'Test connection').click(); return 1")
+        b.js("[...document.querySelectorAll('.agent-conn[data-agent=codex] button')].find(x => x.textContent.trim() === 'Test').click(); return 1")
         b.wait("(document.querySelector('.agent-conn[data-agent=codex]') || {textContent: ''}).textContent.includes('ready')",
                timeout=120, what="Codex ready")
         steps = b.js("return [...document.querySelectorAll('.agent-steps li')].map(x => x.textContent)")
@@ -2306,7 +2306,7 @@ def flows(r: Run) -> None:
              f" p.value = {json.dumps(str(fake))}; p.dispatchEvent(new Event('input', {{bubbles: true}})); return 1")
         b.js("[...document.querySelector('#ag-new-name').closest('fieldset').querySelectorAll('button')].find(x => x.textContent.trim() === 'Add').click(); return 1")
         b.wait("[...document.querySelectorAll('#main .agent-panel')].some(x => x.dataset.label === 'corp')", timeout=30, what="corp added")
-        r.check("an added agent is found by its program", "a codex" in b.js("return [...document.querySelectorAll('#main .agent-panel')].find(c => c.dataset.label === 'corp').textContent"))
+        r.check("an added agent is found by its program", "codex" == b.js("return [...document.querySelectorAll('#main .agent-panel')].find(c => c.dataset.label === 'corp').querySelector('.agent-found .tag').textContent"))
         r.check("Agents and models is one tab: the agent's program and its model on its tab (D814)",
                 b.js("const p = [...document.querySelectorAll('#main .agent-panel')].find(c => c.dataset.label === 'corp');"
                      "return !!p.closest('fieldset').querySelector('#set-server-FLUX_CORP_BASE_URL') && !!p.closest('fieldset').querySelector('#env-server-corp-name')"))
@@ -2470,7 +2470,7 @@ def flows(r: Run) -> None:
         r.login("ada")
         r.page("#/admin", "document.querySelector('#main .card')", "Admin › Loops")
         r.check("the controls say no more than their buttons (D846)", "nobody can start one" not in r.text())
-        r.button("Send a notification…", "#main")                              # D846
+        r.button("Notify…", "#main")                              # D846
         b.wait("document.querySelector('dialog.dlg[open] textarea')", timeout=10, what="the notification dialog")
         b.js("const t = document.querySelector('dialog.dlg[open] textarea'); t.value = 'Maintenance at noon'; t.dispatchEvent(new Event('input', {bubbles: true})); return 1")
         r.dialog_button("Send")
@@ -2485,7 +2485,7 @@ def flows(r: Run) -> None:
         card_w = b.js("const c = [...document.querySelectorAll('#main .mig-loop')].find(x => x.textContent.includes('worldly'));"
                       "return c ? [c.textContent, [...c.querySelectorAll('a.btn')].map(a => a.textContent)] : null")
         r.check("a loop it cannot migrate by itself says why where the button would be, and links to its document (D813)",
-                card_w is not None and "needs rewriting by hand" in card_w[0] and "Edit its document" in card_w[1], str(card_w)[:300])
+                card_w is not None and "needs a hand" in card_w[0] and "Edit document" in card_w[1], str(card_w)[:300])
         r.clean("Admin › Documents")
         b.js("[...[...document.querySelectorAll('#main .mig-loop')].find(x => x.textContent.includes('oldform')).querySelectorAll('button')]"
              ".find(x => x.textContent.trim() === 'Migrate').click(); return 1")
@@ -2710,7 +2710,7 @@ def flows(r: Run) -> None:
         r.page("#/app/broken", "document.querySelector('.page-head')", "the broken loop")
         r.button("Start", ".page-head")
         bad = b.wait("document.querySelector('dialog.dlg[open] .preflight .notice.t-bad') && document.querySelector('dialog.dlg[open]').innerText", timeout=90, what="the check, failed")
-        r.check("the start dialog says the check fails and offers to start anyway", "check fails" in bad and "Start anyway" in bad, bad[:200])
+        r.check("the start dialog says the check fails and offers to start anyway", "Check fails" in bad and "Start anyway" in bad, bad[:200])
         t0 = time.time()
         r.dialog_button("Start anyway")
         end = time.time() + 120
@@ -2753,22 +2753,22 @@ def flows(r: Run) -> None:
         r.login("ada")
         r.page("#/admin/insights", "document.querySelector('#main .subtabs')", "Admin › Insights")
         cards, per = {}, {}
-        first = {"Failures": "Failures", "Usage and disk": "Usage", "Endpoints and network": "Endpoints and agents"}
-        for label in ("Failures", "Usage and disk", "Endpoints and network"):      # D819: a sub-tab each
+        first = {"Failures": "Failures", "Usage": "Usage", "Endpoints": "Endpoints"}
+        for label in ("Failures", "Usage", "Endpoints"):      # D819: a sub-tab each
             r.button(label, "#main .subtabs")
             b.wait(f"[...document.querySelectorAll('#insights-part .card h2')].some(x => x.textContent === '{first[label]}')"
                    " && !document.querySelector('#insights-part .skeleton')", timeout=20, what=label)   # D920: the disk measured apart
             got = b.js("const o = {}; for (const c of document.querySelectorAll('#insights-part .card')) { const h = c.querySelector('h2'); if (h) o[h.textContent] = c.textContent; } return o")
             per[label] = sorted(got)
             cards.update(got)
-            if label == "Usage and disk":       # D989: its tables sort by a header, as Users
+            if label == "Usage":       # D989: its tables sort by a header, as Users
                 sortable = b.js("return [...document.querySelectorAll('#insights-part .card')].filter(c => c.querySelector('table')).every(c => [...c.querySelectorAll('table')].every(t => t.classList.contains('sortable') && t.querySelector('th button.th-sort')))")
-                r.check("Insights: Usage and disk's tables sort by a header (D989)", sortable is True, str(sortable))
-        r.check("Insights: a sub-tab each, a box or two together (D819)", per == {"Failures": ["Failures"], "Usage and disk": ["Current disk usage", "Usage"],
-                "Endpoints and network": ["Endpoints and agents", "Network refused"]}, str(per))
+                r.check("Insights: Usage's tables sort by a header (D989)", sortable is True, str(sortable))
+        r.check("Insights: a sub-tab each, a box or two together (D819)", per == {"Failures": ["Failures"], "Usage": ["Disk now", "Usage"],
+                "Endpoints": ["Endpoints", "Network refused"]}, str(per))
         r.check("Insights: the failed start with why it stopped", "bob/broken" in cards.get("Failures", "") and "not on PATH" in cards.get("Failures", ""),
                 cards.get("Failures", "")[:300])
-        r.check("Insights: the current disk usage, each user", all(u in cards.get("Current disk usage", "") for u in ("ada", "bob")), cards.get("Current disk usage", "")[:300])
+        r.check("Insights: the current disk usage, each user", all(u in cards.get("Disk now", "") for u in ("ada", "bob")), cards.get("Disk now", "")[:300])
         b.js("const s = document.querySelector('#main select[aria-label=\"Over the last\"]'); s.value = '30'; s.dispatchEvent(new Event('change')); return 1")
         b.wait("document.querySelector('#main select[aria-label=\"Over the last\"]') && document.querySelector('#main select[aria-label=\"Over the last\"]').value === '30' "
                "&& document.querySelectorAll('#insights-part .card').length >= 2", timeout=15, what="30 days")
@@ -2780,7 +2780,7 @@ def flows(r: Run) -> None:
                 for i in range(n):
                     fh.write(json.dumps({"t": now - 60 * (i + 1), "host": host, "port": 443, "app": "sw", "user": "bob"}) + "\n")
         r.page("#/admin/insights", "document.querySelector('#main .subtabs')", "Admin › Insights")
-        r.button("Endpoints and network", "#main .subtabs")
+        r.button("Endpoints", "#main .subtabs")
         b.wait("[...document.querySelectorAll('#insights-part .card h2')].some(x => x.textContent === 'Network refused') && "
                "document.querySelector('#insights-part .card:last-child tbody tr')", timeout=20, what="the refused hosts")
         hosts = "return [...[...document.querySelectorAll('#insights-part .card')].find(c => c.querySelector('h2').textContent === 'Network refused').querySelectorAll('tbody tr')].map(t => t.cells[0].textContent)"
@@ -2790,7 +2790,7 @@ def flows(r: Run) -> None:
         r.check("Insights: a column's header sorts it, again the other way (D859)", b.js(hosts)[:2] == ["few.example:443", "many.example:443"], str(b.js(hosts)))
         b.js(sort, "Host")
         r.check("Insights: by host, A to Z first", b.js(hosts)[:2] == ["few.example:443", "many.example:443"], str(b.js(hosts)))
-        sort_fit("Insights › Endpoints and network")
+        sort_fit("Insights › Endpoints")
         if os.environ.get("FLUX_E2E_SHOTS"):
             Path(os.environ["FLUX_E2E_SHOTS"]).mkdir(parents=True, exist_ok=True)
             b.shot(Path(os.environ["FLUX_E2E_SHOTS"]) / "insights-sorted-desktop.png")
@@ -2856,7 +2856,7 @@ def flows(r: Run) -> None:
                         pass
                     seen = b.js("const d = document.getElementById('phone').contentDocument, c = d.querySelector('.agent-conn[data-agent=codex]');"
                                 "return c ? [c.getBoundingClientRect().height > 0, [...c.querySelectorAll('dt')].map(x => x.textContent),"
-                                " !![...c.querySelectorAll('button')].find(x => x.textContent.trim() === 'Test connection')] : null")
+                                " !![...c.querySelectorAll('button')].find(x => x.textContent.trim() === 'Test')] : null")
                     r.check(f"phone {h} at {width}px: the agent's states and Test connection on its tab (D924)",
                             bool(seen) and seen[0] and seen[1] == ["Installation", "Connection", "Verification"] and seen[2], str(seen))
             b.cmd("WebDriver:Navigate", {"url": f"{r.url}/?after-phone={time.time()}#/"})   # a reload: the page is the app again

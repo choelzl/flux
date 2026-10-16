@@ -64,7 +64,7 @@ function Task({ n, env, a, panel }) {
   return html`<${TaskHead} n=${n} env=${env} a=${a} />
     <${Body} n=${n} env=${env} a=${a} mem=${mem} />
     <${NotesFold} n=${n} mem=${mem} />
-    ${!isAgent(n) && (has(f) || has(o) || has(n.params)) ? html`<${Fold} k="fields" title="Every field" mem=${mem}>
+    ${!isAgent(n) && (has(f) || has(o) || has(n.params)) ? html`<${Fold} k="fields" title="All fields" mem=${mem}>
       <${Block} title="Input" obj=${n.params} mem=${mem} /><${Block} title="Fields" obj=${f} mem=${mem} /><${Block} title="Output" obj=${o} mem=${mem} /><//>` : ""}`;
 }
 

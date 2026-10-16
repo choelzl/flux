@@ -21,7 +21,7 @@ import { recall, remember } from "./stored.js";
 
 /** The admin's pages (D695): every loop and the controls over all of them, what the machine holds up (containers,
     disk, caches), users with their limits and usage, the audit trail. */
-const ADMIN_TABS = { "": "Loops", insights: "Insights and audit", applications: "Applications", resources: "Resources", maintenance: "Maintenance", sandbox: "Sandbox", agents: "Agents and models", users: "Users and groups" };
+const ADMIN_TABS = { "": "Loops", insights: "Insights", applications: "Applications", resources: "Resources", maintenance: "Maintenance", sandbox: "Sandbox", agents: "Agents", users: "Users" };
 
 /** What `load()` reads, drawn by `children(d)`; skeleton lines meanwhile. */
 function Read({ load, k, children }) {
@@ -67,7 +67,7 @@ const TAB = {
     : html`<${Read} key="users" k="users" load=${() => Promise.all([api("/users"), api("/admin/usage").catch(() => []), api("/admin/controls").catch(() => null), api("/groups")])}>
       ${([users, use, res, catalog]) => html`<${Users} users=${users} use=${use} res=${res} catalog=${catalog} />`}<//>`}<//>`,
   // D819: Insights a sub-tab each, a box or two that go together, so nothing scrolls far; D816: the audit trail is one
-  insights: first => html`<${Parts} parts=${[["failures", "Failures"], ["usage", "Usage and disk"], ["endpoints", "Endpoints and network"], ["audit", "Audit trail"]]}
+  insights: first => html`<${Parts} parts=${[["failures", "Failures"], ["usage", "Usage"], ["endpoints", "Endpoints"], ["audit", "Audit"]]}
     memo="flux-insights-part" first=${first} partId="insights-part">${k => k === "audit"
       ? html`<${Read} key="audit" k="audit" load=${() => api("/audit")}>${audit => html`<${Audit} audit=${audit} />`}<//>` : html`<${Insights} part=${k} />`}<//>`,
 };

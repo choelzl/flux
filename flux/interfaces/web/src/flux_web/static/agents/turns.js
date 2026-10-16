@@ -14,7 +14,7 @@ const roleOf = (t) => { const m = /\/agents\/([^/]+)\//.exec(String(t.workdir ||
 function Tokens({ t }) {
   const n = t.notes && typeof t.notes === "object" ? t.notes : {};
   const i = t.tokens_in ?? n.input_tokens, o = t.tokens_out ?? n.output_tokens;
-  if (i == null && o == null) return t.tokens_complete === false ? html`<span title="the agent stopped before it reported its tokens">—</span>` : null;   // D1094: "—", as everywhere
+  if (i == null && o == null) return t.tokens_complete === false ? html`<span title="tokens not reported">—</span>` : null;   // D1094: "—", as everywhere
   return `${i == null ? "—" : fmtTok(i)} → ${o == null ? "—" : fmtTok(o)}${t.tokens_complete === false ? " (partial)" : ""}`;
 }
 function Outcome({ t }) {
@@ -26,7 +26,7 @@ function Outcome({ t }) {
 export function TurnRow({ t, picked, onPick }) {
   const role = roleOf(t);
   return html`<tr class=${"clickable" + (picked ? " sel" : "")} onClick=${() => onPick(t)}>
-    <td title=${[t.about || (t.notes && t.notes.model) || "", t.session === "resumed" ? "resumed its session" : ""].filter(Boolean).join(" · ") || null}>
+    <td title=${[t.about || (t.notes && t.notes.model) || "", t.session === "resumed" ? "resumed session" : ""].filter(Boolean).join(" · ") || null}>
       ${role ? html`<span class="muted">${role} · </span>` : ""}
       <button type="button" class="link strong open-turn" onClick=${(e) => { e.stopPropagation(); onPick(t); }}>${t.agent || t.model || t.kind}</button>
       ${t.session === "resumed" ? html`<span class="muted small"> · resumed</span>` : ""}</td>
@@ -44,9 +44,9 @@ function factsOf(full) {
   const tin = full.tokens_in ?? nt.input_tokens, tout = full.tokens_out ?? nt.output_tokens;
   return [["kind", full.kind], ["model", mine && about.startsWith(mine + " ") ? about.slice(mine.length + 1) : about || null], ["server", full.server],
     ["session", full.session ? `${full.session}${full.session_id ? " · " + full.session_id : ""}` : null], ["exit", full.rc],
-    ["tokens in", tin], ["tokens out", tout], ["from the cache", full.tokens_cached],
+    ["tokens in", tin], ["tokens out", tout], ["cached", full.tokens_cached],
     // D1094: "partial" only beside tokens it did report -- a turn that reported none says so
-    ["token usage", full.tokens_complete === false ? (tin == null && tout == null ? "Not reported by the agent" : "Partial: includes only tokens the agent reported before stopping") : null],
+    ["token usage", full.tokens_complete === false ? (tin == null && tout == null ? "Not reported" : "Partial: reported before stopping") : null],
     ["cost", full.cost_usd ? money(full.cost_usd, 4) : null], ["tool calls", full.tool_calls ?? (full.hops || []).length],
     ["prompt", full.prompt_chars ? `${full.prompt_chars} chars` : full.prompt ? `${String(full.prompt).length} chars` : null],
     ["finish", nt.finish], ["schema", nt.schema], ["folder", full.workdir]].filter(([, v]) => v != null && v !== "");
@@ -65,7 +65,7 @@ export function TurnDetail({ full, k }) {
     full.error && html`<div class="blk"><h3>error</h3><${Prose} text=${full.error} /></div>`,
     talk,
     full.stderr && html`<details class="blk"><summary>stderr</summary><${Prose} text=${full.stderr} /></details>`,
-    full.prompt && html`<details class="blk"><summary>Prompt (${String(full.prompt).length.toLocaleString()} characters)</summary><${Prose} text=${full.prompt} /></details>`,
+    full.prompt && html`<details class="blk"><summary>Prompt (${String(full.prompt).length.toLocaleString()} chars)</summary><${Prose} text=${full.prompt} /></details>`,
   ] : [
     ...["error", "reply", "prompt", "stderr"].filter(f => full[f]).map(f => html`<div key=${f} class="blk"><h3>${f}</h3><${Prose} text=${full[f]} /></div>`),
     ...((full.hops || []).length ? [html`<h3>Tool calls</h3>`, ...full.hops.map(x => html`<pre class="val">${x}</pre>`)] : []),

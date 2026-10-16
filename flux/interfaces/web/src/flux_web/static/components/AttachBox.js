@@ -7,6 +7,6 @@ import { Uploader, placedFiles } from "./Uploader.js";
 
 export function AttachBox({ items, onChange }) {
   const rows = items.map(g => ({ key: g.path, label: g.path, folder: null, files: [{ file: g.file, path: g.path }], dest: "", custom: "" }));
-  return html`<div class="attach"><${Uploader} rows=${rows} places=${false} label="Drop a spec, a reference model, tests or papers"
+  return html`<div class="attach"><${Uploader} rows=${rows} places=${false} label="Drop specs, reference models, tests or papers"
     onChange=${next => onChange(placedFiles(next))} /></div>`;
 }

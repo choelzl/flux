@@ -21,12 +21,12 @@ function LinkBox({ name, url, kind }) {
   const copy = async () => {
     try { await navigator.clipboard.writeText(url); toast("Copied", "ok"); } catch (_) { field.current.select(); toast("Selected: copy it", "info"); }
   };
-  return html`<div class="stack"><p>${kind === "invite" ? `Send ${name} this link: it lets them choose their password and log in. Until then the account cannot be used.`
-      : `Send ${name} this link: it lets them choose a new password; their current one works until then, and their sessions end when it is used.`}</p>
+  return html`<div class="stack"><p>${kind === "invite" ? `Send ${name} this link to set a password and log in.`
+      : `Send ${name} this link to choose a new password. The current one works until then; sessions end when it is used.`}</p>
     <div class="row"><input value=${url} readonly class="mono full" id="invite-url" ref=${field} /><button type="button" class="small" onClick=${copy}>Copy</button></div>
     <p class="muted small">Single use, valid a week, shown once.</p></div>`;
 }
-const linkDialog = (name, token, kind) => dialog(kind === "invite" ? `Invite ${name}` : `${name}: a password reset link`,
+const linkDialog = (name, token, kind) => dialog(kind === "invite" ? `Invite ${name}` : `${name}: password reset link`,
   html`<${LinkBox} name=${name} url=${`${location.origin}${location.pathname}#/invite/${token}`} kind=${kind} />`, [["Done", true, "primary"]]);
 
 const GroupSelect = ({ groups, value, label, onChange = null }) => html`<${Select} aria-label=${label} value=${value} onChange=${onChange}
@@ -34,11 +34,11 @@ const GroupSelect = ({ groups, value, label, onChange = null }) => html`<${Selec
 
 /** A user's permissions, in a dialog: theirs to have (a server admin's group has them all). */
 function Permissions({ u, catalog, v, set }) {
-  return html`<div class="stack"><p>${u.role === "admin" ? `Members of ${u.group} have full server administration permissions.`
-      : "These permissions belong to this user. Access to other people's loops applies within their group; individual sharing also grants access across groups."}</p>
+  return html`<div class="stack"><p>${u.role === "admin" ? `Members of ${u.group} have full admin permissions.`
+      : "Access to others' loops applies within the group; sharing grants it across groups."}</p>
     ${Object.entries(catalog.permissions).map(([key, label]) => html`<label class="check"><input type="checkbox" data-permission=${key} checked=${!!v[key]} disabled=${u.role === "admin"}
       onChange=${e => set({ [key]: e.currentTarget.checked })} />${label}</label>`)}
-    <p class="muted small">Editing does not grant permission to run, share, delete or transfer other members' loops. Running uses the loop owner's credentials and limits.</p></div>`;
+    <p class="muted small">Editing others' loops does not let one run, share, delete or transfer them. Runs use the owner's credentials and limits.</p></div>`;
 }
 const editPermissions = async (u, catalog) => {
   const choice = await dialog(`${u.name}'s permissions`, ({ v, set }) => html`<${Permissions} u=${u} catalog=${catalog} v=${v} set=${set} />`, [["Cancel", null],
@@ -70,7 +70,7 @@ function AddUser({ groups }) {
     route();
   };
   return html`<div class="row add-user"><input placeholder="name" autocomplete="off" data-lpignore="true" ...${bound(name, setName)} />
-    <input type="password" autocomplete="new-password" placeholder="password (empty: send an invitation link)" class="min-w-280" ...${bound(pw, setPw)} />
+    <input type="password" autocomplete="new-password" placeholder="password (empty: invite link)" class="min-w-280" ...${bound(pw, setPw)} />
     <${GroupSelect} groups=${groups} value=${group} label="Group of the new user" onChange=${setGroup} />
     <${Act} cls="primary" onClick=${add}>Add user<//></div>`;
 }
@@ -99,7 +99,7 @@ export function Users({ users, use, res, catalog }) {
     { label: "Last active", key: u => u.last_active || null, num: true, title: "Their latest login, action or run" },   // D942
     { label: "" }];
   const row = u => { const x = useOf(u.name); return html`<tr data-user=${u.name}>
-    <td class="strong">${u.name}${u.pending ? html`<${Pill} small title="Invited: their password is not set yet">invited<//>` : ""}</td>
+    <td class="strong">${u.name}${u.pending ? html`<${Pill} small title="Password not set yet">invited<//>` : ""}</td>
     <td>${u.name === me.name ? html`<${Tag}>${u.group}<//>` : html`<${GroupSelect} groups=${catalog.groups} value=${u.group_id} label=${`${u.name}'s group`} onChange=${to => setGroup(u, to)} />`}
       ${u.disabled ? html`<${Pill} tone="bad">disabled<//>` : ""}</td>
     <td><${Act} cls="small" title=${`Select ${u.name}'s permissions`} aria-label=${`Select ${u.name}'s permissions`} onClick=${() => editPermissions(u, catalog)}>Select<//></td>
@@ -110,16 +110,16 @@ export function Users({ users, use, res, catalog }) {
     <td class="num">${u.last_active ? html`<${Ago} t=${u.last_active} />` : html`<span class="muted">never</span>`}</td>
     <td class="right"><div class="actions end">${u.name !== me.name ? html`<${Act} cls="small" title=${`View Flux as ${u.name} (read-only)`} disabled=${u.disabled || u.pending} onClick=${() => viewAs(u)}>View as<//>` : ""}
       <${Act} cls="small" onClick=${() => able(u)}>${u.disabled ? "Enable" : "Disable"}<//>
-      <${Act} cls="small" title="A one-time link to choose a password; it replaces the last one" onClick=${() => link(u)}>${u.pending ? "New invitation link" : "Password reset link"}<//></div></td></tr>`; };
+      <${Act} cls="small" title="One-time link; replaces the last one" onClick=${() => link(u)}>${u.pending ? "New invite link" : "Reset link"}<//></div></td></tr>`; };
   // D926: sorted by its headers (a menu on a phone); a row is moved, never rebuilt -- an edit or a pending save stays
   return html`<${Card} title="Users"><${SortableTable} memo="flux-sort-users" cols=${cols} rows=${users} row=${row} keyOf=${u => u.name} cls="list users" />
     <${AddUser} groups=${catalog.groups} />
-    <p class="muted small">Server access is set for the whole group on the Groups tab. Loop creation, execution and sharing are controlled by Permissions.</p><//>`;
+    <p class="muted small">Server access is set per group (Groups). Creating, running and sharing loops: Permissions.</p><//>`;
 }
 
 const AccessSelect = ({ value, label, id = null, disabled = false, onChange = null }) => html`<select aria-label=${label} id=${id} disabled=${disabled} onChange=${onChange}>
   <option value="" selected=${value == null} disabled>${value == null && !id ? "Keep existing access" : "Choose server access…"}</option>
-  <option value="server" selected=${value === true}>Use server settings</option><option value="own" selected=${value === false}>Own settings only</option></select>`;
+  <option value="server" selected=${value === true}>Server settings</option><option value="own" selected=${value === false}>Own settings</option></select>`;
 
 /** A group's server access, saved as it is chosen; a refusal puts the choice back. */
 function GroupAccess({ g }) {
@@ -147,12 +147,12 @@ export function Groups({ catalog }) {
     await api("/groups", { method: "POST", body: { name: name.trim(), server_access: access === "server" } }); route();
   };
   return html`<${Card} title="Groups" cls="user-groups">
-    <p class="muted">Server access applies to all group members on their next run or agent invocation. Personal settings and per-user permissions are preserved.</p>
-    ${catalog.groups.some(g => g.server_access == null) ? html`<p class="muted small">Keep existing access preserves members' current settings until you choose a policy for the group.</p>` : ""}
+    <p class="muted">Applies to members from their next run. Personal settings and permissions stay.</p>
+    ${catalog.groups.some(g => g.server_access == null) ? html`<p class="muted small">Keep existing access: members keep their settings until a policy is chosen.</p>` : ""}
     <${Table} cls="list groups" heads=${["Group", { label: "Members", num: true },
-      { label: "Server access", title: "Inherit server and machine model, agent and environment settings, or use members' own settings only" }, "Actions"]}>
+      { label: "Server access", title: "The server's model, agent and environment settings, or members' own only" }, "Actions"]}>
       ${catalog.groups.map(g => html`<tr key=${g.id} data-group=${g.id}><td><div class="group-label"><span class="strong">${g.name}</span>
-          ${g.admin ? html`<${Tag} title="Full server administration powers, retained when this group is renamed">Server admin<//>` : ""}</div></td>
+          ${g.admin ? html`<${Tag} title="Full admin powers, kept on rename">Server admin<//>` : ""}</div></td>
         <td class="num mono">${String(g.members)}</td><td><${GroupAccess} g=${g} /></td>
         <td><${Act} cls="small" title=${`Rename ${g.name}`} onClick=${() => rename(g)}>Rename…<//></td></tr>`)}<//>
     <div class="group-create"><h3>New group</h3><div class="row">

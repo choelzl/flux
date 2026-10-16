@@ -9,8 +9,8 @@ export const Reading = ({ lines = 7 }) => html`<${Card}><${Skeleton} lines=${lin
 
 /** `start()` for whoever may run it; without a document, the way to have an agent write one. */
 export const NotRun = ({ info, name, mine, start }) => html`<${Card}>${info.document
-  ? html`<${Empty} text="This loop has not run yet." action=${start ? html`<${Act} cls="small primary" onClick=${start}>Start<//>` : null} />`
-  : html`<${Empty} text="This loop has no problem document yet." action=${mine ? html`<a class="btn small" href=${`${appHref(info.owner, name)}/settings/problem/agent`}>Have an agent write it</a>` : null} />`}<//>`;
+  ? html`<${Empty} text="Not run yet." action=${start ? html`<${Act} cls="small primary" onClick=${start}>Start<//>` : null} />`
+  : html`<${Empty} text="No problem document yet." action=${mine ? html`<a class="btn small" href=${`${appHref(info.owner, name)}/settings/problem/agent`}>Have an agent write it</a>` : null} />`}<//>`;
 
 export const NoResults = () => html`<${Card}><${Empty} text="No results yet." /><//>`;
 
@@ -20,5 +20,5 @@ function CheckOut({ url }) {
   return html`<pre class="log small">${said}</pre>`;
 }
 /** The saved problem and its inputs checked in the sandbox -- as a start checks them. */
-export const CheckButton = ({ name }) => html`<${Act} cls="small check-saved" title="Check the saved problem and inputs. Starting the loop also runs this check."
-  onClick=${() => dialog("Check the saved document", html`<${CheckOut} url=${loopApi(name).at("/check")} />`, [["Close", null]])}>Check<//>`;
+export const CheckButton = ({ name }) => html`<${Act} cls="small check-saved" title="Check the saved problem and inputs (Start does too)"
+  onClick=${() => dialog("Check", html`<${CheckOut} url=${loopApi(name).at("/check")} />`, [["Close", null]])}>Check<//>`;

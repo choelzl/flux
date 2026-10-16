@@ -41,7 +41,7 @@ export function ParetoChart({ designs, xm, ym, stage, objectives, onPick, styles
   const drawn = [...pts].sort((a, b) => (counts(a) ? 1 : 0) - (counts(b) ? 1 : 0) || (a.decision ? 1 : 0) - (b.decision ? 1 : 0));
   return html`<figure class="chart-box"><figcaption>
       <strong class="front-said">${said || `${front.length} on the feasible front${scope ? ` (${scope})` : ""}`}</strong>
-      <span class="muted">${` · ${plural(pts.length, "search design")}${stage ? " at " + stage : " at the deepest stage"}${legend ? " · " : ""}`}</span>
+      <span class="muted">${` · ${plural(pts.length, "search design")}${stage ? " at " + stage : " at deepest stage"}${legend ? " · " : ""}`}</span>
       ${focus ? html`<span class="muted pareto-focus-said">${focused ? " · focused on front" : " · full range (no feasible front)"}</span>` : ""}
       ${legend ? html`<${Legend} S=${S} front rejected=${pts.some(p => p.verdict === "rejected")} pending=${pts.some(p => p.pending)} baseline=${xr.length + yr.length > 0} />` : ""}</figcaption>
     <svg viewBox=${`0 0 ${W} ${H}`} class="chart pareto" role="img" aria-label=${`${ym} against ${xm}: ${said || `${plural(front.length, "design")} on the feasible front`}`}>

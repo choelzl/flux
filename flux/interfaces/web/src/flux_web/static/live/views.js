@@ -53,7 +53,7 @@ export function taskLabel(n) {
   if (head === "tool" && kind === "Design" && candidateOf(n)) return `${kind} · ${candidateOf(n)}`;
   // D1064: a stage's command says the design it measures ("Measure · slow · x#4")
   if (head === "tool" && kind === "Measure" && candidateOf(n) && ranFor(n)) return `${kind} · ${ranFor(n)} · ${candidateOf(n)}`;
-  if (head === "tool") return `${kind} · ${ranFor(n) || rest.replace(/^fluxpreset\s+/, "") || "a command"}`;   // D1037: the document's name
+  if (head === "tool") return `${kind} · ${ranFor(n) || rest.replace(/^fluxpreset\s+/, "") || "command"}`;   // D1037: the document's name
   // D1063: a measurement says the design it measured ("Measure · esl · x#4"; the views say "#4")
   if ((head === "simulation" || head === "analytical") && rest) { const c = candidateOf(n); return c ? `${kind} · ${rest} · ${c}` : `${kind} · ${rest}`; }
   if (head === "dse") { const c = candidateOf(n); return c ? `Search · ${c}` : "Search"; }
@@ -236,7 +236,7 @@ export function docNotes(raw, documentName) {
   const plural = (n, one) => `${n} ${one}${n === 1 ? "" : "s"}`;
   const orch = flow.orchestrate, gen = flow.generate;
   const policy = typeof orch === "object" && orch ? orch.policy || orch.intent || "" : typeof orch === "string" ? orch : "";
-  const cmd = typeof gen === "object" && gen ? gen.command || (gen.agent ? "an agent" : gen.model ? "a model" : "") : typeof gen === "string" ? gen : "";
+  const cmd = typeof gen === "object" && gen ? gen.command || (gen.agent ? "agent" : gen.model ? "model" : "") : typeof gen === "string" ? gen : "";
   const script = String(Array.isArray(cmd) ? cmd.join(" ") : cmd).split(/\s+/).map(w => w.replace(/^\{home\}\//, "")).find(w => /\.\w+$/.test(w) && !w.startsWith("{")) || (cmd ? String(cmd).split(/\s+/)[0] : "");
   // D1058: a goal written as its name alone is maximized, as the loop reads it
   const goals = objectives.map(o => typeof o === "string" ? { metric: o } : o).filter(o => o && o.metric).map(o => `${o.metric} ${/min/i.test(o.direction || "") ? "↓" : "↑"}`);

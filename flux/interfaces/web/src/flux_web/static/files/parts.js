@@ -63,7 +63,7 @@ export function ActionsMenu({ label, it, acts }) {
 export function FileList({ list, open }) {
   const own = f => !f.path.includes("/") && (f.dir ? ["out", "runs", "workbench", "library"].includes(f.path) : f.path === "problem.yaml" || f.path.endsWith(".problem.yaml"));
   return html`<ul class="files">${list.map(f => html`<li key=${f.path} class=${`${f.ignored ? "ignored" : ""}${own(f) ? " own" : ""}${f.link ? " link" : ""}`}
-      title=${f.ignored ? "ignored (.gitignore, or a name starting with .)" : null}>
+      title=${f.ignored ? "ignored" : null}>
     <a href="javascript:void 0" title=${f.path} onClick=${() => open(f.path, f.dir)}><span class="ic">${f.dir ? "▸" : f.link ? "↪" : "·"}</span>${baseOf(f.path) + (f.dir ? "/" : "")}</a>
     ${f.dir || f.link ? "" : html`<small class="muted">${bytes(f.size)}</small>`}</li>`)}</ul>`;
 }

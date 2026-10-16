@@ -18,7 +18,7 @@ import { Tag } from "../components/Tone.js";
 import { Table } from "../components/Table.js";
 
 const Measurements = ({ results }) => html`<${Card} title="Measurements" cls="measurement-preferences">
-  <p class="muted">Visible controls table columns. Main selects metrics for loop lists, decision summaries and default charts. % formats summaries as percent change from the matching baseline, otherwise P90 performance of accepted designs. Tables have their own Absolute/Relative toggle. Saved with this project and shared across browsers; calculations still use every metric. Only owners, editors and admins can save changes.</p>
+  <p class="muted">Visible: table columns. Main: loop lists, decision summaries and default charts. %: change from the baseline, else from the P90 of accepted designs. Saved with the loop; calculations use every metric.</p>
   ${results.metrics?.length ? html`<div><${MeasurementOptions} metrics=${results.metrics} groups=${results.metric_groups || {}} defaults=${defaultMainMeasurements(results)} /></div>`
     : html`<${Empty} text="No measurements yet." />`}<//>`;
 
@@ -28,7 +28,7 @@ function Variables({ e, reload }) {
   return html`<${Card} title="Environment variables"><p class="muted">${isOwner ? "This loop's variables win over yours and the server's." : `This loop's variables win over ${info.owner}'s and the server's.`}</p>
     <${EnvEditor} rows=${e.loop} scope="loop" save=${mine ? async v => { await loopApi(name).api("/env", { method: "PUT", body: v }); reload(); } : null} />
     ${e.user.length || e.server.length ? html`<div class="blk"><h3>Under them</h3><${EnvTable} shadowed=${new Set(e.loop.map(x => x.name))}
-      rows=${[...e.server.map(x => ({ ...x, from: "the server" })), ...e.user.map(x => ({ ...x, from: isOwner ? "yours (Account)" : `${info.owner}'s (their Account)` }))]} /></div>` : ""}<//>`;
+      rows=${[...e.server.map(x => ({ ...x, from: "server" })), ...e.user.map(x => ({ ...x, from: isOwner ? "yours (Account)" : `${info.owner}'s (their Account)` }))]} /></div>` : ""}<//>`;
 }
 
 /** Who else sees or edits a loop (D701): the owner or admin shares it with a user to watch (its runs and outputs)
@@ -42,15 +42,15 @@ function Sharing({ name, sh }) {
   const rows = sh.shares.map(x => html`<div key=${x.user} class="share-who"><span class="share-av" aria-hidden="true">${x.user.slice(0, 1).toUpperCase()}</span><span class="strong">${x.user}</span></div>
     ${sh.can_share ? access(x.perm, { "aria-label": `What ${x.user} may do`, onChange: p => set(x.user, p) }) : html`<${Tag}>${CAN[x.perm] || x.perm}<//>`}
     ${sh.can_share ? html`<button type="button" class="small" onClick=${() => set(x.user, null)}>Remove</button>` : html`<span />`}`);
-  const none = html`<p class="muted share-none">${sh.can_share ? "Not shared." : "Shared with nobody else."}</p>`;
+  const none = html`<p class="muted share-none">Not shared.</p>`;
   if (!sh.can_share) return html`<${Card} title="Sharing" cls="loop-sharing">${sh.shares.length ? html`<div class="share-grid">${rows}</div>` : none}<//>`;
   const free = sh.users.filter(u => !sh.shares.some(x => x.user === u));
   return html`<${Card} title="Sharing" cls="loop-sharing">${sh.shares.length ? "" : none}
     <div class="share-grid">${rows}<div class="share-add-sep" />
-      <${Select} id="share-user" aria-label="Share with" disabled=${!free.length} value=${who} onChange=${setWho} none=${free.length ? "Choose a user…" : "No other user"} options=${free} />
+      <${Select} id="share-user" aria-label="Share with" disabled=${!free.length} value=${who} onChange=${setWho} none=${free.length ? "Choose a user…" : "No other users"} options=${free} />
       ${access(perm, { id: "share-perm", "aria-label": "What they may do", disabled: !free.length, onChange: setPerm })}
       <${Act} cls="primary small" disabled=${!free.length} onClick=${async () => { if (!who) { toast("Choose a user.", "warn"); return; } await set(who, perm); }}>Share<//></div>
-    <p class="muted small share-note"><strong>Watch</strong>: view only. <strong>Edit</strong>: change it; also start/stop when allowed to run (uses the owner's keys).</p><//>`;
+    <p class="muted small share-note"><strong>Watch</strong>: view only. <strong>Edit</strong>: change it; start/stop if allowed to run (owner's keys).</p><//>`;
 }
 
 function Ownership({ plan }) {
@@ -70,10 +70,10 @@ function Ownership({ plan }) {
     const keep = hasPermissions(current.permissions);
     const got = await dialog(`Transfer ${name}`, ({ v, set }) => html`<div class="stack">
       <label class="stack">New owner<${Select} id="loop-transfer-user" aria-label="New owner" value=${v.user} onChange=${user => set({ user })} none="Choose a user…" options=${current.users} /></label>
-      <label class="stack">Loop name for the new owner<input id="loop-transfer-to" value=${v.to} maxlength="60" autocomplete="off" required onInput=${e => set({ to: e.currentTarget.value })} /></label>
-      <p>Files, results, full run history, caches and loop variables (including secrets) move to the new owner. Your account's model keys and agent logins stay with your account.</p>
-      <p>${keep ? "Sharing and other admin settings are cleared. Choose below whether to keep the mount, sandbox and network overrides. The recipient uses their own account settings; the former owner loses access unless it is shared back. Admins retain access."
-        : "Sharing and admin overrides are cleared, including special mounts and sandbox exemptions. The new owner uses their own account settings and the server's sandbox defaults. You lose access unless they share it back; admins retain access."}</p>
+      <label class="stack">Loop name<input id="loop-transfer-to" value=${v.to} maxlength="60" autocomplete="off" required onInput=${e => set({ to: e.currentTarget.value })} /></label>
+      <p>Files, results, history, caches and loop variables (secrets too) move. Your model keys and agent logins stay with you.</p>
+      <p>${keep ? "Sharing and other admin settings are cleared; keep the overrides below if needed. You lose access unless it is shared back."
+        : "Sharing and admin overrides are cleared. You lose access unless it is shared back."}</p>
       <${PermissionChoice} settings=${current.permissions} id="transfer-keep-permissions" keep=${v.keep_permissions} set=${on => set({ keep_permissions: on })} /></div>`,
       [["Cancel", null], ["Transfer", v => ({ ...v, to: v.to.trim() }), "primary"]], { user: "", to: name, keep_permissions: false });
     if (!got) return;
@@ -82,7 +82,7 @@ function Ownership({ plan }) {
     toast(`${name} transferred to ${moved.owner}`, "ok");
     location.hash = me.role === "admin" ? `#/u/${enc(moved.owner)}/app/${enc(moved.name)}/settings` : "#/";
   };
-  return html`<${Card} title="Name & ownership" cls="loop-ownership"><p class="muted">${`Owned by ${info.owner}. Stop the loop and its agents before renaming or transferring it.`}</p>
+  return html`<${Card} title="Name & ownership" cls="loop-ownership"><p class="muted">${`Owned by ${info.owner}. Stop it to rename or transfer.`}</p>
     <div class="form-actions"><${Act} cls="small" id="loop-rename" disabled=${running} onClick=${rename}>Rename…<//>
       <${Act} cls="small" id="loop-transfer" disabled=${running || !plan.users.length} onClick=${transfer}>Transfer…<//></div><//>`;
 }
@@ -93,10 +93,10 @@ function LoopMaintenance({ mt }) {
   const { name } = ctx, running = !!ctx.st.running;
   const [last, setLast] = useState(() => Object.fromEntries(mt.tasks.map(t => [t.key, t.last])));
   const run = async t => { const got = await loopApi(name).api(`/maintenance/${t.key}`, { method: "POST" }); setLast(x => ({ ...x, [t.key]: got })); toast(`${t.title}: ${got.said}`, got.ok ? "ok" : "bad"); };
-  return html`<${Card} title="Maintenance"><p class="muted">${running ? "Stop the loop first: a running loop is never touched." : "Run on this loop now; the admin's schedule runs them on every loop."}</p>
-    <${Table} cls="list compact mt-table" heads=${["Task", "Last run on this loop", ""]}>
+  return html`<${Card} title="Maintenance"><p class="muted">${running ? "Stop the loop first." : "Run now; the admin's schedule runs them on every loop."}</p>
+    <${Table} cls="list compact mt-table" heads=${["Task", "Last run", ""]}>
       ${mt.tasks.map(t => { const x = last[t.key]; return html`<tr><td data-label="Task" title=${t.what}><strong>${t.title}</strong></td>
-        <td data-label="Last run on this loop" class="mt-said">${x ? html`<span class=${x.ok ? "" : "bad"} title=${x.said}><${Ago} t=${x.t} />${` · ${x.said}`}</span>` : html`<span class="muted">never</span>`}</td>
+        <td data-label="Last run" class="mt-said">${x ? html`<span class=${x.ok ? "" : "bad"} title=${x.said}><${Ago} t=${x.t} />${` · ${x.said}`}</span>` : html`<span class="muted">never</span>`}</td>
         <td class="right mt-acts"><${Act} cls="small" disabled=${running} onClick=${() => run(t)}>Run<//></td></tr>`; })}<//><//>`;
 }
 
@@ -104,13 +104,13 @@ function LoopMaintenance({ mt }) {
 function ResetForm({ plan, v, set }) {
   const keep = v.keep;
   const removed = plan.folders.filter(f => !keep.includes(f.key));
-  return html`<div class="stack"><${Notice} tone="bad" what="It cannot be undone" why="the folders listed below are removed for good" />
+  return html`<div class="stack"><${Notice} tone="bad" what="Cannot be undone:" why="the folders below are removed" />
     <h3>Keep</h3><div class="stack">${plan.keep_options.map(o => html`<label key=${o.key} class="check"><input type="checkbox" data-reset-keep=${o.key}
       checked=${keep.includes(o.key)} onChange=${e => set({ keep: e.currentTarget.checked ? [...keep, o.key] : keep.filter(x => x !== o.key) })} />${o.label}</label>`)}</div>
-    <p>These folders and everything inside them will be removed:</p>
-    <ul class="reset-folders">${removed.length ? removed.map(f => html`<li key=${f.path}><code>${f.path}</code><div class="muted small">${f.what}</div></li>`) : html`<li class="muted">No folders will be removed.</li>`}</ul>
-    <p>${keep.includes("history") ? "Results, logs and saved run history stay. The last check status will be cleared." : plan.history + " will also be cleared."}</p>
-    <p class="hint">Your problem document, source files, library, settings and sharing stay. Stop any running agents first.</p></div>`;
+    <p>Removed:</p>
+    <ul class="reset-folders">${removed.length ? removed.map(f => html`<li key=${f.path}><code>${f.path}</code><div class="muted small">${f.what}</div></li>`) : html`<li class="muted">Nothing.</li>`}</ul>
+    <p>${keep.includes("history") ? "Results, logs and history stay; the last check is cleared." : plan.history + " will also be cleared."}</p>
+    <p class="hint">Problem document, source files, library, settings and sharing stay.</p></div>`;
 }
 function Danger() {
   const ctx = useLoop();
@@ -123,10 +123,10 @@ function Danger() {
     toast(`${name} reset`, "ok"); route();
   };
   const remove = async () => {
-    if (!await confirmDialog(`Delete ${name}?`, ["It cannot be undone", "its document, files, record and log go"], { ok: "Delete", danger: true })) return;
+    if (!await confirmDialog(`Delete ${name}?`, ["Cannot be undone", "its document, files, record and log go"], { ok: "Delete", danger: true })) return;
     await loopApi(name).api("", { method: "DELETE" }); toast(`${name} deleted`, "ok"); location.hash = "#/";
   };
-  return html`<${Card} title="Reset or delete this loop" cls="danger-card"><p class="muted">Reset clears generated data; choose what to keep in the confirmation. Source files, settings and sharing stay. Delete removes the entire loop. Both are permanent.</p>
+  return html`<${Card} title="Reset or delete" cls="danger-card"><p class="muted">Reset clears generated data (you choose what to keep). Delete removes the whole loop. Both are permanent.</p>
     <div class="form-actions">${ctx.st.running ? html`<span class="muted">Stop it first.</span>` : html`<${Act} cls="danger" onClick=${reset}>Reset<//><${Act} cls="danger" onClick=${remove}>Delete<//>`}</div><//>`;
 }
 

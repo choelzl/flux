@@ -21,7 +21,7 @@ import { Select } from "../components/Select.js";
 import { Tabs } from "../components/Tabs.js";
 import { recallJson, remember } from "../stored.js";
 
-const MODES = { configurator: "Configurator", upload: "Create or upload", edit: "Direct edit", agent: "Agent", clone: "Clone a loop" };
+const MODES = { configurator: "Configurator", upload: "Create or upload", edit: "Direct edit", agent: "Agent", clone: "Clone" };
 export const modesOf = name => name ? ["configurator", "edit", "agent"] : ["upload", "configurator", "agent", "clone"];
 
 // ---- D912: the one creation draft -- the configurator's state and step, the files staged with it
@@ -43,16 +43,16 @@ function draftUsed(d) {
 
 /** D913b: the preflight's check as Review's line -- [kind, words]. */
 function checkedOf(pre) {
-  if (!pre) return ["note", "reading the loop's last check…"];
-  if (pre.checked && pre.ok === true) return ["ok", `passed on the saved files as they are (${when(pre.when)})`];
-  if (pre.checked && pre.ok === false) return ["error", `failed on the saved files as they are (${when(pre.when)}): Check shows why`];
-  return ["note", pre.when ? `not on the files as they are now (the last check: ${when(pre.when)}); Check runs it` : "not checked yet: Check runs it where it will run"];
+  if (!pre) return ["note", "reading the last check…"];
+  if (pre.checked && pre.ok === true) return ["ok", `passed on saved files (${when(pre.when)})`];
+  if (pre.checked && pre.ok === false) return ["error", `failed on saved files (${when(pre.when)}): see Check`];
+  return ["note", pre.when ? `not on current files (last: ${when(pre.when)})` : "not checked yet"];
 }
 
 /** Save's folded Changes (D941) and the save (D693): what it changes, line by line, before it writes. */
 const changesOf = (name, kept) => async yaml => {
   const p = await loopApi(name).api("/document/preview", { method: "POST", body: { text: yaml, kept } });
-  if (p.before === p.after) return html`<p class="muted">No change: the document already says this.</p>`;
+  if (p.before === p.after) return html`<p class="muted">No change.</p>`;
   const ops = lineDiff(p.before, p.after), n = diffCounts(ops);
   return html`<p class="muted small">${`${plural(n.added, "line")} added, ${n.removed} removed.`}</p><${Diff} ops=${ops} />`;
 };
@@ -80,19 +80,19 @@ function ConfigureLoop({ M, name, owner }) {
     return () => { live = false; };
   }, [name]);
   if (problem === "none") return html`<${Card}><${Empty} text="No problem document yet." /><//>`;
-  if (problem) return html`<${Card}><${Notice} tone="bad" what="The loader refuses the document as it stands:" why=${problem} />
+  if (problem) return html`<${Card}><${Notice} tone="bad" what="The document does not load:" why=${problem} />
     <p class="muted">The configurator cannot read it. Fix it in <a href=${`${appHref(owner, name)}/settings/problem/edit`}>Direct edit</a>.</p><//>`;
   if (!doc) return html`<${Card}><${Skeleton} lines=${6} /><//>`;
   const got = ref.current.got;
   const save = async yaml => {
     const p = await loopApi(name).api("/document/preview", { method: "POST", body: { text: yaml, kept: got.kept } });
-    if (p.before === p.after) { toast("Nothing changes: the document already says this.", "info"); return "No change."; }
+    if (p.before === p.after) { toast("No change.", "info"); return "No change."; }
     if (!await confirmDiff(p.document, p.before, p.after)) return "Not saved.";
     const r = await loopApi(name).api("/document", { method: "PUT", body: { text: yaml, kept: got.kept } });
     toast(r.ok, r.error ? "warn" : "ok"); store.draw(); readCheck(); return r.ok;
   };
-  return html`<p class="muted small doc-line"><span class="mono">${doc.document}</span>${" · saving drops its comments" + (got.kept.length ? "; what the form does not edit is kept as written" : "")}</p>
-    ${doc.error ? html`<${Notice} tone="bad" what="The loader refuses the document as it stands:" why=${doc.error} />` : ""}
+  return html`<p class="muted small doc-line"><span class="mono">${doc.document}</span>${" · saving drops comments" + (got.kept.length ? "; the rest is kept as written" : "")}</p>
+    ${doc.error ? html`<${Notice} tone="bad" what="The document does not load:" why=${doc.error} />` : ""}
     <${Configurator} M=${M} state=${got.state} step=${stepOfHash() || "prompt"} onStep=${stepToHash} notes=${got.notes} saveLabel=${"Save to " + doc.document}
       save=${save} checked=${() => checkedOf(pre)} changes=${changesOf(name, got.kept)} store=${store} onChange=${store.watch} />`;
 }
@@ -121,11 +121,11 @@ function ConfigureNew({ M, draft, onDraft }) {
   };
   const saveDraft = (state, step) => {
     remember(draftKey(), { state, step });
-    return draft.staged.size ? "Draft saved in this browser (its staged files stay with this page)." : "Draft saved in this browser.";
+    return draft.staged.size ? "Draft saved in this browser (staged files stay with this page)." : "Draft saved in this browser.";
   };
   return html`<${Configurator} M=${M} state=${draft.state} step=${stepOfHash() || draft.step} onStep=${id => { draft.step = id; stepToHash(id); }}
     touched=${draftUsed(draft)} calm isNew extra=${extra} saveDraft=${saveDraft} save=${save} saveLabel="Create loop"
-    checked=${() => ["note", "not checked yet: once created, Check runs it where it will run"]} store=${store} onChange=${() => { store.watch(); onDraft(); }}
+    checked=${() => ["note", "not checked yet"]} store=${store} onChange=${() => { store.watch(); onDraft(); }}
     nameLabel="Loop name" namePlaceholder="my_loop" />`;
 }
 
@@ -133,8 +133,8 @@ function ConfigureNew({ M, draft, onDraft }) {
 function DraftLine({ draft, discard }) {
   if (!draft || !draftUsed(draft)) return html`<div class="draft-line muted small" />`;
   const s = draft.state || {};
-  return html`<div class="draft-line muted small">${`Draft kept across the ways: ${String(s.id || "").trim() || "unnamed"}`}${draft.staged.size ? ` · ${plural(draft.staged.size, "file")} staged` : ""} ·
-    <button type="button" class="link" onClick=${discard}>Discard the draft</button></div>`;
+  return html`<div class="draft-line muted small">${`Draft: ${String(s.id || "").trim() || "unnamed"}`}${draft.staged.size ? ` · ${plural(draft.staged.size, "file")} staged` : ""} ·
+    <button type="button" class="link" onClick=${discard}>Discard draft</button></div>`;
 }
 
 /** The ways' tabs (`small`: as sub-tabs) and, on a phone, one compact menu (D913). */
@@ -147,7 +147,7 @@ export function Configure({ name, owner, mode, pick, tabs = true }) {
   const draft = name ? null : currentDraft(), [gen, setGen] = useState(0), [, redraw] = useState(0);
   const onDraft = () => redraw(n => n + 1);
   const discard = async () => {
-    if (!await confirmDialog("Discard the draft?", ["The draft goes", "its name, statement, checks, measurements and staged files"], { ok: "Discard", danger: true })) return;
+    if (!await confirmDialog("Discard draft?", ["The draft is lost:", "name, statement, checks, measurements and staged files"], { ok: "Discard", danger: true })) return;
     Object.assign(draft, newDraft()); forgetDraft(); setGen(g => g + 1);
   };
   const M = useModel();                                   // the model first: an agent's draft starts from it too

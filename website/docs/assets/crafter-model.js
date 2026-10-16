@@ -19,7 +19,7 @@
   var DSE_POLICIES = ["sweep", "montecarlo", "anneal", "gradient", "genetic", "pareto"];
   var DSE_INTENTS = ["adaptive", "explore", "improve", "tune", "finetune", "variations"];
   // These groups filter the UI; the document still has one search choice.
-  var DSE_GROUPS = [["preferences", "Exploration and tuning"], ["algorithms", "Search algorithms"], ["delegated", "Model or agent"]];
+  var DSE_GROUPS = [["preferences", "Guidance"], ["algorithms", "Algorithms"], ["delegated", "AI"]];
   function dseGroup(value) {
     if (value === "none" || DSE_INTENTS.indexOf(value) >= 0) return "preferences";
     return DSE_POLICIES.indexOf(value) >= 0 ? "algorithms" : "delegated";
@@ -27,27 +27,29 @@
   function dseChoices(group, current) {
     var choices = BOXES.dse.choices.filter(function (c) { return dseGroup(c.value) === group; });
     if (current && dseGroup(current) === group && !choiceOf("dse", current)) {
-      choices.push({ value: current, label: "Custom agent settings (kept as written)", half: "agent" });
+      choices.push({ value: current, label: "Own agent settings (as written)", half: "agent" });
     }
     return choices;
   }
   function dseHint(state) {
     var value = state.flow.dse, group = dseGroup(value), space = parameterSearch(state);
-    if (value === "none") return "Adaptive guidance by default: choose local improvements or a new approach from the evidence. Select a policy to search settings defined in Extra.";
-    if (group === "preferences") return space
-      ? "A configured model proposes legal settings using this emphasis and the measured history. No model means no model-proposed points."
-      : "Guides the orchestrator's next experiment and the design, repair and prototype prompts. Reasoned risks remain allowed; checks and objectives still apply.";
-    if (group === "delegated") return (value === "model" ? "Requires a configured model connection. " : "Requires the selected agent to be installed and configured. ") + (space
-      ? "Proposes legal points from the settings in Extra and the measured history; checks and measurements judge them."
-      : "Chooses the next job and search direction. The Make a design setting separately chooses who writes the design.");
+    if (value === "none") return "Adaptive: local improvements or a new approach, from the evidence. Pick a policy to search the settings in Extra.";
+    if (group === "preferences") return INTENT_SAYS[value] + (space
+      ? " The model proposes legal settings from it and the measured history."
+      : " Guides the next experiment and the design, repair and prototype prompts.");
+    if (group === "delegated") return (value === "model" ? "Needs a model connection. " : "Needs the agent installed and set up. ") + (space
+      ? "Proposes points from the settings in Extra; checks and measurements judge them."
+      : "Chooses the next job and direction; Design chooses who writes it.");
     var how = { sweep: "Enumerates every distinct combination.", montecarlo: "Samples distinct random points.",
       anneal: "Tries neighboring points, sometimes accepting a worse point as the temperature cools.",
       gradient: "Uses coordinate descent over neighboring choices, rather than calculating derivatives.",
       genetic: "Evolves a population by selection, crossover and mutation.",
       pareto: "Explores trade-offs using a Pareto tree; the algorithm needs at least two objectives." }[value];
-    return how + (space ? " Runs over the settings in Extra; checks and measurements judge each point."
-      : " Without settings in Extra, this guides reasoning and prompts; it does not run a finite-space search algorithm.");
+    return how + (space ? " Runs over the settings in Extra." : " Without settings in Extra, it only guides the prompts: no search runs.");
   }
+  var INTENT_SAYS = { adaptive: "Follows the evidence, takes reasoned risks.", explore: "Tries different algorithms or architectures.",
+    improve: "Local or structural changes.", tune: "Favors nearby parameter and implementation changes.",
+    finetune: "Favors small, attributable changes.", variations: "Develops distinct alternatives." };
   /** boxes.py: the boxes a coding agent may answer, and the ones that never are. */
   var DELEGABLE = ["validate", "orchestrate", "plan", "dse", "generate", "critique", "lessons", "select"];
   var NEVER = ["test", "calibrate"];
@@ -66,7 +68,7 @@
   var AGENT_LABELS = {};
   function agentChoices(what) {
     return AGENTS.map(function (a) {
-      return { value: "agent:" + a, half: "agent", label: "Coding agent: " + (AGENT_LABELS[a] ? AGENT_LABELS[a] + " (" + a + ")" : a), hint: what };
+      return { value: "agent:" + a, half: "agent", label: "Agent: " + (AGENT_LABELS[a] ? AGENT_LABELS[a] + " (" + a + ")" : a), hint: what };
     });
   }
   /** D934: the server's agents ([{name, label}], the built-in three and those an admin added):
@@ -97,78 +99,74 @@
   /** Each box of the drawing: a plain line, its choices (the first is the default, never
       written), and each choice's half: rules, model, agent or fixed. */
   var BOXES = {
-    validate: { title: "Validate", says: "Before anything runs, the document is read for mistakes.",
-      choices: [{ value: "rules", half: "rules", label: "Built-in checks" },
-                { value: "model", half: "model", label: "Built-in checks, then a model reads it and objects" }]
-        .concat(agentChoices("A coding agent reads the document and objects")) },
-    orchestrate: { title: "Search", says: "Decides what to try next.",
-      choices: [{ value: "default", half: "model", label: "Standard: the model picks the next part, rules pick the kind of work" },
-                { value: "rules", half: "rules", label: "Rules only" },
-                { value: "model", half: "model", label: "A model picks" },
-                { value: "tools", half: "model", label: "A model with tools picks" }]
-        .concat(agentChoices("A coding agent picks"))
+    validate: { title: "Validate", says: "Reads the document for mistakes before anything runs.",
+      choices: [{ value: "rules", half: "rules", label: "Built-in" },
+                { value: "model", half: "model", label: "Built-in, then model review" }]
+        .concat(agentChoices("Agent reviews the document")) },
+    orchestrate: { title: "Search", says: "Decides what to try next. Standard: the model picks the next part, rules pick the kind of work.",
+      choices: [{ value: "default", half: "model", label: "Standard" },
+                { value: "rules", half: "rules", label: "Rules" },
+                { value: "model", half: "model", label: "Model" },
+                { value: "tools", half: "model", label: "Model with tools" }]
+        .concat(agentChoices("Agent picks"))
         // D799: a search a script runs -- it answers each round with the next candidates
-        .concat([{ value: "command", half: "rules", label: "My script picks the next designs (a search command)" }]) },
-    plan: { title: "Plan", says: "Optionally writes a plan for the round before any work starts.",
-      choices: [{ value: "off", half: "rules", label: "No plan: step by step" },
-                { value: "model", half: "model", label: "A model writes the plan" }]
-        .concat(agentChoices("A coding agent writes the plan")) },
-    dse: { title: "Search policy", says: "Guides design and prototype experiments. With settings to search, existing algorithms still walk that space. Reasoned risks are allowed by default.",
-      choices: [{ value: "none", half: "model", label: "Default: adaptive, reasoned risks welcome" }]
+        .concat([{ value: "command", half: "rules", label: "Script" }]) },
+    plan: { title: "Plan", says: "Optionally plans the round before work starts.",
+      choices: [{ value: "off", half: "rules", label: "Off" },
+                { value: "model", half: "model", label: "Model" }]
+        .concat(agentChoices("Agent writes the plan")) },
+    dse: { title: "Search policy", says: "Guides the experiments. With settings to search, an algorithm walks that space.",
+      choices: [{ value: "none", half: "model", label: "Default (adaptive)" }]
         .concat(DSE_INTENTS.map(function (p) {
-          return { value: p, half: "model", label: { adaptive: "Adaptive: follow the evidence, take reasoned risks",
-            explore: "Explore: try different algorithms or architectures", improve: "Improve: local or structural changes",
-            tune: "Tune: favor nearby parameter and implementation changes", finetune: "Finetune: favor small, attributable changes",
-            variations: "Variations: develop distinct alternatives" }[p] };
+          return { value: p, half: "model", label: { adaptive: "Adaptive", explore: "Explore", improve: "Improve", tune: "Tune", finetune: "Finetune", variations: "Variations" }[p] };
         }))
         .concat(DSE_POLICIES.map(function (p) {
-          return { value: p, half: "rules", label: { sweep: "Try every combination", montecarlo: "Random samples",
-            anneal: "Annealing", gradient: "Step towards better", genetic: "Genetic (breed the best)",
-            pareto: "Trade-off front" }[p] + " (" + p + ")" };
+          return { value: p, half: "rules", label: { sweep: "Sweep", montecarlo: "Monte Carlo", anneal: "Annealing", gradient: "Gradient", genetic: "Genetic",
+            pareto: "Pareto front" }[p] };
         }))
-        .concat([{ value: "model", half: "model", label: "Model: choose the next experiment" }])
-        .concat(agentChoices("A coding agent proposes settings")) },
+        .concat([{ value: "model", half: "model", label: "Model" }])
+        .concat(agentChoices("Agent proposes settings")) },
     generate: { title: "Design", says: "Writes each candidate design.",
-      choices: [{ value: "model", half: "model", label: "A model writes it" },
-                { value: "command", half: "rules", label: "My script writes it" }]
-        .concat(agentChoices("A coding agent writes it"))
-        .concat([{ value: "catalog", half: "rules", label: "Designs I already have, one file each" }]) },
-    test: { title: "Check", says: "Runs your checks in order; a design that fails goes back to be repaired. Always yours, never a model's.",
+      choices: [{ value: "model", half: "model", label: "Model" },
+                { value: "command", half: "rules", label: "Script" }]
+        .concat(agentChoices("Agent writes it"))
+        .concat([{ value: "catalog", half: "rules", label: "Existing designs" }]) },
+    test: { title: "Check", says: "Runs the checks in order; a failing design goes back for repair.",
       fixed: "Configured in Check & Measure: its checks.",
-      choices: [{ value: "gate", half: "fixed", label: "Your checks (fixed)" }] },
-    critique: { title: "Critic", says: "Optionally, a critic judges the split, each design the checks passed and the final choice: a rejected design fails with its note, a rejected pick is never chosen.",
-      choices: [{ value: "off", half: "off", label: "No critic" },
-                { value: "model", half: "model", label: "A model critic" }]
-        .concat(agentChoices("A coding agent critic")) },
-    measure: { title: "Measure", says: "Runs your measurements, cheapest first; a design that fails a gate is dropped.",
-      fixed: "Configured in Check & Measure: its measurements (each may estimate first).",
-      choices: [{ value: "stages", half: "fixed", label: "Your measurements (fixed)" }] },
+      choices: [{ value: "gate", half: "fixed", label: "Checks (fixed)" }] },
+    critique: { title: "Critic", says: "Optionally judges the split, each passing design and the pick: a rejected design fails, a rejected pick is never chosen.",
+      choices: [{ value: "off", half: "off", label: "Off" },
+                { value: "model", half: "model", label: "Model" }]
+        .concat(agentChoices("Agent critic")) },
+    measure: { title: "Measure", says: "Runs the measurements, cheapest first; a design that misses a cutoff is dropped.",
+      fixed: "Configured in Check & Measure.",
+      choices: [{ value: "stages", half: "fixed", label: "Measurements (fixed)" }] },
     calibrate: { title: "Calibrate", says: "Checks how well the cheap measurement predicts the costly one.",
       choices: [{ value: "on", half: "rules", label: "On" }, { value: "off", half: "off", label: "Off" }] },
-    select: { title: "Choose", says: "Picks the winner by your goals.",
-      choices: [{ value: "objectives", half: "rules", label: "By the goals" }]
-        .concat(agentChoices("By the goals; a coding agent breaks ties")) },
+    select: { title: "Choose", says: "Picks the winner by the goals.",
+      choices: [{ value: "objectives", half: "rules", label: "Goals" }]
+        .concat(agentChoices("Goals; agent breaks ties")) },
     feedback: { title: "Notes", says: "Notes you type while it runs steer the next round.",
-      choices: [{ value: "human", half: "rules", label: "Take my notes" }, { value: "off", half: "off", label: "No notes" }] },
+      choices: [{ value: "human", half: "rules", label: "Notes" }, { value: "off", half: "off", label: "Off" }] },
     knowledge: { title: "Knowledge", says: "What the model reads with every request.",
-      choices: [{ value: "default", half: "rules", label: "The library (on), and the files I list" },
-                { value: "none", half: "off", label: "None: no library" }] },
+      choices: [{ value: "default", half: "rules", label: "Library and listed files" },
+                { value: "none", half: "off", label: "Off" }] },
     // D784, D791: who sums the papers up, once each, in each pass's Setup -- always, while the
     // library is on; not a flow key of its own: an agent is written as flow.knowledge.agent
-    digest: { title: "Digest papers", says: "Each paper of the library (library/ beside the document, and the shared one) is summed up once; the summaries reach every prompt.",
-      choices: [{ value: "model", half: "model", label: "The model sums up each paper" }]
-        .concat(agentChoices("A coding agent reads each paper (its tables and figures too) and sums it up")) },
+    digest: { title: "Digest papers", says: "Sums up each library paper (library/ and the shared one) once, for every prompt.",
+      choices: [{ value: "model", half: "model", label: "Model" }]
+        .concat(agentChoices("Agent reads each paper, figures too")) },
     // D796: the record's lessons, written into flow.knowledge as `lessons:` -- not a flow key of its own
-    lessons: { title: "Lessons", says: "Optionally turns past results into lessons for the next round, read with the library.",
-      choices: [{ value: "off", half: "off", label: "No lessons" },
-                { value: "mined", half: "rules", label: "Lessons mined from the results" }]
-        .concat(agentChoices("A coding agent writes lessons from the results")) },
-    records: { title: "Record", says: "Every design, measurement and refusal is kept, and read back when you resume.",
-      fixed: "Always on: every design, measurement and refusal is kept.",
+    lessons: { title: "Lessons", says: "Optionally turns past results into lessons for the next round.",
+      choices: [{ value: "off", half: "off", label: "Off" },
+                { value: "mined", half: "rules", label: "Mined" }]
+        .concat(agentChoices("Agent writes lessons")) },
+    records: { title: "Record", says: "Keeps every design, measurement and refusal; read back on resume.",
+      fixed: "Always on.",
       choices: [{ value: "on", half: "fixed", label: "On (fixed)" }] },
   };
 
-  var HALVES = { rules: "rules", model: "a model", agent: "a coding agent", fixed: "fixed", off: "off" };
+  var HALVES = { rules: "rules", model: "model", agent: "agent", fixed: "fixed", off: "off" };
 
   function defaultFlow() {
     var out = {};
@@ -814,6 +812,9 @@
     if (kf["flow.dse.seeds"] !== undefined) D.push("    seeds: " + inline(kf["flow.dse.seeds"], false));
     if (D.length) {
       F.push("  orchestrate:                # a search: the points it tries (D797)");
+      if (dv && typeof dv === "object" && !Array.isArray(dv) && dv.policy === "model" && Object.keys(dv).length > 1) {   // D1135: a model's options
+        dv = Object.assign({ by: "model" }, dv); delete dv.policy;
+      }
       if (dv && typeof dv === "object" && !Array.isArray(dv)) Object.keys(dv).forEach(function (k) { F.push("    " + q(k) + ": " + inline(dv[k], false)); });
       else if (dv !== undefined) F.push("    policy: " + inline(dv, false));
       F = F.concat(D);
@@ -875,13 +876,16 @@
 
     // knowledge: what is read, and who digests it
     if (!own("flow.knowledge")) { if (kf["flow.knowledge"] !== undefined) F.push("  knowledge: " + inline(kf["flow.knowledge"], false)); }
+    else if (boxesKept && kb.knowledge !== undefined) F.push("  knowledge: " + inline(kb.knowledge, false));   // D1135: kept with the flow
     else {
       var kv = boxVal("knowledge"), K = {}, kfiles = list(state.knowledgeFiles);
       if (kfiles.length) K.files = kfiles;
       var dg = (state.flow || {}).digest;                  // D784, D791: the Digest box -- the model unless an agent
       if (typeof dg === "string" && dg.indexOf("agent:") === 0) K.digest = dg.slice(6);      // D830: by name, as every box
-      var ls = (state.flow || {}).lessons;                 // D796: the Learn box
-      if (ls && ls !== "off") K.lessons = typeof ls === "string" && ls.indexOf("agent:") === 0 ? ls.slice(6) : ls;
+      var ls = (state.flow || {}).lessons, lr = (state.agentRaw || {}).lessons;   // D796: the Learn box
+      var lrName = lr && lr.agent && typeof lr.agent === "object" ? lr.agent.preset : null;
+      if (ls && ls !== "off") K.lessons = lr && (ls === INLINE_AGENT || (lrName && ls === "agent:" + lrName)) ? toSurface("lessons", lr)   // D1135: its own settings kept
+        : typeof ls === "string" && ls.indexOf("agent:") === 0 ? ls.slice(6) : ls;
       if (kv === "none" || kv === "off") K = K.lessons ? { off: true, lessons: K.lessons } : { off: true };
       if (Object.keys(K).length === 1 && K.off) F.push("  knowledge: off");
       else if (Object.keys(K).length) F.push("  knowledge: " + inline(K, false));
@@ -906,7 +910,10 @@
       CRITIC_BOXES.forEach(function (bx) {
         var v = cs[bx];
         if (v === "off") return;
-        var val = v === INLINE_AGENT ? (state.agentRaw || {}).critique : typeof v === "string" && v.indexOf("agent:") === 0 ? { agent: v.slice(6) } : v;
+        var cr = (state.criticRaw || {})[bx];                // D1135: a critic agent's own settings, kept while it is chosen
+        var val = v === INLINE_AGENT ? (state.agentRaw || {}).critique
+          : cr && v === "agent:" + cr.agent.preset ? cr
+          : typeof v === "string" && v.indexOf("agent:") === 0 ? { agent: v.slice(6) } : v;
         F = withCritic(F, bx, inline(toSurface("critique", val), false));
       });
     }
@@ -1162,13 +1169,13 @@
     if (searching && flow.dse === "pareto" && r.objectives.length < 2) error("The trade-off front (pareto) needs two objectives or more.");
     if (state.budget.exploration_quota && !(Number(state.budget.exploration_quota) >= 0 && Number(state.budget.exploration_quota) <= 1)) error("Exploration quota must be a fraction between 0 and 1.");
     if (!searching && knobs.length) warn("The settings are only searched when a search policy is selected.");
-    if (searching && flow.orchestrate && flow.orchestrate !== "default") warn("With a search, the search picks the next job; \"Pick the next job\" is left out.");
+    if (searching && flow.orchestrate && flow.orchestrate !== "default") warn("With a search, the search picks the next job; the Search box's choice is left out.");
     if (flow.generate === "command" && !String(state.generateCommand || "").trim()) error("Say the command that writes each design.");
     if (flow.generate === "catalog" && !list(state.generateCatalog).length) error("Name the designs you already have (their files, separated by commas).");
     if (flow.orchestrate === "command") {
       if (!String(state.orchestrateCommand || "").trim()) error("Say the search command that picks the next designs.");
       if (state.orchestrateTimeout && !(num(state.orchestrateTimeout) > 0)) error("The search command's time limit should be a number of seconds.");
-      if (searching) error("A search command and a search over settings both pick the next designs: keep one (Graph › Orchestrate, or Extra › Settings to search).");
+      if (searching) error("A search command and a search over settings both pick the next designs: keep one (Graph › Search, or Extra › Settings to search).");
     }
     var crits = criticsOf(state);
     CRITIC_BOXES.forEach(function (b) {
@@ -1196,9 +1203,9 @@
     // once per point); a model or a coding agent is never asked, so the drawing does not say one
     at = STEP_OF.flow;
     if (searching && knobs.length && flow.generate !== "command" && flow.generate !== "catalog") {
-      if (!knobsSaid) error("A search's settings become designs only through a script: in \"Make a design\" choose \"My script writes it\" and say {" +
-                            knobs[0] + "} in it, or use {" + knobs[0] + "} in a check or a measurement. A model or a coding agent is not asked for a search's points.");
-      else note("A parameter-only search: each point's settings reach your commands as {" + knobs[0] + "}; no design is written, \"Make a design\" does not run.");
+      if (!knobsSaid) error("A search's settings become designs only through a script: in Graph › Design choose Script and say {" +
+                            knobs[0] + "} in it, or use {" + knobs[0] + "} in a check or a measurement.");
+      else note("A parameter-only search: each point's settings reach your commands as {" + knobs[0] + "}; no design is written, Design does not run.");
     }
 
     at = STEP_OF.more;
@@ -1376,7 +1383,10 @@
       var d = Object.assign({}, f.dse);
       if ("space" in d) { out.space = d.space; delete d.space; }
       if ("seeds" in d) { out.seeds = d.seeds; delete d.seeds; }
-      if ("policy" in d) f.dse = d.policy; else if (Object.keys(d).length) f.dse = d; else delete f.dse;
+      if ("policy" in d) {                                // D1135: a policy with options keeps them (the flow then kept as written)
+        var pol = d.policy; delete d.policy;
+        f.dse = Object.keys(d).length ? Object.assign({ policy: pol }, d) : pol;
+      } else if (Object.keys(d).length) f.dse = d; else delete f.dse;
     }
     if (f.knowledge && typeof f.knowledge === "object" && !Array.isArray(f.knowledge) && "lessons" in f.knowledge) {
       f.lessons = toInner("lessons", f.knowledge.lessons);                  // D796: the Learn box
@@ -1566,6 +1576,10 @@
         if (c === undefined || c === null || c === false || c === "off" || c === "none") s.critics[b] = "off";
         else if (typeof c === "string" && choiceOf("critique", c)) s.critics[b] = c;
         else if (c && typeof c === "object" && typeof c.agent === "string" && choiceOf("critique", "agent:" + c.agent)) s.critics[b] = "agent:" + c.agent;
+        else if (c && typeof c === "object" && c.agent && typeof c.agent === "object" && typeof c.agent.preset === "string"
+                 && choiceOf("critique", "agent:" + c.agent.preset)) {          // D1135: an agent with its own settings
+          s.critics[b] = "agent:" + c.agent.preset; (s.criticRaw = s.criticRaw || {})[b] = c;
+        }
         else s.critics[b] = s.flow.critique;
       });
     }

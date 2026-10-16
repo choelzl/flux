@@ -5,7 +5,7 @@ import { can } from "../state.js";
 import { PageHead } from "../components/PageHead.js";
 import { LoopsBrowser, LoopsTable } from "./Table.js";
 
-export const LoopsPage = ({ loops, shared, group }) => html`<${PageHead} title="Loops" sub="Each loop is a problem document and its files; it runs or it does not, and a start resumes it.">
+export const LoopsPage = ({ loops, shared, group }) => html`<${PageHead} title="Loops">
     ${can("create_loops") ? html`<a class="btn primary" href="#/configure">New loop</a>` : ""}<//>
   <${Card}><${LoopsBrowser} loops=${loops} /><//>
   <${Card} title="Shared with me" hidden=${!shared.length}><div>${shared.length ? html`<${LoopsTable} loops=${shared} who memo="flux-sort-shared" />` : ""}</div><//>

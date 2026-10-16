@@ -11,29 +11,29 @@ import { Select } from "../components/Select.js";
 function StartForm({ name, pre, v, set }) {
   const docs = (pre.documents || []).filter(d => d.ok), [said, setSaid] = useState(null);
   const verdict = (ok, output) => {
-    if (ok) setSaid({ ok: true, text: pre.checked ? `The check passed on these inputs (${when(pre.when)}).` : "The check passes on these inputs." });
-    else setSaid({ ok: false, text: "The check fails: the loop would not get far.", output });
+    if (ok) setSaid({ ok: true, text: pre.checked ? `Check passed (${when(pre.when)}).` : "Check passes." });
+    else setSaid({ ok: false, text: "Check fails: the loop would not get far.", output });
     set({ failing: !ok });
   };
   const check = (why, doc = v.document) => {
     setSaid({ ok: null, text: why });
     set({ checking: true, failing: false });
     const q = docs.length > 1 ? `?document=${enc(doc)}` : "";
-    loopApi(name).api(`/check${q}`, { method: "POST" }).then(r => verdict(r.ok, r.output), x => setSaid({ ok: false, text: "The check could not run: " + x.message }))
+    loopApi(name).api(`/check${q}`, { method: "POST" }).then(r => verdict(r.ok, r.output), x => setSaid({ ok: false, text: "Check could not run: " + x.message }))
       .finally(() => set({ checking: false }));
   };
   useEffect(() => {
     if (pre.checked && pre.ok !== null) verdict(pre.ok, pre.output);
-    else check(pre.changed ? "The inputs changed since the last start: checking them in the sandbox…" : "Checking the inputs in the sandbox…");
+    else check(pre.changed ? "Inputs changed: checking in the sandbox…" : "Checking inputs in the sandbox…");
   }, []);
   return html`<p class="muted">Resumes from its record.</p>
-    ${docs.length > 1 ? html`<label class="stack">${`Which problem (${docs.length} in this loop)`}<${Select} class="start-doc" value=${v.document} onChange=${doc => { set({ document: doc }); check(`Checking ${doc} in the sandbox…`, doc); }}
+    ${docs.length > 1 ? html`<label class="stack">${`Problem (${docs.length})`}<${Select} class="start-doc" value=${v.document} onChange=${doc => { set({ document: doc }); check(`Checking ${doc} in the sandbox…`, doc); }}
       options=${docs.map(d => [d.path, `${d.path} — record ${d.record}`])} /></label>` : ""}
     <div class="preflight">${said ? html`<${Notice} tone=${said.ok === true ? "ok" : said.ok === false ? "bad" : "run"} what=${said.text}>
       ${said.output ? html`<details><summary>Check output</summary><pre class="log small">${said.output}</pre></details>` : ""}<//>` : ""}</div>
     <div class="row"><label class="stack">Passes<input type="number" class="start-passes w-90" min="1" value=${v.passes} disabled=${v.forever} onInput=${e => set({ passes: e.currentTarget.value })} /></label>
       <label class="check"><input type="checkbox" class="start-forever" checked=${v.forever} onChange=${e => set({ forever: e.currentTarget.checked })} />until I stop it</label></div>
-    <label class="check"><input type="checkbox" class="start-screen" checked=${v.screen} onChange=${e => set({ screen: e.currentTarget.checked })} />screen only (skip the costly stages)</label>`;
+    <label class="check"><input type="checkbox" class="start-screen" checked=${v.screen} onChange=${e => set({ screen: e.currentTarget.checked })} />screen only (skip costly stages)</label>`;
 }
 
 /** The dialog for a start's options, then the start; true when it started. */

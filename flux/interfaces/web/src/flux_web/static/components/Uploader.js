@@ -35,7 +35,7 @@ export function placedFiles(rows) {
 }
 
 /** `rows` what was added, `onChange(next)`; `places` false: no destination (they all go where the caller puts them). */
-export function Uploader({ rows, onChange, places = true, label = "Drop files or folders here" }) {
+export function Uploader({ rows, onChange, places = true, label = "Drop files or folders" }) {
   const [over, setOver] = useState(false), depth = useRef(0), n = useRef(0), filesIn = useRef(null), dirIn = useRef(null);
   const add = list => { if (list.length) onChange([...rows, ...rowsOf(list, ++n.current)]); };
   const drop = async e => {
@@ -55,7 +55,7 @@ export function Uploader({ rows, onChange, places = true, label = "Drop files or
       <input type="file" webkitdirectory multiple ref=${dirIn} class="up-input up-folder" tabindex="-1" aria-hidden="true" onChange=${e => { add([...e.currentTarget.files].map(f => ({ file: f, path: f.webkitRelativePath || f.name }))); e.currentTarget.value = ""; }} /></div>
     ${rows.length ? html`<ul class="files flist up-rows">${rows.map(r => html`<li key=${r.key}>
         <span class="mono">${r.label}</span><small class="muted">${r.folder ? plural(r.files.length, "file") : bytes(r.files[0].file.size)}</small>
-        ${r.loop ? html`<small class="muted">the loop itself</small>` : r.zip && places ? html`<small class="muted">unpacked as the loop</small>`
+        ${r.loop ? html`<small class="muted">loop itself</small>` : r.zip && places ? html`<small class="muted">unpacked as loop</small>`
           : places ? html`<span class="up-place"><${Select} aria-label=${`Where ${r.label} goes`} value=${r.dest} options=${PLACES} onChange=${v => set(r, { dest: v })} />
             ${r.dest === "custom" ? html`<input class="narrow-in" aria-label="Folder" placeholder="folder" value=${r.custom} onInput=${e => set(r, { custom: e.currentTarget.value })} />` : ""}</span>` : ""}
         <${Tool} icon="close" danger label=${`Remove ${r.label}`} onClick=${() => onChange(rows.filter(x => x !== r))} /></li>`)}</ul>` : ""}</div>`;

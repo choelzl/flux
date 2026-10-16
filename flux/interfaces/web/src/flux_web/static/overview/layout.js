@@ -25,7 +25,7 @@ async function editOverviewLayout() {
     const save = async layout => {
       saving = true;
       try { await api("/preferences/overview", { method: "PUT", body: layout }); } finally { saving = false; }
-      if (m) { finish(true); toast("Overview layout saved for your account", "ok"); }
+      if (m) { finish(true); toast("Layout saved", "ok"); }
     };
     cleanup.push(cancel);
     m = openModal(html`<${LayoutEditor} prefs=${prefs} example=${overviewMockData()} save=${save} cancel=${cancel} />`,

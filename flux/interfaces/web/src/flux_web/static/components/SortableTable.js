@@ -22,6 +22,6 @@ export function SortableTable({ memo, cols, rows, row, keyOf, first = 0, cls = "
     ${sorted.map(r => { const tr = row(r); if (tr && keyOf) tr.key = keyOf(r); return tr; })}<//>`;
   return html`<div class="sort-strip"><label class="sort">Sort by <${Select} aria-label="Sort by" value=${s.col} onChange=${v => { const i = Number(v); pick(i, !cols[i].asc); }}
         options=${cols.map((c, i) => [i, c.label, c.key]).filter(x => x[2]).map(([i, label]) => [i, label])} /></label>
-      <button type="button" class="small sort-dir" title="Turn the order round" onClick=${() => pick(s.col, !s.desc)}>${s.desc ? "▾ Descending" : "▴ Ascending"}</button></div>
+      <button type="button" class="small sort-dir" title="Reverse order" onClick=${() => pick(s.col, !s.desc)}>${s.desc ? "▾ Descending" : "▴ Ascending"}</button></div>
     ${table}`;
 }

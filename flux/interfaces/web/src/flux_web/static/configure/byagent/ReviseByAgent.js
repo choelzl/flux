@@ -20,9 +20,9 @@ export function ReviseByAgent({ name }) {
   };
   const acts = authorActs(name, ms => poll.soon(ms)), job = st?.ever ? st : null;
   return html`<${Card}><div class="row"><label class="stack">Agent<${AgentPick} id="ag-who" ask onPick=${v => { who.current = v; }} /></label></div>
-      <label class="stack">What should change?<textarea rows="5" id="ag-ask" ref=${ask} value=${text} onInput=${e => setText(e.currentTarget.value)} placeholder="What should change: e.g. measure at 1.2 GHz too, add a check for the carry out, keep everything else." /></label>
-      <h3>Files it should read</h3><${AttachBox} items=${items} onChange=${setItems} />
-      <label class="check"><input type="checkbox" id="ag-ask-me" checked=${askMe} onChange=${e => setAskMe(e.currentTarget.checked)} />Ask me when it is unclear</label>
-      <div class="form-actions"><${Act} cls="primary" disabled=${job?.running} onClick=${revise}>Revise the problem<//></div><//>
+      <label class="stack">What should change?<textarea rows="5" id="ag-ask" ref=${ask} value=${text} onInput=${e => setText(e.currentTarget.value)} placeholder="e.g. measure at 1.2 GHz too, add a check for the carry out, keep everything else." /></label>
+      <h3>Files to read</h3><${AttachBox} items=${items} onChange=${setItems} />
+      <label class="check"><input type="checkbox" id="ag-ask-me" checked=${askMe} onChange=${e => setAskMe(e.currentTarget.checked)} />Ask me when unclear</label>
+      <div class="form-actions"><${Act} cls="primary" disabled=${job?.running} onClick=${revise}>Revise<//></div><//>
     ${job ? html`<${AuthorJob} name=${name} st=${job} onStop=${acts.stop} answer=${acts.answer} />` : ""}`;
 }

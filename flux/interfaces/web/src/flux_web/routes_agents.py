@@ -116,7 +116,7 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
                     reasons.append(why[v["state"]])
         if bad:
             raise HTTPException(409, f"{', '.join(bad)} not set up for {user.name} yet ({'; '.join(dict.fromkeys(reasons))}): "
-                                     f"{user.name}'s Account › My agents and models, the agent's tab: Test connection"
+                                     f"{user.name}'s Account › Agents, the agent's tab: Test"
                                      + (f" (for the loop {loop} when it has variables of its own)" if loop else ""))
 
     def author_agent(author: Any) -> list[str]:
@@ -208,7 +208,7 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
                 got = run_agent_test(u, n, why="daily")
                 if was and not got.get("ok"):
                     store.notify(u.name, f"{registry(store)[n].label}'s daily test failed: your loops wait for it -- "
-                                 "Account › My agents and models, its tab: log in again", "#/account", "warn")
+                                 "Account › Agents, its tab: log in again", "#/account", "warn")
             finally:
                 retesting.discard((u.name, n))
 

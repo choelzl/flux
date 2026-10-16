@@ -17,7 +17,7 @@ import { Tag } from "../components/Tone.js";
 import { Table } from "../components/Table.js";
 
 const PERIODS = [[1, "24 hours"], [7, "7 days"], [30, "30 days"]];
-const TITLE = { failures: "Failures", usage: "Usage", endpoints: "Endpoints and agents" };
+const TITLE = { failures: "Failures", usage: "Usage", endpoints: "Endpoints" };
 // D920: the period Insights counts over, kept here in memory; the browser only remembers it
 let insightsDays = null;
 const period = () => {
@@ -40,16 +40,15 @@ function Failures({ f }) {
   return html`${f.starts.length ? html`<${Table} heads=${["When", "Loop", "Why"]}>
       ${f.starts.slice(0, 20).map(s => html`<tr key=${`${s.when}|${s.user}|${s.app}`}><td class="muted"><${When} t=${s.when} /></td><td><${LoopLink} u=${s.user} a=${s.app} /></td>
         <td class="mono small why-cell">${(s.why || []).slice(-2).join(" · ") || `exit ${s.rc}`}</td></tr>`)}<//>`
-    : html`<${Empty} text="No start failed." />`}
-    ${f.tests.length ? html`<h3>Agent Tests whose latest run failed</h3><${Table} heads=${["User", "Agent", "Step", "Why", "When"]}>
+    : html`<${Empty} text="No failed starts." />`}
+    ${f.tests.length ? html`<h3>Failed agent tests</h3><${Table} heads=${["User", "Agent", "Step", "Why", "When"]}>
       ${f.tests.map(t => html`<tr key=${`${t.user}|${t.agent}|${t.step}|${t.when}`}><td>${t.user}</td><td>${t.agent}</td><td>${t.step}</td><td class="small">${t.why}</td><td class="muted"><${When} t=${t.when} /></td></tr>`)}<//>` : ""}`;
 }
 
 /** D841: turns recorded before a price was set, priced once at today's prices. */
 const reprice = async () => {
-  if (!await confirmDialog("Price past turns?", ["A turn is priced once", "one priced here, or when it was recorded, is never priced again"], { ok: "Price them",
-    hint: "Every turn recorded without a price set is priced at today's prices (the admin's; a user's own only with their own endpoint). "
-      + "Running loops are skipped: price them once they stop." })) return;
+  if (!await confirmDialog("Price past turns?", ["Each turn is priced once", "never again"], { ok: "Price",
+    hint: "Unpriced turns get today's prices (the admin's; a user's own with their own endpoint). Running loops are skipped." })) return;
   const got = await api("/admin/reprice", { method: "POST" });
   toast(`${plural(got.turns, "turn")} in ${plural(got.loops, "loop")} priced: $${got.usd.toFixed(2)}`
     + (got.skipped.length ? `; skipped, running: ${got.skipped.join(", ")}` : ""), got.skipped.length ? "warn" : "ok");
@@ -68,8 +67,8 @@ function Usage({ u }) {
       foot=${html`<${Totals} label="Total"><${Total} label="Turns" value=${String(sum(values.map(v => sum(v.turns))))} mono=${false} /><${Total} label="Tokens" value=${fmtTok(sum(tokens))} />
         <${Total} label="Cost" value=${`$${sum(values.map(v => sum(v.cost))).toFixed(2)}`} /><td data-label=${`Tokens ${per}`}><${Spark} xs=${tokens} label=${`Total: tokens ${per}`} /></td><//>`} />`;
   };
-  return html`${Object.keys(u.users).length ? html`<h3>By user</h3>${table(u.users, "User")}<h3>By agent or model</h3>${table(u.agents, "Agent or model")}
-      ${u.top.length ? html`<h3>Highest usage loops</h3><${SortableTable} memo="flux-sort-usage-loops" first=${2} rows=${u.top} keyOf=${t => `${t.user}/${t.app}`}
+  return html`${Object.keys(u.users).length ? html`<h3>By user</h3>${table(u.users, "User")}<h3>By agent</h3>${table(u.agents, "Agent")}
+      ${u.top.length ? html`<h3>Top loops</h3><${SortableTable} memo="flux-sort-usage-loops" first=${2} rows=${u.top} keyOf=${t => `${t.user}/${t.app}`}
         cols=${[{ label: "Loop", key: t => `${t.user}/${t.app}`, asc: true }, { label: "Turns", key: t => t.turns, num: true }, { label: "Tokens", key: t => t.tokens, num: true },
           { label: "Cost", key: t => t.cost, num: true }, { label: "Time", key: t => t.seconds, num: true }]}
         row=${t => html`<tr><td><${LoopLink} u=${t.user} a=${t.app} /></td><td class="num">${String(t.turns)}</td><td class="num mono">${fmtTok(t.tokens)}</td>
@@ -77,12 +76,12 @@ function Usage({ u }) {
         foot=${html`<${Totals} label="Total shown"><${Total} label="Turns" value=${String(sum(u.top.map(t => t.turns)))} mono=${false} />
           <${Total} label="Tokens" value=${fmtTok(sum(u.top.map(t => t.tokens)))} /><${Total} label="Cost" value=${`$${sum(u.top.map(t => t.cost)).toFixed(2)}`} />
           <${Total} label="Time" value=${dur(sum(u.top.map(t => t.seconds)))} mono=${false} /><//>`} />` : ""}`
-    : html`<${Empty} text="No model or agent turn in this time." />`}
+    : html`<${Empty} text="No turns in this period." />`}
     <div class="row end"><${Act} cls="small" onClick=${reprice}>Price past turns…<//></div>`;
 }
 
 /** D850: each list in the order asked (kept in this browser), each row removable; D859: a header sorts it. */
-const Forget = ({ kind, k, what }) => html`<${Bin} what="row" title=${`Remove ${what}?`} said="It leaves this list until it is used again."
+const Forget = ({ kind, k, what }) => html`<${Bin} what="row" title=${`Remove ${what}?`} said="It returns when used again."
   remove=${async () => { await api("/admin/insights/forget", { method: "POST", body: { kind, key: k } }); route(); }} />`;
 const Endpoints = ({ eps }) => eps.length ? html`<${SortableTable} memo="flux-insights-ep-sort" first=${2} rows=${eps} keyOf=${e => e.key}
   cols=${[{ label: "Which", key: e => `${e.kind} ${e.where}`, asc: true }, { label: "Turns", key: e => e.turns, num: true },
@@ -91,18 +90,18 @@ const Endpoints = ({ eps }) => eps.length ? html`<${SortableTable} memo="flux-in
   row=${e => html`<tr><td><${Tag}>${e.kind}<//> <span class="mono small">${e.where}</span></td><td class="num">${String(e.turns)}</td>
     <td class=${cx("num", e.rate > 0.2 && "bad")}>${`${e.failed} (${Math.round(100 * e.rate)}%)`}</td><td class="num">${dur(e.p50)}</td><td class="num">${dur(e.p95)}</td>
     <td class="muted"><${When} t=${e.last} /></td><td class="small why-cell" title=${e.last_error || ""}>${e.last_error ? html`<${When} t=${e.last_error_at} />${`: ${e.last_error.slice(0, 140)}`}` : "—"}</td>
-    <td class="right"><${Forget} kind="endpoint" k=${e.key} what=${e.where} /></td></tr>`} />` : html`<${Empty} text="No turn in this time." />`;
+    <td class="right"><${Forget} kind="endpoint" k=${e.key} what=${e.where} /></td></tr>`} />` : html`<${Empty} text="No turns in this period." />`;
 const Network = ({ net }) => html`<${Card} title="Network refused">${net.length ? html`<${SortableTable} memo="flux-insights-net-sort" first=${1} rows=${net} keyOf=${n => n.key}
   cols=${[{ label: "Host", key: n => `${n.host}:${n.port}`, asc: true }, { label: "Times", key: n => n.count, num: true },
     { label: "By", key: n => n.loops.map(([a]) => a).join(","), asc: true }, { label: "Last", key: n => n.last }, { label: "" }]}
   row=${n => html`<tr><td class="mono">${`${n.host}:${n.port}`}</td><td class="num">${String(n.count)}</td><td class="small">${n.loops.map(([a, c]) => `${a} ×${c}`).join(", ")}</td>
     <td class="muted"><${When} t=${n.last} /></td><td class="right"><${Forget} kind="network" k=${n.key} what=${`${n.host}:${n.port}`} /></td></tr>`} />`
-  : html`<${Empty} text="Nothing refused in this time." />`}<//>`;
+  : html`<${Empty} text="Nothing refused in this period." />`}<//>`;
 
 /** D920: the disk as it is now -- not historical, so no period; when it was measured said. */
 function Disk() {
   const read = useLoad(() => api("/admin/insights/disk"), "disk"), at = read.got?.d?.at;
-  return html`<${Card} title="Current disk usage" actions=${html`<span class="muted small">${at ? html`<span>measured <${Ago} t=${at} /></span>` : ""}</span>`}>
+  return html`<${Card} title="Disk now" actions=${html`<span class="muted small">${at ? html`<span>measured <${Ago} t=${at} /></span>` : ""}</span>`}>
     <${Loaded} read=${read} wait=${html`<${Skeleton} lines=${4} />`} failed="The disk could not be measured">${d => {
       const max = Math.max(...d.disk.map(x => x.total), 1);
       return html`<${SortableTable} memo="flux-sort-user-disk" first=${4} rows=${d.disk} keyOf=${x => x.user}
@@ -126,7 +125,7 @@ export function Insights({ part }) {
   const range = html`<div class="range-pick"><label for="insights-range">Over the last</label>
     <${Select} id="insights-range" aria-label="Over the last" options=${PERIODS} value=${days} onChange=${pick} /></div>`;
   return html`<${Card} title=${TITLE[part]} actions=${range}><${Loaded} read=${read} failed="Insights could not be read">${r => html`<div>
-      <p class="muted small range-said">${`${when(r.range.start)} – ${when(r.range.end)}`}${r.catching_up ? " · counting past turns after the update: the numbers fill in within minutes" : ""}</p>
+      <p class="muted small range-said">${`${when(r.range.start)} – ${when(r.range.end)}`}${r.catching_up ? " · counting past turns: numbers fill in within minutes" : ""}</p>
       ${part === "failures" ? html`<${Failures} f=${r.failures} />` : part === "usage" ? html`<${Usage} u=${r.usage} />` : html`<${Endpoints} eps=${r.endpoints} />`}</div>`}<//><//>
     ${part === "endpoints" && r ? html`<${Network} net=${r.network} />` : ""}${part === "usage" ? html`<${Disk} />` : ""}`;
 }

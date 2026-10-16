@@ -36,9 +36,9 @@ function Queue({ idea, refresh }) {
     refresh();
   };
   return idea.queued
-    ? html`<div class="idea-queue"><${Tag} k="var(--accent)" title="The passes test the queued ideas in this order">${idea.queued === 1 ? "next pass" : `queued · ${idea.queued}`}<//>
+    ? html`<div class="idea-queue"><${Tag} k="var(--accent)" title="Tested in this order">${idea.queued === 1 ? "next pass" : `queued · ${idea.queued}`}<//>
         <${Act} cls="small" onClick=${turn} title="Take it off the queue">Unqueue<//></div>`
-    : html`<div class="idea-queue"><${Act} cls="small" onClick=${turn} title="The next free pass builds a design that follows this idea, so it gets a measurement">Queue a test<//></div>`;
+    : html`<div class="idea-queue"><${Act} cls="small" onClick=${turn} title="The next free pass builds a design for it">Queue<//></div>`;
 }
 
 /** D1127: every untested idea queued at once, or the whole queue emptied. */
@@ -47,13 +47,13 @@ function QueueAll({ data, refresh }) {
   const untested = data.ideas.filter(i => i.status === "proposed" && !i.queued).length, queued = (data.queue || []).length;
   const all = async on => { toast((await loopApi(ctx.name).api("/ideas/queue-all", { method: "POST", body: { on } })).ok, "ok"); refresh(); };
   return html`<div class="idea-queue-all"><${Act} cls="small" disabled=${!untested} onClick=${() => all(true)}
-      title="Each of the next passes builds a design following one of them, oldest first">${`Queue all untested (${untested})`}<//>
+      title="The next passes test them, oldest first">${`Queue all untested (${untested})`}<//>
     <${Act} cls="small" disabled=${!queued} onClick=${() => all(false)}>${`Unqueue all (${queued})`}<//></div>`;
 }
 
-export const Ideas = ({ data, refresh }) => html`<${RefreshCard} title="Ideas" rawTitle="Ideas notebook" said="Measured means evidence is available; it does not mean the idea improved the objectives." refresh=${refresh} raw=${data} cls="ideas-view">
+export const Ideas = ({ data, refresh }) => html`<${RefreshCard} title="Ideas" rawTitle="Ideas notebook" said="Measured: there is evidence, not that it helped." refresh=${refresh} raw=${data} cls="ideas-view">
   ${data.ideas.length ? html`<${QueueAll} data=${data} refresh=${refresh} /><${Table} heads=${["Idea", "Hypothesis", "State", "Evidence"]} cls="ideas-table">${data.ideas.map(idea => html`<tr key=${idea.id}>
       <td><strong>${idea.title}</strong><small class="muted">${idea.id}</small>${idea.part ? html`<small class="muted">${`Part: ${idea.part}`}</small>` : ""}</td>
       <td><p>${idea.hypothesis}</p>${idea.test ? html`<p class="muted">${`Test: ${idea.test}`}</p>` : ""}</td>
       <td>${idea.status}</td><td>${idea.evaluations.length ? html`<${Evaluations} rows=${idea.evaluations} />` : "Not tested yet"}<${Queue} idea=${idea} refresh=${refresh} /></td></tr>`)}<//>`
-    : html`<${Empty} text="No ideas recorded yet. Agents can save hypotheses and alternatives with their drafts." />`}<//>`;
+    : html`<${Empty} text="No ideas yet." />`}<//>`;

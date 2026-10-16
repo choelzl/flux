@@ -164,8 +164,8 @@ export function createStore(ctx) {
     }
     s.stream = "off";
     const start = s.history.starts.find(x => String(x.id) === s.startId), campaign = start && campaignForStart(s.history, start);
-    if (!campaign) { s.loadMessage = "No task journal retained for this start. Its text output is in Log."; now(); return; }
-    s.loadMessage = "Loading retained tasks…"; now();
+    if (!campaign) { s.loadMessage = "No task journal for this start: see Log."; now(); return; }
+    s.loadMessage = "Loading tasks…"; now();
     const next = s.history.starts.slice().reverse().find(x => x.id > start.id);
     s.journal.ended(start.ended || (start.running ? null : next?.started || Date.now() / 1000));
     const query = new URLSearchParams({ run_id: String(start.record_id), campaign: campaign.campaign_id, start_id: String(start.id), kind: "events" });

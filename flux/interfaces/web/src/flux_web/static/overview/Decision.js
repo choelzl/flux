@@ -51,15 +51,15 @@ export function DecisionCard({ a, r, main, comparison, unit }) {
   const best = html`<${BestTable} r=${r} n=${3} comparison=${comparison} unit=${unit} />`;
   if (dec) return html`<${Card} ...${a} title="Decision" actions=${all}>
     <div class="decision-head"><span class="mono strong" title=${dec.name}>${own(ctx, dec.name)}</span>
-      ${dec.verdict === "accepted" ? html`<${Pill} tone="ok">meets every requirement<//>` : html`<${Pill} tone="bad">misses a requirement<//>`}
+      ${dec.verdict === "accepted" ? html`<${Pill} tone="ok">meets all<//>` : html`<${Pill} tone="bad">misses one<//>`}
       <span class="muted">${`measured at ${dec.shown}`}</span></div>
     ${r.decided_by ? html`<p class="small decided-by"><span class="muted">Decided by: </span>${r.decided_by}</p>` : ""}
     <${MainNumbers} r=${r} d=${dec} main=${main} unit=${unit} compare=${m => r.decision_measurements?.[m] ? () => r.decision_measurements[m] : comparison} />
     ${dec.why.length ? html`<ul class="misses">${dec.why.map(w => html`<li>${w}</li>`)}</ul>` : ""}${best}<//>`;
   // D900: no design meets every requirement -- the closest, apart, with what it does not meet: what the next pass can refine, not the answer
   if (c) return html`<${Card} ...${a} title="Decision" actions=${all}>
-    <p class="decision-head"><strong>No feasible design yet</strong><${Pill} tone="warn">no design meets every requirement<//></p>
-    <div class="decision-head"><small class="muted">Closest candidate </small><span class="mono strong" title=${c.name}>${own(ctx, c.name)}</span><span class="muted">${`measured at ${c.shown}`}</span></div>
+    <p class="decision-head"><strong>No feasible design yet</strong><${Pill} tone="warn">none meets all<//></p>
+    <div class="decision-head"><small class="muted">Closest </small><span class="mono strong" title=${c.name}>${own(ctx, c.name)}</span><span class="muted">${`measured at ${c.shown}`}</span></div>
     <${MainNumbers} r=${r} d=${designs.find(d => d.closest) || { ...c, stages: { [c.shown]: c.numbers } }} main=${main} unit=${unit} compare=${() => comparison} />
     ${c.reasons.length ? html`<ul class="misses">${c.reasons.map(w => html`<li>${w}</li>`)}</ul>` : ""}${best}<//>`;
   // D1093: chosen on its checks (no measure stage) -- said, not "nothing measured" beside a decision

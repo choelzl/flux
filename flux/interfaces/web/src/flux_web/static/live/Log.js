@@ -74,14 +74,14 @@ export function Log({ store }) {
   return html`<${Card} cls="log-card"><${ViewerFrame} v=${view} title="Log"><div onviewerresize=${() => { row.current = 0; setScroll(box.current?.scrollTop || 0); }}>
     <div class="toolbar">${check("follow", "follow", null, v => { set({ follow: v }); })}${check("wrap", "wrap")}${check("problems", "problems only")}${check("times", "times", "Each line's time", times)}
       <input placeholder="filter (text or /regex/)" class=${`filter${m?.bad ? " bad" : ""}`} value=${o.filter} onInput=${e => set({ filter: e.currentTarget.value })} />
-      <span class="muted">${`${shown.length === total ? total : `${shown.length} of ${total}`} line(s)`}</span>
+      <span class="muted">${`${shown.length === total ? total : `${shown.length} of ${total}`} lines`}</span>
       <${Tools}><${ViewerTools} v=${view} title="Log" rawUrl=${raw} />${L.past ? "" : html`<${Tool} icon="download" label="Download" href=${`${ctx.base}/log/raw${ctx.qs}`} />`}<//>
       ${L.skipped ? html`<span class="log-earlier small">${`${(L.skipped.bytes / 1048576).toFixed(1)} MiB of earlier lines not loaded · `}<button type="button" class="small" onClick=${L.loadAll}>Load all</button></span>` : ""}
-      ${!L.past && L.stream && L.stream !== "live" ? html`<${Pill} tone="run" small cls="stream" title="The page's connection to the loop">reconnecting<//>` : ""}</div>
-    ${L.cut ? html`<p class="muted">Preview: first 1 MiB. Raw opens the complete output.</p>` : ""}${L.failed ? html`<${Notice} tone="bad" what="This start's log could not be read" why=${L.failed} />` : ""}
+      ${!L.past && L.stream && L.stream !== "live" ? html`<${Pill} tone="run" small cls="stream" title="Connection to the loop">reconnecting<//>` : ""}</div>
+    ${L.cut ? html`<p class="muted">Preview: first 1 MiB; Raw has it all.</p>` : ""}${L.failed ? html`<${Notice} tone="bad" what="This start's log could not be read" why=${L.failed} />` : ""}
     <div class=${cx("logview virt", o.wrap && "wrap")} ref=${box} onScroll=${onScroll}>
       ${o.wrap ? "" : html`<div class="spacer" style=${`height:${shown.length * r}px`} />`}
       <div class="win" style=${o.wrap ? "" : `transform:translateY(${first * r}px)`}>
-        ${o.wrap && first ? html`<div class="ln more">${`… ${first} earlier line(s): turn wrap off to scroll through all, or download the log`}</div>` : ""}
+        ${o.wrap && first ? html`<div class="ln more">${`… ${first} earlier lines: turn wrap off, or download the log`}</div>` : ""}
         ${shown.slice(first, last).map(l => html`<${Line} key=${l.n} l=${l} times=${o.times} />`)}</div></div></div><//><//>`;
 }

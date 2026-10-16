@@ -661,7 +661,7 @@ class Store:
 
     def set_setting(self, user: User, key: str, value: str | None) -> None:
         if key.endswith("_AT_ONCE"):
-            raise ValueError(f"{key}: how many calls an endpoint takes at once is the admin's (Admin › Agents and models)")
+            raise ValueError(f"{key}: how many calls an endpoint takes at once is the admin's (Admin › Agents)")
         value = self._checked(key, value)
         with self._db() as db:
             if value is None:

@@ -43,7 +43,7 @@ export function UploadForm() {
   };
   return html`<${Card}><div class="upload">
     <label class="stack">Name<input placeholder="my_loop" pattern="[A-Za-z0-9_\\-]{1,60}" maxlength="60" class="full" id="up-name" autocomplete="off" ...${bound(name, setName)} /></label>
-    <${Uploader} rows=${rows} onChange=${take} label="Drop the loop's folder, its files or a .zip" />
+    <${Uploader} rows=${rows} onChange=${take} label="Drop a loop folder, files or a .zip" />
     ${rows.length ? "" : html`<p class="muted small">Without files: a starter problem.yaml, README and empty library/, opened in the configurator.</p>`}
     <div class="form-actions"><${Act} cls="primary" onClick=${create}>Create loop<//></div></div><//>`;
 }
@@ -55,9 +55,9 @@ export function NewPage() {
     if (!await createFromText(name, file, ed.current.textarea.value)) { nameField.current.focus(); return; }
     toast(`${name} created`, "ok"); location.hash = `#/app/${enc(name)}`;
   };
-  return html`<${PageHead} title="Write a problem document" sub="Paste or write the YAML; upload its other files afterwards on the application's page.">
-      <a class="btn" href="#/configure">Use the configurator instead</a><//>
-    <${Card}><div><div class="row"><label class="stack">Application<input class="new-name" placeholder="application name" required ref=${nameField} ...${bound(name, setName)} /></label>
+  return html`<${PageHead} title="Write a problem document" sub="Paste or write the YAML; add files later on its page.">
+      <a class="btn" href="#/configure">Use configurator</a><//>
+    <${Card}><div><div class="row"><label class="stack">Name<input class="new-name" placeholder="my_loop" required ref=${nameField} ...${bound(name, setName)} /></label>
       <label class="stack">File<input class="new-file" size="28" ...${bound(file, setFile)} /></label></div>
       <${CodeEditor} text="" lang="yaml" placeholder=${"id: my_problem\nstatement: >-\n  What the design must do.\n..."} onEditor=${e => { ed.current = e; }} />
       <div class="form-actions"><${Act} cls="primary" onClick=${create}>Create<//></div></div><//>`;

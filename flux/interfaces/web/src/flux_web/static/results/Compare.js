@@ -26,7 +26,7 @@ function Comparison({ a, b, fa, fb, stages, directions, fmt }) {
     <${Table} heads=${["stage", "metric", { label: html`A <${VerdictPill} d=${a} />`, num: true }, { label: html`B <${VerdictPill} d=${b} />`, num: true }, { label: "B − A", num: true }]}>
       ${rows.map(row => html`<tr key=${`${row.st}|${row.m}`}><td class="muted">${row.st}</td><td>${row.m}</td>${cell(row.va)}${cell(row.vb)}${delta(row)}</tr>`)}<//>
     <h3>Source${ops ? html`<span class="muted">${changed ? ` · ${plural(changed, "line")} differ` : " · the same"}</span>` : ""}</h3>
-    ${ops ? (changed ? html`<${Diff} ops=${ops} />` : html`<${Empty} text="The two sources are the same." />`) : html`<${Empty} text="A source is missing." />`}</div>`;
+    ${ops ? (changed ? html`<${Diff} ops=${ops} />` : html`<${Empty} text="Same source." />`) : html`<${Empty} text="A source is missing." />`}</div>`;
 }
 
 /** The two designs ticked, compared in a dialog. */

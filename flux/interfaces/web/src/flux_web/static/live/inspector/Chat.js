@@ -91,13 +91,13 @@ function stopSaid(n, f, nodes) {
   const exit = Number(f.exit), signal = { 143: "TERM", 137: "KILL", [-15]: "TERM", [-9]: "KILL" }[exit];
   const next = [...nodes.values()].find(k => k !== n && k.t0 >= (n.t1 ?? n.t0) && k.name === n.name && k.why === n.why);
   const loopRuns = [...nodes.values()].some(x => x.t1 == null);
-  const after = next ? " The next try continues its session, where it stopped." : loopRuns
-    ? " Its session is kept: the next try continues where it stopped."
-    : " Its session was kept for a next try; none followed in this pass (its continues used up, or the pass ended).";
+  const after = next ? " The next try continues its session." : loopRuns
+    ? " Its session is kept for the next try."
+    : " Its session was kept; no next try followed in this pass.";
   if (n.timedOut || f["timed out"]) return `Reached its time limit${f["timed out"] ? ` (${String(f["timed out"]).replace(/^stopped /, "")})` : ""} and Flux stopped it.` + after;
   if (f["endpoint recovery"]) return "Stopped: the model's API failed and then went silent." + after;
   if (n.interrupted) return "Stopped with the loop.";
-  if (signal) return `Ended from outside (it was ${signal === "KILL" ? "killed" : "told to stop"}), not by the agent itself: the loop was stopped, or the machine ended it.`;
+  if (signal) return `Ended from outside (${signal === "KILL" ? "killed" : "told to stop"}): the loop was stopped, or the machine ended it.`;
   return "";
 }
 const Output = ({ n, f, mem }) => { const out = f.stdout ?? f["stdout (live tail)"], err = f.stderr;
@@ -121,7 +121,7 @@ export function AgentChat({ n, env, mem }) {
       ${above > 0 ? html`<button type="button" class="alt-chat-more link" title="Show earlier steps" onClick=${e => moreChat(n, env, e.currentTarget.closest(".alt-chat"))}>${`↑ ${above} earlier — scroll up or click`}</button>`
         : [lost > 0 ? (kept == null && !running(n) ? html`<${Notice} tone="run" cls="alt-chat-more" what="Reading the earlier steps…" />`
           : html`<div class="alt-chat-more">${lostSaid(n, kept, steps, lost)}</div>`) : "",
-          prompt ? html`<${Bubble} side="me" label=${`Prompt · ${prompt.length.toLocaleString()} characters`} k="input" mem=${mem}><${Pre} k="prompt" cls="val tall" text=${prompt} mem=${mem} follow=${false} /><//>` : ""]}
+          prompt ? html`<${Bubble} side="me" label=${`Prompt · ${prompt.length.toLocaleString()} chars`} k="input" mem=${mem}><${Pre} k="prompt" cls="val tall" text=${prompt} mem=${mem} follow=${false} /><//>` : ""]}
       ${all.length ? html`<${Conversation} steps=${shown} k=${`task${n.id}`} offset=${total - shown.length} live=${running(n)} quiet />`
         : running(n) ? "" : html`<${Empty} text="No conversation recorded." />`}
       ${running(n) && !liveWork(shown, true) ? html`<div class="alt-chat-now"><${Glyph} tone="run" />${String(f.status || "working") + "…"}</div>` : ""}
@@ -136,8 +136,8 @@ export function ModelChat({ n, env, mem }) {
   try { if (/^\s*[{[]/.test(reply)) shown = JSON.stringify(JSON.parse(reply), null, 2); } catch (_) { /* not JSON: as it came */ }
   return html`<${Facts} list=${usage(f, [["model", p.model], ["thinking", p.think === false ? "off" : p.think ? "on" : ""]])} cls="alt-usage" />
     <${ChatBox} n=${n} env=${env} mem=${mem} more=${false}>
-      ${p.system ? html`<${Bubble} side="me" label=${`System · ${String(p.system).length.toLocaleString()} characters`} k="system" mem=${mem}><${Pre} k="system" cls="val tall" text=${String(p.system)} mem=${mem} follow=${false} /><//>` : ""}
-      ${p.prompt ? html`<${Bubble} side="me" label=${`Prompt · ${String(p.prompt).length.toLocaleString()} characters`} k="input" mem=${mem}><${Pre} k="prompt" cls="val tall" text=${String(p.prompt)} mem=${mem} follow=${false} /><//>` : ""}
+      ${p.system ? html`<${Bubble} side="me" label=${`System · ${String(p.system).length.toLocaleString()} chars`} k="system" mem=${mem}><${Pre} k="system" cls="val tall" text=${String(p.system)} mem=${mem} follow=${false} /><//>` : ""}
+      ${p.prompt ? html`<${Bubble} side="me" label=${`Prompt · ${String(p.prompt).length.toLocaleString()} chars`} k="input" mem=${mem}><${Pre} k="prompt" cls="val tall" text=${String(p.prompt)} mem=${mem} follow=${false} /><//>` : ""}
       ${thinking ? html`<details class="cv-step cv-think"><summary><span class="cv-kind">Thinking</span><span class="cv-sum muted">${thinking.slice(0, 140)}</span></summary><pre class="cv-body cv-thought">${thinking}</pre></details>` : ""}
       ${reply ? html`<div class="cv-text alt-reply">${shown !== reply ? html`<pre class="mono">${shown}</pre>` : html`<${Markdown} text=${reply.trim()} />`}</div>` : ""}
       ${f.error ? html`<div class="alt-chat-more bad">${String(f.error)}</div>` : ""}

@@ -32,9 +32,9 @@ export function Legend({ S, front = false, pending = false, baseline = false, re
   return html`<span class="legend groups">
     ${S.groups.map(g => item(html`<${Key} st=${S.of(g)} cls="accepted" />`, g || "other", { "data-group": g }))}
     ${baseline ? item(html`<svg viewBox="0 0 14 8" class="chart key wide" aria-hidden="true"><line x1="0" x2="14" y1="4" y2="4" class="baseline-ref" /></svg>`, "Baseline (pass 0)", { "data-baseline": "true" }) : ""}
-    ${item(html`<${Key} st=${plain} cls="accepted" />`, "meets every requirement")}
+    ${item(html`<${Key} st=${plain} cls="accepted" />`, "meets all")}
     ${item(html`<${Key} st=${plain} cls="failed" />`, "misses one")}
-    ${pending ? item(html`<${Key} st=${plain} cls="pending" />`, "waits for a later stage") : ""}
+    ${pending ? item(html`<${Key} st=${plain} cls="pending" />`, "pending") : ""}
     ${rejected ? item(html`<${Key} st=${plain} cls="rejected" />`, "rejected") : ""}
     ${item(html`<${Key} st=${plain} cls="accepted" ring />`, "decision")}
     ${front ? item(html`<svg viewBox="0 0 14 8" class="chart key wide" aria-hidden="true"><path d="M1,7L1,4L7,4L7,1L13,1" class="front" /></svg>`, "feasible front") : ""}</span>`;
@@ -42,7 +42,7 @@ export function Legend({ S, front = false, pending = false, baseline = false, re
 /** A point's details (D914): which design, its piece, its standing and what it does not meet. */
 export function pointTitle(p, lines) {
   const piece = p.group === "whole" ? " (whole)" : p.group ? ` (${p.group})` : "";
-  return [`${p.name}${piece}${p.baseline ? " · Baseline (pass 0)" : ""} · ${p.verdict === "accepted" ? "meets every requirement" : p.verdict}${p.decision ? " · the decision" : ""}`,
+  return [`${p.name}${piece}${p.baseline ? " · Baseline (pass 0)" : ""} · ${p.verdict === "accepted" ? "meets all" : p.verdict}${p.decision ? " · decision" : ""}`,
     ...lines, ...(p.verdict !== "accepted" ? p.reasons.map(w => (p.verdict === "pending" ? "waits: " : "not met: ") + w) : [])].join("\n");
 }
 /** D1094: ticks on round values -- 0, 25, 50, not 1.9, 46.65, 91.4 -- about `n` of them inside [lo, hi]. */

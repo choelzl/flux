@@ -136,10 +136,26 @@ def _variant(name: str) -> dict:
     elif name == "params_placeholder":
         d["params"] = {"n": 1}
         d["flow"]["test"] = "{python} {home}/check.py {artifact} {params}"
+    # D1134: what a round trip lost before
+    elif name == "kept_flow_knowledge":            # phases keep the whole flow; its knowledge went with it
+        d["flow"]["orchestrate"] = {"policy": [{"policy": "sweep"}, {"policy": "gradient"}], "space": {"mode": ["a", "b"]}}
+        d["flow"]["generate"] = {"command": "{python} {home}/gen.py {artifact} {mode}"}
+        d["flow"]["knowledge"] = {"digest": "claude", "lessons": "mined"}
+    elif name == "model_search_options":
+        d["flow"]["orchestrate"] = {"by": "model", "rounds": 3, "batch_size": 2, "space": {"mode": ["a", "b"]}}
+        d["flow"]["generate"] = {"command": "{python} {home}/gen.py {artifact} {mode}"}
+    elif name == "policy_options":
+        d["flow"]["orchestrate"] = {"policy": {"gradient": {"steps": 4, "patience": 2}}, "space": {"mode": [1, 2, 3]}}
+        d["flow"]["generate"] = {"command": "{python} {home}/gen.py {artifact} {mode}"}
+    elif name == "critic_options":
+        d["flow"]["test"] = {"check": "{python} {home}/check.py {artifact}", "critic": {"by": "claude", "timeout_s": 99}}
+    elif name == "lessons_options":
+        d["flow"]["knowledge"] = {"lessons": {"by": "claude", "timeout_s": 99}}
     return d
 
 
-@pytest.mark.parametrize("name", ["scalar_choices", "needs_override", "spaced_script", "params_placeholder"])
+@pytest.mark.parametrize("name", ["scalar_choices", "needs_override", "spaced_script", "params_placeholder", "kept_flow_knowledge",
+                                  "model_search_options", "policy_options", "critic_options", "lessons_options"])
 def test_an_untouched_edit_keeps_the_meaning(name, tmp_path):
     src = tmp_path / "src" / name
     src.mkdir(parents=True)

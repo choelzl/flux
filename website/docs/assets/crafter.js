@@ -137,7 +137,7 @@
           return ps ? String(Math.round(1e6 / ps)) : v;
         }, function (v) { var ps = clockPs(v); row.params.clock_ps = ps ? String(ps) : v; },
         { compact: true, narrow: true, placeholder: String(Math.round(1e6 / dflt)),
-          hint: "The clock the tools aim for" + (auto ? " (empty: from the objective)" : "") + ". fmax is measured; this steers synthesis: tighter = faster and bigger" });
+          hint: "The clock the tools aim for" + (auto ? " (empty: from the objective)" : "") + "; tighter = faster and bigger" });
       }
       return field(p.label + (p.unit ? " (" + p.unit + ")" : ""), function () { return row.params[k]; }, function (v) { row.params[k] = v; },
                    { compact: true, placeholder: shown(p.default), grow: typeof p.default !== "number" });
@@ -254,7 +254,7 @@
           if (custom) more.push(field("Tools it needs", function () { return st.needs; }, function (v) { st.needs = v; }, { compact: true }));
           var est = st.estimate = st.estimate || { kind: "off", margin: "5", command: "" };
           more.push(field("Estimate first", function () { return est.kind; }, function (v) { est.kind = v; },
-                          { compact: true, structural: true, hint: "Predict this measurement before running it; a design estimated to fail a gate or a limit by more than the margin is skipped here",
+                          { compact: true, structural: true, hint: "Predict it first; a design estimated to miss a cutoff or limit by more than the margin is skipped",
                             options: [["off", "off"], ["surrogate", "fitted from past runs"], ["command", "my model script"], ["model", "the AI model"]] }));
           more.push(h("small", { class: "fc-wide fc-now", text: "Estimate: " + explainEstimate(est) }));
           if (est.kind !== "off") {
@@ -324,13 +324,13 @@
           field(opts.nameLabel || "Name", function () { return state.id; }, function (v) { state.id = v; },
                 { compact: true, key: "id", placeholder: opts.namePlaceholder || "my_design", hint: opts.nameHint || "Letters, digits, - and _ (1–60 characters)" }),
           field("Language", function () { return state.language; }, function (v) { state.language = v; },
-                { compact: true, options: langs, structural: true, hint: "Optional: the language the designs are written in, when the checks' tools do not tell it" }),
-          state.language === "other" ? field("Which language?", function () { return state.languageOther; }, function (v) { state.languageOther = v; }, { compact: true, placeholder: "ini" }) : null,
+                { compact: true, options: langs, structural: true, hint: "Optional, when the tools do not tell it" }),
+          state.language === "other" ? field("Language name", function () { return state.languageOther; }, function (v) { state.languageOther = v; }, { compact: true, placeholder: "ini" }) : null,
           ]),
-        field("What should be made? Say it as you would to an engineer.", function () { return state.statement; },
+        field("What to make (as you would tell an engineer)", function () { return state.statement; },
               function (v) { state.statement = v; }, { area: true, rows: 3, wide: true, key: "statement" }),
         h("div", { class: "fc-line" }, [
-          field("Rules every design must follow (optional)", function () { return state.contract; },
+          field("Rules for every design (optional)", function () { return state.contract; },
                 function (v) { state.contract = v; }, { area: true, rows: 1, grow: true, placeholder: "Names, ports, what is not allowed" }),
           field("Files the model reads (optional)", function () { return state.knowledgeFiles; },
                 function (v) { state.knowledgeFiles = v; }, { compact: true, grow: true, placeholder: "spec.md, notes.txt", hint: "Beside the document, separated by commas" })]),
@@ -514,7 +514,7 @@
         text = hasParts(state) ? "model picks the part" : "default: one design";
       }
       if (name === "generate" && paramOnly(state)) text = "not run: settings only";        // D911
-      if (readonly && (name === "test" || name === "measure")) return name === "test" ? "your checks" : "your measurements";
+      if (readonly && (name === "test" || name === "measure")) return name === "test" ? "checks" : "measurements";
       var names = stepNames(name);
       max = max || 24;
       if (names) return names.length ? abbreviate(names, max) : "none yet";
@@ -552,11 +552,11 @@
       var now = explain(openBox, state);
       if (now) p.appendChild(h("p", { class: "fc-hint fc-now", text: "As set: " + now + "." }));
       var raw = state.agentRaw && state.agentRaw[openBox];
-      if (raw) p.appendChild(h("p", { class: "fc-hint fc-now", text: "A coding agent with its own settings, kept as written: " + JSON.stringify(raw.agent) +
-        ". Choosing another replaces them." }));
+      if (raw) p.appendChild(h("p", { class: "fc-hint fc-now", text: "Own settings, kept as written: " + JSON.stringify(raw.agent) +
+        ". Another choice replaces them." }));
       if (openBox === "generate" && paramOnly(state)) {               // D911: what a search runs
-        p.appendChild(h("p", { class: "fc-hint fc-now", text: "A search is on: only a script turns a point's settings into a design. " +
-          "With a model or a coding agent here, nothing writes a design -- the settings alone reach your commands (a parameter-only search)." }));
+        p.appendChild(h("p", { class: "fc-hint fc-now", text: "A search is on: only a script turns a point into a design; " +
+          "with a model or agent here, the settings only reach the commands." }));
       }
       if (openBox === "orchestrate" && parameterSearch(state)) {
         p.appendChild(h("p", { class: "fc-hint", text: "A search is on, so the search picks the next job." }));
@@ -584,17 +584,17 @@
         });
         p.appendChild(group);
         if (openBox === "generate" && state.flow.generate === "command") {
-          p.appendChild(field("Command that writes each design", function () { return state.generateCommand; },
+          p.appendChild(field("Design command", function () { return state.generateCommand; },
                               function (v) { state.generateCommand = v; },
-                              { wide: true, placeholder: "{python} {home}/gen.py {artifact} {knob}", hint: "Each setting to search is {its name}" }));
+                              { wide: true, placeholder: "{python} {home}/gen.py {artifact} {knob}", hint: "Each setting is {its name}" }));
         }
         if (openBox === "generate" && state.flow.generate === "catalog") {
-          p.appendChild(field("Designs you already have", function () { return state.generateCatalog; },
+          p.appendChild(field("Existing designs", function () { return state.generateCatalog; },
                               function (v) { state.generateCatalog = v; }, { wide: true, placeholder: "designs/a.sv, designs/b.sv", hint: "Files beside the document, separated by commas" }));
         }
         if (openBox === "orchestrate" && state.flow.orchestrate === "command") {
           p.appendChild(field("Search command", function () { return state.orchestrateCommand; },
-                              function (v) { state.orchestrateCommand = v; }, { wide: true, placeholder: "{python} {home}/search.py {history} {state}", hint: "It answers each round with the next candidates" }));
+                              function (v) { state.orchestrateCommand = v; }, { wide: true, placeholder: "{python} {home}/search.py {history} {state}", hint: "Answers each round with the next candidates" }));
         }
       }
     }
@@ -651,11 +651,11 @@
         state.flow.dse = v;
         if (state.agentRaw) delete state.agentRaw.dse;
       }, { key: "dse", options: choices, structural: true, disabled: kept, grow: true,
-        hint: kept ? "The flow has custom settings kept as written; edit its DSE setting in Direct edit." :
+        hint: kept ? "Kept as written; change it in Direct edit." :
           dseHint(state) });
       var selectors = h("div", { class: "fc-line fc-dse-selectors" }, [dseGroupField("dse-group"), policy]);
       if (!opts.foldSteps) {
-        return h("div", { class: "fc-level" }, [titled("2. Graph", [h("span", { class: "fc-hint fc-inline", text: " click a box to change it; the defaults are usually right" })], [selectors].concat(drawing()))]);
+        return h("div", { class: "fc-level" }, [titled("2. Graph", [h("span", { class: "fc-hint fc-inline", text: " click a box to change it" })], [selectors].concat(drawing()))]);
       }
       if (parts.stepsOpen === undefined) parts.stepsOpen = false;
       var body = h("div", {}, drawing());
@@ -665,7 +665,7 @@
         body.hidden = !parts.stepsOpen;
         toggle.setAttribute("aria-expanded", parts.stepsOpen ? "true" : "false");
         if (parts.stepsOpen) renderDiagram();
-      } } }, ["2. Graph", h("span", { class: "fc-hint fc-inline", text: " the defaults are usually right: open to choose a model, an agent or rules per step" })]);
+      } } }, ["2. Graph", h("span", { class: "fc-hint fc-inline", text: " rules, model or agent per step" })]);
       return h("section", { class: "fc-section fc-advanced" }, [h("h3", {}, [toggle]), selectors, body]);
     }
 
@@ -679,7 +679,7 @@
       var bp = state.baseline || (state.baseline = { mode: "off", source: "project" });
       function baselineMetrics() {
         var metrics = bp.metrics || (bp.metrics = []), rep = reported(state);
-        var stageOptions = [["", "Deepest stage (default)"]].concat(resolve(state).stages.map(function (s) { return [s.name, s.name]; }));
+        var stageOptions = [["", "deepest"]].concat(resolve(state).stages.map(function (s) { return [s.name, s.name]; }));
         var rows = metrics.map(function (m, i) {
           return h("div", { class: "fc-row" }, [h("div", { class: "fc-line" }, [
             field("Metric", function () { return m.metric; }, function (v) { m.metric = v; },
@@ -691,24 +691,23 @@
               { key: "baseline-stage-" + i, compact: true, options: stageOptions }), rowButtons(metrics, i)])]);
         });
         return h("div", { class: "fc-rows", "data-fc-field": "baseline-metrics" }, rows.concat([
-          button("+ Add baseline metric", function () { metrics.push({ metric: rep[0] || "", value: "", stage: "" }); changed(true); }, "fc-add-btn"),
-          h("p", { class: "fc-hint", text: "Reference values for graphs and relative measurements. No checks or measurement tools run for this source, and it is never selected as a design." })]));
+          button("+ Metric", function () { metrics.push({ metric: rep[0] || "", value: "", stage: "" }); changed(true); }, "fc-add-btn"),
+          h("p", { class: "fc-hint", text: "Reference values for graphs and relative measurements; nothing runs for them." })]));
       }
-      var baseline = sub("Baseline / pass 0", "check and measure before any agent edits or repairs", [
-        field("Baseline pass", function () { return bp.mode; }, function (v) { bp.mode = v; },
+      var baseline = sub("Baseline / pass 0", "checked and measured before any edit", [
+        field("Baseline", function () { return bp.mode; }, function (v) { bp.mode = v; },
           { key: "baseline-mode", structural: true, disabled: (state.kept || []).indexOf("baseline") >= 0,
-            options: [["off", "Off (default)"], ["before", "Pass 0, then normal passes"], ["only", "Pass 0 only: check tools and measure"]],
-            hint: "Runs before parallel passes when no successful baseline is recorded or its inputs, settings or tools changed. Failed baselines are retried on the next start; unchanged successful results are reused. Pass 0 does not use the normal pass budget; new measurements bypass caches and estimators." }),
-        bp.mode !== "off" ? field("Baseline source", function () { return bp.source; }, function (v) { bp.source = v; },
-          { key: "baseline-source", structural: true, options: [["project", "Current project: run checks and measurements as written"],
-            ["file", "Existing design file (unchanged)"], ["command", "A baseline preparation command"], ["metrics", "Provided metrics and values"]],
-            hint: "Current project uses your scripts as written. Select a file when scripts expect a design in {artifact}." }) : null,
-        bp.mode !== "off" && bp.source === "file" ? field("Baseline design file", function () { return bp.file; }, function (v) { bp.file = v; },
-          { key: "baseline-file", placeholder: "baseline.py", hint: "Relative to the loop folder. Flux checks and measures a copy, leaving the original untouched." }) : null,
-        bp.mode !== "off" && bp.source === "command" ? field("Baseline command", function () { return bp.command; }, function (v) { bp.command = v; },
+            options: [["off", "off"], ["before", "first"], ["only", "only"]],
+            hint: "first: pass 0, then the passes; only: pass 0 alone, to check the tools. Rerun when its inputs, settings or tools change; outside the pass budget." }),
+        bp.mode !== "off" ? field("From", function () { return bp.source; }, function (v) { bp.source = v; },
+          { key: "baseline-source", structural: true, options: [["project", "project"], ["file", "file"], ["command", "command"], ["metrics", "numbers"]],
+            hint: "project: your scripts as written; file: when they expect a design in {artifact}." }) : null,
+        bp.mode !== "off" && bp.source === "file" ? field("File", function () { return bp.file; }, function (v) { bp.file = v; },
+          { key: "baseline-file", placeholder: "baseline.py", hint: "Relative to the loop folder; a copy is checked and measured." }) : null,
+        bp.mode !== "off" && bp.source === "command" ? field("Command", function () { return bp.command; }, function (v) { bp.command = v; },
           { key: "baseline-command", placeholder: "{python} {home}/baseline.py {artifact}",
-            hint: "Runs once with the usual placeholders and first seed or default knob values. May write {artifact}, or prepare the project for your scripts." }) : null,
-        bp.mode !== "off" && bp.source === "command" ? field("Baseline command timeout (seconds)", function () { return bp.timeout; }, function (v) { bp.timeout = v; },
+            hint: "Runs once with the usual placeholders; may write {artifact} or prepare the project." }) : null,
+        bp.mode !== "off" && bp.source === "command" ? field("Time limit, s", function () { return bp.timeout; }, function (v) { bp.timeout = v; },
           { placeholder: "600" }) : null,
         bp.mode !== "off" && bp.source === "metrics" ? baselineMetrics() : null]);
       function num(label, key, dflt, hint) {
@@ -717,32 +716,32 @@
       }
       var budget = h("div", { class: "fc-grid" }, [
         num("Designs per round", "steps", "24", "Work items in one round"),
-        num("Rounds", "passes", "until stopped", "How many rounds before the run stops"),
-        num("Rounds at once", "parallel", "1", "Rounds run side by side, each its own design; on a server an admin allows it"),
-        num("Search designs a round", "batch", "1", "With a search: designs one round tries side by side; 1 picks each round's design from the last ones' numbers"),
+        num("Rounds", "passes", "until stopped", "Before the run stops"),
+        num("Rounds at once", "parallel", "1", "Side by side; on a server an admin allows it"),
+        num("Search designs a round", "batch", "1", "With a search: designs tried side by side per round"),
         num("Repairs per design", "repair_attempts", "12", "Repairs a draft gets after a check fails"),
-        num("Exploration quota", "exploration_quota", "0", "Minimum fraction of attempted improvements reserved for new approaches, 0 to 1; 0 leaves the choice to the model"),
+        num("Exploration quota", "exploration_quota", "0", "Share of tries kept for new approaches, 0 to 1"),
         num("Designs fully measured", "finalists", "3", "How many designs reach the costliest measurement"),
         num("Tool runs at once", "workers", "auto", "Measurements in parallel; 1 for anything timed"),
         field("Prototype first", function () { return b.prototype; }, function (v) { b.prototype = v; },
-              { compact: true, hint: "The model proves the algorithm before the design is written: yes for maths, no for plain logic (budget.prototype; empty: on with a golden model)",
+              { compact: true, hint: "Proves the algorithm first: yes for maths, no for plain logic (budget.prototype; empty: on with a golden model)",
                 options: [["", "default"], ["true", "yes"], ["false", "no"], ["python", "yes, in Python"], ["systemc", "yes, in SystemC"]] })]);
 
       var knobs = state.space.map(function (r, i) {
         return h("div", { class: "fc-row" }, [h("div", { class: "fc-line" }, [
           h("span", { class: "fc-idx", text: String(i + 1) }),
           field("Setting", function () { return r.knob; }, function (v) { r.knob = v; },
-                { compact: true, placeholder: "block", hint: "Its name; {name} in a command is the value tried" }),
-          field("Its choices, in order", function () { return r.choices; }, function (v) { r.choices = v; },
+                { compact: true, placeholder: "block", hint: "{name} in a command is the value tried" }),
+          field("Choices, in order", function () { return r.choices; }, function (v) { r.choices = v; },
                 { compact: true, grow: true, placeholder: "16, 32, 64", hint: "Separated by commas; a \"quoted\" choice stays text (\"01\", \"a,b\")" }),
           h("div", { class: "fc-row-buttons" }, [button("\u00d7", function () { state.space.splice(i, 1); changed(true); }, "small fc-icon")])])]);
       });
       var searching = state.flow.dse && state.flow.dse !== "none";
-      var space = sub("Settings to search", searching ? "each is {its name} in the commands" : "used once a search policy is selected in the Graph", [
+      var space = sub("Settings to search", searching ? "{name} in the commands" : "used once a search policy is picked in the Graph", [
         h("div", { class: "fc-rows" }, knobs),
-        button("+ Add a setting", function () { state.space.push({ knob: "", choices: "" }); changed(true); }, "fc-add-btn")]);
+        button("+ Setting", function () { state.space.push({ knob: "", choices: "" }); changed(true); }, "fc-add-btn")]);
 
-      var split = sub("Parts", "one design made as several, each checked on its own, then composed", [h("div", { class: "fc-line" }, [
+      var split = sub("Parts", "each checked on its own, then composed", [h("div", { class: "fc-line" }, [
         field("Split the design", function () { return state.partsMode; }, function (v) { state.partsMode = v; },
               { compact: true, structural: true, options: [["none", "no"], ["list", "into these parts"], ["decompose", "let it decide"]] }),
         state.partsMode === "list" ? field("Parts", function () { return state.parts; }, function (v) { state.parts = v; },
@@ -768,13 +767,13 @@
     var STEPS = ["Prompt", "Check & Measure", "Objective", "Graph", "Extra", "Save"];
     // D828: what each step is for, in a line -- in place of the long form's numbered titles
     var STEP_SAYS = [
-      "What the loop designs, in your words: what to make, the rules every design must respect, the files the model reads.",
-      "Checks first: each refuses a wrong design, in order, and the first that fails sends it back to be repaired. " +
-        "Then the measurements: each sizes or times a design that passed, cheapest first; a costly one runs only on the best of the cheaper.",
-      "What makes one design better: limits it must meet, then what to push, most important first.",
-      "Who works each step: built-in rules, a model, or a coding agent. Click a box to change it; the defaults are usually right.",
-      "The budget, settings to search over, splitting one design into parts" + (opts.extra ? ", the loop's resources" : "") +
-        ". An empty field keeps the default, shown greyed.",
+      "What to make, the rules every design follows, the files the model reads.",
+      "Checks refuse a wrong design, in order; a failure sends it back for repair. " +
+        "Measurements size or time a passing design, cheapest first; a costly one runs only on the best.",
+      "Limits a design must meet, then what to push, most important first.",
+      "Who works each step: rules, model or agent. Click a box to change it.",
+      "Budget, settings to search, parts" + (opts.extra ? ", resources" : "") +
+        ". Empty fields keep the default.",
       ""];
     function renderForm() {
       parts.form.innerHTML = "";
@@ -1038,7 +1037,7 @@
     if (opts.changes) {
       parts.diffBody = h("div", { class: "fc-diff" });
       parts.diffFold = h("details", { class: "fc-fold fc-diff-fold" }, [h("summary", {}, [h("strong", { text: "Changes" }), " ",
-        h("span", { class: "fc-hint", text: "against the saved document" })]), parts.diffBody]);
+        h("span", { class: "fc-hint", text: "vs saved" })]), parts.diffBody]);
       parts.diffFold.addEventListener("toggle", function () { if (parts.diffFold.open) showChanges(); });
       changes.push(parts.diffFold);
     }

@@ -24,13 +24,13 @@ export function AgentPick({ id, ask = false, value: wanted = null, onPick = () =
   const pick = v => { setValue(v); onPick(v); };
   const a = list.find(x => x.id === value), st = a?.verified;
   const test = async () => {
-    toast(`Testing ${a.label}: it is asked one short question…`, "info");
+    toast(`Testing ${a.label}…`, "info");
     const got = await api(`/agents/${enc(a.id)}/test`, { method: "POST" });
     setList(l => l.map(x => x.id === a.id ? { ...x, verified: got.ok ? "ready" : "failed" } : x));
-    toast(got.ok ? `${a.label} is ready` : `${a.label} is not ready: Account › My agents and models says why`, got.ok ? "ok" : "warn");
+    toast(got.ok ? `${a.label} is ready` : `${a.label} is not ready: see Account › Agents`, got.ok ? "ok" : "warn");
   };
   return html`<span class="agent-pick"><select id=${id} value=${value} onChange=${e => pick(e.currentTarget.value)}>
       ${list.length ? list.map(x => html`<option value=${x.id} disabled=${!x.available}>${x.label + (x.available ? (SAID[x.verified] ? ` (${SAID[x.verified]})` : "") : ` (${x.why})`)}</option>`)
-        : html`<option value="" disabled>${ask ? "none offered for Ask (Admin › Agents and models)" : "none"}</option>`}</select>
-    <span class="agent-pick-said small">${!st || st === "ready" ? "" : html`<span class="muted">${SAID[st]} · <${Act} cls="small" onClick=${test}>Test connection<//> <a href="#/account" target="_blank" rel="noopener">Set it up</a></span>`}</span></span>`;
+        : html`<option value="" disabled>${ask ? "none offered for Ask (Admin › Agents)" : "none"}</option>`}</select>
+    <span class="agent-pick-said small">${!st || st === "ready" ? "" : html`<span class="muted">${SAID[st]} · <${Act} cls="small" onClick=${test}>Test<//> <a href="#/account" target="_blank" rel="noopener">Set up</a></span>`}</span></span>`;
 }

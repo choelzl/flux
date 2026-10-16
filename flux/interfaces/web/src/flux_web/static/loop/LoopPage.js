@@ -29,7 +29,7 @@ const SLUG = { Overview: "", Live: "live", Results: "results", Agents: "agents",
 const TAB_OF = Object.fromEntries(Object.entries(SLUG).map(([t, k]) => [k, t]));
 const ALIAS = { log: "live/log", timeline: "live/timeline", "agent-turns": "agents", workbench: "files/workbench", configure: "settings/problem" };
 const SUBS = { Live: [["", "Tree"], ["graph", "Graph"], ["timeline", "Timeline"], ["log", "Log"]], Results: [["", "Results"], ["graphs", "Graphs"], ["ideas", "Ideas"], ["library", "Library"]],
-  Files: [["", "Loop files"], ["workbench", "Workbench"]], Settings: [["loop", "Preferences"], ["problem", "Problem"]] };
+  Files: [["", "Files"], ["workbench", "Workbench"]], Settings: [["loop", "Preferences"], ["problem", "Problem"]] };
 
 /** Where an address leads: the tab, its sub-tab, a mode below it, Talk open. */
 function placeOf(path) {

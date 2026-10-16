@@ -19,12 +19,12 @@ export function Composer({ name, mine, send, n }) {
     setBusy(true);
     try { await send(said); setText(""); read(); } catch (x) { toast(x.message, "bad"); } finally { setBusy(false); }
   };
-  const remove = async x => { await loopApi(name).api(`/notes/${enc(x.id)}`, { method: "DELETE" }); toast("The note is removed", "ok"); read(); };
+  const remove = async x => { await loopApi(name).api(`/notes/${enc(x.id)}`, { method: "DELETE" }); toast("Note removed", "ok"); read(); };
   return html`<div class="composer">
     <div class="composer-row"><textarea rows="1" class="composer-in" aria-label="A note to the loop" ref=${ta} value=${text} onInput=${e => setText(e.currentTarget.value)}
-        placeholder="A note to the loop: it joins the next prompt (Enter sends, Shift+Enter for a new line)"
+        placeholder="Note to the loop (Enter sends, Shift+Enter: new line)"
         onKeyDown=${e => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); go(); } }} />
       <button class="primary" type="button" disabled=${busy} onClick=${go}>Send</button></div>
     <div class="composer-hist"><div class="notes">${notes.slice(-20).reverse().map(x => html`<div key=${x.id} class="note has-bin"><small class="muted">${x.by} · <${Ago} t=${x.t} /></small><div>${x.text}</div>
-      ${mine ? html`<${Bin} what="note" title="Remove this note?" said="It goes from the page, and from the loop if it has not read it yet; what the loop read already stays in its record." remove=${() => remove(x)} />` : ""}</div>`)}</div></div></div>`;
+      ${mine ? html`<${Bin} what="note" title="Remove this note?" said="Removed unless the loop read it already." remove=${() => remove(x)} />` : ""}</div>`)}</div></div></div>`;
 }

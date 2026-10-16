@@ -46,13 +46,13 @@ export function BoxPanel({ M, state, box, agent, setAgent = () => {}, edit, go, 
           set=${v => set(M.dseChoices(v)[0].value)} />
         <${Pick} label="Policy" k="dse" disabled=${kept} value=${f.dse} options=${choices} set=${set} /></div>
         <p class="cfg-says">${M.dseHint(state)}</p>
-        ${M.parameterSearch(state) ? html`<div class="cfg-grid2">${K("Designs a pass tries side by side", "batch", "1")}</div>` : ""}`;
+        ${M.parameterSearch(state) ? html`<div class="cfg-grid2">${K("Designs side by side", "batch", "1")}</div>` : ""}`;
       break;
     }
     case "orchestrate":
       if (M.parameterSearch(state)) { head = html`<${WhoTag} kind="rules">settings<//>`; body = html`<${Goto} go=${go} step="extra" what="Extra › Settings to search">A search over settings picks the next job:<//>`; break; }
       body = html`${f.orchestrate === "command" ? html`<div class="cfg-grid2"><${Text} label="Search command" mono wide value=${state.orchestrateCommand}
-            placeholder="{python} {home}/search.py {history} {state}" hint="it answers each round with the next candidates" set=${v => edit(() => { state.orchestrateCommand = v; })} />
+            placeholder="{python} {home}/search.py {history} {state}" hint="answers each round with the next candidates" set=${v => edit(() => { state.orchestrateCommand = v; })} />
           <${Text} label="Time limit, s" value=${state.orchestrateTimeout} placeholder="600" set=${v => edit(() => { state.orchestrateTimeout = v; })} /></div>`
         : ["default", "model", "tools"].includes(f.orchestrate) ? html`<${Pick} label="How the model picks" value=${f.orchestrate} disabled=${kept}
             options=${M.BOXES.orchestrate.choices.filter(c => c.half === "model").map(c => [c.value, c.label])} set=${v => edit(() => { f.orchestrate = v; })} />` : ""}
@@ -61,18 +61,18 @@ export function BoxPanel({ M, state, box, agent, setAgent = () => {}, edit, go, 
           ${K("A part yields after", "cooldown_after", "3", "designs that do not build")}${K("Share kept for new ideas", "exploration_quota", "0", "0 to 1")}</div>`;
       break;
     case "generate":
-      body = html`${M.paramOnly(state) ? html`<${Notice} tone="warn" what="A search over settings is on:" why="only a script turns a point into a design; with a model or an agent here, the settings alone reach your commands." />` : ""}
+      body = html`${M.paramOnly(state) ? html`<${Notice} tone="warn" what="A search over settings is on:" why="only a script turns a point into a design; with a model or agent, the settings only reach the commands." />` : ""}
         ${f.generate === "command" ? html`<${Text} label="Command" mono wide value=${state.generateCommand} placeholder="{python} {home}/gen.py {artifact} {knob}"
-          hint="it writes {artifact}; each setting to search is {its name}" set=${v => edit(() => { state.generateCommand = v; })} />` : ""}
-        ${f.generate === "catalog" ? html`<${Text} label="Designs you already have" wide value=${state.generateCatalog} placeholder="designs/a.sv, designs/b.sv"
+          hint="writes {artifact}; each setting is {its name}" set=${v => edit(() => { state.generateCommand = v; })} />` : ""}
+        ${f.generate === "catalog" ? html`<${Text} label="Existing designs" wide value=${state.generateCatalog} placeholder="designs/a.sv, designs/b.sv"
           hint="files beside the document, tried in order" set=${v => edit(() => { state.generateCatalog = v; })} />` : ""}
         <div class="cfg-grid2">${K("Designs per pass", "steps", "24")}${K("Repairs per design", "repair_attempts", "12")}
-          <${Pick} label="Prototype first" value=${state.budget.prototype} set=${v => edit(() => { state.budget.prototype = v; })}
-            options=${[["", "default (with a golden model)"], ["false", "off"], ["true", "on"], ["python", "in Python"], ["systemc", "in SystemC"]]} />
+          <${Pick} label="Prototype first" hint="default: with a golden model" value=${state.budget.prototype} set=${v => edit(() => { state.budget.prototype = v; })}
+            options=${[["", "default"], ["false", "off"], ["true", "on"], ["python", "in Python"], ["systemc", "in SystemC"]]} />
           <${Pick} label="Repair by" value=${state.budget.patching} set=${v => edit(() => { state.budget.patching = v; })}
             options=${[["", "edits (default)"], ["true", "edits"], ["false", "rewrites"]]} /></div>
-        ${isAgent(f.generate) ? html`<div class="cfg-sub"><h4>The agent's turns</h4><div class="cfg-grid2">${K("Continues past its time", "agent_continues", "3")}
-          ${K("Final turn, s", "agent_grace_s", "a quarter of its time")}</div></div>` : ""}`;
+        ${isAgent(f.generate) ? html`<div class="cfg-sub"><h4>Agent turns</h4><div class="cfg-grid2">${K("Continues past time", "agent_continues", "3")}
+          ${K("Final turn, s", "agent_grace_s", "¼ of its time")}</div></div>` : ""}`;
       break;
     case "test":
       head = html`<${WhoTag} kind="fixed">checks<//>`;
@@ -89,17 +89,17 @@ export function BoxPanel({ M, state, box, agent, setAgent = () => {}, edit, go, 
     case "records":
       head = html`<${WhoTag} kind="fixed">kept<//>`;
       body = html`<div class="cfg-grid2">${K("Passes", "passes", "until stopped")}${K("Time per pass, s", "budget_s", "no limit")}
-        ${K("Worse edits tolerated", "regress_after", "2")}${K("Passes at once", "parallel", "1", "an admin allows it on a server")}</div>`;
+        ${K("Worse edits tolerated", "regress_after", "2")}${K("Passes at once", "parallel", "1", "needs an admin on a server")}</div>`;
       break;
     case "knowledge":
       body = html`<${Goto} go=${go} step="prompt" what="Prompt › Files">The files the model reads are marked in<//>`;
       break;
     case "digest":
-      if (f.knowledge === "none") { head = html`<${WhoTag} kind="off">off<//>`; body = html`<p class="cfg-says">The library is off: no paper is read.</p>`; }
+      if (f.knowledge === "none") { head = html`<${WhoTag} kind="off">off<//>`; body = html`<p class="cfg-says">Library is off.</p>`; }
       break;
     default:
   }
   return html`<${Head} title=${b.title} hint=${b.says} actions=${head || null} />
-    ${raw ? html`<p class="cfg-says">${`An agent with its own settings, kept as written: ${JSON.stringify(state.agentRaw[box].agent)}. Choosing another replaces them.`}</p>` : ""}
+    ${raw ? html`<p class="cfg-says">${`Own settings, kept as written: ${JSON.stringify(state.agentRaw[box].agent)}. Another choice replaces them.`}</p>` : ""}
     ${body}`;
 }

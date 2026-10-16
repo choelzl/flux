@@ -11,9 +11,9 @@ import { Table } from "../components/Table.js";
 
 const EVERY_UNITS = [["min", 1 / 60], ["h", 1], ["d", 24]];
 const PARAM_LABEL = { days: "older than (days)", keep: "keep (names, comma-separated)", min_free_pct: "alert below (% free)",
-  keep_backups: "keep latest backups (at least 1)",
+  keep_backups: "keep backups (min 1)",
   max_mb: "condense over (MB)", keep_mb: "keep recent (MB)", failures_days: "login failures (days)",
-  notices_days: "notifications (days)", audit_days: "audit trail (days, 0 keeps all)", delete: "delete them (not only report)" };
+  notices_days: "notifications (days)", audit_days: "audit (days, 0 = all)", delete: "delete (not just report)" };
 const unitOf = hrs => hrs >= 24 && hrs % 24 === 0 ? EVERY_UNITS[2] : hrs >= 1 ? EVERY_UNITS[1] : EVERY_UNITS[0];
 const runTask = async (t, loop = null) => {
   const got = await api(`/admin/maintenance/${t.key}/run`, { method: "POST", body: { loop } });
@@ -42,7 +42,7 @@ function TaskForm({ t, loops }) {
     ${Object.entries(t.params).map(field)}
     ${t.per_loop && loops.length ? html`<div class="stack"><span class="muted small">Once, on one loop</span><div class="row">
       <${Select} aria-label="a loop" options=${loops} value=${loop} onChange=${setLoop} />
-      <${Act} cls="small" onClick=${() => runTask(t, loop)}>Run on this loop<//></div></div>` : ""}
+      <${Act} cls="small" onClick=${() => runTask(t, loop)}>Run<//></div></div>` : ""}
     ${mark}</div>`;
 }
 
@@ -61,6 +61,6 @@ export function Maintenance({ r, reload }) {
         : x ? html`<span class=${x.ok ? "" : "bad"} title=${x.said}>${x.loop ? `${x.loop}: ` : ""}${x.said}</span>` : html`<span class="muted">—</span>`}</td>
       <td class="right mt-acts"><${Act} cls="small" onClick=${async () => { await runTask(t); reload(); }}>Run<//><button type="button" class="small" onClick=${() => edit(t)}>Edit</button></td></tr>`;
   };
-  return html`<${Card} title="Maintenance"><p class="muted small">Clean-up on a schedule. A running loop is never touched; every run is in the audit trail.</p>
+  return html`<${Card} title="Maintenance"><p class="muted small">Scheduled clean-up. Running loops are never touched.</p>
     <${Table} cls="list compact mt-table" heads=${["Task", "Schedule", "Last run", "Result", ""]}>${r.tasks.map(row)}<//><//>`;
 }

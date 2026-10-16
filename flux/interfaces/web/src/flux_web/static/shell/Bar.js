@@ -51,7 +51,7 @@ export function Who() {
   return html`${me ? html`<${Bell} />` : ""}
     <button class="small acct-btn" type="button" aria-label="Account menu" aria-expanded=${String(open)} onClick=${e => { e.stopPropagation(); setOpen(!open); }}>☰</button>
     <div class=${cx("who-items", open && "open")} onClick=${e => { if (e.target.closest("a, button")) setOpen(false); }}>
-      <button class="small theme" title="Theme: system, light or dark" onClick=${next}>${THEMES[t]}</button>
+      <button class="small theme" title="Theme" onClick=${next}>${THEMES[t]}</button>
       ${me ? html`<a href="#/account" class="me" title=${me.name}>${me.name}</a><button class="small" onClick=${logout}>Log out</button>` : ""}</div>`;
 }
 

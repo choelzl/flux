@@ -45,9 +45,9 @@ async function once() {
       if (was.running && !l.running) {
         if (l.failed) notify(`${label} failed`, "bad", href);
         else if (l.stopped) notify(`${label} stopped`, "warn", href);
-        else notify(`${label} finished its passes`, "ok", href);
+        else notify(`${label} finished`, "ok", href);
       }
-      if (asks && asks !== was.key) notify(`${label}: the agent asks a question`, "warn", href);
+      if (asks && asks !== was.key) notify(`${label}: agent asks a question`, "warn", href);
     }
     bell.seen.set(id, { running: l.running, key: asks });
   }
