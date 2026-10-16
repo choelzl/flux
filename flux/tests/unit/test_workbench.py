@@ -33,13 +33,27 @@ def test_the_brief_lists_what_it_holds_and_the_link_reaches_it(tmp_path):
     work.mkdir()
     workbench_link(str(bench), work)
     assert (work / "workbench").resolve() == bench.resolve() and (bench / "tools").is_dir() and (bench / "notes").is_dir()
-    assert "(empty: you are the first)" in workbench_section(str(bench))
+    assert "It is empty: you are the first." in workbench_section(str(bench))
     (bench / "tools" / "fit.py").write_text('"""Fit a cubic per segment of GELU."""\nimport numpy\n')
     (bench / "notes" / "gelu.md").write_text("# The negative tail needs 2 more bits\n\nbecause ...\n")
     s = workbench_section(str(bench))
-    assert "workbench/tools/fit.py -- Fit a cubic per segment of GELU." in s
-    assert "workbench/notes/gelu.md -- The negative tail needs 2 more bits" in s
+    assert "It holds 2 files: `workbench/README.md` lists them" in s and "fit.py" not in s, "D1111: the index, not a listing"
     assert "never reads it" in s and "kept across runs" in s
+    index = (bench / "README.md").read_text()
+    assert "## tools" in index and "- `tools/fit.py` -- Fit a cubic per segment of GELU." in index
+    assert "- `notes/gelu.md` -- The negative tail needs 2 more bits" in index and "README.md`" not in index
+    import os
+    import time
+    stamp = (bench / "README.md").stat().st_mtime_ns
+    workbench_section(str(bench))
+    assert (bench / "README.md").stat().st_mtime_ns == stamp, "unchanged workbench: the index is not written again"
+    (bench / "notes" / "gelu.md").unlink()
+    workbench_section(str(bench))
+    assert "gelu.md" not in (bench / "README.md").read_text(), "a removed file leaves the index"
+    later = time.time() + 5
+    (bench / "tools" / "fit.py").write_text('"""Fit a quartic now."""\n')
+    os.utime(bench / "tools" / "fit.py", (later, later))
+    assert "It holds 1 file" in workbench_section(str(bench)) and "Fit a quartic now." in (bench / "README.md").read_text()
     workbench_link(str(bench), work)                                     # a second turn: the link stays
 
 

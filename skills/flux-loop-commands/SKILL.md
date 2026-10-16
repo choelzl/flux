@@ -56,7 +56,9 @@ Your cwd is the turn's work directory. It holds:
     with `pdftotext` or `python3` when the digest is not enough.
 - `workbench/` -- a link to the loop's workbench, kept across runs and shared by sub-loops:
   `workbench/tools/` for scripts you build and want next time, `workbench/notes/` for what you
-  learned. Read it first; write to it last. It is the only place outside `out/` you may write.
+  learned. `workbench/README.md` is its index (each file's first line; the loop rewrites it, so give
+  every file a first line saying what it is). Read it first; write to it last. It is the only place
+  outside `out/` you may write.
 
 **Run the loop's own gate or stage on a file** (`flux probe` or the same through `flux loop gate|measure`; raw tools are denied):
 

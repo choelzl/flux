@@ -78,8 +78,9 @@ tool inside its turn.
 The agents' own folder for tools and notes ([D677](decisions.md)): `workbench/` beside the
 document, always (D790). It is made on the first
 agent turn with `tools/` and `notes/` and is kept across runs. Every agent of the problem
-(generate, prototype, every box) finds it as `workbench/` in its work directory, and its brief
-lists what the folder holds, one line per file. The agents build tools there (scripts that fit,
+(generate, prototype, every box) finds it as `workbench/` in its work directory. The loop keeps an
+index of it, `workbench/README.md` (each file's first line, size and date, written again when the
+folder changes, D1111), and the brief points at the index instead of listing the folder. The agents build tools there (scripts that fit,
 tabulate or analyse) and keep notes (the method, what failed and why). This is knowledge built
 inside the loop, beside the lessons that `knowledge.lessons` draws from measured results between passes.
 The loop provides the folder and never reads it. Commit it with the application if it is worth

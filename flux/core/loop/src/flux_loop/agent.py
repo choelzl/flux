@@ -383,7 +383,6 @@ DECIDE = ("Nobody is available to answer questions during this run. Choose the o
           "say in one line what you chose, and write the file now.")
 
 
-WORKBENCH_LIST_MAX = 3000
 
 
 def workbench_link(bench: str, workdir: Path) -> Path | None:
@@ -415,25 +414,69 @@ def _first_line(path: Path) -> str:
     return ""
 
 
+#: D1111: the workbench's index, written by the loop -- the brief points at it instead of listing the folder.
+WORKBENCH_README = "README.md"
+_README_HEAD = ("# The workbench\n\nWritten by the loop from each file's first line whenever the workbench changes; edits "
+                "here are overwritten. Give every tool and note a first line saying what it is.\n")
+
+
+def _bench_files(root: Path) -> list[Path]:
+    return sorted((p for p in root.rglob("*") if p.is_file() and p.suffix not in (".pyc", ".pyo")
+                   and p.relative_to(root).parts != (WORKBENCH_README,)
+                   and not any(q.startswith(".") or q == "__pycache__" for q in p.relative_to(root).parts)),
+                  key=lambda p: str(p.relative_to(root)))
+
+
+def workbench_index(bench: str) -> tuple[Path, int] | None:
+    """D1111: `workbench/README.md` -- each folder, then each file in it with its first line, its size and when it last
+    changed -- written again when a file is newer than it (or one was removed). (its path, how many files); None
+    without a workbench."""
+    if not bench:
+        return None
+    root = Path(bench)
+    if not root.is_dir():
+        return None
+    files, readme = _bench_files(root), root / WORKBENCH_README
+    try:
+        stamp = readme.stat().st_mtime if readme.is_file() else -1.0
+        listed = readme.read_text(errors="replace").count("\n- `") if readme.is_file() else -1
+    except OSError:
+        stamp, listed = -1.0, -1
+    if stamp >= 0 and listed == len(files) and all(p.stat().st_mtime <= stamp for p in files):
+        return readme, len(files)
+    import time as _time
+
+    lines, folder = [_README_HEAD], None
+    for p in files:
+        rel = p.relative_to(root)
+        here = str(rel.parent) if rel.parent != Path(".") else "(top)"
+        if here != folder:
+            folder = here
+            lines.append(f"\n## {here}\n")
+        st = p.stat()
+        first = _first_line(p)
+        lines.append(f"- `{rel}` -- {first or '(no first line)'} ({st.st_size} B, {_time.strftime('%Y-%m-%d', _time.localtime(st.st_mtime))})")
+    if not files:
+        lines.append("\n(empty)")
+    tmp = readme.with_name(f".{WORKBENCH_README}.{os.getpid()}")
+    try:
+        tmp.write_text("\n".join(lines) + "\n")
+        tmp.replace(readme)                          # whole or not at all: agents read it while others write
+    except OSError:
+        return None
+    return readme, len(files)
+
+
 def workbench_section(bench: str) -> str:
-    """The WORKBENCH section of a brief (D677): what the folder is for, and what is in it now
-    (each file with its first line), within a budget; "" without one."""
+    """The WORKBENCH section of a brief (D677): what the folder is for, and where its index is (D1111: the index, not
+    a listing of the folder); "" without one."""
     if not bench:
         return ""
-    root = Path(bench)
-    files = sorted((p for p in root.rglob("*") if p.is_file() and p.suffix not in (".pyc", ".pyo")
-                    and not any(q.startswith(".") or q == "__pycache__" for q in p.relative_to(root).parts)),
-                   key=lambda p: str(p.relative_to(root)))
-    lines, used = [], 0
-    for p in files:
-        first = _first_line(p)
-        line = f"  workbench/{p.relative_to(root)}" + (f" -- {first}" if first else "")
-        if used + len(line) > WORKBENCH_LIST_MAX:
-            lines.append(f"  ... and {len(files) - len(lines)} more (look in the folder)")
-            break
-        lines.append(line)
-        used += len(line)
-    held = "\n".join(lines) if lines else "  (empty: you are the first)"
+    got = workbench_index(bench)
+    n = got[1] if got else 0
+    held = ("It is empty: you are the first." if not n else
+            f"It holds {n} {'file' if n == 1 else 'files'}: `workbench/{WORKBENCH_README}` lists them, each with its first "
+            "line -- read it first.")
     return ("YOUR WORKBENCH: `workbench/` in your directory. It is one folder for every agent working on this "
             "problem, and it is kept across runs, so what you leave there helps the next agent, and you in a "
             "later session. The loop gives it to you and never reads it: it is your own knowledge, built while "
@@ -445,8 +488,7 @@ def workbench_section(bench: str) -> str:
             "which you worked something out (a method, a number, why a draft failed), leave it there for the "
             "next agent. The draft goes to its own path, not here. A tool may not run the design tools either. "
             "Scratch that need not last goes to /tmp (gone when the run ends); everything else outside your "
-            "directory and the workbench is read-only.\n"
-            f"What it holds now:\n{held}")
+            "directory and the workbench is read-only.\n" + held)
 
 
 def library_section(problem: Any, question: str | list[str], state: Any = None) -> str:
