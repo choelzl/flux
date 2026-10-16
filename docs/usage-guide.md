@@ -49,7 +49,9 @@ flux ask --tui                                           # the same, from a setu
   the document and its files into `./out/ask_<slug>/`. It checks the document, runs it, and
   gives the author the report to revise for the next pass. Options: `--no-run` (write and
   check only), `--passes N`, `--screen-only`, `--dir DIR`, `--skill DIR`, `--questions operator` (an agent
-  author may ask one question, answered as a line in `runs/author/inbox.jsonl` within `--wait-s`). An agent
+  author may ask one question, answered as a line in `runs/author/inbox.jsonl` within `--wait-s`), `--hidden PATH`
+  (a path in the folder hidden from AI: the author may not read it, the document gets it in
+  `flow.knowledge.hidden`). An agent
   author gets the skills `flux-loop-creator` and `flux-loop-commands`, reads the bundled loops, and writes
   `decisions.json` (each decision's step and one-line reason) beside the document. The setup screen
   (`--tui`, or no prompt) takes the prompt, the files, the author and the passes; with

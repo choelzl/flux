@@ -317,8 +317,9 @@ class Authoring:
         return st
 
     def start(self, *, app_dir: Path, workspace: Any, name: str, prompt: str, author: str, env: dict[str, str],
-              attachments: list[Path], revise: str | None, by: str, ask_me: bool = False) -> None:
-        """`revise`: the loop's document name, when it has one to revise; `ask_me`: the agent may ask (D1125)."""
+              attachments: list[Path], revise: str | None, by: str, ask_me: bool = False, hidden: list[str] = ()) -> None:
+        """`revise`: the loop's document name, when it has one to revise; `ask_me`: the agent may ask (D1125); `hidden`:
+        paths in the loop hidden from its agents and the author, which the document gets (D1159)."""
         with self._lock:
             if not app_dir.is_dir():
                 raise ValueError("this loop has moved or been removed; reload it before starting an agent")
@@ -336,7 +337,7 @@ class Authoring:
             self._launch(app_dir, workspace, name, ask=ask, author=author, env=env, attachments=attachments, by=by,
                          ask_me=ask_me, extra=[], header="revision" if revise else "authoring",
                          state={"prompt": prompt.strip()[:4000], "revise": revise, "before": before,
-                                "yours": sorted({f"library/{a.name}" for a in attachments})})
+                                "yours": sorted({f"library/{a.name}" for a in attachments}), "hidden": list(hidden)})
 
     def retry(self, *, app_dir: Path, workspace: Any, name: str, env: dict[str, str], by: str, note: str = "") -> str:
         """D1158: another round of repairs on a draft its author's check refused -- the same agent, its session
@@ -362,7 +363,7 @@ class Authoring:
             ask = st.get("ask") or st.get("prompt") or ""
             self._launch(app_dir, workspace, name, ask=ask, author=str(st.get("author") or "model"), env=env, attachments=[],
                          by=by, ask_me=bool(st.get("ask_me")), extra=extra, header="repair",
-                         state={k: st.get(k) for k in ("prompt", "revise", "before", "yours", "session")}
+                         state={k: st.get(k) for k in ("prompt", "revise", "before", "yours", "session", "hidden")}
                          | {"rounds": int(st.get("rounds") or 1) + 1},
                          keep=[(logs / "author-activity.jsonl", Path("runs/author/activity.jsonl"))])
         return "the agent repairs the draft" + (" as told" if note.strip() else "")
@@ -402,6 +403,8 @@ class Authoring:
             argv += ["--questions", "operator"]
         for a in attachments:
             argv += ["--file", str(a)]
+        for h in state.get("hidden") or []:
+            argv += ["--hidden", str(h)]
         with open(f["log"], "a") as fh:
             fh.write(f"\n── {header} {time.strftime('%Y-%m-%d %H:%M:%S')} by {by} · {AUTHORS.get(author, author)} ──\n")
         log = open(f["log"], "ab")

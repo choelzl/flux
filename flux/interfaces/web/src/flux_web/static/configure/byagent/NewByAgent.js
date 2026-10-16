@@ -29,6 +29,7 @@ import { Check } from "../../components/Check.js";
 import { AskMe } from "./ReviseByAgent.js";
 import { sendWithProgress } from "../../uploads.js";
 import { useLoad } from "../../components/Load.js";
+import { hiddenBy } from "../../files/hidden.js";
 
 const STAGES = ["Ask", "Drafting", "Review", "Ready"];
 /** The configurator's steps a decision belongs to (its ids: the configure route's `?step=`). */
@@ -69,7 +70,7 @@ function Ask({ state, items, setItems, edit, who, askMe, setAskMe, draft: start 
         <label class="stack">Agent<${AgentPick} id="ag-who" ask onPick=${v => { who.current = v; }} /></label></div>
       <label class="stack">What should the loop do?<textarea rows="6" id="ag-ask" value=${state.statement || ""} ref=${askField} onInput=${edit("statement")}
         placeholder="e.g. a signed 8x8 multiplier in SystemVerilog, the smallest that makes 1 GHz placed on ASAP7, exact for every input." /></label>
-      <h3>Files to read</h3><${AttachBox} items=${items} onChange=${setItems} />
+      <h3>Files to read</h3><${AttachBox} items=${items} onChange=${setItems} hideable />
       <${AskMe} on=${askMe} set=${setAskMe} /><//>
     <${Uses} /></div>
     <div class="form-actions ba-nav"><span class="grow" /><${Act} cls="primary" onClick=${go}>Draft<//></div>`;
@@ -171,7 +172,7 @@ function Ready({ name, back, made }) {
 export function NewByAgent({ draft = null, onDraft = () => {}, done = () => {} }) {
   const who = useRef(""), own = useRef({}), [, redraw] = useState(0);
   const state = draft ? (draft.state = draft.state || window.FluxCrafter?.base() || {}) : own.current;
-  const [items, setItems] = useState(() => draft ? [...draft.staged].map(([path, x]) => ({ path, src: x, file: x.file || new File([x.text], path.split("/").pop(), { type: "text/plain" }) })) : []);
+  const [items, setItems] = useState(() => draft ? [...draft.staged].map(([path, x]) => ({ path, src: x, hidden: !!hiddenBy(path, draft.state?.hidden), file: x.file || new File([x.text], path.split("/").pop(), { type: "text/plain" }) })) : []);
   const [flow, setFlow] = useState(() => recallJson(flowKey(), null) || {}), [askMe, setAskMe] = useState(flow.askMe ?? true);
   const save = patch => setFlow(f => { const next = { ...f, ...patch }; remember(flowKey(), next.name ? next : null); return next; });
   const [st, poll] = useAuthor(flow.name);
@@ -181,11 +182,16 @@ export function NewByAgent({ draft = null, onDraft = () => {}, done = () => {} }
     loopApi(flow.name).api().then(info => { if (!info.agent_draft) save({ name: null, stage: 0, kept: {} }); },
       e => { if (e.status === 404) save({ name: null, stage: 0, kept: {} }); });
   }, [flow.name]);
-  const keepItems = next => { setItems(next); if (!draft) return; draft.staged.clear(); for (const g of next) draft.staged.set(g.path, g.src || { file: g.file }); onDraft(); };
+  const keepItems = next => {                                  // D1159: hidden from AI, as the draft's own (the configurator's)
+    setItems(next); if (!draft) return; draft.staged.clear(); for (const g of next) draft.staged.set(g.path, g.src || { file: g.file });
+    const kept = (state.hidden || []).filter(p => !items.some(g => g.path === p)), hide = next.filter(g => g.hidden).map(g => g.path);
+    state.hidden = [...kept, ...hide.filter(p => !kept.includes(p))]; onDraft();
+  };
   const edit = k => e => { state[k] = e.currentTarget.value; onDraft(); redraw(n => n + 1); };
   const start = async () => {
     const name = String(state.id).trim();
     const fd = new FormData(); fd.append("name", name); fd.append("prompt", state.statement); fd.append("author", who.current); fd.append("ask_me", askMe ? "true" : "false");
+    for (const g of items) if (g.hidden) fd.append("hidden", g.path);           // D1159: in the draft, hidden from AI
     const r = await withFiles("/apps/new-by-agent", fd, items);
     toast(r.ok, "ok");
     save({ name, stage: 1, kept: {}, who: who.current, askMe, ask: { id: name, statement: state.statement } });

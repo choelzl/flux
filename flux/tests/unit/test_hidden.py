@@ -334,3 +334,61 @@ def test_an_agent_author_with_hidden_paths_is_refused_them(tmp_path, monkeypatch
     got = json.loads(rec.read_text())
     deny = json.loads(got["argv"][got["argv"].index("--settings") + 1])["permissions"]["deny"]
     assert f"Read(/{work.resolve() / 'tests'}/**)" in deny
+
+
+# ---- an ask's hidden inputs: the author is told, the document carries them -------------------------------------------
+CHECK = "import sys\nprint('0 failing')\n"
+DIGITS = {"statement": "The digits 0 to 9, one per line.", "language": "text",
+          "budget": {"steps": 1, "repair_attempts": 0, "prototype": False}, "flow": {"test": "{python} {home}/check.py {artifact}"}}
+
+
+def test_the_check_adds_the_asks_hidden_paths_and_reads_none_of_them(tmp_path):
+    """An author's draft that forgot the ask's hidden paths gets them in flow.knowledge.hidden, beside `off`; a hidden
+    input is not added to the files every prompt reads."""
+    from flux_loop.author import check_document
+
+    work = tmp_path / "w"
+    (work / "library").mkdir(parents=True)
+    (work / "library" / "spec.md").write_text("the spec\n")
+    (work / "library" / "expected.txt").write_text("0\n1\n")
+    (work / "check.py").write_text(CHECK)
+    (work / "problem.yaml").write_text(yaml.safe_dump(DIGITS, sort_keys=False))
+    inputs = [Path("library/spec.md"), Path("library/expected.txt")]
+    task, _p, why = check_document(work, inputs, hidden=["library/expected.txt"])
+    assert task is not None, why
+    k = yaml.safe_load((work / "problem.yaml").read_text())["flow"]["knowledge"]
+    assert k == {"files": ["library/spec.md"], "hidden": ["library/expected.txt"]}
+    assert task.hidden_said == ("library/expected.txt",)
+    check_document(work, inputs, hidden=["library/expected.txt"])          # said once, not twice
+    assert yaml.safe_load((work / "problem.yaml").read_text())["flow"]["knowledge"]["hidden"] == ["library/expected.txt"]
+    (work / "problem.yaml").write_text(yaml.safe_dump({**DIGITS, "flow": {**DIGITS["flow"], "knowledge": "off"}}, sort_keys=False))
+    assert check_document(work, inputs, hidden=["library/expected.txt"])[2] == ""
+    assert yaml.safe_load((work / "problem.yaml").read_text())["flow"]["knowledge"] == {"off": True, "hidden": ["library/expected.txt"]}
+
+
+def test_a_model_authors_brief_marks_a_hidden_input_and_shows_none_of_it(tmp_path):
+    from flux_loop.author import Ask, brief
+
+    (tmp_path / "library").mkdir()
+    (tmp_path / "library" / "spec.md").write_text("THE SPEC\n")
+    (tmp_path / "library" / "expected.txt").write_text("THE ANSWERS\n")
+    text = brief(Ask(prompt="digits", workdir=tmp_path, inputs=[Path("library/spec.md"), Path("library/expected.txt")],
+                     hidden=["library/expected.txt"]), inline=True)
+    assert "library/expected.txt -- HIDDEN" in text and "THE SPEC" in text and "THE ANSWERS" not in text
+
+
+def test_flux_ask_hidden_puts_a_given_file_in_the_documents_hidden(tmp_path):
+    """`flux ask --file ... --hidden library/<name>`: the draft the author wrote hides it."""
+    from flux_cli.main import main
+
+    from test_author import _reply
+
+    replies = tmp_path / "author.json"
+    replies.write_text(json.dumps([_reply({"problem.yaml": yaml.safe_dump(DIGITS), "check.py": CHECK})]))
+    (tmp_path / "expected.txt").write_text("0\n")
+    w = tmp_path / "w"
+    rc = main(["ask", "the digits", "--dir", str(w), "--no-run", "--author-replies", str(replies), "--replies", str(replies),
+               "--file", str(tmp_path / "expected.txt"), "--hidden", "library/expected.txt"])
+    assert rc == 0
+    k = yaml.safe_load((w / "problem.yaml").read_text())["flow"]["knowledge"]
+    assert k == {"hidden": ["library/expected.txt"]}, k

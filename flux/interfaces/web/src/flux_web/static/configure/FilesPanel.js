@@ -2,18 +2,20 @@
 // removable; the ones the document names and the loop lacks; a new one written here; files dropped (into a folder,
 // when one is named). `FilesBody` is the list itself (the configurator's Prompt holds it, each file with what it is
 // to the loop); `FilesPanel` folds it under a form (Direct edit), open by itself when there are files or one is missing.
+// D1159: with `hide(paths)`, each file or folder dropped may be marked hidden from AI, the paths it makes said to `hide`.
 
 import { html, Notice, useChanges, useEffect, useRef, useState, Empty } from "../view.js";
 import { bytes, plural } from "../format.js";
-import { Uploader, placedFiles } from "../components/Uploader.js";
+import { Uploader, hiddenRows, placedFiles } from "../components/Uploader.js";
 import { Tool } from "../components/Head.js";
 
 /** The files, the missing ones, a new file, a drop; `more(f)` what a file's row says besides (tags, a toggle). */
-export function FilesBody({ store, more = null }) {
+export function FilesBody({ store, more = null, hide = null }) {
   const [rows, setRows] = useState([]);
   const add = () => {
     if (rows.some(r => r.dest === "custom" && !r.custom.trim())) return;
     store.add(placedFiles(rows), "");
+    if (hide && hiddenRows(rows).length) hide(hiddenRows(rows));
     setRows([]);
   };
   useChanges(store);
@@ -25,7 +27,7 @@ export function FilesBody({ store, more = null }) {
       ${missing.length ? html`<${Notice} key="missing" tone="bad" what="Named but missing:">
         ${" "}${missing.map((p, i) => html`${i ? ", " : ""}<button type="button" class="link" title="Write it here" onClick=${() => store.editor(p, "")}>${p}</button>`)}<//>` : ""}
       <div class="row"><button class="small" type="button" onClick=${() => store.editor("", "")}>New file</button></div>
-      <${Uploader} rows=${rows} onChange=${setRows} label="Drop scripts, models, papers or folders" />
+      <${Uploader} rows=${rows} onChange=${setRows} hideable=${!!hide} label="Drop scripts, models, papers or folders" />
       ${rows.length ? html`<div class="row"><button class="small primary" type="button" onClick=${add}>${`Add ${plural(placedFiles(rows).length, "file")}`}</button></div>` : ""}</div>`;
 }
 

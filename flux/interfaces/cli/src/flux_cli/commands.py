@@ -601,6 +601,7 @@ def cmd_ask(args: argparse.Namespace) -> int:
               skills=skills, no_run=bool(args.no_run), questions=getattr(args, "questions", "decide") or "decide",
               wait_s=float(getattr(args, "wait_s", 600.0) or 600.0), session=getattr(args, "session", None) or None,
               repair=bool(getattr(args, "repair", False)), note=str(getattr(args, "note", "") or ""),
+              hidden=[str(h) for h in getattr(args, "hidden", None) or []],
               journal=workdir / "runs" / "author" if args.no_run else None)     # D1125: the page's activity and answers
     if tui:
         return _ask_tui(ask, run_pass=run_pass, proposer=author_model, review=review, channel=channel)

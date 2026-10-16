@@ -376,9 +376,11 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
 
     @app.post("/api/apps/new-by-agent")
     async def new_by_agent(name: str = Form(...), prompt: str = Form(...), author: str = Form("opencode"), ask_me: bool = Form(False),
-                           files: list[UploadFile] | None = File(None), user: User = Depends(user_of)) -> dict[str, Any]:
+                           files: list[UploadFile] | None = File(None), hidden: list[str] | None = Form(None),
+                           user: User = Depends(user_of)) -> dict[str, Any]:
         """A new loop whose problem an agent writes from a description and files (D704); a draft until it is made
-        (D1122: `agent_draft` in its meta), the agent asking when `ask_me`."""
+        (D1122: `agent_draft` in its meta), the agent asking when `ask_me`; `hidden` the files given (by their names as
+        sent) hidden from AI, in library/ as the author places them (D1159)."""
         creator(user)
         if not user.can("run_loops"):
             raise HTTPException(403, "you may not run agents")
@@ -391,9 +393,11 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
         except WorkspaceError as exc:
             raise fail(exc) from exc
         try:
+            sent = {f.filename for f in files or [] if f.filename}
+            hide = sorted({f"library/{Path(h).name}" for h in hidden or [] if h in sent})
             got = await _attach(d, files)
             authoring.start(app_dir=d, workspace=w, name=name, prompt=prompt, author=author, env=_author_env(user, name, None, author),
-                            attachments=got, revise=None, by=user.name, ask_me=ask_me)
+                            attachments=got, revise=None, by=user.name, ask_me=ask_me, hidden=hide)
             w.set_meta(name, agent_draft=True)
         except (ValueError, HTTPException) as exc:
             shutil.rmtree(d, ignore_errors=True)

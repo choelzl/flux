@@ -6,6 +6,7 @@ import { html } from "../view.js";
 import { Tag } from "../components/Tone.js";
 import { FilesBody } from "./FilesPanel.js";
 import { Pick, Text } from "./fields.js";
+import { HiddenMark, hiddenBy } from "../files/hidden.js";
 
 export function PromptStep({ M, state, edit, store, opts, invalid }) {
   const implied = M.impliedLanguage(state);              // D832: optional -- the tools usually tell
@@ -15,7 +16,10 @@ export function PromptStep({ M, state, edit, store, opts, invalid }) {
   const reads = M.list(state.knowledgeFiles).map(p => p.replace(/\/$/, "")), named = new Set(M.namedFiles(state));
   const read = p => reads.some(r => p === r || p.startsWith(`${r}/`));
   const more = f => html`<span class="cfg-file-tags">${f.path.startsWith("library/") ? html`<${Tag} title="a paper: summed up once, the summary in every prompt">library<//>`
-    : read(f.path) ? html`<${Tag} title="every prompt reads it (Graph › Library)">read<//>` : named.has(f.path) ? html`<${Tag}>named<//>` : ""}</span>`;
+    : read(f.path) ? html`<${Tag} title="every prompt reads it (Graph › Library)">read<//>` : named.has(f.path) ? html`<${Tag}>named<//>` : ""}${
+      hiddenBy(f.path, M.hiddenOf(state)) ? html`<${HiddenMark} path=${f.path} by=${hiddenBy(f.path, M.hiddenOf(state))} />` : ""}</span>`;
+  // D1159: files dropped hidden from AI go to flow.knowledge.hidden (Graph › Knowledge lists them)
+  const hide = paths => edit(() => { const now = M.hiddenOf(state); state.hidden = [...now, ...paths.filter(p => !now.includes(p))]; });
   return html`<div class="cfg-grid2">
       <${Text} label=${opts.nameLabel || "Name"} k="id" invalid=${invalid} value=${state.id} set=${v => edit(() => { state.id = v; })}
         placeholder=${opts.namePlaceholder || "my_design"} hint=${W.nameHint} />
@@ -25,5 +29,5 @@ export function PromptStep({ M, state, edit, store, opts, invalid }) {
       placeholder=${W.statementPlaceholder} />
     <${Text} area rows=${2} label=${W.rules} value=${state.contract} set=${v => edit(() => { state.contract = v; })}
       placeholder=${W.rulesPlaceholder} />
-    <section class="cfg-sec"><h3>Files</h3><${FilesBody} store=${store} more=${more} /></section>`;
+    <section class="cfg-sec"><h3>Files</h3><${FilesBody} store=${store} more=${more} hide=${hide} /></section>`;
 }

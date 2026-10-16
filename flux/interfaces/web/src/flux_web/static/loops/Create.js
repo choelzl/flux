@@ -3,13 +3,13 @@
 // document written here.
 
 import { Card, html, useRef, useState } from "../view.js";
-import { api, createFromText, enc, toast } from "../ui.js";
+import { api, createFromText, enc, loopApi, toast } from "../ui.js";
 import { plural } from "../format.js";
 import { sendFiles, sendWithProgress } from "../uploads.js";
 import { bound } from "../components/Autosave.js";
 import { Act } from "../components/Act.js";
 import { CodeEditor } from "../components/CodeEditor.js";
-import { Uploader, placedFiles } from "../components/Uploader.js";
+import { Uploader, hiddenRows, placedFiles } from "../components/Uploader.js";
 import { PageHead } from "../components/PageHead.js";
 
 /** Create a loop from a starter document or uploaded files, a folder, or a single ZIP. */
@@ -31,11 +31,16 @@ export function UploadForm() {
       return;
     }
     const sent = await sendWithProgress("Uploading", `${plural(chosen.length, "file")} to ${n}`, p => sendFiles(n, chosen, { create: true, ...p }));
-    if (sent != null) { toast(`${n} uploaded: ${plural(sent, "file")}`, "ok"); location.hash = `#/app/${enc(n)}`; }
+    if (sent == null) return;
+    for (const p of hiddenRows(rows)) {                      // D1159: marked hidden from AI, once the loop has its document
+      try { await loopApi(n).api("/hidden", { method: "PUT", body: { path: p, hidden: true } }); }
+      catch (e) { toast(`${p} not hidden: ${e.message}`, "warn", { timeout: 9000 }); }
+    }
+    toast(`${n} uploaded: ${plural(sent, "file")}`, "ok"); location.hash = `#/app/${enc(n)}`;
   };
   return html`<${Card}><div class="upload">
     <label class="stack">Name<input placeholder="my_loop" pattern="[A-Za-z0-9_\\-]{1,60}" maxlength="60" class="full" id="up-name" autocomplete="off" ...${bound(name, setName)} /></label>
-    <${Uploader} rows=${rows} onChange=${take} label="Drop a loop folder, files or a .zip" />
+    <${Uploader} rows=${rows} onChange=${take} hideable label="Drop a loop folder, files or a .zip" />
     ${rows.length ? "" : html`<p class="muted small">Without files: a starter problem.yaml, README and empty library/, opened in the configurator.</p>`}
     <div class="form-actions"><${Act} cls="primary" onClick=${create}>Create loop<//></div></div><//>`;
 }

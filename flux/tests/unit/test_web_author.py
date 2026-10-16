@@ -22,7 +22,8 @@ args = sys.argv[1:]
 prompt, d = args[1], args[args.index("--dir") + 1]
 files = [args[i + 1] for i, a in enumerate(args) if a == "--file"]
 time.sleep(float(os.environ.get("FAKE_SLEEP", "0")))
-print("author:", args[args.index("--author") + 1], "files:", ",".join(os.path.basename(f) for f in files))
+hidden = [args[i + 1] for i, a in enumerate(args) if a == "--hidden"]
+print("author:", args[args.index("--author") + 1], "files:", ",".join(os.path.basename(f) for f in files), "hidden:", ",".join(hidden))
 text = "statement: from the agent\n" if not prompt.startswith("REVISE") else "statement: revised by the agent\n"
 open(os.path.join(d, "problem.yaml"), "w").write(text)
 '''
@@ -73,6 +74,18 @@ def test_an_agent_writes_a_new_loops_problem_from_a_description_and_files(server
     assert c.post("/api/apps/new-by-agent", data={"name": "made", "prompt": "again"}, headers=H).status_code == 400
     assert c.post("/api/apps/new-by-agent", data={"name": "z", "prompt": "x", "author": "nobody"}, headers=H).status_code == 400
     assert not (tmp / "data/users/bob/apps/z").exists(), "a refused start leaves no loop behind"
+
+
+def test_files_given_hidden_from_ai_reach_the_author_as_hidden(server):
+    """D1159: the files a new loop's author is given, marked hidden from AI, go to `flux ask --hidden` as the author
+    places them (library/<name>); a name not among the files sent is ignored."""
+    _app, c, _tmp = server
+    r = c.post("/api/apps/new-by-agent", data={"name": "hid", "prompt": "an 8-bit adder", "author": "opencode",
+                                               "hidden": ["tests/expected.txt", "nope.txt"]},
+               files=[("files", ("spec.md", b"# the spec")), ("files", ("tests/expected.txt", b"42"))], headers=H)
+    assert r.status_code == 200, r.text
+    st = _wait(c, "hid")
+    assert "hidden: library/expected.txt\n" in "\n".join(st["log"]) + "\n", st["log"]
 
 
 def test_an_agent_revises_a_problem_keeping_its_name_and_says_what_changed(server, monkeypatch):

@@ -1498,6 +1498,14 @@ objectives: [{metric: timings.fast, goal: 15, direction: minimize},
             doc = "document.getElementById('phone').contentDocument"
             views = {"live": ("/live", ".alt-detail"), "agents": ("/agents", ".detail-card"), "ask": ("/ask", "dialog[open]")}
             b.cmd("WebDriver:SetWindowRect", {"width": 1340, "height": 1000})     # a 1280 px frame whole in the window
+            # A document of its own to hold the frames: Firefox gives a new frame the load type of the document it is in, and in
+            # one an earlier step refreshed (WebDriver:Refresh) the frame's hash change below is a whole reload -- mock gone.
+            # (Navigate can answer before the new document is in: wait for its own address, not the last page's list.)
+            fresh = f"?agent-views={time.time()}"
+            b.go(f"{r.url}/{fresh}#/")
+            b.wait(f"location.search === '{fresh}' && document.readyState === 'complete'"
+                   " && performance.getEntriesByType('navigation')[0]?.type === 'navigate' && document.querySelector('#main table.list, #main .empty')",
+                   timeout=20, what="a freshly loaded page")
             try:
                 for theme in ("light", "dark"):
                     b.js("localStorage.setItem('flux-theme', arguments[0]); return 1", theme)

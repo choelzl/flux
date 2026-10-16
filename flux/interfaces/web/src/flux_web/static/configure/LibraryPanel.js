@@ -135,7 +135,7 @@ export function Knowledge({ M, state, edit, store, who, opts, fixed, direct }) {
     if (p && !hidden.includes(p)) setHidden([...hidden, p]);
     setHideIn("");
   };
-  const tops = [...new Set(files.map(x => x.path.includes("/") ? `${x.path.split("/")[0]}/` : x.path))].filter(p => !isDoc(p) && !hidden.includes(p)).sort();
+  const tops = [...new Set(files.map(x => x.path.includes("/") ? `${x.path.split("/")[0]}/` : x.path))].filter(p => !isDoc(p) && !hidden.some(h => bare(h) === bare(p))).sort();
   const hiddenSec = html`<div class="cfg-sub" data-sec="hidden">
     <${Head} title=${W.hidden} control=${html`<span class="muted small">${hidden.length || ""}</span>`} />
     <p class="cfg-says">${W.hiddenSays}</p>

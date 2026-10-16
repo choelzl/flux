@@ -121,17 +121,28 @@ class Ask:
     hidden: list[str] = field(default_factory=list)         # D1159: paths in workdir hidden from an agent author
 
 
+def _hidden_input(p: Path | str, hidden: list[str], workdir: Path) -> bool:
+    """Whether an input (relative to `workdir`) is one of the ask's `hidden` paths (D1159), or under one."""
+    if not hidden:
+        return False
+    from .hidden import absolute, is_hidden
+
+    return is_hidden(Path(workdir) / p, [a for a, _r in absolute(hidden, workdir)])
+
+
 def _inputs_block(ask: Ask, *, inline: bool) -> str:
     if not ask.inputs:
         return "INPUT FILES: none."
     lines = ["INPUT FILES (in the working directory; name them in `flow: {knowledge: {files: [...]}}` so every design "
              "prompt reads them, and use them -- a reference model, tests, a spec -- in the gate where they fit):"]
-    lines += [f"  - {p}" for p in ask.inputs]
+    off = [p for p in ask.inputs if _hidden_input(p, ask.hidden, ask.workdir)]
+    lines += [f"  - {p}" + (" -- HIDDEN from the loop's agents and you: do not read it; the loop's own checks may use it"
+                            if p in off else "") for p in ask.inputs]
     if inline:
         from .document import read_input
 
         budget = ask.excerpt_chars
-        for p in ask.inputs:
+        for p in [p for p in ask.inputs if p not in off]:
             if budget <= 0:
                 lines.append(f"(the rest is not shown inline: {budget} characters over)")
                 break
@@ -776,14 +787,16 @@ def _golden_fault(task: Any, workdir: Path) -> str:
     return ""
 
 
-def check_document(workdir: Path, inputs: list[Path] = (), skills: bool = False) -> tuple[Any, Any, str]:
+def check_document(workdir: Path, inputs: list[Path] = (), skills: bool = False,
+                   hidden: list[str] = ()) -> tuple[Any, Any, str]:
     """(task, problem, "") when the authored document can run, else (None, None, why): `check_problem` on its
-    `problem.yaml`, an author's draft. Input files the document forgot are added to its `knowledge.files`."""
+    `problem.yaml`, an author's draft. Input files the document forgot are added to its `knowledge.files`, the ask's
+    `hidden` paths it forgot to its `knowledge.hidden`."""
     path = document_path(workdir)
     if not path.is_file():
         listing = _listing(workdir) if Path(workdir).is_dir() else "(no folder)"
         return None, None, f"there is no `{DOCUMENT}` in the loop folder; it holds: {listing}"
-    return check_problem(path, inputs=inputs, skills=skills)
+    return check_problem(path, inputs=inputs, skills=skills, hidden=hidden)
 
 
 def is_draft(folder: Path) -> bool:
@@ -792,14 +805,15 @@ def is_draft(folder: Path) -> bool:
 
 
 def check_problem(path: Path, *, draft: bool = True, tools: bool = True, inputs: list[Path] = (),
-                  skills: bool = False) -> tuple[Any, Any, str]:
+                  skills: bool = False, hidden: list[str] = ()) -> tuple[Any, Any, str]:
     """The check an authored document passes before anything runs (D589, D1155) -- the author's after each turn, and
     `flux task check`'s: (task, problem, "") when it can run, else (None, None, why), every path in `why` relative to
     the loop folder. It is YAML, says only document keys, names only files the folder has (each missing one with the
     key that names it and what the folder holds), loads, its golden model runs, and (`tools`) the tools it needs are
     on PATH. A `draft` is an author's: it must also write its golden model (outside a draft the loop's model may,
     D604) and never name its folder by its absolute path. `inputs` the document forgot are added to its
-    `knowledge.files`; with `skills`, `skills: [skills]`."""
+    `knowledge.files` (not the `hidden` ones); the `hidden` paths it forgot to its `knowledge.hidden`; with `skills`,
+    `skills: [skills]`."""
     import yaml
 
     from .document import TaskError, load_task
@@ -825,10 +839,18 @@ def check_problem(path: Path, *, draft: bool = True, tools: bool = True, inputs:
     flow = doc.get("flow") if isinstance(doc.get("flow"), dict) else {}
     know = flow.get("knowledge") if isinstance(flow.get("knowledge"), dict) else {}
     named = set(know.get("files") or [])
-    forgot = [str(p) for p in inputs if str(p) not in named]
+    forgot = [str(p) for p in inputs if str(p) not in named and not _hidden_input(p, hidden, workdir)]
     changed = False
     if forgot and flow.get("knowledge") != "off":     # D775: what is read is said in flow.knowledge
-        doc["flow"] = {**flow, "knowledge": {**know, "files": sorted(named | set(forgot))}}
+        doc["flow"] = flow = {**flow, "knowledge": {**know, "files": sorted(named | set(forgot))}}
+        changed = True
+    said = flow["knowledge"].get("hidden") if isinstance(flow.get("knowledge"), dict) else None
+    said = [said] if isinstance(said, str) else list(said or [])
+    unsaid = [h for h in dict.fromkeys(hidden) if h.rstrip("/") not in {str(x).rstrip("/") for x in said}]
+    if unsaid:                                        # D1159: the ask's hidden paths go with the problem, beside `off`
+        k = flow.get("knowledge")
+        k = {} if k is None or k == "model" else {"off": True} if k == "off" else {"digest": k} if not isinstance(k, dict) else k
+        doc["flow"] = flow = {**flow, "knowledge": {**k, "hidden": said + unsaid}}
         changed = True
     if skills and not doc.get("skills"):              # D588: the ask's skills go with the problem
         doc["skills"] = ["skills"]
@@ -1016,7 +1038,7 @@ def _drive(ask: Ask, *, run_pass: Callable[..., Any], proposer: Any, say: Callab
                 history.append({"pass": 1, "turn": "write", "what": what})
                 say(f"author: {what}")
             elif n == 0 and attempt == 0 and ask.note:          # D1158: a person's word on a refused draft
-                _t, _p, pre = check_document(ask.workdir, ask.inputs, skills=bool(ask.skills))
+                _t, _p, pre = check_document(ask.workdir, ask.inputs, skills=bool(ask.skills), hidden=ask.hidden)
                 last = before(pre)
                 say("author: told what to do by the person who asked…")
                 done, what = turn(brief(ask, inline=inline, note=ask.note, error=pre, current=last["doc"]),
@@ -1033,7 +1055,7 @@ def _drive(ask: Ask, *, run_pass: Callable[..., Any], proposer: Any, say: Callab
                 say(f"author (repair): {what}")
             say("author: checking the document, required files and tools…")
             with _phase("check: problem document", "validate the authored document, files and tools"):
-                task, problem, error = check_document(ask.workdir, ask.inputs, skills=bool(ask.skills))
+                task, problem, error = check_document(ask.workdir, ask.inputs, skills=bool(ask.skills), hidden=ask.hidden)
             checked(error)
             if not error:
                 break
@@ -1048,7 +1070,7 @@ def _drive(ask: Ask, *, run_pass: Callable[..., Any], proposer: Any, say: Callab
             say(f"author (your note): {what}")
             last = None
             for _attempt in range(ask.checks + 1):
-                task, problem, error = check_document(ask.workdir, ask.inputs, skills=bool(ask.skills))
+                task, problem, error = check_document(ask.workdir, ask.inputs, skills=bool(ask.skills), hidden=ask.hidden)
                 if not error:
                     break
                 say(f"document refused: {error}")

@@ -162,6 +162,9 @@ def build_parser() -> argparse.ArgumentParser:
     ask_p.add_argument("prompt", nargs="?", default=None, help="What you want, in words (none: the setup screen opens).")
     ask_p.add_argument("--tui", action="store_true", help="The setup screen, then the loop screen with a review of the problem before it runs.")
     ask_p.add_argument("--file", "-f", action="append", default=[], help="An input: a spec, code, a reference, a PDF, tests (repeatable; a folder is copied whole).")
+    ask_p.add_argument("--hidden", action="append", default=[],
+                       help="A path in --dir hidden from the loop's AI agents and an agent author (repeatable): the document "
+                            "gets it in flow.knowledge.hidden (D1159).")
     ask_p.add_argument("--skill", action="append", default=[], help="A skill folder (SKILL.md), or a folder of them, for the author and the designers (repeatable).")
     ask_p.add_argument("--author", default="model", help="Who writes the problem: model (default), a coding agent preset (opencode, claude, codex), or a JSON agent spec.")
     ask_p.add_argument("--dir", default=None, help="The working directory (default: ./out/ask_<slug>; its name is the problem's id).")
