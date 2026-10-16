@@ -6,7 +6,7 @@ import { Pill } from "./Tone.js";
 
 export function StatePill({ st }) {
   if (!st) return null;
-  if (st.running) return html`<${Pill} tone="run">${st.restart_requested ? "restarting" : st.stop_requested ? "stopping" : "running"}<//>`;   // D1131: a restart is not a stop
+  if (st.running) return html`<${Pill} tone="run">${st.restart_requested ? "restarting" : st.stop_requested ? "stopping" : "running"}<//>`;   // D1132: a restart is not a stop
   if (st.failed) return html`<${Pill} tone="bad">failed<//>`;
   if (st.stopped) return html`<${Pill} tone="warn">stopped<//>`;
   return html`<${Pill}>${st.last_active ? "idle" : "never run"}<//>`;
