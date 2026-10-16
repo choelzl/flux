@@ -300,3 +300,21 @@ def test_a_queued_idea_is_the_next_pass_and_its_design_carries_it(tmp_path, monk
     assert idea["status"] == "measured" and {r["design"] for r in idea["evaluations"]} == {"ideas#2"}
     assert queued(rec, task.id) == [], "its evaluation took it off the queue"
     rec.close()
+
+
+def test_every_untested_idea_is_queued_at_once_and_the_queue_emptied(tmp_path):
+    """D1127: Queue all untested -- the untested ones not queued yet, in the notebook's order, after the queue -- and
+    Unqueue all."""
+    from flux_loop.ideas import queue_all, set_queued
+
+    st = state(tmp_path)
+    a = Candidate("a", "x")
+    bind(st, a, {"idea": IDEA, "ideas": [FUTURE, {"title": "A third", "hypothesis": "something else"}]})
+    trial(st, a, "bench", {"cycles": 8})                                # IDEA is tested now
+    store, cid = st.records.store, st.records.campaign_id
+    ids = {i["title"]: i["id"] for i in notebook(store, cid)["ideas"]}
+    set_queued(store, cid, ids["A third"], True)
+    assert queue_all(store, cid, True) == [ids["A third"], ids["Lookup table"]], "the tested one is not queued"
+    assert queue_all(store, cid, True) == [ids["A third"], ids["Lookup table"]], "again: nothing more"
+    assert queue_all(store, cid, False) == []
+

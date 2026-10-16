@@ -227,6 +227,20 @@ def set_queued(store: Any, campaign: str, ident: str, on: bool) -> list[str]:
     return queued(store, campaign)
 
 
+def queue_all(store: Any, campaign: str, on: bool) -> list[str]:
+    """D1127: every untested idea queued (in the notebook's order, after those already queued), or the queue emptied;
+    the queue after."""
+    queue = queued(store, campaign)
+    if on:
+        for idea in notebook(store, campaign)["ideas"]:
+            if idea["status"] == "proposed" and idea["id"] not in queue:
+                store.append_event(campaign, QUEUE, {"id": idea["id"], "on": True})
+    else:
+        for ident in queue:
+            store.append_event(campaign, QUEUE, {"id": ident, "on": False})
+    return queued(store, campaign)
+
+
 def next_queued(state: Any) -> dict | None:
     """The oldest idea queued for testing, its proposal (id, part, title, hypothesis, test); None when none is."""
     rec = _record(state)

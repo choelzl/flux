@@ -144,7 +144,8 @@ function Body({ store }) {
         <div class="alt-detail-actions">
           <button type="button" class="small" disabled=${!s.boxView && v.selected == null} title="Reveal and highlight the selected task in the list" onClick=${a.locate}>Locate</button>
           <a class="btn small alt-log-link" title="The start's whole output" href=${logHref}>Full log</a></div>
-        <div class="alt-inspector-host" tabindex="-1" ref=${host}>
+        <div class="alt-inspector-host" tabindex="-1" ref=${host}
+          onClickCapture=${e => { if (e.target.closest("summary")) a.pause(); }} onWheelCapture=${e => { if (e.deltaY < 0) a.pause(); }}>
           ${s.boxView && v.box ? html`<${BoxPanel} v=${v} a=${a} box=${v.box} />`
             : s.passView !== NO_PASS ? html`<${PassPanel} p=${s.passView} nodes=${v.passNodes} a=${a} N=${v.N} />`
             : html`<${ViewerFrame} v=${{ full, close: () => a.fullscreen(null) }} title=${s.full || ""}>${detail}<//>`}</div></section>

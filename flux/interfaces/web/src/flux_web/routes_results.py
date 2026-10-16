@@ -598,6 +598,22 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
         finally:
             record.close()
 
+    @app.post("/api/apps/{name}/ideas/queue-all")
+    def queue_all_ideas(name: str, body: IdeaQueueIn, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, Any]:
+        """D1127: every untested idea queued for testing (on), or every queued one taken off."""
+        from flux_loop.ideas import queue_all, queued
+
+        record, cid = _record_of(name, user, owner, running=True)
+        try:
+            before = len(queued(record, cid))
+            queue = queue_all(record, cid, body.on)
+        finally:
+            record.close()
+        store.audit(user.name, "queued an idea" if body.on else "unqueued an idea", f"{owner or user.name}/{name}: all")
+        said = (f"Queued {len(queue) - before} untested ideas: the next {len(queue)} passes test them" if body.on and len(queue) > before
+                else "Every untested idea was queued already" if body.on else f"Took {before} ideas off the queue")
+        return {"ok": said, "queue": queue}
+
     @app.post("/api/apps/{name}/ideas/{ident}/queue")
     def queue_idea(name: str, ident: str, body: IdeaQueueIn, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, Any]:
         """D1112: queue an idea for testing -- each of the next passes builds a design that follows the oldest queued idea,

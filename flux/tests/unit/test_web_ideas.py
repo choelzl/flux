@@ -168,6 +168,9 @@ def test_an_idea_is_queued_for_testing_and_taken_off_again(server):  # noqa: F81
     off = bob.post("/api/apps/past/ideas/idea-b/queue", json={"on": False}, headers=H)
     assert off.json()["queue"] == ["idea-a"] and off.json()["ok"] == "Taken off the queue"
     assert bob.post("/api/apps/past/ideas/idea-z/queue", json={"on": True}, headers=H).status_code == 404
+    every = bob.post("/api/apps/past/ideas/queue-all", json={"on": True}, headers=H)          # D1127
+    assert every.status_code == 200 and every.json()["queue"] == ["idea-a", "idea-b"] and "Queued 1 untested" in every.json()["ok"]
+    assert bob.post("/api/apps/past/ideas/queue-all", json={"on": False}, headers=H).json() == {"ok": "Took 2 ideas off the queue", "queue": []}
     app.state.store.add_user("cy", "cy has a long secret")
     cy = _client(app, "cy", "cy has a long secret")
     assert cy.post("/api/apps/past/ideas/idea-a/queue?owner=bob", json={"on": False}, headers=H).status_code in (403, 404)

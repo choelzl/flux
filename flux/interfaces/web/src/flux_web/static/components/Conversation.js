@@ -50,8 +50,11 @@ export function Conversation({ steps, k = "", offset = 0, live = false, scroll =
     const secs = work[0].at != null && end != null ? end - work[0].at : null;
     const said = [`${work.length} step${work.length === 1 ? "" : "s"}${now ? " so far" : ""}`,
       cmds ? `${cmds} command${cmds === 1 ? "" : "s"}` : "", failed ? `${failed} failed` : "", secs != null ? took(secs) : ""].filter(Boolean).join(" · ");
-    const id = `${k}:w${offset + i}`;
-    // open while a step in it is open: a live tail rolls its first steps away, and with them the line's own key
+    // D1126: a stretch is known by where it ends (the answer after it), the one at work as "live" -- not by its first
+    // step, which a live window rolls away with every new step (the box one opened closed on each update)
+    const live_ = `${k}:wlive`, id = now ? live_ : `${k}:w${offset + j}`;
+    if (!now && convOpen.has(live_) && !steps.slice(j).some(x => x.k !== "text")) { convOpen.add(id); convOpen.delete(live_); }   // it ended: still open
+    // open while a step in it is open
     const open = convOpen.has(id) || work.some((_x, n) => convOpen.has(`${k}:${offset + first + n}`));
     items.push(html`<details key=${id} class=${cx("cv-work", now && "live", failed && "bad")} open=${open} onToggle=${remember(id)}>
       <summary title="Its thinking and commands: click to open"><span class="cv-work-said">${now ? html`<${Glyph} tone="run" />` : ""}${now ? `working · ${said}` : said}</span></summary>

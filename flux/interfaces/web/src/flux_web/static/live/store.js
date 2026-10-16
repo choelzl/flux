@@ -67,6 +67,8 @@ export function createStore(ctx) {
       if (s.following) { s.following = false; pinPass(s.selected); now(); return; }
       s.boxView = null; s.pass = "current"; s.following = true; s.passView = NO_PASS; s.folded.clear(); s.reveal = true; now();
     },
+    /** D1126: one reads the task in hand (a fold opened, scrolled up): following stops, as its button does. */
+    pause() { if (!s.following) return; s.following = false; pinPass(s.selected); now(); },
     locate() { unfoldTo(s.selected); s.reveal = true; now(); },
     more() { s.limit += 200; now(); },
     earlier() { listeners.events?.onData({ ev: "hello" }); s.transport?.restart("events", { window: 0 }); emit(); },

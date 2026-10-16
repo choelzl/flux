@@ -1410,4 +1410,5 @@ td.cleared s { color: var(--muted); }
 .check-saved { margin-bottom: 12px !important; }
 
 /* D1112: an idea queued for testing, under its evidence */
+.idea-queue-all { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
 .idea-queue { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-top: 6px; }
