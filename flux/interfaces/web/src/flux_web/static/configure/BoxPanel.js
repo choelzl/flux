@@ -1,13 +1,15 @@
 // Flux web, configure (D1118): a box of the loop opened -- who works it (rules, a model, the coding agent, a script
 // where Flux takes one, off), its critic when it has one, and that step's own settings, each default shown greyed.
 // Search holds the search policy, Measure the cheap-with-costly comparison (calibrate) (D1139).
-// Check, Measure and Choose say where their commands and goals are set; the Library is LibraryPanel.js. `kept`: the
+// Check, Measure and Choose say where their commands and goals are set; the Library is LibraryPanel.js. An agent's own
+// settings (time limit, session, questions) fold under More, Design's probe below its knobs (D1142). `kept`: the
 // flow is kept as written (who works each box said, not chosen), `keptBudget` the budget (its knobs read-only).
 
 import { Notice, html } from "../view.js";
 import { Head } from "../components/Head.js";
 import { Kept, Pick, Text, Who, WhoTag, isKept } from "./fields.js";
 import { Library } from "./LibraryPanel.js";
+import { AgentOpts, ProbeFields } from "./AgentOpts.js";
 import { Select } from "../components/Select.js";
 import { isAgent, whoOn, whoOptions } from "./who.js";
 
@@ -27,21 +29,22 @@ export function BoxPanel({ M, state, box, agent, setAgent = () => {}, edit, go, 
     if (state.agentRaw) delete state.agentRaw[bx];               // another choice: its own settings go (D728)
   });
   const labels = M.AGENT_LABELS();
-  /** D1128: which coding agent, beside the choice when an agent works the box (its own settings aside) */
-  const which = (cur, set) => isAgent(cur) && cur !== M.INLINE_AGENT && !kept ? html`<${Select} aria-label="Which coding agent" value=${cur.slice(6)}
-    options=${M.AGENTS.map(a => [a, labels[a] || a])} onChange=${a => { setAgent(a); edit(() => set(`agent:${a}`)); }} />` : "";
+  /** D1128: which coding agent, beside the choice when an agent works the box; D1142: its settings go with it */
+  const which = (cur, set, slot) => isAgent(cur) && cur !== M.INLINE_AGENT && !kept ? html`<${Select} aria-label="Which coding agent" value=${cur.slice(6)}
+    options=${M.AGENTS.map(a => [a, labels[a] || a])} onChange=${a => { setAgent(a); edit(() => { M.renameAgent(state, slot, a); set(`agent:${a}`); }); }} />` : "";
+  const opts = slot => html`<${AgentOpts} M=${M} state=${state} slot=${slot} edit=${edit} disabled=${kept} />`;
   const who = (bx = box) => {
     const opts = whoOptions(M, bx, f[bx], agent);
     return html`<span class="cfg-who-row"><${Who} label=${bx === "knowledge" ? "Library" : `Who works ${M.BOXES[bx].title}`} fixed=${kept} options=${opts} on=${whoOn(opts, f[bx])} pick=${choose(bx, opts)} />
-      ${which(f[bx], v => { f[bx] = v; if (state.agentRaw) delete state.agentRaw[bx]; })}</span>`;
+      ${which(f[bx], v => { f[bx] = v; }, bx)}</span>`;
   };
   const critic = bx => {
     const cur = M.criticsOf(state)[bx], opts = whoOptions(M, "critique", cur, agent);
     return html`<div class="cfg-bar"><span class="muted small">Critic</span><${Who} label=${`The critic on ${M.BOXES[bx].title}`} fixed=${kept} options=${opts}
-      on=${whoOn(opts, cur)} pick=${k => edit(() => { M.setCritic(state, bx, opts.find(o => o.k === k).value()); })} />${which(cur, v => M.setCritic(state, bx, v))}</div>`;
+      on=${whoOn(opts, cur)} pick=${k => edit(() => { M.setCritic(state, bx, opts.find(o => o.k === k).value()); })} />${which(cur, v => M.setCritic(state, bx, v), `critic:${bx}`)}</div>
+      ${isAgent(cur) ? html`<${AgentOpts} M=${M} state=${state} slot=${`critic:${bx}`} edit=${edit} disabled=${kept} />` : ""}`;
   };
   const K = (label, k, dflt, hint) => html`<${Knob} state=${state} edit=${edit} label=${label} k=${k} dflt=${dflt} hint=${hint} disabled=${keptBudget} />`;
-  const raw = state.agentRaw && state.agentRaw[box] && isAgent(f[box]);
   let head = who(), body = "";
   switch (box) {
     case "orchestrate": {                       // D1139: the search policy is Search's
@@ -73,9 +76,11 @@ export function BoxPanel({ M, state, box, agent, setAgent = () => {}, edit, go, 
           <${Pick} label="Prototype first" hint="default: with a golden model" disabled=${keptBudget} value=${state.budget.prototype} set=${v => edit(() => { state.budget.prototype = v; })}
             options=${[["", "default"], ["false", "off"], ["true", "on"], ["python", "in Python"], ["systemc", "in SystemC"]]} />
           <${Pick} label="Repair by" disabled=${keptBudget} value=${state.budget.patching} set=${v => edit(() => { state.budget.patching = v; })}
-            options=${[["", "edits (default)"], ["true", "edits"], ["false", "rewrites"]]} /></div>
+            options=${[["", "edits (default)"], ["true", "edits"], ["false", "rewrites"]]} />
+          ${K("Revert after", "revert_after", "3", "failed repairs")}${M.hasParts(state) ? K("Parts at once", "parallel_parts", "1") : ""}</div>
         ${isAgent(f.generate) ? html`<div class="cfg-sub"><h4>Agent turns</h4><div class="cfg-grid2">${K("Continues past time", "agent_continues", "3")}
-          ${K("Final turn, s", "agent_grace_s", "¼ of its time")}</div></div>` : ""}`;
+          ${K("Final turn, s", "agent_grace_s", "¼ of its time")}</div></div>
+          <${ProbeFields} M=${M} state=${state} edit=${edit} disabled=${kept} />` : ""}`;
       break;
     case "test":
       head = html`<${WhoTag} kind="fixed">checks<//>`;
@@ -100,11 +105,11 @@ export function BoxPanel({ M, state, box, agent, setAgent = () => {}, edit, go, 
       break;
     case "knowledge":
       if (isKept(state, "flow.knowledge")) { head = ""; body = html`<${Kept} M=${M} state=${state} at="flow.knowledge" direct=${direct} />`; break; }
-      body = html`<${Library} M=${M} state=${state} edit=${edit} store=${store} who=${who} fixed=${kept} />`;
+      body = html`<${Library} M=${M} state=${state} edit=${edit} store=${store} who=${who} opts=${opts} fixed=${kept} />`;
       break;
     default:
   }
   return html`<${Head} title=${b.title} hint=${b.says} actions=${head || null} />
-    ${raw ? html`<p class="cfg-says">${`Own settings, kept as written: ${JSON.stringify(state.agentRaw[box].agent)}. Another choice replaces them.`}</p>` : ""}
+    ${box !== "knowledge" && isAgent(f[box]) && !M.parameterSearch(state) ? opts(box) : ""}
     ${body}`;
 }

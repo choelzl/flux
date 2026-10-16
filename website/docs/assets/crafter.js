@@ -15,7 +15,7 @@
       explainEstimate = api.explainEstimate, halfOf = api.halfOf, impliedLanguage = api.impliedLanguage, isCustom = api.isCustom, isFixed = api.isFixed, isPreset = api.isPreset,
       knobNames = api.knobNames, language = api.language, list = api.list, namedFiles = api.namedFiles, naturalDirection = api.naturalDirection, newCheck = api.newCheck,
       newObjective = api.newObjective, newStage = api.newStage, nextStageTool = api.nextStageTool, num = api.num, paramOnly = api.paramOnly, parameterSearch = api.parameterSearch,
-      reported = api.reported, reports = api.reports, resolve = api.resolve, setCatalog = api.setCatalog, setCheckTool = api.setCheckTool, shown = api.shown,
+      reported = api.reported, reports = api.reports, resolve = api.resolve, runsTool = api.runsTool, setCatalog = api.setCatalog, setCheckTool = api.setCheckTool, shown = api.shown,
       stagePresets = api.stagePresets, stageTools = api.stageTools, stepIndex = api.stepIndex, toolOf = api.toolOf, toolsFor = api.toolsFor, uniqueName = api.uniqueName,
       unitFor = api.unitFor;
   var hasParts = api.hasParts;
@@ -248,7 +248,9 @@
         });
         if (moreOpen.has(st)) {
           var more = [];
-          if (t) more.push(h("small", { class: "fc-wide", text: t.what + (custom ? "" : " Reports " + Object.keys(t.metrics || {}).map(function (m) {
+          var ran = custom ? runsTool(st) : null;                // D1141: a command that runs a preset says the preset
+          if (ran) more.push(h("small", { class: "fc-wide", text: "Runs " + ran.title + ": " + ran.what }));
+          else if (t) more.push(h("small", { class: "fc-wide", text: t.what + (custom ? "" : " Reports " + Object.keys(t.metrics || {}).map(function (m) {
             return m + (t.metrics[m] ? " (" + t.metrics[m] + ")" : ""); }).join(", ") + ".") }));
           keys.slice(1).forEach(function (k) { more.push(paramField(t, st, k)); });
           if (custom) more.push(field("Tools it needs", function () { return st.needs; }, function (v) { st.needs = v; }, { compact: true }));

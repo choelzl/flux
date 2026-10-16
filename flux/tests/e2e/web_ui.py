@@ -691,6 +691,83 @@ def flows(r: Run) -> None:
         r.clean("the Library")
     r.step("library box", library_box)
 
+    def agent_settings():
+        """D1142: Design's panel sets what its agent may run of the gate while designing (D1137: some checks, how often)
+        and, under More, its time limit -- saved into flow.generate and read back into the same fields."""
+        import yaml
+
+        made = r.api("/apps/new-empty", "POST", {"name": "agent_settings"})
+        r.check("create a loop for an agent's settings", made["status"] == 200, made["body"])
+        root = r.data / "users/bob/apps/agent_settings"
+        raw = yaml.safe_load((root / "problem.yaml").read_text())
+        raw["flow"] = {"generate": "claude", "test": {"test": "true", "lint": "true"}}
+        (root / "problem.yaml").write_text(yaml.safe_dump(raw, sort_keys=False))
+        setv = ("const [css, v] = arguments; const el = document.querySelector(css); el.value = v;"
+                " el.dispatchEvent(new Event(el.tagName === 'SELECT' ? 'change' : 'input', {bubbles: true})); return 1")
+        checks = "return [...document.querySelectorAll('.cfg-panel [data-probe-check]')].map(i => [i.dataset.probeCheck, i.checked])"
+        r.page("#/app/agent_settings/settings/problem?step=graph", "document.querySelector('.cfg-panel [data-probe] [data-probe-check]')", "Design's probe")
+        r.check("Design's probe lists the gate's checks, every one on by default", b.js(checks) == [["test", True], ["lint", True]], str(b.js(checks)))
+        r.check("an agent's rarer settings are folded under More", b.js("return !document.querySelector('.cfg-panel details.cfg-more').open"))
+        b.js("document.querySelector('.cfg-panel [data-probe-check=test]').click(); return 1")
+        b.js(setv, ".cfg-panel [data-probe] input[aria-label='Gate runs']", "4")
+        b.js("document.querySelector('.cfg-panel details.cfg-more').open = true; return 1")
+        b.js(setv, ".cfg-panel details.cfg-more input[aria-label='Time limit, s']", "900")
+        if os.environ.get("FLUX_E2E_SHOTS"):
+            Path(os.environ["FLUX_E2E_SHOTS"]).mkdir(parents=True, exist_ok=True)
+            b.js("document.querySelector('.cfg-panel').scrollIntoView(); return 1")
+            b.shot(Path(os.environ["FLUX_E2E_SHOTS"]) / "agent-settings-design.png")
+        r.button("Save to problem.yaml", ".cfg-nav")
+        r.dialog_button("Save")
+        b.wait("document.querySelector('.cfg-status.t-ok') && !document.querySelector('.cfg-status.t-run')", timeout=20, what="the agent's settings saved")
+        saved = json.loads(r.api("/apps/agent_settings/document")["body"])
+        gen = (saved["raw"].get("flow") or {}).get("generate")
+        r.check("the probe and the time limit are saved on Design's agent (D1137, D1142)",
+                gen == {"by": "claude", "timeout_s": 900, "probe": {"gate": {"checks": ["lint"], "runs": 4}}} and saved["normal"] is not None, str(gen))
+        r.page("#/app/agent_settings/settings/problem?step=graph", "document.querySelector('.cfg-panel [data-probe] [data-probe-check]')", "Design's probe again")
+        r.check("read back: the checks, the runs and the time limit", b.js(checks) == [["test", False], ["lint", True]]
+                and b.js("return [document.querySelector(\".cfg-panel [data-probe] input[aria-label='Gate runs']\").value,"
+                         " document.querySelector(\".cfg-panel details.cfg-more input[aria-label='Time limit, s']\").value]") == ["4", "900"])
+        if os.environ.get("FLUX_E2E_SHOTS"):                # read back, More open: light and dark, a desktop's width and a phone's
+            out = Path(os.environ["FLUX_E2E_SHOTS"])
+            for theme in ("light", "dark"):
+                for width in (1280, 390):
+                    b.js("document.body.innerHTML = ''; const f = document.createElement('iframe'); f.id = 'phone'; localStorage.setItem('flux-theme', arguments[1]);"
+                         "f.style.cssText = `width:${arguments[0]}px;height:900px;border:0`; f.src = '/?agent=' + Date.now() + '#/app/agent_settings/settings/problem?step=graph';"
+                         "document.body.append(f); return 1", width, theme)
+                    b.wait("(() => { const d = document.getElementById('phone').contentDocument; return d && d.querySelector('.cfg-panel details.cfg-more'); })()", timeout=20)
+                    b.js("const d = document.getElementById('phone').contentDocument; d.querySelector('.cfg-panel details.cfg-more').open = true;"
+                         " d.querySelector('.cfg-panel').scrollIntoView(); return 1")
+                    time.sleep(0.5)
+                    (out / f"agent-settings-{width}px-{theme}.png").write_bytes(
+                        base64.b64decode(b.cmd("WebDriver:TakeScreenshot", {"id": b.find("#phone"), "full": False})["value"]))
+            b.js("localStorage.removeItem('flux-theme'); return 1")
+            b.cmd("WebDriver:Navigate", {"url": f"{r.url}/?after-agent={time.time()}#/"})
+            b.wait("document.querySelector('#main')", timeout=20)
+        r.clean("an agent's settings")
+    r.step("agent settings", agent_settings)
+
+    def preset_named():
+        """D1141: a measurement that runs a preset but lists only some of its numbers (a command of one's own to the
+        configurator, so it round-trips) is named by its preset on Check & Measure, not "command"."""
+        import yaml
+
+        made = r.api("/apps/new-empty", "POST", {"name": "preset_named"})
+        r.check("create a loop that measures with a preset", made["status"] == 200, made["body"])
+        root = r.data / "users/bob/apps/preset_named"
+        raw = yaml.safe_load((root / "problem.yaml").read_text())
+        raw["language"] = "verilog"
+        raw["flow"] = {"test": {"check": "true"}, "measure": {"screen": {
+            "command": "fluxpreset rtl measure {artifact} --stage synth --clock-ps 333", "metrics": ["fmax_mhz", "area_um2"], "needs": ["yosys"]}}}
+        raw["objectives"] = [{"metric": "area_um2", "direction": "minimize"}]
+        (root / "problem.yaml").write_text(yaml.safe_dump(raw, sort_keys=False))
+        r.page("#/app/preset_named/settings/problem?step=checks", "document.querySelector('.cfg[data-step=checks] .cfg-xrow')", "Check & Measure")
+        line = b.js("return [...document.querySelectorAll('.cfg-xrow .what')].map(w => w.textContent).find(t => t.startsWith('screen'))")
+        r.check("a preset's measurement says its preset (D1141)", bool(line) and "Synthesise and time" in line and "command" not in line, str(line))
+        if os.environ.get("FLUX_E2E_SHOTS"):
+            b.shot(Path(os.environ["FLUX_E2E_SHOTS"]) / "preset-named-checks.png")
+        r.clean("a preset's measurement")
+    r.step("preset named", preset_named)
+
     def kept_read_only():
         """D1136: a part the configurator keeps as written is read-only where it would be edited, with one notice and the way
         to Direct edit -- not fields whose typing the save drops."""
@@ -3039,6 +3116,47 @@ def flows(r: Run) -> None:
         b.wait("document.querySelector('#main')", timeout=20)
         r.clean("phone wizard")
     r.step("phone wizard", phone_wizard)
+
+    def talk_clear():
+        """D1140: Talk floats in a gutter of its own -- scrolled to the end, at a desktop's, a tablet's and a phone's width,
+        a running loop's composer mounted or not, no button, link or field of the page under it (the configurator's Back and
+        Next, a box's panel, Live's details). FLUX_E2E_SHOTS: each, light and dark."""
+        r.login("bob")
+        shots = Path(os.environ["FLUX_E2E_SHOTS"]) if os.environ.get("FLUX_E2E_SHOTS") else None
+        if shots:
+            shots.mkdir(parents=True, exist_ok=True)
+        pages = ("#/app/sw/settings/problem?step=graph", "#/app/sw/settings/problem?step=checks", "#/app/sw/live", "#/app/sw/results")
+        for theme in ("light", "dark"):
+            b.js("localStorage.setItem('flux-theme', arguments[0]); return 1", theme)
+            for width, height in ((1280, 720), (800, 720), (390, 720)):
+                for h in pages:
+                    b.js("document.body.innerHTML = ''; const f = document.createElement('iframe'); f.id = 'phone';"
+                         "f.style.cssText = `width:${arguments[0]}px;height:${arguments[1]}px;border:0`; f.src = '/?talk=' + Date.now() + arguments[2];"
+                         "document.body.append(f); return 1", width, height, h)
+                    nav = " && d.querySelector('.cfg-nav')" if "step=" in h else ""
+                    b.wait("(() => { const d = document.getElementById('phone').contentDocument; return d && d.querySelector('.ask-fab')"
+                           f" && !d.querySelector('#main .skeleton'){nav}; }})()", timeout=20, what=f"{h} at {width}")
+                    # a running loop's note composer, mounted in the drawer once Talk opened, once lifted the button over the page
+                    b.js("const d = document.getElementById('phone').contentDocument, c = d.createElement('div'); c.className = 'composer';"
+                         " d.querySelector('.drawer').append(c); return 1")
+                    time.sleep(0.8)
+                    b.js("const w = document.getElementById('phone').contentWindow; w.scrollTo(0, w.document.documentElement.scrollHeight); return 1")
+                    time.sleep(0.4)
+                    under = b.js("""const d = document.getElementById('phone').contentDocument, f = d.querySelector('.ask-fab').getBoundingClientRect();
+                        return [...d.querySelectorAll('#main button, #main a, #main input, #main select, #main textarea, #main summary')].filter(e => {
+                          const r = e.getBoundingClientRect();
+                          return !e.closest('.ask-fab, .drawer') && r.width && r.height && r.left < f.right && r.right > f.left && r.top < f.bottom && r.bottom > f.top;
+                        }).map(e => (e.textContent || e.getAttribute('aria-label') || e.tagName).trim().slice(0, 30));""")
+                    r.check(f"Talk covers nothing on {h} at {width}px, {theme} (D1140)", not under, str(under))
+                    if shots:
+                        name = h.strip("#/").replace("/", "-").replace("?", "-").replace("=", "-")
+                        (shots / f"talk-{name}-{width}px-{theme}.png").write_bytes(
+                            base64.b64decode(b.cmd("WebDriver:TakeScreenshot", {"id": b.find("#phone"), "full": False})["value"]))
+        b.js("localStorage.removeItem('flux-theme'); return 1")
+        b.cmd("WebDriver:Navigate", {"url": f"{r.url}/?after-talk={time.time()}#/"})
+        b.wait("document.querySelector('#main')", timeout=20)
+        r.clean("talk clear")
+    r.step("talk clear", talk_clear)
 
     from web_ui_general import general_flows
 

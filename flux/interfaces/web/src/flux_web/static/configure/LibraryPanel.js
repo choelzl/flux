@@ -1,7 +1,7 @@
 // Flux web, configure (D1136): the Library box opened -- what every prompt reads, in one place: the loop's files and
 // top folders checked (`knowledge.files`), library/ and the shared library (read while it is on, their papers summed
 // up once), files added here (the loop's, as Prompt › Files adds them, and checked), a text, a method sheet, who sums
-// the papers up and the lessons drawn from the record. On or off is the box's head.
+// the papers up and the lessons drawn from the record (its agent's settings under More, D1142). On or off is the box's head.
 
 import { html, useChanges, useEffect, useState } from "../view.js";
 import { api } from "../ui.js";
@@ -29,7 +29,7 @@ export function readRows(files, reads) {
 }
 
 /** `who(box)` the choice of who works a box (BoxPanel's); `fixed` the flow is kept as written. */
-export function Library({ M, state, edit, store, who, fixed }) {
+export function Library({ M, state, edit, store, who, opts, fixed }) {
   const [up, setUp] = useState([]), [papers, setPapers] = useState(null);
   useChanges(store || NO_STORE);
   useEffect(() => { let live = true; sharedPapers().then(n => { if (live) setPapers(n); }); return () => { live = false; }; }, []);
@@ -55,7 +55,6 @@ export function Library({ M, state, edit, store, who, fixed }) {
   };
   const row = (path, note, checked, onToggle, disabled) => html`<li key=${path}><label>
     <input type="checkbox" checked=${checked} disabled=${disabled} onChange=${onToggle} /><code>${path}</code>${note ? html`<span class="muted small">${note}</span>` : ""}</label></li>`;
-  const lessons = state.agentRaw && state.agentRaw.lessons && isAgent(f.lessons);
   return html`${on ? html`<div class="cfg-sub"><h4>What every prompt reads</h4>
       <ul class="cfg-lib-reads" aria-label="What every prompt reads">
         ${readRows(files, reads).map(r => row(r.path, r.missing ? "missing" : r.n ? `folder, ${plural(r.n, "file")}` : "", isRead(r.path), () => toggle(r.path), false))}
@@ -69,6 +68,5 @@ export function Library({ M, state, edit, store, who, fixed }) {
         options=${[["", "none"], ...[...new Set([...files.map(x => x.path), ...(state.knowledgeSheet ? [state.knowledgeSheet] : [])])].sort().map(p => [p, p])]} /></div>
     <div class="cfg-sub"><h4>Papers summed up by</h4><div class="cfg-bar">${who("digest")}</div></div>`
     : html`<p class="cfg-says">Off: no files, papers or text are read.</p>`}
-    <div class="cfg-sub"><h4>Lessons</h4><div class="cfg-bar">${who("lessons")}</div>
-      ${lessons && !fixed ? html`<p class="cfg-says">${`Own settings, kept as written: ${JSON.stringify(state.agentRaw.lessons.agent)}. Another choice replaces them.`}</p>` : ""}</div>`;
+    <div class="cfg-sub"><h4>Lessons</h4><div class="cfg-bar">${who("lessons")}</div>${isAgent(f.lessons) ? opts("lessons") : ""}</div>`;
 }

@@ -387,6 +387,12 @@ ul.checklist li > .g { align-self: center; color: var(--t); }
 ul.checklist li > span { min-width: 0; overflow-wrap: anywhere; }
 ul.checklist li b { font-weight: 600; }
 details.cfg-fold > summary { padding: 8px 0; font-weight: 600; }
+/* D1142: an agent's rarer settings, folded under its choice */
+details.cfg-more > summary { width: max-content; cursor: pointer; font-size: 12.5px; color: var(--muted); }
+details.cfg-more > summary:hover { color: var(--ink); }
+details.cfg-more[open] { padding-bottom: 10px; border-bottom: 1px solid var(--line); }
+details.cfg-more[open] > summary { margin-bottom: 8px; }
+details.cfg-more .cfg-says code { overflow-wrap: anywhere; }
 .cfg-diff { padding-bottom: 8px; }
 /* Graph: the loop drawn beside the box opened */
 .cfg-split { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 14px; align-items: start; }
@@ -1076,10 +1082,12 @@ td.bad { color: var(--bad); }
 .subtabs button b { font-weight: 600; font-variant-numeric: tabular-nums; color: var(--muted); } .subtabs button.on b { color: var(--ink); }
 .subtabs.choice { margin: 0; } .subtabs.choice.small button { padding: 2px 9px; font-size: 12.5px; }
 .bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 10px; } .bar .grow { flex: 1; } .bar.scope { margin-bottom: 6px; }
-.ask-fab { position: fixed; right: 24px; bottom: 24px; z-index: 40; border-radius: 999px; padding: 10px 20px; font-weight: 600;
+/* D1140: Talk floats in a gutter of its own -- the page ends that far below its last button, at every width */
+:root { --fab-bottom: 24px; }
+main:has(.ask-fab) { padding-bottom: calc(var(--fab-bottom) + 60px); }
+.ask-fab { position: fixed; right: 24px; bottom: var(--fab-bottom); z-index: 40; border-radius: 999px; padding: 10px 20px; font-weight: 600;
   background: var(--accent); color: var(--accent-ink); border: 0; box-shadow: 0 4px 14px rgb(0 0 0 / .18); cursor: pointer; }
 .ask-fab.on { background: var(--ink); color: var(--panel); }
-main:has(.composer) .ask-fab { bottom: 96px; }
 .drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(var(--talk-width, 520px), 100vw); min-width: min(520px, 100vw); z-index: 50; background: var(--bg);
   border-left: 1px solid var(--line); box-shadow: -8px 0 24px rgb(0 0 0 / .12); transform: translateX(105%); transition: transform .18s ease;
   display: flex; flex-direction: column; pointer-events: none; }
@@ -1112,9 +1120,8 @@ body.resizing-drawer, body.resizing-drawer * { cursor: ew-resize !important; use
 .danger-card { border-color: color-mix(in srgb, var(--bad) 35%, var(--line)); }
 .reset-folders { padding-left: 20px; }
 .reset-folders li { margin: 10px 0; overflow-wrap: anywhere; }
-@media (max-width: 640px) { .ask-fab { right: 16px; bottom: 16px; } main:has(.composer) .ask-fab { bottom: 88px; } }
-body:has(.ask-fab) .toasts { bottom: 78px; }
-body:has(.composer) .toasts { bottom: 150px; }
+@media (max-width: 640px) { :root { --fab-bottom: 16px; } .ask-fab { right: 16px; } }
+body:has(.ask-fab) .toasts { bottom: calc(var(--fab-bottom) + 54px); }
 body:has(.drawer.open) .toasts { left: 18px; right: auto; bottom: 18px; pointer-events: none; }
 body:has(.drawer.open) .toast a, body:has(.drawer.open) .toast button { pointer-events: auto; }
 @media (max-width: 640px) {

@@ -159,11 +159,25 @@ def _variant(name: str) -> dict:
         d["flow"]["orchestrate"] = {"policy": [{"policy": "sweep"}, {"policy": "gradient"}], "space": {"mode": ["a", "b"]}}
         d["flow"]["generate"] = {"command": "{python} {home}/gen.py {artifact} {mode}"}
         d["flow"]["knowledge"] = {"files": ["rtl"], "text": "Read the spec first.", "digest": "claude"}
+    # D1142: an agent's own settings, edited now -- time limit, session, questions, Design's probe
+    elif name == "agent_options":
+        d["flow"]["test"] = {"test": "{python} {home}/check.py {artifact}", "lint": "{python} {home}/check.py {artifact}"}
+        d["budget"] = {"revert_after": 2, "parallel_parts": 2}
+        d["flow"]["generate"] = {"by": "claude", "timeout_s": 900, "questions": "operator", "max_questions": 1, "wait_s": 60,
+                                 "probe": {"gate": {"runs": 5, "checks": ["lint"]}, "stages": 2, "bench": 1}}
+        d["flow"]["select"] = {"by": "codex", "session": "pass", "finalists": 2}
+    elif name == "probe_off":
+        d["flow"]["generate"] = {"by": "claude", "probe": False}
+    elif name == "probe_gate_off":
+        d["flow"]["generate"] = {"by": "opencode", "bin": "oc-mod", "probe": {"gate": 0}}
+    elif name == "critic_session":
+        d["flow"]["select"] = {"critic": {"by": "claude", "session": "pass", "questions": "model"}}
     return d
 
 
 @pytest.mark.parametrize("name", ["scalar_choices", "needs_override", "spaced_script", "params_placeholder", "kept_flow_knowledge",
-                                  "model_search_options", "policy_options", "critic_options", "lessons_options", "library", "library_kept_flow"])
+                                  "model_search_options", "policy_options", "critic_options", "lessons_options", "library", "library_kept_flow",
+                                  "agent_options", "probe_off", "probe_gate_off", "critic_session"])
 def test_an_untouched_edit_keeps_the_meaning(name, tmp_path):
     src = tmp_path / "src" / name
     src.mkdir(parents=True)
@@ -393,6 +407,69 @@ def test_the_librarys_choices_load_and_read_back(tmp_path):
         assert (st["knowledgeFiles"], st["knowledgeText"], st["knowledgeSheet"]) == ("rtl/, golden.py", "Widths are 8 bits.", "method.md")
 
 
+AGENT_JS = r"""
+const c = require(process.argv[1]);
+c.setCatalog(JSON.parse(require("fs").readFileSync(process.argv[2], "utf8")));
+const v = JSON.parse(require("fs").readFileSync(0, "utf8"));
+const s = c.fromDoc(v.raw, v.normal).state, out = {};
+s.flow.generate = "agent:claude"; s.flow.select = "agent:codex"; s.flow.lessons = "agent:claude";
+c.setAgentOpt(s, "generate", "timeout_s", "900");
+c.setProbe(s, {off: false, runs: "4", checks: ["lint"], stages: "2"});
+c.setAgentOpt(s, "select", "session", "pass"); c.setAgentOpt(s, "select", "questions", "operator");
+c.setCritic(s, "test", "agent:codex"); c.setAgentOpt(s, "critic:test", "timeout_s", "60");
+c.setAgentOpt(s, "lessons", "timeout_s", "30");
+out.set = {yaml: c.buildYaml(s), probe: c.probeOf(s), errors: c.check(s).filter(m => m.level === "error")};
+c.renameAgent(s, "generate", "codex"); s.flow.generate = "agent:codex";           // another agent: its settings go with it
+out.renamed = c.buildYaml(s);
+c.setProbe(s, {off: false, runs: "", checks: null, stages: ""}); c.setAgentOpt(s, "generate", "timeout_s", "");
+c.setAgentOpt(s, "select", "session", ""); c.setAgentOpt(s, "select", "questions", "");
+out.cleared = c.buildYaml(s);
+s.checks.find(x => x.name === "lint").name = "lint2"; c.setProbe(s, {off: false, runs: "", checks: ["lint"], stages: ""});
+out.stale = c.check(s).filter(m => m.level === "error").map(m => m.text);
+process.stdout.write(JSON.stringify(out));
+"""
+
+
+def test_an_agents_settings_are_edited_and_load(tmp_path):
+    """D1142: the configurator sets an agent's time limit, session and questions on a box, a critic and the lessons, and
+    Design's probe (D1137) -- a document the loader takes, read back the same; another agent keeps them, cleared they go,
+    and a probe of a check the gate no longer has is said before the save."""
+    home = tmp_path / "agents"
+    home.mkdir()
+    for f in ("check.py", "bench.py"):
+        (home / f).write_text("print('time_ms=1')\n")
+    doc = json.loads(json.dumps(_BASE))
+    doc["flow"]["test"] = {"test": "{python} {home}/check.py {artifact}", "lint": "{python} {home}/check.py {artifact}"}
+    (home / "problem.yaml").write_text(yaml.safe_dump(doc, sort_keys=False))
+    v = views(home / "problem.yaml")
+    r = subprocess.run(["node", "-e", AGENT_JS, str(ASSETS / "crafter-model.js"), str(ASSETS / "tools.json")],
+                       input=json.dumps({"raw": v["raw"], "normal": v["normal"]}, default=str), capture_output=True, text=True, timeout=60)
+    assert r.returncode == 0, r.stderr
+    out = json.loads(r.stdout)
+    assert not out["set"]["errors"], out["set"]["errors"]
+    flow = yaml.safe_load(out["set"]["yaml"])["flow"]
+    assert flow["generate"] == {"by": "claude", "timeout_s": 900, "probe": {"gate": {"checks": ["lint"], "runs": 4}, "stages": 2}}, flow
+    assert flow["select"] == {"by": "codex", "session": "pass", "questions": "operator"}, flow
+    assert flow["test"]["critic"] == {"by": "codex", "timeout_s": 60} and flow["knowledge"]["lessons"] == {"by": "claude", "timeout_s": 30}, flow
+    assert out["set"]["probe"] == {"off": False, "runs": "4", "checks": ["lint"], "stages": "2"}
+    (home / "problem.yaml").write_text(out["set"]["yaml"])
+    task = load_task(str(home / "problem.yaml"))
+    from flux_loop.agent import agent_spec
+    a = agent_spec(task.generator["agent"])
+    assert (a.timeout_s, a.probe_checks, dict(a.probe)["gate"], dict(a.probe)["stages"]) == (900.0, ("lint",), 4, 2)
+    v = views(home / "problem.yaml")
+    back = subprocess.run(["node", "-e", READ_JS, str(ASSETS / "crafter-model.js"), str(ASSETS / "tools.json")],
+                          input=json.dumps({"raw": v["raw"], "normal": v["normal"]}, default=str), capture_output=True, text=True, timeout=60)
+    assert back.returncode == 0, back.stderr
+    again = json.loads(back.stdout)
+    assert not again["kept"] and again["yaml"] == out["set"]["yaml"], again["kept"]
+    renamed = yaml.safe_load(out["renamed"])["flow"]["generate"]
+    assert renamed == {"by": "codex", "timeout_s": 900, "probe": {"gate": {"checks": ["lint"], "runs": 4}, "stages": 2}}, renamed
+    cleared = yaml.safe_load(out["cleared"])["flow"]
+    assert cleared["generate"] == "codex" and cleared["select"] == "codex", cleared
+    assert out["stale"] and "lint" in out["stale"][0], out["stale"]
+
+
 KEPT_JS = r"""
 const c = require(process.argv[1]);
 const doc = {statement: "x", budget: {steps: 4, mystery: 1}, objectives: [{metric: "t", direction: "minimize", tie: 0.1}], params: {width: {a: 1}}};
@@ -408,3 +485,27 @@ def test_a_part_kept_as_written_is_shown_as_written():
     out = json.loads(r.stdout)
     assert set(out["kept"]) == {"budget", "objectives", "params"}, out
     assert out["text"] == {"budget": "steps: 4\nmystery: 1", "objectives": "- {metric: t, direction: minimize, tie: 0.1}", "params": "width: {a: 1}"}, out
+
+
+WORD_JS = r"""
+const c = require(process.argv[1]);
+c.setCatalog(JSON.parse(require("fs").readFileSync(process.argv[2], "utf8")));
+const v = JSON.parse(require("fs").readFileSync(0, "utf8"));
+const s = c.fromDoc(v.raw, v.normal).state;
+process.stdout.write(JSON.stringify({stages: s.stages.map(x => [x.tool, c.toolWord(x)]), checks: s.checks.map(x => c.toolWord(x)),
+  own: c.toolWord({tool: "custom-stage", params: {command: "make -C {home} bench"}}),
+  other: c.toolWord({tool: "custom-stage", params: {command: "fluxpreset rtl newthing {artifact}"}})}));
+"""
+
+
+def test_a_preset_measurement_is_named_by_its_preset():
+    """D1141: a measurement that runs a preset but lists fewer numbers than it reports is read as a command of one's own
+    (so it round-trips), yet its row says the preset ("Synthesise and time"), not "command"; a command of one's own
+    says "command"."""
+    v = views(REPO / "flux/applications/adder16/problem.yaml")
+    r = subprocess.run(["node", "-e", WORD_JS, str(ASSETS / "crafter-model.js"), str(ASSETS / "tools.json")],
+                       input=json.dumps({"raw": v["raw"], "normal": v["normal"]}, default=str), capture_output=True, text=True, timeout=60)
+    assert r.returncode == 0, r.stderr
+    out = json.loads(r.stdout)
+    assert out["stages"] == [["custom-stage", "Synthesise and time (ASAP7)"], ["custom-stage", "Place and time (ASAP7)"]], out
+    assert out["own"] == "command" and out["other"] == "rtl newthing", out

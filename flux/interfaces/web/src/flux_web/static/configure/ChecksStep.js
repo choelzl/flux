@@ -109,7 +109,7 @@ export function ChecksStep({ M, state, edit, agent, direct }) {
       ${keptChecks ? html`<${Kept} M=${M} state=${state} at="flow.test" direct=${direct} />` : html`<div class="cfg-rows">${state.checks.map((c, i) => {
         const ty = M.checkType(c.type);
         return html`<${XRow} key=${i} i=${i + 1} title=${r.checks[i].name} line=${r.checks[i].run || "(its command)"} open=${open === c} toggle=${toggle(c)}
-          tags=${html`<${Tag}>${ty?.preset ? "preset" : ty?.key === "test" ? "test script" : "command"}<//>${c.timeout ? html`<${Tag}>${c.timeout} s<//>` : ""}`}
+          tags=${html`<${Tag}>${ty?.preset || M.runsTool(c)?.preset ? "preset" : ty?.key === "test" ? "test script" : "command"}<//>${c.timeout ? html`<${Tag}>${c.timeout} s<//>` : ""}`}
           acts=${html`<${Acts} list=${state.checks} i=${i} edit=${edit} what=${r.checks[i].name} />`}><${CheckFields} M=${M} state=${state} c=${c} lang=${lang} edit=${edit} /><//>`;
       })}</div>`}
       <div class="cfg-bar">${keptChecks ? "" : html`<button type="button" class="small" onClick=${addCheck}>+ Check</button>`}<span class="grow" />
@@ -118,9 +118,9 @@ export function ChecksStep({ M, state, edit, agent, direct }) {
           pick=${k => edit(() => { M.setCritic(state, "test", kinds.find(o => o.k === k).value()); })} /></div></section>
     <section class="cfg-sec"><h3>Measurements <span class="muted">cheapest first</span></h3>
       ${keptStages ? html`<${Kept} M=${M} state=${state} at="flow.measure" direct=${direct} />` : html`<div class="cfg-rows">${state.stages.map((st, i) => {
-        const rs = r.stages[i], t = M.toolOf(st.tool), est = st.estimate && st.estimate.kind && st.estimate.kind !== "off";
+        const rs = r.stages[i], est = st.estimate && st.estimate.kind && st.estimate.kind !== "off";
         const clock = rs.clock_ps && /^\d+$/.test(String(rs.clock_ps)) ? ` at ${Math.round(1e6 / Number(rs.clock_ps))} MHz` : "";
-        return html`<${XRow} key=${i} i=${i + 1} title=${rs.name} line=${`${t && !M.isCustom(st.tool) ? t.title : "command"}${clock} · ${rs.reports.join(", ") || "no numbers yet"}`}
+        return html`<${XRow} key=${i} i=${i + 1} title=${rs.name} line=${`${M.toolWord(st)}${clock} · ${rs.reports.join(", ") || "no numbers yet"}`}
           open=${open === st} toggle=${toggle(st)} tags=${html`${est ? html`<${Tag}>estimated first<//>` : ""}${st.gates.length ? html`<${Tag}>cutoff<//>` : ""}`}
           acts=${html`<${Acts} list=${state.stages} i=${i} edit=${edit} what=${rs.name} />`}><${StageFields} M=${M} state=${state} st=${st} lang=${lang} edit=${edit} /><//>`;
       })}</div>`}

@@ -284,6 +284,23 @@
 
   function isPreset(id, cat) { var t = toolOf(id, cat); return !!(t && t.preset); }
 
+  /** D1141: the catalog tool a row runs -- its own, else the one its command fills (a preset stage that lists fewer
+      numbers than the preset reports is read as a command of one's own, so it round-trips, yet still runs the preset). */
+  function runsTool(row, cat) {
+    var t = toolOf(row.tool, cat);
+    if (t && !isCustom(row.tool)) return t;
+    var cmd = String(((row.params || {}).command) || "").trim(), role = row.tool === "custom-check" ? "check" : "stage";
+    var m = cmd ? matchTool(argvOf(shellSplit(cmd)), role, cat) : null;
+    return m ? m.tool : null;
+  }
+  /** A row's tool in a word or few: the tool's title, the preset its command names, else "command". */
+  function toolWord(row, cat) {
+    var t = runsTool(row, cat);
+    if (t) return t.title;
+    var a = shellSplit(String(((row.params || {}).command) || ""));
+    return a[0] === "fluxpreset" && a[1] ? a[1] + (a[2] && !/^[{-]/.test(a[2]) ? " " + a[2] : "") : "command";
+  }
+
   /** The measuring tools the first list shows: the catalog's own stages, one "Flux presets" entry
       for all its presets (`preset`), custom last, as [id, label]. */
   function stageTools(cat) {
@@ -965,6 +982,79 @@
     return all;
   }
 
+  /** D1142: an agent's own settings the configurator edits -- on whatever box, critic (`critic:<box>`) or the
+      Lessons agent (`lessons`) an agent works: its time limit, its session (a fresh agent each turn, or one per pass; not
+      Design's, D669), who answers its questions (how many, how long one waits), and Design's probe (D1137). They live where a round trip kept them
+      (agentRaw, criticRaw, D728, D1135); none said, the agent is written by its name alone. */
+  var AGENT_KEEPS = ["timeout_s", "session", "questions", "max_questions", "wait_s", "probe", "allow"];
+  var AGENT_EDITS = ["preset", "timeout_s", "session", "questions", "max_questions", "wait_s", "probe"];
+  function agentSlot(state, slot) {
+    var critic = slot.indexOf("critic:") === 0, b = critic ? slot.slice(7) : slot;
+    var v = critic ? criticsOf(state)[b] : (state.flow || {})[b];
+    if (typeof v !== "string" || v.indexOf("agent:") !== 0) return null;
+    var inline = v === INLINE_AGENT, field = critic && !inline ? "criticRaw" : "agentRaw", key = critic && inline ? "critique" : b;
+    var raw = (state[field] || {})[key], name = inline ? null : v.slice(6);
+    var own = raw && raw.agent && typeof raw.agent === "object" ? raw.agent : null;
+    if (raw && !inline && (critic || b === "lessons") && !(own && own.preset === name)) raw = own = null;   // another agent's, left behind
+    return { state: state, field: field, key: key, raw: raw, own: own, name: name };
+  }
+  /** The agent's settings at `slot` ({} when it has none of its own), or null when no agent works it. */
+  function agentOpts(state, slot) {
+    var s = agentSlot(state, slot);
+    return s ? Object.assign({}, s.own || {}) : null;
+  }
+  /** One of them set (`value` empty or null: the agent's default). */
+  function setAgentOpt(state, slot, k, value) {
+    var s = agentSlot(state, slot);
+    if (!s) return;
+    var raw = s.raw ? s.raw : { agent: { preset: s.name } };
+    if (!raw.agent || typeof raw.agent !== "object") raw.agent = { preset: raw.agent };
+    if (value === undefined || value === null || value === "") delete raw.agent[k];
+    else raw.agent[k] = typeof value === "string" ? typed(value) : value;
+    var store = state[s.field] = state[s.field] || {};
+    var bare = Object.keys(raw).length === 1 && Object.keys(raw.agent).length === 1 && raw.agent.preset;
+    if (bare) delete store[s.key]; else store[s.key] = raw;
+  }
+  /** Another coding agent at `slot`: the settings any agent takes go with it, a program's own (`bin`, `args`) do not. */
+  function renameAgent(state, slot, name) {
+    var s = agentSlot(state, slot);
+    if (!s || !s.own || !s.name) return;
+    var kept = { preset: name };
+    AGENT_KEEPS.forEach(function (k) { if (k in s.own) kept[k] = s.own[k]; });
+    var raw = Object.assign({}, s.raw, { agent: kept });
+    var store = state[s.field] = state[s.field] || {};
+    if (Object.keys(raw).length === 1 && Object.keys(kept).length === 1) delete store[s.key]; else store[s.key] = raw;
+  }
+  /** What else an agent's own settings say, beyond those the configurator edits (kept as written). */
+  function agentRest(state, slot) {
+    var s = agentSlot(state, slot), out = {};
+    if (!s || !s.own) return out;
+    Object.keys(s.own).forEach(function (k) { if (AGENT_EDITS.indexOf(k) < 0) out[k] = s.own[k]; });
+    return out;
+  }
+  /** D1137: Design's probe, as its panel shows it -- off, the gate's runs and checks (null: every check), the
+      stages' runs; `setProbe` writes it back, keeping a stage's own count. */
+  function probeOf(state) {
+    var p = (agentOpts(state, "generate") || {}).probe;
+    if (p === false) return { off: true, runs: "", checks: null, stages: "" };
+    var o = p && typeof p === "object" ? p : {}, g = o.gate;
+    var gate = g && typeof g === "object" ? g : { runs: g };
+    var checks = g === 0 ? [] : Array.isArray(gate.checks) && gate.checks.length ? gate.checks.slice() : null;
+    return { off: false, runs: g === 0 || gate.runs === undefined || gate.runs === null ? "" : String(gate.runs), checks: checks,
+             stages: o.stages === undefined ? "" : String(o.stages) };
+  }
+  function setProbe(state, pr) {
+    if (pr.off) { setAgentOpt(state, "generate", "probe", false); return; }
+    var was = (agentOpts(state, "generate") || {}).probe, out = {}, k;
+    if (was && typeof was === "object") for (k in was) if (k !== "gate" && k !== "stages") out[k] = was[k];
+    var runs = num(pr.runs), stages = num(pr.stages);
+    if (pr.checks && !pr.checks.length) out.gate = 0;
+    else if (pr.checks) { out.gate = { checks: pr.checks.slice() }; if (runs !== null) out.gate.runs = runs; }
+    else if (runs !== null) out.gate = runs;
+    if (stages !== null) out.stages = stages;
+    setAgentOpt(state, "generate", "probe", Object.keys(out).length ? out : null);
+  }
+
   /** D1040: the flow's lines with `critic:` under `box` -- beside a block's entries, inside an inline
       map, a word made `{by: word, critic: ...}`; a box not said is said for it (but a test without checks). */
   function withCritic(F, box, crit) {
@@ -1202,6 +1292,8 @@
       if (v !== "off" && v !== INLINE_AGENT && !choiceOf("critique", v)) error("The critic on \"" + (BOXES[b] || {}).title + "\" cannot be \"" + v + "\".");
     });
 
+    var pc = probeOf(state).checks, gateNames = state.checks.map(function (c) { return c.name; });   // D1137: the loader refuses it
+    if (pc && state.checks.length) pc.forEach(function (n) { if (gateNames.indexOf(n) < 0) error("Design's probe runs \"" + n + "\", which is not a check of the gate."); });
     var cmds = r.checks.map(function (c) { return ["check \"" + c.name + "\"", c.run, STEP_OF.checks]; });
     r.stages.forEach(function (st) {
       cmds.push(["measurement \"" + st.name + "\"", st.command, STEP_OF.measurements]);
@@ -1224,7 +1316,7 @@
     if (searching && knobs.length && flow.generate !== "command" && flow.generate !== "catalog") {
       if (!knobsSaid) error("A search's settings become designs only through a script: in Graph › Design choose Script and say {" +
                             knobs[0] + "} in it, or use {" + knobs[0] + "} in a check or a measurement.");
-      else note("A parameter-only search: each point's settings reach your commands as {" + knobs[0] + "}; no design is written, Design does not run.");
+      else note("A parameter-only search: each point's settings reach the commands as {" + knobs[0] + "}; no design is written, Design does not run.");
     }
 
     at = STEP_OF.more;
@@ -1271,8 +1363,10 @@
   var STATE_KEYS = ["id", "statement", "contract", "language", "knowledge", "parts", "space", "flow", "gate", "stages",
                     "objectives", "budget", "baseline", "params"];
   /** The loop's knobs the configurator's Graph sets beside each box (LoopRequest): when a design explores,
-      how a part yields, how many worse edits are tolerated, an agent's turns, how a repair edits. */
-  var MORE_BUDGET = ["explore_every", "explore_after", "cooldown_after", "regress_after", "agent_continues", "agent_grace_s", "budget_s", "patching"];
+      how a part yields, how many worse edits are tolerated, an agent's turns, how a repair edits and when it reverts,
+      how many parts are drafted at once. */
+  var MORE_BUDGET = ["explore_every", "explore_after", "cooldown_after", "regress_after", "agent_continues", "agent_grace_s", "budget_s", "patching",
+                     "revert_after", "parallel_parts"];            // D1142: when a repair goes back, parts drafted at once
   var BUDGET_KEYS = ["steps", "passes", "parallel", "batch", "repair_attempts", "finalists", "workers", "prototype", "exploration_quota"].concat(MORE_BUDGET);
 
   function argvOf(run) {
@@ -1734,11 +1828,12 @@
               explain: explain, explainEstimate: explainEstimate, choicesOf: choicesOf, choiceText: choiceText, shellSplit: shellSplit,
               namedFiles: namedFiles, BUILTIN_SUBS: BUILTIN_SUBS, STEP_OF: STEP_OF, STEP_IDS: STEP_IDS, stepIndex: stepIndex,
               // the views' own helpers (crafter.js, the web app's configure/)
-              catalog: function () { return CATALOG; }, HALVES: HALVES, INLINE_AGENT: INLINE_AGENT, AGENT_LABELS: function () { return AGENT_LABELS; },
+              catalog: function () { return CATALOG; }, runsTool: runsTool, toolWord: toolWord, HALVES: HALVES, INLINE_AGENT: INLINE_AGENT, AGENT_LABELS: function () { return AGENT_LABELS; },
               language: language, impliedLanguage: impliedLanguage, checkType: checkType, isPreset: isPreset, isCustom: isCustom, fits: fits,
               uniqueName: uniqueName, unitFor: unitFor, dictionarySpec: dictionarySpec, paramOnly: paramOnly, parameterSearch: parameterSearch,
               knobNames: knobNames, choiceOf: choiceOf, list: list, num: num, shown: shown, paramsOf: paramsOf, hasParts: hasParts,
-              CRITIC_BOXES: CRITIC_BOXES, criticsOf: criticsOf, setCritic: setCritic, BUDGET_KEYS: BUDGET_KEYS, keptText: keptText };
+              CRITIC_BOXES: CRITIC_BOXES, criticsOf: criticsOf, setCritic: setCritic, agentOpts: agentOpts, setAgentOpt: setAgentOpt,
+              renameAgent: renameAgent, agentRest: agentRest, probeOf: probeOf, setProbe: setProbe, BUDGET_KEYS: BUDGET_KEYS, keptText: keptText };
 
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.FluxCrafterModel = api;

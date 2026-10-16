@@ -2,7 +2,7 @@
  {
   "id": "python-test-script",
   "role": "check",
-  "title": "A test script of yours",
+  "title": "Test script",
   "what": "A Python script beside the document runs the design on known cases and prints `N failing`.",
   "run": "{python} {script} {artifact}",
   "params": {
@@ -33,7 +33,7 @@
   "id": "custom-check",
   "role": "check",
   "title": "Any command",
-  "what": "Your own command; it prints `N failing` (or say `count_re` / `fail_re`), or its exit code decides.",
+  "what": "Any command; it prints `N failing` (or say `count_re` / `fail_re`), or its exit code decides.",
   "run": "{command}",
   "params": {
    "command": {
@@ -52,7 +52,7 @@
  {
   "id": "bench-script",
   "role": "stage",
-  "title": "A timing script of yours",
+  "title": "Timing script",
   "what": "A Python script beside the document runs the design and prints `time_ms=...`.",
   "run": "{python} {script} {artifact}",
   "params": {
@@ -81,7 +81,7 @@
   "id": "custom-stage",
   "role": "stage",
   "title": "Any command",
-  "what": "Your own command; it prints `name=value` for each metric it measures, listed as the stage's `metrics`.",
+  "what": "Any command; it prints `name=value` for each metric it measures, listed as the stage's `metrics`.",
   "run": "{command}",
   "params": {
    "command": {

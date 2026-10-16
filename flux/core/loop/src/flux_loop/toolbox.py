@@ -34,22 +34,22 @@ def _m(*names: str) -> dict[str, str]:
 
 TOOLS: list[dict[str, Any]] = [
     # ---- your own scripts and commands (D654); the prebuilt ones are Flux's presets (D968)
-    {"id": "python-test-script", "role": "check", "title": "A test script of yours",
+    {"id": "python-test-script", "role": "check", "title": "Test script",
      "what": "A Python script beside the document runs the design on known cases and prints `N failing`.",
      "run": "{python} {script} {artifact}", "params": {"script": _p("Script", "{home}/check.py")},
      "needs": [], "pass": _N_FAILING, "languages": ["python", "text", "ini", "yaml", "c", "cpp"],
      "kinds": ["program", "python", "champsim", "own"]},
     {"id": "custom-check", "role": "check", "title": "Any command",
-     "what": "Your own command; it prints `N failing` (or say `count_re` / `fail_re`), or its exit code decides.",
+     "what": "Any command; it prints `N failing` (or say `count_re` / `fail_re`), or its exit code decides.",
      "run": "{command}", "params": {"command": _p("Command", "")},
      "needs": [], "pass": "passes when it prints `0 failing`, or else exits 0; exit 3 = did not build",
      "languages": [], "kinds": ["own"]},
-    {"id": "bench-script", "role": "stage", "title": "A timing script of yours",
+    {"id": "bench-script", "role": "stage", "title": "Timing script",
      "what": "A Python script beside the document runs the design and prints `time_ms=...`.",
      "run": "{python} {script} {artifact}", "params": {"script": _p("Script", "{home}/bench.py")},
      "metrics": _m("time_ms"), "needs": [], "languages": ["python", "text", "c", "cpp"], "kinds": ["program", "python"]},
     {"id": "custom-stage", "role": "stage", "title": "Any command",
-     "what": "Your own command; it prints `name=value` for each metric it measures, listed as the stage's `metrics`.",
+     "what": "Any command; it prints `name=value` for each metric it measures, listed as the stage's `metrics`.",
      "run": "{command}", "params": {"command": _p("Command", "")},
      "metrics": {}, "needs": [], "languages": [], "kinds": ["own"]},
 ]
