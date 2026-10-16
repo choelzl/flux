@@ -88,7 +88,7 @@ function draftDesign(n) {
 }
 
 /** Which flow a pass draws: the setup (before pass 0 or 1), the baseline (pass 0), or a pass. */
-export const passKind = p => p == null ? "setup" : Number(p) === 0 ? "baseline" : Number.isInteger(Number(p)) ? "pass" : "remeasure";
+const passKind = p => p == null ? "setup" : Number(p) === 0 ? "baseline" : Number.isInteger(Number(p)) ? "pass" : "remeasure";
 /** D1043: a pass as people read it -- Setup, the baseline, Pass N, and R (the rejected designs measured
     again between two passes; its number half-way between them). */
 export const passName = p => p == null ? "Setup" : Number(p) === 0 ? "Pass 0 · baseline" : Number.isInteger(Number(p)) ? `Pass ${p}` : "R · measured again";
@@ -114,7 +114,7 @@ export function boxKind(n) {
 }
 /** D1094: when a design's run handed its design on -- the time its first check or measurement began, the
     run itself holding them (the generation runs its gate) -- with no work of its own after it; else null. */
-export function handedOn(n) {
+function handedOn(n) {
   if (boxKind(n) !== "design") return null;
   let first = null;
   const own = [], walk = x => { for (const c of x.kids || []) { const k = boxKind(c);

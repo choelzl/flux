@@ -52,7 +52,7 @@ function checkedOf(pre) {
 /** Save's folded Changes (D941) and the save (D693): what it changes, line by line, before it writes. */
 const changesOf = (name, kept) => async yaml => {
   const p = await loopApi(name).api("/document/preview", { method: "POST", body: { text: yaml, kept } });
-  if (p.before === p.after) return html`<p class="muted">No change.</p>`;
+  if (p.before === p.after) return html`<${Empty} text="No change." />`;
   const ops = lineDiff(p.before, p.after), n = diffCounts(ops);
   return html`<p class="muted small">${`${plural(n.added, "line")} added, ${n.removed} removed.`}</p><${Diff} ops=${ops} />`;
 };

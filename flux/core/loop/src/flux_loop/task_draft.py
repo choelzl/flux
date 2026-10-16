@@ -168,10 +168,10 @@ class DraftMixin:
         subs = {"prompt": brief, "prompt_file": str(prompt_file), "artifact": str(path), "workdir": str(workdir),
                 "part": sg or "", "name": name, "python": sys.executable, "home": self.task.home or ".",
                 "workbench": self.task.workbench, "probe": probe_ctx}
-        if self.skill_list() and not resume:           # install skills where the agent looks (D588)
+        if self.agent_skill_list() and not resume:     # install skills where the agent looks (D588, D1152: the built-in ones too)
             from .skills import install
 
-            install(self.skill_list(), workdir)
+            install(self.agent_skill_list(), workdir)
         t0 = time.monotonic()
         path.with_name(path.name + ".ideas.json").unlink(missing_ok=True)
         turn, asked = converse(agent, subs, workdir=workdir, artifact=path, prompt_file=prompt_file,
@@ -440,6 +440,10 @@ class DraftMixin:
         subs = {"prompt": brief, "prompt_file": str(prompt_file), "artifact": str(path), "workdir": str(workdir),
                 "part": subgoal or "", "name": safe, "python": sys.executable, "home": self.task.home or ".",
                 "workbench": self.task.workbench, "probe": probe_ctx}
+        if self.agent_skill_list() and not resume:     # D1152: the prototype's agent has the loop's skills too
+            from .skills import install
+
+            install(self.agent_skill_list(), workdir)
         t0 = time.monotonic()
         path.with_name(path.name + ".ideas.json").unlink(missing_ok=True)
         turn, _asked = converse(agent, subs, workdir=workdir, artifact=path, prompt_file=prompt_file,

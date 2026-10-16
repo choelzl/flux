@@ -3,7 +3,7 @@
 // when one is named). `FilesBody` is the list itself (the configurator's Prompt holds it, each file with what it is
 // to the loop); `FilesPanel` folds it under a form (Direct edit), open by itself when there are files or one is missing.
 
-import { html, Notice, useChanges, useEffect, useRef, useState } from "../view.js";
+import { html, Notice, useChanges, useEffect, useRef, useState, Empty } from "../view.js";
 import { bytes, plural } from "../format.js";
 import { Uploader, placedFiles } from "../components/Uploader.js";
 import { Tool } from "../components/Head.js";
@@ -19,11 +19,11 @@ export function FilesBody({ store, more = null }) {
   useChanges(store);
   const { files, missing } = store.s;
   return html`<div class="files-panel">${files.length ? html`<ul class="files flist">${files.map(f => html`<li key=${f.path}>
-        <a href="javascript:void 0" onClick=${() => store.open(f)}><span class="ic">·</span>${f.path}</a>
+        <button type="button" class="link file-link" onClick=${() => store.open(f)}><span class="ic">·</span>${f.path}</button>
         <small class="muted">${bytes(f.size)}${f.staged ? " · staged" : ""}</small>${more ? more(f) : ""}
-        <${Tool} icon="close" danger label=${`Delete ${f.path}`} onClick=${() => store.remove(f)} /></li>`)}</ul>` : html`<p class="muted">No files.</p>`}
+        <${Tool} icon="close" danger label=${`Delete ${f.path}`} onClick=${() => store.remove(f)} /></li>`)}</ul>` : html`<${Empty} text="No files." />`}
       ${missing.length ? html`<${Notice} key="missing" tone="bad" what="Named but missing:">
-        ${" "}${missing.map((p, i) => html`${i ? ", " : ""}<a href="javascript:void 0" title="Write it here" onClick=${() => store.editor(p, "")}>${p}</a>`)}<//>` : ""}
+        ${" "}${missing.map((p, i) => html`${i ? ", " : ""}<button type="button" class="link" title="Write it here" onClick=${() => store.editor(p, "")}>${p}</button>`)}<//>` : ""}
       <div class="row"><button class="small" type="button" onClick=${() => store.editor("", "")}>New file</button></div>
       <${Uploader} rows=${rows} onChange=${setRows} label="Drop scripts, models, papers or folders" />
       ${rows.length ? html`<div class="row"><button class="small primary" type="button" onClick=${add}>${`Add ${plural(placedFiles(rows).length, "file")}`}</button></div>` : ""}</div>`;

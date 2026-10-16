@@ -1,16 +1,17 @@
 // Flux web, files (D808, D829, D908, D937, D1095): the pieces of the Files tab -- a path as links, what the
 // selected item is (kind, size, a folder's size counted when asked, when it changed), its Actions menu, a list.
 
-import { Ago, html, useLayoutEffect, useRef, useState } from "../view.js";
+import { Ago, html } from "../view.js";
 import { api } from "../ui.js";
 import { bytes, plural } from "../format.js";
 import { Act } from "../components/Act.js";
 import { useLoad } from "../components/Load.js";
+import { usePopover } from "../components/Popover.js";
 
 export const parentOf = p => String(p || "").split("/").slice(0, -1).join("/");
 export const baseOf = p => String(p || "").split("/").pop();
 export const joinP = (dir, leaf) => [dir, leaf].filter(Boolean).join("/");
-const link = (label, onClick) => html`<a href="javascript:void 0" onClick=${onClick}>${label}</a>`;
+const link = (label, onClick) => html`<button type="button" class="link" onClick=${onClick}>${label}</button>`;
 
 /** D808: a path as its folders, each a link that opens it; the loop's own folder first. */
 export function PathCrumbs({ name, path, open }) {
@@ -36,23 +37,12 @@ export const MetaLine = ({ it, sizeUrl }) => html`<div class="item-meta muted sm
 /** Rename, Move and Delete (D908) on the selected item's head -- D937: the only place; what is not possible
     here disabled, with why. Opened from the keyboard, its first possible action takes the focus. */
 export function ActionsMenu({ label, it, acts }) {
-  const menu = useRef(null), [open, setOpen] = useState(false);
+  // D908: open, it closes on a click elsewhere or Escape -- D937: the keyboard's place kept, back on the menu's button
+  const { open, setOpen, ref } = usePopover();
   const toggled = e => { const d = e.currentTarget; setOpen(d.open); if (d.open && document.activeElement === d.querySelector("summary")) d.querySelector(".menu-list button:not([disabled])")?.focus(); };
-  useLayoutEffect(() => {                             // D908: open, it closes on a click elsewhere or Escape
-    if (!open) return;
-    const d = menu.current;
-    const click = e => { if (!d.contains(e.target)) d.open = false; };
-    const key = e => {
-      if (e.key !== "Escape") return;
-      const back = d.contains(document.activeElement);       // D937: the keyboard's place kept -- back on the menu's button
-      d.open = false; if (back) d.querySelector("summary").focus();
-    };
-    document.addEventListener("click", click); document.addEventListener("keydown", key);
-    return () => { document.removeEventListener("click", click); document.removeEventListener("keydown", key); };
-  }, [open]);
   const item = (text, fn, ok) => html`<button type="button" role="menuitem" disabled=${!ok} title=${ok ? null : it.why}
-    onClick=${async e => { e.preventDefault(); menu.current.open = false; await fn(it); }}>${text}</button>`;
-  return html`<details class="actions-menu" ref=${menu} onToggle=${toggled}>
+    onClick=${async e => { e.preventDefault(); setOpen(false); await fn(it); }}>${text}</button>`;
+  return html`<details class="actions-menu" ref=${ref} open=${open} onToggle=${toggled}>
     <summary class="btn small" aria-label=${`Actions for ${label}`} title="Rename, move or delete">Actions ▾</summary>
     <div class="menu-list" role="menu">${item("Rename…", acts.rename, it.can.rename)}${item("Move…", acts.move, it.can.move)}${item("Delete…", acts.remove, it.can.delete)}
       ${it.why ? html`<p class="muted small why">${`Not here: ${it.why}.`}</p>` : ""}</div></details>`;
@@ -64,6 +54,6 @@ export function FileList({ list, open }) {
   const own = f => !f.path.includes("/") && (f.dir ? ["out", "runs", "workbench", "library"].includes(f.path) : f.path === "problem.yaml" || f.path.endsWith(".problem.yaml"));
   return html`<ul class="files">${list.map(f => html`<li key=${f.path} class=${`${f.ignored ? "ignored" : ""}${own(f) ? " own" : ""}${f.link ? " link" : ""}`}
       title=${f.ignored ? "ignored" : null}>
-    <a href="javascript:void 0" title=${f.path} onClick=${() => open(f.path, f.dir)}><span class="ic">${f.dir ? "▸" : f.link ? "↪" : "·"}</span>${baseOf(f.path) + (f.dir ? "/" : "")}</a>
+    <button type="button" class="link file-link" title=${f.path} onClick=${() => open(f.path, f.dir)}><span class="ic">${f.dir ? "▸" : f.link ? "↪" : "·"}</span>${baseOf(f.path) + (f.dir ? "/" : "")}</button>
     ${f.dir || f.link ? "" : html`<small class="muted">${bytes(f.size)}</small>`}</li>`)}</ul>`;
 }

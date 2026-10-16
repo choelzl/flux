@@ -2,7 +2,20 @@
 // the loop is created; its progress: components/Modal.js), and what a drop holds (a folder walked, its own name taken
 // off when it is the only thing dropped).
 
-import { api, enc, loopApi, offline, owned } from "./ui.js";
+import { api, enc, loopApi, offline, owned, toast } from "./ui.js";
+import { progressDialog } from "./components/Modal.js";
+
+/** A send with its progress in a dialog, cancellable (D1075): `send({onProgress, signal})` its promise. Its value, or
+    -- a failure or a cancel said in a toast -- null; `say: false` throws it instead (D1149). */
+export async function sendWithProgress(title, what, send, { say = true } = {}) {
+  const pd = progressDialog(title, what);
+  try { return await send({ onProgress: pd.set, signal: pd.signal }); }
+  catch (x) {
+    if (!say) throw x;
+    toast(pd.signal.aborted ? `The upload was cancelled: ${x.message}.` : `The upload failed: ${x.message}`, pd.signal.aborted ? "warn" : "bad", { timeout: 12000 });
+    return null;
+  } finally { pd.close(); }
+}
 
 /** Files to a loop (D700): in batches of at most 300 files and 40 MB, a file over 40 MB in
     parts of 32 MB, the document first when the loop is created. `entries`: [{file, path}];

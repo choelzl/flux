@@ -12,6 +12,7 @@ import { atEnd } from "../scroll.js";
 import { useLoop } from "../loop/context.js";
 import { Pill } from "../components/Tone.js";
 import { Tool, Tools } from "../components/Head.js";
+import { Check } from "../components/Check.js";
 
 const WRAPPED = 3000, TAIL = 2 << 20;
 const storedTimes = () => recall("flux-log-times") !== "off";
@@ -70,7 +71,7 @@ export function Log({ store }) {
     if (!o.wrap) setScroll(el.scrollTop);
   };
   const times = on => { remember("flux-log-times", on ? "on" : "off"); row.current = 0; set({ times: on }); };
-  const check = (k, label, title, change = v => set({ [k]: v })) => html`<label class="check" title=${title}><input type="checkbox" checked=${o[k]} onChange=${e => change(e.currentTarget.checked)} />${label}</label>`;
+  const check = (k, label, title, change = v => set({ [k]: v })) => html`<${Check} title=${title} checked=${o[k]} onChange=${change}>${label}<//>`;
   const raw = L.past ? `${ctx.base}/log/raw?run_id=${enc(store.s.startId)}&download=false${ctx.q}` : `${ctx.base}/log/raw${ctx.qs || "?"}${ctx.qs ? "&" : ""}download=false`;
   return html`<${Card} cls="log-card"><${ViewerFrame} v=${view} title="Log"><div onviewerresize=${() => { row.current = 0; setScroll(box.current?.scrollTop || 0); }}>
     <div class="toolbar">${check("follow", "follow", null, v => { set({ follow: v }); })}${check("wrap", "wrap")}${check("problems", "problems only")}${check("times", "times", "Each line's time", times)}

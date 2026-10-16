@@ -472,7 +472,7 @@ def flows(r: Run) -> None:
         b.type("form.login input:not([type=password])", "bob")
         b.type("form.login input[type=password]", "not the password")
         b.click("form.login button[type=submit]")
-        said = b.wait("document.querySelector('form.login .err') && document.querySelector('form.login .err').textContent", what="the refusal")
+        said = b.wait("document.querySelector('form.login .notice.t-bad') && document.querySelector('form.login .notice.t-bad').textContent", what="the refusal")
         r.check("a wrong password is refused, said", "wrong name or password" in said, said)
         b.js("window.__e2e.errors.splice(0); return true;")       # the 401 itself is expected
     r.step("login refused", login_refused)
@@ -650,21 +650,21 @@ def flows(r: Run) -> None:
                 " el.dispatchEvent(new Event(el.tagName === 'SELECT' ? 'change' : 'input', {bubbles: true})); return 1")
         pick = ("const [who, what] = arguments; [...document.querySelector('.cfg-panel [role=group][aria-label=\"' + who + '\"]').querySelectorAll('button')]"
                 ".find(b => b.textContent.trim() === what).click(); return 1")
-        rows = "return [...document.querySelectorAll('.cfg-panel .cfg-lib-reads li')].map(l => [l.querySelector('code, span').textContent, l.querySelector('input').checked, l.querySelector('input').disabled])"
+        rows = "return [...document.querySelectorAll('.cfg-panel [data-sec=library] .cfg-lib-reads li')].map(l => [l.querySelector('code, span').textContent, l.querySelector('input').checked, l.querySelector('input').disabled])"
 
         r.page("#/app/library_box/settings/problem?step=graph", "document.querySelector('.cfg[data-step=graph] .cfg-cycle')", "the Graph")
         nodes = b.js("return [...document.querySelectorAll('.cfg-cycle [data-node]')].map(n => n.dataset.node)")
-        r.check("one Library box, no Digest or Lessons box (D1136)", "knowledge" in nodes and "digest" not in nodes and "lessons" not in nodes
-                and "Library" in b.js("return document.querySelector('.cfg-cycle [data-node=knowledge]').textContent")
-                and b.js("return !!document.querySelector('.cfg-cycle [data-node=knowledge] .pill.ai')"), str(nodes))
+        r.check("one Knowledge box, no Digest or Lessons box (D1136, D1152)", "knowledge" in nodes and "digest" not in nodes and "lessons" not in nodes
+                and "Knowledge" in b.js("return document.querySelector('.cfg-cycle [data-node=knowledge]').textContent")
+                and b.js("return !!document.querySelector('.cfg-cycle [data-node=knowledge] .svg-pill.ai')"), str(nodes))
         b.js("document.querySelector('.cfg-cycle [data-node=knowledge]').dispatchEvent(new MouseEvent('click', {bubbles: true})); return 1")
-        b.wait("document.querySelector('.cfg-panel .cfg-lib-reads li code')", timeout=10, what="the Library's files")
+        b.wait("document.querySelector('.cfg-panel [data-sec=library] .cfg-lib-reads li code')", timeout=10, what="the Library's files")
         got = b.js(rows)
         r.check("the Library lists the loop's files, a folder as one row, library/ and the shared library read while on",
                 ["golden.py", False, False] in got and ["rtl/", False, False] in got and ["library/", True, True] in got
                 and ["shared library", True, True] in got and not any(x[0].startswith("rtl/t") for x in got), str(got))
-        r.check("the folder says its files", "folder, 2 files" in b.js("return document.querySelector('.cfg-panel .cfg-lib-reads').textContent"))
-        b.js("[...document.querySelectorAll('.cfg-panel .cfg-lib-reads li')].find(l => l.textContent.startsWith('rtl/')).querySelector('input').click(); return 1")
+        r.check("the folder says its files", "folder, 2 files" in b.js("return document.querySelector('.cfg-panel [data-sec=library] .cfg-lib-reads').textContent"))
+        b.js("[...document.querySelectorAll('.cfg-panel [data-sec=library] .cfg-lib-reads li')].find(l => l.textContent.startsWith('rtl/')).querySelector('input').click(); return 1")
         b.js(setv, ".cfg-panel [data-fc-field=knowledge-text]", "Widths are 8 bits.")
         b.js(setv, ".cfg-panel [data-fc-field=knowledge-sheet]", "method.md")
         b.js(pick, "Who works Digest papers", b.js("return [...document.querySelector('.cfg-panel [role=group][aria-label=\"Who works Digest papers\"]').querySelectorAll('button')].pop().textContent.trim()"))
@@ -673,9 +673,9 @@ def flows(r: Run) -> None:
         added = r.files / "library_box" / "notes.md"            # where the browser may read
         added.parent.mkdir(parents=True, exist_ok=True)
         added.write_text("Notes to read.\n")
-        b.attach(".cfg-panel input.up-files", str(added))
+        b.attach(".cfg-panel [data-sec=library] input.up-files", str(added))
         r.button("Add 1 file", ".cfg-panel")
-        b.wait("[...document.querySelectorAll('.cfg-panel .cfg-lib-reads li')].some(l => l.textContent.startsWith('notes.md') && l.querySelector('input').checked)",
+        b.wait("[...document.querySelectorAll('.cfg-panel [data-sec=library] .cfg-lib-reads li')].some(l => l.textContent.startsWith('notes.md') && l.querySelector('input').checked)",
                timeout=20, what="the added file, checked")
         r.button("Save to problem.yaml", ".cfg-nav")
         r.dialog_button("Save")
@@ -690,6 +690,80 @@ def flows(r: Run) -> None:
                 and b.js("return [...document.querySelectorAll('.files-panel li')].some(l => l.textContent.includes('rtl/top.sv') && l.textContent.includes('read'))"))
         r.clean("the Library")
     r.step("library box", library_box)
+
+    def knowledge_skills():
+        """D1152: the Knowledge box's Skills -- the loop's skills/ and the built-in flux-loop-commands, each with a
+        switch, saved as `skills: {off: [...]}`; the whole section off is `skills: off`, in the document the Save step shows."""
+        import yaml
+
+        made = r.api("/apps/new-empty", "POST", {"name": "knowledge_skills"})
+        r.check("create a loop for the Skills", made["status"] == 200, made["body"])
+        root = r.data / "users/bob/apps/knowledge_skills"
+        (root / "skills" / "rtl-style").mkdir(parents=True, exist_ok=True)
+        (root / "skills" / "rtl-style" / "SKILL.md").write_text("---\nname: rtl-style\ndescription: how we write RTL\n---\nNo latches.\n")
+        raw = yaml.safe_load((root / "problem.yaml").read_text())
+        raw["flow"] = {"test": {"check": "true"}}
+        (root / "problem.yaml").write_text(yaml.safe_dump(raw, sort_keys=False))
+        skills = "return [...document.querySelectorAll('.cfg-panel [data-sec=skills] li')].map(l => [l.querySelector('code').textContent, l.querySelector('input').checked])"
+        pick = ("const [sec, what] = arguments; [...document.querySelector('.cfg-panel [data-sec=' + sec + '] .cfg-bar [role=group]').querySelectorAll('button')]"
+                ".find(b => b.textContent.trim() === what).click(); return 1")
+        open_box = ("document.querySelector('.cfg-cycle [data-node=knowledge]').dispatchEvent(new MouseEvent('click', {bubbles: true})); return 1")
+
+        def save(what):
+            r.button("Save to problem.yaml", ".cfg-nav")
+            r.dialog_button("Save")
+            b.wait("document.querySelector('.cfg-status.t-ok') && !document.querySelector('.cfg-status.t-run')", timeout=20, what=what)
+            return json.loads(r.api("/apps/knowledge_skills/document")["body"])
+
+        r.page("#/app/knowledge_skills/settings/problem?step=graph", "document.querySelector('.cfg[data-step=graph] .cfg-cycle')", "the Graph")
+        b.js(open_box)
+        b.wait("document.querySelectorAll('.cfg-panel [data-sec=skills] li').length >= 2", timeout=10, what="the skills")
+        r.check("Knowledge has four sections, Skills first", b.js("return [...document.querySelectorAll('.cfg-panel [data-sec]')].map(x => x.dataset.sec)")
+                == ["skills", "library", "lessons", "workbench"])
+        r.check("the loop's skill and the built-in one, both on", b.js(skills) == [["rtl-style", True], ["flux-loop-commands", True]], str(b.js(skills)))
+        b.js("[...document.querySelectorAll('.cfg-panel [data-sec=skills] li')].find(l => l.textContent.includes('flux-loop-commands')).querySelector('input').click(); return 1")
+        saved = save("one skill off saved")
+        r.check("one skill off is `skills: {off: [...]}`", saved["raw"].get("skills") == {"off": ["flux-loop-commands"]} and saved["normal"] is not None,
+                str(saved["raw"].get("skills")))
+        r.page("#/app/knowledge_skills/settings/problem?step=graph", "document.querySelector('.cfg[data-step=graph] .cfg-cycle')", "the Graph again")
+        b.js(open_box)
+        b.wait("document.querySelectorAll('.cfg-panel [data-sec=skills] li').length >= 2", timeout=10, what="the skills again")
+        r.check("read back: the built-in skill off", b.js(skills) == [["rtl-style", True], ["flux-loop-commands", False]], str(b.js(skills)))
+        b.js(pick, "skills", "off")
+        r.check("Skills off folds its list", not b.js("return !!document.querySelector('.cfg-panel [data-sec=skills] li')"))
+        b.click(".cfg-rail button[data-step=save]")
+        b.wait("document.querySelector('.cfg-yaml-fold')", timeout=10, what="the document")
+        r.check("the document says `skills: off`", "skills: \"off\"" in b.js("return document.querySelector('.cfg-yaml-fold').textContent")
+                or "skills: off" in b.js("return document.querySelector('.cfg-yaml-fold').textContent"))
+        saved = save("Skills off saved")
+        r.check("saved: `skills: off`", saved["raw"].get("skills") in ("off", False) and saved["normal"] is not None, str(saved["raw"].get("skills")))
+        if os.environ.get("FLUX_E2E_SHOTS"):                # the Knowledge panel, every section on: light and dark, a desktop's and a phone's width
+            raw = yaml.safe_load((root / "problem.yaml").read_text())
+            raw.pop("skills", None)
+            raw["flow"]["knowledge"] = {"lessons": "claude", "workbench": "codex"}
+            (root / "problem.yaml").write_text(yaml.safe_dump(raw, sort_keys=False))
+            out = Path(os.environ["FLUX_E2E_SHOTS"])
+            out.mkdir(parents=True, exist_ok=True)
+            for theme in ("light", "dark"):
+                for width in (1280, 390):
+                    b.js("document.body.innerHTML = ''; const f = document.createElement('iframe'); f.id = 'phone'; localStorage.setItem('flux-theme', arguments[1]);"
+                         "f.style.cssText = `width:${arguments[0]}px;height:800px;border:0`; f.src = '/?know=' + Date.now() + '#/app/knowledge_skills/settings/problem?step=graph';"
+                         "document.body.append(f); return 1", width, theme)
+                    b.wait("(() => { const d = document.getElementById('phone').contentDocument; return d && d.querySelector('.cfg-cycle [data-node=knowledge]'); })()", timeout=20)
+                    b.js("const d = document.getElementById('phone').contentDocument; d.querySelector('.cfg-cycle [data-node=knowledge]')"
+                         ".dispatchEvent(new MouseEvent('click', {bubbles: true})); return 1")
+                    b.wait("(() => { const d = document.getElementById('phone').contentDocument; return d.querySelectorAll('.cfg-panel [data-sec=skills] li').length >= 2; })()", timeout=20)
+                    for part, sec, at in (("top", "", "start"), ("end", " [data-sec=workbench]", "end")):
+                        b.js("const w = document.getElementById('phone').contentWindow; w.document.querySelector('.cfg-panel' + arguments[0])"
+                             ".scrollIntoView({block: arguments[1]}); if (arguments[1] === 'start') w.scrollBy(0, -64); return 1", sec, at)
+                        time.sleep(0.5)
+                        (out / f"knowledge-{width}px-{theme}-{part}.png").write_bytes(
+                            base64.b64decode(b.cmd("WebDriver:TakeScreenshot", {"id": b.find("#phone"), "full": False})["value"]))
+            b.js("localStorage.removeItem('flux-theme'); return 1")
+            b.cmd("WebDriver:Navigate", {"url": f"{r.url}/?after-know={time.time()}#/"})
+            b.wait("document.querySelector('#main')", timeout=20)
+        r.clean("the Skills")
+    r.step("knowledge skills", knowledge_skills)
 
     def agent_settings():
         """D1142: Design's panel sets what its agent may run of the gate while designing (D1137: some checks, how often)
@@ -967,7 +1041,7 @@ def flows(r: Run) -> None:
 
     def raw_and_fullscreen():
         r.page("#/app/sw/files", "document.querySelector('#main ul.files')", "Files")
-        b.js("[...document.querySelectorAll('#main ul.files a')].find(a => a.textContent.endsWith('problem.yaml')).click(); return 1")
+        b.js("[...document.querySelectorAll('#main ul.files .file-link')].find(a => a.textContent.endsWith('problem.yaml')).click(); return 1")
         b.wait("document.querySelector('.viewer textarea')", what="file editor")
         b.js("window.__viewEditor = document.querySelector('.viewer textarea'); window.__viewText = window.__viewEditor.value;"
              " window.__viewEditor.value += '\\n# unsaved fullscreen edit\\n'; window.__viewEditor.dispatchEvent(new Event('input')); return 1")
@@ -1004,7 +1078,7 @@ def flows(r: Run) -> None:
 
     def editor_alignment():
         r.page("#/app/sw/files", "document.querySelector('#main ul.files')", "Files")
-        b.js("[...document.querySelectorAll('#main ul.files a')].find(a => a.textContent.endsWith('problem.yaml')).click(); return 1")
+        b.js("[...document.querySelectorAll('#main ul.files .file-link')].find(a => a.textContent.endsWith('problem.yaml')).click(); return 1")
         b.wait("document.querySelector('.viewer .editor textarea')", what="file editor")
         b.js("const ta = document.querySelector('.editor-input'); window.__editorOriginal = ta.value;"
              " ta.value = Array.from({length: 180}, (_, i) => `row_${i}:\\t'${'x'.repeat(180)}' # a comment`).join('\\n') + '\\n';"
@@ -1424,7 +1498,7 @@ def flows(r: Run) -> None:
         b.wait("[...document.querySelectorAll('.files-card ul.files li')].some(l => l.innerText.includes('scratch.tmp'))", what="the ignored shown")
         r.check("show ignored files lists it, marked", b.js("return [...document.querySelectorAll('.files-card li.ignored')].some(l => l.innerText.includes('scratch.tmp'))"))
         r.check("an ignored one is greyed, no pill (D937)", b.js("const l = [...document.querySelectorAll('.files-card li.ignored')].find(l => l.innerText.includes('scratch.tmp'));"
-                "return !l.querySelector('.pill, .tag') && !l.innerText.includes('ignored') && getComputedStyle(l.querySelector('a')).opacity < 0.9"))
+                "return !l.querySelector('.pill, .tag') && !l.innerText.includes('ignored') && getComputedStyle(l.querySelector('.file-link')).opacity < 0.9"))
         r.check("a dotfile counts as ignored (D836)", not any(n.startswith(".gitignore") for n in names)
                 and b.js("return [...document.querySelectorAll('.files-card li.ignored')].some(l => l.innerText.includes('.gitignore'))"))
         b.click("#show-ignored")
@@ -1451,20 +1525,20 @@ def flows(r: Run) -> None:
         exists = lambda p: r.api(f"/apps/sw/item?path={p}")["status"] == 200  # noqa: E731
         r.api("/apps/sw/file?path=fm/notes%20%C3%A9t%C3%A9.md", "PUT", {"text": "ça va\n"})
         r.page("#/app/sw/files", "document.querySelector('.files-card ul.files')", "the Files tab")
-        b.js("[...document.querySelectorAll('.files-card ul.files li a')].find(a => a.textContent.includes('fm/')).click(); return 1")
+        b.js("[...document.querySelectorAll('.files-card ul.files li .file-link')].find(a => a.textContent.includes('fm/')).click(); return 1")
         said = b.wait("(document.querySelector('.viewer-head .item-meta') || {}).innerText && document.querySelector('.viewer-head .item-meta').innerText.includes(' file')"
                       " && document.querySelector('.viewer-head .item-meta').innerText", what="the folder's size")
         r.check("a folder selected says its kind and its contents' size", "folder" in said and "7 B in 1 file, 0 folders" in said, said)
-        b.js("[...document.querySelectorAll('.viewer ul.files li a')].find(a => a.textContent.includes('notes été.md')).click(); return 1")
+        b.js("[...document.querySelectorAll('.viewer ul.files li .file-link')].find(a => a.textContent.includes('notes été.md')).click(); return 1")
         said = b.wait("document.querySelector('.viewer .editor textarea') && document.querySelector('.viewer-head .item-meta').innerText", what="the file")
         r.check("a file selected says its kind and its bytes", said.startswith("file · 7 B"), said)
         if os.environ.get("FLUX_E2E_SHOTS"):                     # D937: rows without menus (the ignored greyed), the head's Actions
             Path(os.environ["FLUX_E2E_SHOTS"]).mkdir(parents=True, exist_ok=True)
             b.click("#show-ignored")
             b.wait("document.querySelector('.files-card li.ignored') && document.querySelector('.viewer .editor textarea')", what="the ignored shown")
-            b.js("[...document.querySelectorAll('.files-card ul.files li a')].find(a => a.textContent.includes('fm/')).click(); return 1")
-            b.wait("[...document.querySelectorAll('.viewer ul.files li a')].some(a => a.textContent.includes('notes été.md'))", what="fm/ again")
-            b.js("[...document.querySelectorAll('.viewer ul.files li a')].find(a => a.textContent.includes('notes été.md')).click(); return 1")
+            b.js("[...document.querySelectorAll('.files-card ul.files li .file-link')].find(a => a.textContent.includes('fm/')).click(); return 1")
+            b.wait("[...document.querySelectorAll('.viewer ul.files li .file-link')].some(a => a.textContent.includes('notes été.md'))", what="fm/ again")
+            b.js("[...document.querySelectorAll('.viewer ul.files li .file-link')].find(a => a.textContent.includes('notes été.md')).click(); return 1")
             b.wait("document.querySelector('.viewer .editor textarea') && document.querySelector('.viewer-head .actions-menu')", what="the file again")
             b.js("const d = document.querySelector('.viewer-head .actions-menu'); d.open = true; return 1")
             time.sleep(0.3)
@@ -1472,9 +1546,9 @@ def flows(r: Run) -> None:
             b.js("document.querySelector('.viewer-head .actions-menu').open = false; return 1")
             b.click("#show-ignored")
             b.wait("!document.querySelector('.files-card li.ignored')", what="the ignored hidden")
-            b.js("[...document.querySelectorAll('.files-card ul.files li a')].find(a => a.textContent.includes('fm/')).click(); return 1")
-            b.wait("[...document.querySelectorAll('.viewer ul.files li a')].some(a => a.textContent.includes('notes été.md'))", what="fm/ again")
-            b.js("[...document.querySelectorAll('.viewer ul.files li a')].find(a => a.textContent.includes('notes été.md')).click(); return 1")
+            b.js("[...document.querySelectorAll('.files-card ul.files li .file-link')].find(a => a.textContent.includes('fm/')).click(); return 1")
+            b.wait("[...document.querySelectorAll('.viewer ul.files li .file-link')].some(a => a.textContent.includes('notes été.md'))", what="fm/ again")
+            b.js("[...document.querySelectorAll('.viewer ul.files li .file-link')].find(a => a.textContent.includes('notes été.md')).click(); return 1")
             b.wait("document.querySelector('.viewer .editor textarea') && document.querySelector('.viewer-head .actions-menu')", what="the file again")
         # an unsaved edit: Cancel keeps it, Discard lets the rename go on
         b.js("const t = document.querySelector('.viewer .editor textarea'); t.value = 'edited\\n'; t.dispatchEvent(new Event('input')); return 1")
@@ -1507,7 +1581,7 @@ def flows(r: Run) -> None:
         # D937: no menu on a row -- the selected item's head has the actions
         r.check("no Actions menu on the list's rows (D937)", b.js("return document.querySelectorAll('ul.files li details, ul.files li .actions-menu').length") == 0)
         # the document selected: its rename is not offered, with why
-        b.js("[...document.querySelectorAll('.files-card ul.files li a')].find(a => a.textContent.endsWith('problem.yaml')).click(); return 1")
+        b.js("[...document.querySelectorAll('.files-card ul.files li .file-link')].find(a => a.textContent.endsWith('problem.yaml')).click(); return 1")
         b.wait("document.querySelector('.viewer-head .path-crumbs') && document.querySelector('.viewer-head .path-crumbs').innerText.endsWith('problem.yaml')"
                " && document.querySelector('.viewer-head .actions-menu')", what="the document selected")
         b.js(menu, ".viewer-head .actions-menu")
@@ -1516,7 +1590,7 @@ def flows(r: Run) -> None:
         r.check("the document's Rename is unavailable, with why", "document" in why, why)
         b.js("document.body.click(); return 1")
         # a folder deleted whole, from its head
-        b.js("[...document.querySelectorAll('.files-card ul.files li a')].find(a => a.textContent === '▸archive/').click(); return 1")
+        b.js("[...document.querySelectorAll('.files-card ul.files li .file-link')].find(a => a.textContent === '▸archive/').click(); return 1")
         b.wait("document.querySelector('.viewer-head .path-crumbs') && document.querySelector('.viewer-head .path-crumbs').innerText.endsWith('archive')"
                " && document.querySelector('.viewer-head .actions-menu')", what="archive/ selected")
         # the keyboard: focus on Actions, Enter opens it, its first possible action has the focus, Escape gives it back
@@ -1538,7 +1612,7 @@ def flows(r: Run) -> None:
         r.api("/apps/sw/file?path=gone.txt", "PUT", {"text": "x"})
         r.page("#/app/sw/files", "[...document.querySelectorAll('.files-card ul.files li')].some(l => l.innerText.includes('gone.txt'))", "gone.txt listed")
         r.api("/apps/sw/file?path=gone.txt", "DELETE")
-        b.js("[...document.querySelectorAll('.files-card ul.files li a')].find(a => a.textContent.endsWith('gone.txt')).click(); return 1")
+        b.js("[...document.querySelectorAll('.files-card ul.files li .file-link')].find(a => a.textContent.endsWith('gone.txt')).click(); return 1")
         said = b.wait("(document.querySelector('.viewer .failed') || {}).innerText && document.querySelector('.viewer .failed').innerText", what="the failure said")
         r.check("a file gone since the list is said with Retry, not as a binary", "could not be opened" in said and "Retry" in said and "binary" not in said, said[:160])
         b.js("document.querySelectorAll('.toast .x').forEach(x => x.click()); window.__e2e.bad.splice(0); window.__e2e.errors.splice(0); return 1")
@@ -1551,9 +1625,9 @@ def flows(r: Run) -> None:
              "f.style.cssText = 'width:390px;height:800px;border:0'; f.src = '/#/app/sw/files'; document.body.append(f); return 1")
         doc = "document.getElementById('phone').contentDocument"
         b.wait(f"(() => {{ const d = {doc}; return d && [...d.querySelectorAll('.files-card ul.files li')].some(l => l.innerText.includes('phone.txt')); }})()", timeout=20, what="Files at 390")
-        row = f"[...{doc}.querySelectorAll('.files-card ul.files li')].find(l => l.querySelector('a').textContent.endsWith(arguments[0]))"
+        row = f"[...{doc}.querySelectorAll('.files-card ul.files li')].find(l => l.querySelector('.file-link').textContent.endsWith(arguments[0]))"
         head = f"{doc}.querySelector('.viewer-head')"
-        open_row = (f"const li = {row}; li.querySelector('a').click(); return 1")                  # D937: selected, its head's menu
+        open_row = (f"const li = {row}; li.querySelector('.file-link').click(); return 1")                  # D937: selected, its head's menu
         open_menu = f"const m = {head}.querySelector('.actions-menu'); m.open = true; return 1"
         click_item = (f"const b = [...{head}.querySelectorAll('.menu-list button')].find(x => x.textContent === arguments[1]);"
                       "if (!b || b.disabled) return false; b.click(); return true")
@@ -1694,6 +1768,10 @@ def flows(r: Run) -> None:
         b.wait("document.querySelectorAll('.logview .ln').length > 3", timeout=60, what="the log's lines")
         r.check("Live › Log shows the start's log as it grows (D1095)", True)
         r.check("the log has no problem arrows (D723)", not any(x in r.text() for x in ("◀ problem", "problem ▶")))
+        r.page("#/", "[...document.querySelectorAll('#main tr')].some(t => t.textContent.includes('sw'))", "the loop list")
+        row = b.js("const t = [...document.querySelectorAll('#main tr')].find(t => [...t.cells].some(c => c.textContent.trim() === 'sw')); return t ? [...t.cells].map(c => c.textContent.trim()) : null")
+        r.check("a running loop's row: its activity since when, no pass number, no Configure (D1147)", bool(row) and any(c.startswith("since ") and "pass" not in c for c in row)
+                and not any("Configure" in c for c in row), str(row))
         r.page("#/app/sw/live", "document.querySelector('.alt-visual')", "Live again")
         # D758: a note to the running loop is said in the Talk drawer, from any tab, and listed there
         b.click(".ask-fab")
@@ -2586,18 +2664,18 @@ def flows(r: Run) -> None:
                     break
                 time.sleep(0.5)
             b.js("localStorage.setItem('flux-show-ignored', '1'); return 1")      # runs/ is what .gitignore leaves out
-            r.page("#/app/fromex/files", "[...document.querySelectorAll('#main ul.files a')].some(a => a.textContent.endsWith('runs/'))", "the loop's files")
-            b.js("[...document.querySelectorAll('#main ul.files a')].find(a => a.textContent.endsWith('runs/')).click(); return 1")
-            b.wait("[...document.querySelectorAll('#main ul.files a')].some(a => a.textContent.endsWith('asks/'))", timeout=90, what="runs/ listed",
-                   said="JSON.stringify([[...document.querySelectorAll('#main ul.files a')].map(a => a.textContent), document.querySelector('#main .viewer')?.innerText.slice(0, 300)])")
-            b.js("[...document.querySelectorAll('#main ul.files a')].find(a => a.textContent.endsWith('asks/')).click(); return 1")
+            r.page("#/app/fromex/files", "[...document.querySelectorAll('#main ul.files .file-link')].some(a => a.textContent.endsWith('runs/'))", "the loop's files")
+            b.js("[...document.querySelectorAll('#main ul.files .file-link')].find(a => a.textContent.endsWith('runs/')).click(); return 1")
+            b.wait("[...document.querySelectorAll('#main ul.files .file-link')].some(a => a.textContent.endsWith('asks/'))", timeout=90, what="runs/ listed",
+                   said="JSON.stringify([[...document.querySelectorAll('#main ul.files .file-link')].map(a => a.textContent), document.querySelector('#main .viewer')?.innerText.slice(0, 300)])")
+            b.js("[...document.querySelectorAll('#main ul.files .file-link')].find(a => a.textContent.endsWith('asks/')).click(); return 1")
             b.wait("document.querySelector('.path-crumbs') && document.querySelector('.path-crumbs').textContent.endsWith('runs / asks')", what="the path runs / asks")
-            b.js("[...document.querySelectorAll('.path-crumbs a')].find(a => a.textContent === 'runs').click(); return 1")
-            b.wait("[...document.querySelectorAll('#main ul.files a')].some(a => a.textContent.endsWith('asks/')) && document.querySelector('.path-crumbs').textContent.endsWith('runs')",
+            b.js("[...document.querySelectorAll('.path-crumbs .link')].find(a => a.textContent === 'runs').click(); return 1")
+            b.wait("[...document.querySelectorAll('#main ul.files .file-link')].some(a => a.textContent.endsWith('asks/')) && document.querySelector('.path-crumbs').textContent.endsWith('runs')",
                    what="back in runs/")
             r.check("a path's folders are links that open them", True)
-            r.page("#/app/fromex/files", "[...document.querySelectorAll('#main ul.files a')].some(a => a.textContent.endsWith('runs/'))", "the loop's files")
-            bold = b.js("return [...document.querySelectorAll('#main ul.files li.own > a')].map(a => a.textContent.replace(/^[▸·]/, ''))")
+            r.page("#/app/fromex/files", "[...document.querySelectorAll('#main ul.files .file-link')].some(a => a.textContent.endsWith('runs/'))", "the loop's files")
+            bold = b.js("return [...document.querySelectorAll('#main ul.files li.own > .file-link')].map(a => a.textContent.replace(/^[▸·]/, ''))")
             r.check("a loop's own parts are bold: its documents, out/ runs/ workbench/ library/ (D829)",
                     "problem.yaml" in bold and "runs/" in bold and "check.py" not in bold, str(bold))
             b.click(".ask-fab")
@@ -3179,7 +3257,9 @@ def flows(r: Run) -> None:
         out = Path(os.environ["FLUX_E2E_SHOTS"])
         out.mkdir(parents=True, exist_ok=True)
         pages = [("ada", "#/admin"), ("ada", "#/admin/agents"), ("ada", "#/admin/agents?OpenCode"), ("ada", "#/admin/resources"), ("ada", "#/admin/sandbox"), ("ada", "#/admin/maintenance"),
-                 ("ada", "#/admin/users"), ("bob", "#/account"), ("bob", "#/app/sw"), ("bob", "#/app/sw/settings")]
+                 ("ada", "#/admin/users"), ("bob", "#/account"), ("bob", "#/"), ("bob", "#/app/sw"), ("bob", "#/app/sw/live"), ("bob", "#/app/sw/live/graph"),
+                 ("bob", "#/app/sw/live/log"), ("bob", "#/app/sw/results"), ("bob", "#/app/sw/results/ideas"), ("bob", "#/app/sw/agents"),
+                 ("bob", "#/app/sw/files"), ("bob", "#/app/sw/settings")]
         who = None
         for user, h in pages:
             if user != who:
@@ -3194,7 +3274,13 @@ def flows(r: Run) -> None:
             time.sleep(1.0)
             h = h.replace("?", "-")
             b.shot(out / f"{user}-{h.strip('#/').replace('/', '-') or 'loops'}.png", full=True)
-        for h in ("#/configure?step=graph", "#/app/sw/settings/problem?step=graph", "#/app/sw/settings/problem?step=extra"):   # the configurator
+            b.js("document.documentElement.dataset.theme = 'dark'; return 1")     # each page in dark too
+            time.sleep(0.4)
+            b.shot(out / f"{user}-{h.strip('#/').replace('/', '-') or 'loops'}-dark.png", full=True)
+            b.js("delete document.documentElement.dataset.theme; return 1")
+        for h in ("#/configure?step=graph", "#/app/sw/settings/problem?step=graph", "#/app/sw/settings/problem?step=extra",
+                  "#/app/sw/settings/problem?step=prompt", "#/app/sw/settings/problem?step=checks", "#/app/sw/settings/problem?step=objective",
+                  "#/app/sw/settings/problem?step=save"):   # the configurator
             if who != "bob":
                 r.login("bob")
                 who = "bob"
@@ -3202,7 +3288,7 @@ def flows(r: Run) -> None:
             time.sleep(1.0)
             name = f"bob-{h.strip('#/').replace('/', '-').replace('?', '-').replace('=', '-')}"
             b.shot(out / f"{name}.png", full=True)
-            if h.endswith("step=graph"):                                    # D1139: the Graph in dark too
+            if True:                                                        # D1139: the Graph in dark too, every step
                 b.js("document.documentElement.dataset.theme = 'dark'; return 1")
                 time.sleep(0.5)
                 b.shot(out / f"{name}-dark.png", full=True)

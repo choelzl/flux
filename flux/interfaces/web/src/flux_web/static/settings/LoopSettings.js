@@ -16,6 +16,7 @@ import { Select } from "../components/Select.js";
 import { useLoop } from "../loop/context.js";
 import { Tag } from "../components/Tone.js";
 import { Table } from "../components/Table.js";
+import { Check } from "../components/Check.js";
 
 const Measurements = ({ results }) => html`<${Card} title="Measurements" cls="measurement-preferences">
   <p class="muted">Visible: table columns. Main: loop lists, decision summaries and default charts. %: change from the baseline, else from the P90 of accepted designs. Saved with the loop; calculations use every metric.</p>
@@ -105,10 +106,10 @@ function ResetForm({ plan, v, set }) {
   const keep = v.keep;
   const removed = plan.folders.filter(f => !keep.includes(f.key));
   return html`<div class="stack"><${Notice} tone="bad" what="Cannot be undone:" why="the folders below are removed" />
-    <h3>Keep</h3><div class="stack">${plan.keep_options.map(o => html`<label key=${o.key} class="check"><input type="checkbox" data-reset-keep=${o.key}
-      checked=${keep.includes(o.key)} onChange=${e => set({ keep: e.currentTarget.checked ? [...keep, o.key] : keep.filter(x => x !== o.key) })} />${o.label}</label>`)}</div>
+    <h3>Keep</h3><div class="stack">${plan.keep_options.map(o => html`<${Check} key=${o.key} data-reset-keep=${o.key}
+      checked=${keep.includes(o.key)} onChange=${on => set({ keep: on ? [...keep, o.key] : keep.filter(x => x !== o.key) })}>${o.label}<//>`)}</div>
     <p>Removed:</p>
-    <ul class="reset-folders">${removed.length ? removed.map(f => html`<li key=${f.path}><code>${f.path}</code><div class="muted small">${f.what}</div></li>`) : html`<li class="muted">Nothing.</li>`}</ul>
+    ${removed.length ? html`<ul class="reset-folders">${removed.map(f => html`<li key=${f.path}><code>${f.path}</code><div class="muted small">${f.what}</div></li>`)}</ul>` : html`<${Empty} text="Nothing." />`}
     <p>${keep.includes("history") ? "Results, logs and history stay; the last check is cleared." : plan.history + " will also be cleared."}</p>
     <p class="hint">Problem document, source files, library, settings and sharing stay.</p></div>`;
 }

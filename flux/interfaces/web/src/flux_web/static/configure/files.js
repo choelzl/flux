@@ -7,8 +7,7 @@ import { confirmDialog, dialog, enc, loopApi, toast } from "../ui.js";
 import { bytes, plural } from "../format.js";
 import { changes, html } from "../view.js";
 import { langOf } from "../highlight.js";
-import { sendFiles } from "../uploads.js";
-import { progressDialog } from "../components/Modal.js";
+import { sendFiles, sendWithProgress } from "../uploads.js";
 import { CodeEditor } from "../components/CodeEditor.js";
 
 /** `yamlOf()` the document as it stands; `namedOf()` the files the configurator's commands name (D912); `onDraw(missing)`. */
@@ -60,10 +59,9 @@ export function filesStore(name, yamlOf, { staged = new Map(), namedOf = null, o
   async function add(got, folder) {
     const pre = folder.trim().replace(/^\/+|\/+$/g, "");
     if (!name) { for (const g of got) staged.set(pre ? `${pre}/${g.path}` : g.path, { file: g.file }); draw(); return; }
-    const pd = progressDialog("Adding files", `${plural(got.length, "file")}`);
-    try { const n = await sendFiles(name, got, { folder: pre, onProgress: pd.set, signal: pd.signal }); toast(`Added ${plural(n, "file")}`, "ok"); }
-    catch (x) { toast(pd.signal.aborted ? `The upload was cancelled: ${x.message}.` : `The upload failed: ${x.message}`, pd.signal.aborted ? "warn" : "bad", { timeout: 12000 }); }
-    finally { pd.close(); draw(); }
+    const n = await sendWithProgress("Adding files", plural(got.length, "file"), p => sendFiles(name, got, { folder: pre, ...p }));
+    if (n != null) toast(`Added ${plural(n, "file")}`, "ok");
+    draw();
   }
   let t;
   return { s, draw, editor, open, remove, add, subscribe: said.subscribe,
@@ -76,10 +74,7 @@ export function filesStore(name, yamlOf, { staged = new Map(), namedOf = null, o
     /** A new loop: its files, once it exists -- D1075: with their progress, cancellable. */
     async upload(appName) {
       if (!staged.size) return 0;
-      const pd = progressDialog("Uploading", `${plural(staged.size, "file")} to ${appName}`);
-      try {
-        return await sendFiles(appName, [...staged].map(([p, x]) => ({ file: x.file || new File([x.text], p.split("/").pop(), { type: "text/plain" }), path: p })),
-          { onProgress: pd.set, signal: pd.signal });
-      } finally { pd.close(); }
+      return sendWithProgress("Uploading", `${plural(staged.size, "file")} to ${appName}`,
+        p => sendFiles(appName, [...staged].map(([q, x]) => ({ file: x.file || new File([x.text], q.split("/").pop(), { type: "text/plain" }), path: q })), p), { say: false });
     } };
 }

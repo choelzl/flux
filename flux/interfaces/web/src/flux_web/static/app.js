@@ -21,25 +21,6 @@ import { AdminRoute } from "./admin.js";
 import { AccountRoute, InviteRoute, LoginRoute } from "./account.js";
 
 // ================================================================ routing
-// ---- D754: on a phone nothing scrolls sideways -- a list's rows stack, each value under its column's name
-function labelTables(root) {
-  for (const t of root.querySelectorAll("table.list")) {
-    const heads = [...t.querySelectorAll(":scope > thead > tr:last-child > th")].map(th => th.dataset.label || th.textContent.trim());   // D926: not a sort arrow
-    if (!heads.some(Boolean)) continue;
-    for (const tr of t.querySelectorAll(":scope > tbody > tr")) {
-      [...tr.children].forEach((td, i) => { if (heads[i] && td.dataset.label !== heads[i]) td.dataset.label = heads[i]; });
-    }
-  }
-}
-{
-  let queued = false;
-  new MutationObserver(() => {
-    if (queued) return;
-    queued = true;
-    requestAnimationFrame(() => { queued = false; labelTables(document.body); });
-  }).observe(document.body, { childList: true, subtree: true });
-}
-
 /** The app: the bar over every page (shell/Bar.js -- who is logged in, where one is), the banner while an admin views
     as a user, the page (drawn anew at each navigation: the one left unmounted with all it read and polls), the
     banner while the server is out of reach, the notices, the dialogs. */

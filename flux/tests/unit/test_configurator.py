@@ -23,7 +23,7 @@ pytestmark = pytest.mark.skipif(shutil.which("node") is None, reason="node is no
 DOCS = sorted([*REPO.glob("flux/applications/*/problem.yaml"), *REPO.glob("flux/applications/*/*.problem.yaml"),
                *REPO.glob("flux/tests/fixtures/loops/*/problem.yaml"),
                REPO / "flux/core/loop/examples/digits/problem.json"])
-COMPARED = ("id", "language", "gate", "stages", "objectives", "flow", "budget", "space", "parts")
+COMPARED = ("id", "language", "gate", "stages", "objectives", "flow", "budget", "space", "parts", "skills")
 
 JS = r"""
 const c = require(process.argv[1]);
@@ -172,24 +172,45 @@ def _variant(name: str) -> dict:
         d["flow"]["generate"] = {"by": "opencode", "bin": "oc-mod", "probe": {"gate": 0}}
     elif name == "critic_session":
         d["flow"]["select"] = {"critic": {"by": "claude", "session": "pass", "questions": "model"}}
+    # D1152: the Knowledge box -- skills off, one by one, from a folder; the workbench's digest
+    elif name == "skills_off":
+        d["skills"] = "off"
+    elif name == "skills_some_off":
+        d["skills"] = {"off": ["flux-loop-commands", "s1"]}
+    elif name == "skills_from":
+        d["skills"] = ["skills"]
+    elif name == "skills_from_some_off":
+        d["skills"] = {"from": ["skills/s1"], "off": ["flux-loop-commands"]}
+    elif name == "workbench_off":
+        d["flow"]["knowledge"] = {"files": ["check.py"], "workbench": "off", "lessons": "mined"}
+    elif name == "workbench_agent":
+        d["flow"]["knowledge"] = {"digest": "codex", "workbench": {"by": "claude", "timeout_s": 99}}
+    elif name == "library_off_workbench":
+        d["flow"]["knowledge"] = {"off": True, "lessons": "claude", "workbench": "model"}
     return d
 
 
 @pytest.mark.parametrize("name", ["scalar_choices", "needs_override", "spaced_script", "params_placeholder", "kept_flow_knowledge",
                                   "model_search_options", "policy_options", "critic_options", "lessons_options", "library", "library_kept_flow",
-                                  "agent_options", "probe_off", "probe_gate_off", "critic_session"])
+                                  "agent_options", "probe_off", "probe_gate_off", "critic_session", "skills_off", "skills_some_off",
+                                  "skills_from", "skills_from_some_off", "workbench_off", "workbench_agent", "library_off_workbench"])
 def test_an_untouched_edit_keeps_the_meaning(name, tmp_path):
     src = tmp_path / "src" / name
     src.mkdir(parents=True)
     for f in ("check.py", "bench.py", "my bench.py", "gen.py", "method.md", "rtl/top.sv"):
         (src / f).parent.mkdir(parents=True, exist_ok=True)
         (src / f).write_text("print('time_ms=1')\n")
+    (src / "skills" / "s1").mkdir(parents=True)
+    (src / "skills" / "s1" / "SKILL.md").write_text("---\nname: s1\ndescription: a skill\n---\nuse it\n")
     (src / "problem.yaml").write_text(yaml.safe_dump(_variant(name), sort_keys=False))
     (tmp_path / "w").mkdir()
     before, after, kept = _round(src / "problem.yaml", tmp_path / "w")
     for key in COMPARED:
         assert after.get(key) == before.get(key), (key, kept)
-    if name.startswith("library"):
+    if name.startswith(("skills", "workbench")) or name == "library_off_workbench":
+        assert not [k for k in kept if "skills" in k or "knowledge" in k or k == "flow.boxes"], kept
+        assert after.get("skills") == _variant(name).get("skills")
+    if name.startswith("library_kept") or name == "library":
         assert "flow.knowledge" not in kept and "FILE rtl/top.sv:" in after["flow"]["knowledge"]["text"], (kept, after["flow"])
     # a typed choice is the same value of the same type: "01" is not 1, "true" is not True
     space = (before.get("space") or {}).get("mode")
@@ -274,11 +295,10 @@ def test_the_crafters_docs_tokens_are_the_apps():
     assert {"--ink", "--muted", "--line", "--panel", "--bg", "--soft", "--accent", "--accent-ink", "--ok", "--bad", "--warn"} <= set(docs_light) & set(docs_dark)
     for app, docs in ((app_light, docs_light), (app_dark, docs_dark)):
         assert {k: v for k, v in docs.items() if k in app} == {k: app[k] for k in docs if k in app}
-    # D1120: the agent is pink everywhere -- the drawing's agent half is the app's agent colour, light and dark
-    halves_light = tokens(re.search(r"^\.flux-crafter \{(.*?)\}", crafter, re.S | re.M).group(1))
-    halves_dark = tokens(re.search(r'\[data-md-color-scheme="slate"\] \.flux-crafter,\s*:root\[data-theme="dark"\][^{]*\{(.*?)\}', crafter, re.S).group(1))
-    assert halves_light["--fc-agent"] == app_light["--agent"] == app_light["--half-agent"]
-    assert halves_dark["--fc-agent"] == app_dark["--agent"] == app_dark["--half-agent"]
+    # D1120: the agent is pink everywhere; D1146: the drawing's halves are the app's --half-* (copied, compared above)
+    halves = {f"--half-{h}" for h in ("rules", "model", "agent", "fixed", "off")}
+    assert halves <= set(docs_light) & set(docs_dark)
+    assert docs_light["--half-agent"] == app_light["--agent"] and docs_dark["--half-agent"] == app_dark["--agent"]
 
 
 def test_an_added_agent_called_custom_is_one_choice_however_often_the_agents_are_set():

@@ -6,19 +6,18 @@ import { Ago, Card, Empty, Notice, Skeleton, html, useEffect, useRef, useState }
 import { api, askText, dialog, enc, loopApi, toast } from "../ui.js";
 import { bytes, plural } from "../format.js";
 import { langOf } from "../highlight.js";
-import { sendFiles } from "../uploads.js";
-import { progressDialog } from "../components/Modal.js";
-import { DropZone } from "../components/DropZone.js";
+import { sendFiles, sendWithProgress } from "../uploads.js";
 import { Act } from "../components/Act.js";
 import { CodeEditor } from "../components/CodeEditor.js";
 import { ViewerFrame, ViewerTools, useViewer } from "../viewer.js";
 import { ActionsMenu, FileList, MetaLine, PathCrumbs, baseOf, joinP, parentOf } from "./parts.js";
 import { useLoad } from "../components/Load.js";
-import { bound } from "../components/Autosave.js";
 import { recall, remember } from "../stored.js";
 import { useLoop } from "../loop/context.js";
 import { Failed } from "../components/Tone.js";
 import { Tool, Tools } from "../components/Head.js";
+import { Check } from "../components/Check.js";
+import { Uploader, placedFiles } from "../components/Uploader.js";
 
 /** A name or a folder asked for, the path it makes shown as it is typed; Enter asks. */
 const askPath = (name, title, label, value, ok, pathOf) => askText(title, { label, value, ok,
@@ -149,27 +148,18 @@ function Viewer({ f, showIgnored }) {
         <${CodeEditor} key=${`${path}#${sel.n}`} text=${got.text} lang=${langOf(path)} readonly=${!editable} onEditor=${onEditor} />`}`}</div><//>`;
 }
 
-/** Files added: dropped (a folder keeps its paths), or chosen -- into a folder if one is named. */
+/** Files added: dropped or chosen (a folder keeps its paths), each where it goes (D1149: the one uploader). */
 function Adder() {
-  const ctx = useLoop();
-  const { name, drawBody } = ctx, [folder, setFolder] = useState(""), [chosen, setChosen] = useState([]);
-  const into = () => folder.trim();
-  const drop = async got => {
-    const pd = progressDialog("Adding files", `${plural(got.length, "file")}${into() ? " into " + into() : ""}`);
-    try {
-      const n = await sendFiles(name, got, { folder: into(), onProgress: pd.set, signal: pd.signal });
-      toast(`Added ${plural(n, "file")}${into() ? " into " + into() : ""}`, "ok");
-    } catch (x) { toast(pd.signal.aborted ? `The upload was cancelled: ${x.message}.` : `The upload failed: ${x.message}`, pd.signal.aborted ? "warn" : "bad", { timeout: 12000 }); }
-    finally { pd.close(); drawBody(); }
-  };
+  const { name, drawBody } = useLoop(), [rows, setRows] = useState([]);
   const add = async () => {
-    if (!chosen.length) { toast("Choose files or a .zip.", "warn"); return; }
-    const n = await sendFiles(name, chosen.map(f => ({ file: f, path: f.name })), { folder: into() });
-    toast(`Added ${plural(n, "file")}`, "ok"); drawBody();
+    if (rows.some(r => r.dest === "custom" && !r.custom.trim())) { toast("Name the folder a file goes to, or choose another place.", "warn"); return; }
+    const got = placedFiles(rows);
+    const n = await sendWithProgress("Adding files", plural(got.length, "file"), p => sendFiles(name, got, p));
+    if (n != null) { toast(`Added ${plural(n, "file")}`, "ok"); setRows([]); }
+    drawBody();
   };
-  return html`<div><${DropZone} label="Drop files or folders" onFiles=${drop} /><details class="adder"><summary>Add files</summary>
-    <label class="stack">Files or a .zip<input type="file" multiple onChange=${e => setChosen([...e.currentTarget.files])} /></label><label class="stack">Into folder<input placeholder="folder (optional)" ...${bound(folder, setFolder)} /></label>
-    <${Act} cls="small primary" onClick=${add}>Add<//></details></div>`;
+  return html`<div class="adder"><${Uploader} rows=${rows} onChange=${setRows} />
+    ${rows.length ? html`<div class="row"><${Act} cls="small primary" onClick=${add}>${`Add ${plural(placedFiles(rows).length, "file")}`}<//></div>` : ""}</div>`;
 }
 
 // D703: what .gitignore ignores is left out, unless asked for (remembered in this browser)
@@ -183,8 +173,8 @@ export function FilesTab({ root }) {
   const rootList = () => loopApi(ctx.name).api(`/files${showIgnored() ? "?ignored=true" : ""}`);
   const f = useFiles(ctx, async () => setList(await rootList()));      // D908: after a rename, move or delete
   useEffect(() => { if (ctx.info.document) f.open(ctx.info.document, false, true); }, []);
-  const ignored = html`<label class="check small ignored-toggle" title=".gitignore'd and dot files">
-    <input type="checkbox" id="show-ignored" checked=${showIgnored()} onChange=${e => { remember("flux-show-ignored", e.currentTarget.checked ? "1" : "0"); ctx.drawBody(); }} />show ignored</label>`;
+  const ignored = html`<${Check} cls="small ignored-toggle" title=".gitignore'd and dot files" id="show-ignored" checked=${showIgnored()}
+    onChange=${on => { remember("flux-show-ignored", on ? "1" : "0"); ctx.drawBody(); }}>show ignored<//>`;
   return html`<div class="grid-app"><${Card} title="Files" cls="files-card" actions=${ignored}><div class="files-list"><${FileList} list=${list} open=${f.open} /></div>${ctx.mine ? html`<${Adder} />` : ""}<//>
     <${Card} cls="viewer-card"><${Viewer} f=${f} showIgnored=${showIgnored()} /><//></div>`;
 }
@@ -195,7 +185,7 @@ export function WorkbenchTab({ bench }) {
   const f = useFiles(ctx);
   const groups = ["tools", "notes", ""].map(kind => [kind, bench.filter(b => b.kind === kind || (kind === "" && !["tools", "notes"].includes(b.kind)))]).filter(([, items]) => items.length);
   return html`<div class="grid-app"><${Card} title="Workbench">${bench.length ? groups.map(([kind, items]) => html`<div key=${kind} class="bench-group"><h3>${kind || "other"}</h3>
-      <ul class="bench">${items.map(b => html`<li key=${b.path}><a href="javascript:void 0" onClick=${() => f.open(b.path, false)}>${baseOf(b.path)}</a>
+      <ul class="bench">${items.map(b => html`<li key=${b.path}><button type="button" class="link file-link" onClick=${() => f.open(b.path, false)}>${baseOf(b.path)}</button>
         <small class="muted"> <${Ago} t=${b.mtime} /></small>${b.first ? html`<div class="first">${b.first}</div>` : ""}</li>`)}</ul></div>`) : html`<${Empty} text="Empty." />`}<//>
     <${Card} cls="viewer-card"><${Viewer} f=${f} showIgnored=${showIgnored()} /><//></div>`;
 }

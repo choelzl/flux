@@ -4,13 +4,9 @@
 
 import { html } from "../view.js";
 import { Act } from "../components/Act.js";
-import { Crumbs } from "../components/Crumbs.js";
 import { PageHead } from "../components/PageHead.js";
-import { Tabs } from "../components/Tabs.js";
 import { LastSaid, StatePill } from "../components/StatePill.js";
 import { Tag } from "../components/Tone.js";
-
-export { Crumbs, Tabs };
 
 /** `acts`: {start, stop, restart, leave} -- what the page does, each null where one may not. D1006: a stop or a
     restart asked already is red, pressed again (confirmed) now. */

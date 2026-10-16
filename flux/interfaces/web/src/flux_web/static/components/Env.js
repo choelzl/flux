@@ -7,6 +7,7 @@ import { toast } from "../ui.js";
 import { Act } from "./Act.js";
 import { Pill } from "./Tone.js";
 import { Table } from "./Table.js";
+import { Check } from "./Check.js";
 
 export function EnvTable({ rows, shadowed = new Set() }) {
   const mixed = rows.some(x => x.origin !== "server");
@@ -34,6 +35,6 @@ export function EnvEditor({ rows, save, scope }) {
   return html`<div>${list}<div class="row env-add">
     <input placeholder="NAME" class="mono w-180" id=${`env-${scope}-name`} autocomplete="off" ...${QUIET} ...${bound(name, setName)} />
     <input placeholder="value" class="mono env-value" id=${`env-${scope}-value`} type=${secret ? "password" : "text"} autocomplete=${secret ? "new-password" : "off"} ...${QUIET} ...${bound(value, setValue)} />
-    <label class="check"><input type="checkbox" id=${`env-${scope}-secret`} checked=${secret} onChange=${e => setSecret(e.currentTarget.checked)} />secret</label>
+    <${Check} id=${`env-${scope}-secret`} checked=${secret} onChange=${setSecret}>secret<//>
     <${Act} cls="primary small" onClick=${add}>Add<//></div></div>`;
 }

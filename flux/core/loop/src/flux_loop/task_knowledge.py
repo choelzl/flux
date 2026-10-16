@@ -42,7 +42,7 @@ def library_queries(task: TaskSpec, parts: Any = (), n: int = 8, words: int = 12
     return list(dict.fromkeys(got))[:n]
 
 
-def _agent_digest(spec: Any):
+def _agent_digest(spec: Any, skills: Any = ()):
     """D771: `ask(path, prompt, text) -> (digest, by)` -- one coding agent turn per paper, in a
     scratch directory of its own. D785: the paper's text is a file there (`paper.txt`) the agent
     reads with its tools, in pieces as it needs, not the brief itself -- a paper's 30,000 tokens
@@ -65,6 +65,10 @@ def _agent_digest(spec: Any):
                       if text else f"The document is the file {path}: read it with your tools. ")
                      + "Do not write any file and call no tool to answer: reply with the key points as plain text.\n\n" + how)
             (work / "BRIEF.md").write_text(brief)
+            if skills:                            # D1152: the loop's agents' skills, a digest's too
+                from .skills import install
+
+                install(list(skills), work)
             subs = {"prompt": brief, "prompt_file": str(work / "BRIEF.md"), "artifact": str(work / "digest.md"),
                     "workdir": str(work), "part": "digest", "name": f"digest {Path(path).name}", "home": str(work)}
             turn = run_turn(agent, agent.argv, subs, workdir=work)
@@ -115,6 +119,9 @@ class KnowledgeMixin:
                         lib.append(Digest(folders=folders, whole=True, own=own, problem=self.task.statement))   # D1101
                     self._mentor = (Mentor(lib) if role is None else
                                     Mentor([*lib, *rest], budget=role.budget, share=role.share))
+            for src in getattr(self._mentor, "sources", ()):         # D1152: the lessons' agent has the loop's skills
+                if type(src).__name__ == "AgentLessons":
+                    src.skills = self.agent_skill_list()
         return self._mentor
 
     def digesting(self) -> bool:
@@ -129,7 +136,7 @@ class KnowledgeMixin:
         sources = [x for x in getattr(mentor, "sources", ()) if type(x).__name__ == "Digest"]
         if not sources:
             return {}
-        ask = _agent_digest(self.task.digest_by) if self.task.digest_by is not None else None
+        ask = _agent_digest(self.task.digest_by, self.agent_skill_list()) if self.task.digest_by is not None else None
         out: dict[str, Any] = {}
         for src in sources:
             if ask is not None:
@@ -148,6 +155,11 @@ class KnowledgeMixin:
         files = bench_files(bench)
         if not files or not bench_stale(bench):
             return {}
+        how = getattr(self.task, "bench_by", None)                 # D1152: `knowledge.workbench`, else the papers' digester
+        if how == "off":
+            write_bench_readme(bench, "", "")
+            return {"files": len(files), "described by": "nobody (the workbench digest is off)"}
+        agent = how["agent"] if isinstance(how, dict) else self.task.digest_by if how is None else None
         about, by = "", ""
         brief = ("Write the overview of a workbench: a folder where coding agents keep the tools they built (scripts that "
                  "compute, generate or analyse) and the notes they took (methods, what failed and why) while working on "
@@ -155,8 +167,8 @@ class KnowledgeMixin:
                  "notes are for, grouped by what they help with; which to read first; a note that contradicts another. Name "
                  "files by their path. No preamble, no list of every file (one is appended).")
         try:
-            if self.task.digest_by is not None:
-                ask = _agent_digest(self.task.digest_by)
+            if agent is not None:
+                ask = _agent_digest(agent, self.agent_skill_list())
                 about, by = ask(str(Path(bench).resolve()), brief + f"\n\nThe workbench is the folder {Path(bench).resolve()}: "
                                 "read its files with your tools.")
             elif getattr(state, "proposer", None) is not None:

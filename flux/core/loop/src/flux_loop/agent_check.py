@@ -72,6 +72,9 @@ def agents_used(task: Any) -> list[str]:
         walk(part or {})
     if getattr(task, "digest_by", None) is not None:          # D771: the papers' digest by an agent
         take(task.digest_by)
+    bench = getattr(task, "bench_by", None)
+    if isinstance(bench, dict) and "agent" in bench:           # D1152: the workbench's digest by an agent
+        take(bench["agent"])
     return found
 
 

@@ -16,7 +16,7 @@ import { Diff } from "./Diff.js";
 import { Tag } from "./Tone.js";
 
 /** An author that ended without a document, said alike wherever its job is drawn: [what, why]. */
-export const AUTHOR_FAILED = ["No document passed its checks.", "See its log: try again, or write it yourself."];
+const AUTHOR_FAILED = ["No document passed its checks.", "See its log: try again, or write it yourself."];
 
 /** The author's job on loop `name` as /author says it, read again every 2 s while it runs; `n` reads it anew; `first`
     what was read already (then read again only while it runs). A read that fails keeps what was read, said to be

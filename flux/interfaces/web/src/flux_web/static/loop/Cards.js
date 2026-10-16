@@ -1,9 +1,11 @@
 // Flux web, a loop's page (D704, D757, D1095): the cards a tab shows before it has anything -- reading, a loop that
 // has not run (Start), one with no problem document yet (an agent writes it); the saved document checked.
 
-import { Card, Empty, Skeleton, html, useEffect, useState } from "../view.js";
+import { Card, Empty, Skeleton, html } from "../view.js";
 import { api, appHref, dialog, loopApi } from "../ui.js";
 import { Act } from "../components/Act.js";
+import { useLoad } from "../components/Load.js";
+import { Failed } from "../components/Tone.js";
 
 export const Reading = ({ lines = 7 }) => html`<${Card}><${Skeleton} lines=${lines} /><//>`;
 
@@ -15,9 +17,9 @@ export const NotRun = ({ info, name, mine, start }) => html`<${Card}>${info.docu
 export const NoResults = () => html`<${Card}><${Empty} text="No results yet." /><//>`;
 
 function CheckOut({ url }) {
-  const [said, setSaid] = useState("Checking in the sandbox…");
-  useEffect(() => { api(url, { method: "POST" }).then(r => setSaid((r.ok ? "Ready to run.\n\n" : "NOT READY\n\n") + r.output), x => setSaid(x.message)); }, []);
-  return html`<pre class="log small">${said}</pre>`;
+  const read = useLoad(() => api(url, { method: "POST" }), url), r = read.got?.d;      // D1149: a failure said, with Retry
+  return read.got?.error ? html`<${Failed} what="Check did not run" why=${read.got.error} retry=${read.reload} />`
+    : html`<pre class="log small">${!r ? "Checking in the sandbox…" : (r.ok ? "Ready to run.\n\n" : "NOT READY\n\n") + r.output}</pre>`;
 }
 /** The saved problem and its inputs checked in the sandbox -- as a start checks them. */
 export const CheckButton = ({ name }) => html`<${Act} cls="small check-saved" title="Check the saved problem and inputs (Start does too)"

@@ -14,6 +14,7 @@ import { useLoop } from "../loop/context.js";
 import { Pill } from "../components/Tone.js";
 import { Head, Tool } from "../components/Head.js";
 import { Table } from "../components/Table.js";
+import { Check } from "../components/Check.js";
 
 /** The reject form (D1043): why, each measurement measured again or cleared, hidden too (at rest). `v` {reason,
     hide, ticked: {"stage metric": "again" | "clear"} for each ticked}. */
@@ -25,12 +26,12 @@ function RejectForm({ d, fmt, live, v, set }) {
   return html`<div class="reject-form stack">
     <textarea class="reject-reason" rows="2" placeholder="Why (kept with it; Restore undoes it)" value=${v.reason} onInput=${e => set({ reason: e.currentTarget.value })} />
     ${rows.length ? html`<${Table} cls="list compact reject-measurements" heads=${["", "measurement", { label: "value", num: true }, "do"]}>
-      ${rows.map(x => html`<tr key=${x.k}><td><input type="checkbox" checked=${x.k in v.ticked} onChange=${e => tick(x, e.currentTarget.checked)} /></td>
+      ${rows.map(x => html`<tr key=${x.k}><td><${Check} bare checked=${x.k in v.ticked} onChange=${on => tick(x, on)} /></td>
           <td class="mono">${`${x.stage} · ${x.metric}`}</td><td class="mono num">${fmt(x.v)}</td>
           <td><${Select} class="reject-how" aria-label=${`${x.stage} ${x.metric}: measure again or clear`} onChange=${to => choose(x, to)} options=${[["again", "measure again"], ["clear", "clear"]]} /></td></tr>`)}<//>` : ""}
     <p class="muted small">Ticked: measured again or cleared (struck through). None ticked: only marked.</p>
-    <label class="row-inline"><input type="checkbox" class="reject-hide" disabled=${live} checked=${v.hide} onChange=${e => set({ hide: e.currentTarget.checked })} />
-      <span>Also hide the design<small class="muted">${live ? " -- stop the loop first" : " -- listed under Invalidated by hand"}</small></span></label>
+    <${Check} cls="row-inline" class="reject-hide" disabled=${live} checked=${v.hide} onChange=${hide => set({ hide })}>
+      <span>Also hide the design<small class="muted">${live ? " -- stop the loop first" : " -- listed under Invalidated by hand"}</small></span><//>
     ${live ? html`<p class="note small">Running: measured again before the next pass.</p>` : ""}</div>`;
 }
 /** What the form says: why, hidden, the measurements cleared and the stages measured again. */

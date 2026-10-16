@@ -76,7 +76,7 @@ function AdminRoute({ sub = "" }) {
   // D814: Models and variables are the agents' tab; D816: the audit is Insights', the documents are the Loops'
   const tab = sub === "models" ? "agents" : sub === "audit" ? "insights" : ADMIN_TABS[sub] ? sub : "";
   return html`<${Crumbs} parts=${[["Admin", "#/admin"], tab ? [ADMIN_TABS[tab], null] : null]} /><${PageHead} title="Admin" />
-    <div class="tabs admin-tabs" role="tablist">${Object.entries(ADMIN_TABS).map(([k, label]) => html`<a role="tab" class=${k === tab ? "on" : ""} href=${`#/admin${k ? "/" + k : ""}`}>${label}</a>`)}</div>
+    <${Tabs} cls="tabs admin-tabs" items=${Object.entries(ADMIN_TABS)} on=${tab} href=${k => `#/admin${k ? "/" + k : ""}`} />
     <div>${TAB[tab](sub === "audit" ? "audit" : null)}</div>`;
 }
 

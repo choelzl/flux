@@ -38,7 +38,7 @@ export function ObjectiveStep({ M, state, edit, direct }) {
         const higher = up(o), u = unit(o.metric);
         const dir = v => edit(() => { const h = v === "higher"; if (o.label === "balance") o.direction = h ? "maximize" : "minimize"; else o.label = labelOf(h, o.value); });
         return html`<div class="cfg-orow" key=${i}><span class="ix">${i + 1}</span>
-          ${M.dictionarySpec(state, o.metric) ? html`<input aria-label="Number" value=${o.metric} title="the parent aggregate or parent.test" onInput=${e => edit(() => { o.metric = e.currentTarget.value; })} />`
+          ${M.dictionarySpec(state, o.metric) ? html`<input aria-label="Number" value=${o.metric} title=${M.WORDS.objective.dictHint} onInput=${e => edit(() => { o.metric = e.currentTarget.value; })} />`
             : html`<code class="cfg-metric">${o.metric}</code>`}
           <${Choice} small label=${`Which way ${o.metric} is better`} value=${higher ? "higher" : "lower"} onChange=${dir} options=${[["higher", "higher"], ["lower", "lower"]]} />
           ${o.label === "balance" ? (tradeoff ? "" : html`<${Tag}>balanced<//>`) : html`<input aria-label="Goal" class="narrow" placeholder="no goal" value=${o.value}
@@ -48,6 +48,6 @@ export function ObjectiveStep({ M, state, edit, direct }) {
           <button type="button" class="small" disabled=${i === objs.length - 1} aria-label=${`Move ${o.metric} down`} onClick=${() => move(i, 1)}>↓</button>
           <${Tool} icon="close" label=${`Remove ${o.metric}`} onClick=${() => edit(() => { objs.splice(i, 1); })} /></div>`;
       })}</div>
-      <${Select} class="cfg-add" aria-label="Add to the objective" value="" onChange=${add} none=${rep.length ? "+ Objective…" : "(add a measurement first)"}
+      <${Select} class="cfg-add" aria-label=${M.WORDS.objective.addLabel} value="" onChange=${add} none=${rep.length ? M.WORDS.objective.add : M.WORDS.objective.none}
         options=${rep.filter(m => !used.includes(m)).map(m => [m, m + (unit(m) ? ` (${unit(m)})` : "")])} /></section>`;
 }

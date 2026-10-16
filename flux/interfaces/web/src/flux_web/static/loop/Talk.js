@@ -16,6 +16,7 @@ import { AgentTurn } from "../live/inspector/Chat.js";
 import { FullscreenHead, openModal } from "../components/Modal.js";
 import { usePoll } from "../components/Load.js";
 import { Pill, Tag } from "../components/Tone.js";
+import { Composer } from "../components/Composer.js";
 
 /** D993, D1144: the answering agent's thinking, commands and replies, drawn by Live's own view of an agent; read again
     while it answers. `a` the question; `name` its loop. */
@@ -44,7 +45,7 @@ function Turn({ a, t, open }) {
     <div class="ask-message ask-user"><div class="ask-meta"><strong>${a.by}</strong> · <${Ago} t=${a.started} /></div><p>${a.question}</p></div>
     <div class="ask-message ask-agent"><div class="ask-meta"><strong>${a.author}</strong>${a.ended ? ` · ${dur(a.ended - a.started)}` : ""}</div>
       ${a.running ? html`<div class="row"><${Pill} tone="run">Reading<//>${t.mine || a.by === me.name ? html`<${Act} cls="small" onClick=${() => t.stop(a)}>Stop<//>` : ""}</div>`
-        : a.answer ? html`<${Markdown} text=${a.answer} />` : html`<p class="muted">No answer.</p>`}
+        : a.answer ? html`<${Markdown} text=${a.answer} />` : html`<${Empty} text="No answer." />`}
       ${a.author && a.author !== "model" ? html`<div class="ask-turn-actions"><button type="button" class="small ask-thinking" data-ask-thinking=${a.id} onClick=${() => t.thinking(a)}>Thinking & commands</button></div>` : ""}
       ${(a.log || []).length ? html`<details class="ask-output" data-ask-output=${a.id} open=${open.get(a.id) || false} onToggle=${e => open.set(a.id, e.currentTarget.open)}><summary>Activity</summary>
         <pre class="log small author-log" data-ask-log=${a.id}>${a.log.join("\n")}</pre></details>` : ""}
@@ -125,9 +126,9 @@ export function Talk({ name, mine, canAsk, ask = null, askAt = 0, steer, steerOp
     <div class="ask-history" ref=${history}>${askCard}${steer ? html`<details class="steer-card card" open=${steerOpen.get() || null} onToggle=${e => steerOpen.set(e.currentTarget.open)}>
         <summary>Note to the loop</summary><p class="muted small">Notes join the loop’s next prompt.</p>${steer}</details>` : ""}
       ${ordered.length ? ordered.map((turns, i) => html`<${Thread} key=${turns[0].thread_id || turns[0].id} turns=${turns} folded=${folded(turns, i)} t=${t} open=${open} />`) : html`<${Card}><${Empty} text="No conversations yet." /><//>`}</div>
-    ${canAsk ? html`<div class="ask-compose"><div class="ask-compose-head"><span class="ask-reply-context" title=${current?.question}>${current ? `Reply to: ${current.question}` : "New conversation"}</span>
-        ${current ? html`<button type="button" class="small ask-new" disabled=${sending} onClick=${() => { setReply(null); requestAnimationFrame(() => q.current?.focus()); }}>New chat</button>` : ""}</div>
-      <textarea rows="2" id="ask-q" aria-label="Message" placeholder="Ask about this loop…" ref=${q} value=${draft} onInput=${e => setDraft(e.currentTarget.value)} onKeyDown=${e => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && !e.isComposing) { e.preventDefault(); send(); } }} />
-      <div class="ask-compose-actions"><label class="ask-agent-picker">Agent<${AgentPick} id="ask-who" ask value=${replyAuthor} onPick=${setWho} /></label>
-        <${Act} cls="primary ask-send" title="Ctrl+Enter or ⌘+Enter to send" disabled=${busy} onClick=${send}>${busy ? "Answering…" : "Send"}<//></div></div>` : ""}`;
+    ${canAsk ? html`<div class="ask-compose"><${Composer} id="ask-q" rows=${2} enter="mod" label="Message" placeholder="Ask about this loop…" taRef=${q} value=${draft} onInput=${setDraft}
+      send=${send} busy=${busy} sendCls="ask-send" sendTitle="Ctrl+Enter or ⌘+Enter to send" sendLabel=${busy ? "Answering…" : "Send"}
+      head=${html`<span class="ask-reply-context" title=${current?.question}>${current ? `Reply to: ${current.question}` : "New conversation"}</span>
+        ${current ? html`<button type="button" class="small ask-new" disabled=${sending} onClick=${() => { setReply(null); requestAnimationFrame(() => q.current?.focus()); }}>New chat</button>` : ""}`}
+      actions=${html`<label class="ask-agent-picker">Agent<${AgentPick} id="ask-who" ask value=${replyAuthor} onPick=${setWho} /></label>`} /></div>` : ""}`;
 }

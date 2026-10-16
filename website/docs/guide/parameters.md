@@ -60,7 +60,7 @@ params: {n_max: 1000000}                                    # your own settings,
 - **The document** is `problem.yaml` (or `problem.yml`, `problem.json`). Alternates beside it
   are `NAME.problem.yaml`; each has its own record, `out/<id>.NAME.db`.
 - **Beside it:** your scripts, `library/` (papers and notes the model reads), `workbench/`
-  (the agents' own tools and notes, kept across runs), `skills/` if you name them, and `out/`
+  (the agents' own tools and notes, kept across runs), `skills/` (read unless `skills:` says otherwise), and `out/`
   (the record, the cache and the decided design, written by Flux).
 - **Parsing:** a YAML or JSON error reports its line and column; a document that is not a
   mapping is refused. Unknown keys are refused with a "did you mean" hint.
@@ -83,7 +83,7 @@ params: {n_max: 1000000}                                    # your own settings,
 | `parts` | List of names, map of descriptions, or `decompose` | Pieces of one artifact ([parts](#parts-and-sub-loops)) |
 | `subtasks` | List of folders or inline documents, or `decompose` | Child problems, each its own loop ([sub-loops](#parts-and-sub-loops)) |
 | `max_subtasks` | Integer; `4` | Most children when `subtasks: decompose` |
-| `skills` | Folder or list of folders; empty | Skills (a folder with `SKILL.md`) the model and agents can load |
+| `skills` | `off`, a folder or list of folders, or `{from, off}`; `skills/` | Skills (a folder with `SKILL.md`) the model and agents can load ([skills](#skills)) |
 | `ladder` | `true`, `false`, or a map; absent | The part improvement ladder ([ladder](#improvement-ladder)) |
 | `baseline` | `true`, `false`, or a map; absent | A reference measured before pass 1 ([baseline](#baseline-pass-0)) |
 
@@ -239,11 +239,28 @@ stage.
 | `sheet` | Absent | A methods sheet appended to the text |
 | `digest` | `model` | Who summarises the library's papers: `model` or an agent |
 | `lessons` | `off` | Lessons drawn from the record: `off`, `mined`, or an agent |
-| `off` | `false` | `off: true` alone turns reading off; `knowledge: off` is the same |
+| `workbench` | who digests | Who sums up the agents' `workbench/` when it changed: `off`, `model`, or an agent (`{by: claude, timeout_s: 600}` with its options); unsaid, whoever digests the papers |
+| `off` | `false` | `off: true` turns reading off (`lessons` and `workbench` may stand beside it); `knowledge: off` is the same |
 
 `knowledge: claude` is short for `{digest: claude}`. `by:` on the knowledge box is refused:
 say `digest:`. While knowledge is on, the loop's `library/` and the server's shared library
 are read; PDFs go through `pdftotext`.
+
+### Skills
+
+A skill is a folder with a `SKILL.md` (front matter `name` and `description`, then the
+instructions). The loop's `skills/` folder is read without a word in the document. The model
+gets an index of them and a `skill` tool; every coding agent of the loop (the design agent, a
+box's, a critic, the lessons' and the digests') finds them in its work directory
+(`.claude/skills`, `.opencode/skills`, `.agents/skills`), together with the built-in
+`flux-loop-commands` (how the loop's record is read with `flux loop ...`).
+
+```yaml
+skills: off                                  # none, not the built-in one either
+skills: [skills, ../shared-skills]           # these folders instead of skills/
+skills: {off: [flux-loop-commands, rtl-style]}   # skills/ and the built-in one, these two off
+skills: {from: [../shared-skills], off: [old-style]}
+```
 
 ## Search settings
 

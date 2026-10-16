@@ -1,6 +1,6 @@
 // Flux web, configure (D1118, D1128, D1139): the loop drawn as it runs -- five steps on one circle (Search, Design,
 // Check, Measure, Choose), an arrowhead half way between each two, clockwise; left of it one column: the Setup box
-// (Validate, Plan, the Library -- what every prompt reads, D1136 -- and notes) feeding Search, and the record Choose
+// (Validate, Plan, Knowledge -- skills, the library, lessons, the workbench digest, D1136, D1152 -- and notes) feeding Search, and the record Choose
 // writes, each link one straight horizontal arrow. The search policy is Search's, calibration Measure's. A design its
 // checks refuse goes back to Design. Each box wears its kind's colour (Live's), an "AI" pill when a model or an agent
 // works it, a "critic" pill when a critic judges it; a step that is off is dashed. A click (Enter, Space) opens it.
@@ -8,7 +8,8 @@
 import { cx, html } from "../view.js";
 import { plural } from "../format.js";
 import { WORK_COLORS } from "../live/work_style.js";
-import { agentWord, isAgent, whoOn, whoOptions } from "./who.js";
+import { agentWord, isAgent } from "./who.js";
+import { SvgPill, pillWidth } from "../components/SvgPill.js";
 
 const CX = 450, CY = 192, R = 150;
 const RING = [["orchestrate", -162], ["generate", -90], ["test", -18], ["measure", 54], ["select", 126]];
@@ -16,7 +17,7 @@ const P = Object.fromEntries(RING.map(([k, a]) => [k, [CX + R * Math.cos(a * Mat
 /** Each box's kind of work, as Live colours it. */
 const KIND = { validate: "setup", plan: "plan", orchestrate: "search", feedback: "setup", generate: "design",
   test: "check", measure: "measure", select: "choose", knowledge: "setup", records: "setup" };
-const SETUP = [["validate"], ["plan"], ["knowledge", "Library"], ["feedback"]];
+const SETUP = [["validate"], ["plan"], ["knowledge"], ["feedback"]];        // D1152: Knowledge -- skills, library, lessons, workbench
 const BIG = 124, SMALL = 140, COL = 102;                  // box widths; the column's centre
 const f1 = x => x.toFixed(1);
 
@@ -32,7 +33,7 @@ const AI = ["model", "agent"];
 /** What works a box, in a word, and whether it is off or AI: [word, "off" | "ai" | ""]. */
 function workerOf(M, state, box, agent) {
   const f = state.flow || {};
-  const who = (bx, v = f[bx]) => { const opts = whoOptions(M, bx, v, agent); return opts.find(x => x.k === whoOn(opts, v)) || {}; };
+  const who = (bx, v = f[bx]) => M.whoWorks(bx, v, agent);            // the model's, the docs' drawing's too (D1146)
   if (box === "test") return [state.checks.length ? plural(state.checks.length, "check") : "no checks", ""];
   if (box === "measure") return [state.stages.length ? plural(state.stages.length, "measurement") : "none", ""];
   if (box === "records") return ["", ""];
@@ -42,9 +43,10 @@ function workerOf(M, state, box, agent) {
     return [word, ai ? "ai" : ""];
   }
   if (box === "generate" && M.paramOnly(state)) return ["off", "off"];
-  if (box === "knowledge") {                     // AI: a model or an agent sums up its papers (and an agent may write lessons)
-    if (f.knowledge === "none") return f.lessons && f.lessons !== "off" ? ["lessons only", isAgent(f.lessons) ? "ai" : ""] : ["off", "off"];
-    return ["", "ai"];
+  if (box === "knowledge") {                     // D1152: AI when a model or an agent works a section (papers, lessons, workbench)
+    const lib = f.knowledge !== "none", wb = f.workbench !== "off", ls = f.lessons && f.lessons !== "off";
+    if (!lib && !wb && !ls && state.skillsOn === false) return ["off", "off"];
+    return ["", lib || wb || isAgent(f.lessons) ? "ai" : ""];
   }
   const o = who(box);
   return [o.cls === "agent" ? cut(o.label) : cut(o.label || String(f[box])), o.cls === "off" ? "off" : AI.includes(o.cls) ? "ai" : ""];
@@ -66,8 +68,7 @@ export function Cycle({ M, state, agent, sel, pick }) {
       <rect class=${cx("bx", how === "off" && "off")} style=${`--k:${WORK_COLORS[KIND[k]] || "var(--muted)"}`} x=${x} y=${y} width=${w} height=${h} rx="8" />
       <text class="t" x=${x + 10} y=${cy0 + (shown ? -3 : 4)}>${title}</text>
       ${shown ? html`<text class=${cx("w", how)} x=${x + 10} y=${cy0 + 12}>${shown}</text>` : ""}
-      ${pills.map(([t, cls]) => { const pw = t.length * 6 + 10, py = small ? cy0 - 7 : y + 5; px -= pw; const at = px; px -= 3;
-        return html`<g class=${cx("pill", cls)}><rect x=${at} y=${py} width=${pw} height="14" rx="7" /><text x=${at + pw / 2} y=${py + 10.5} text-anchor="middle">${t}</text></g>`; })}</g>`;
+      ${pills.map(([t, cls]) => { px -= pillWidth(t); const at = px; px -= 3; return html`<${SvgPill} x=${at} y=${small ? cy0 - 7 : y + 5} text=${t} kind=${cls} />`; })}</g>`;
   };
   // the circle: one line behind the steps (their fill hides it), an arrowhead half way between each two (D1139)
   const heads = RING.map(([, deg], i) => {
@@ -78,7 +79,7 @@ export function Cycle({ M, state, agent, sel, pick }) {
   // left: the Setup box centred on Search's height, the record at Choose's: both links straight across
   const O = P.orchestrate, Ch = P.select, G = P.generate, T = P.test, gap = 36, gh = 26 + SETUP.length * gap + 4, gt = O[1] - gh / 2;
   const gx = COL - SMALL / 2 - 12, gw = SMALL + 24;
-  return html`<svg class="cfg-cycle" viewBox="0 0 670 350" role="group" aria-label="The loop: each box is one step">
+  return html`<svg class="cfg-cycle" viewBox="0 0 670 350" role="group" aria-label=${M.WORDS.graph.aria}>
     <circle class="e ring-line" cx=${CX} cy=${CY} r=${R} /><g class="ring-heads">${heads}</g>
     <path class="e back" d=${`M${f1(T[0] - 30)} ${f1(T[1] + 20)} Q${f1(CX + 30)} ${f1(CY - 50)} ${f1(G[0] + 12)} ${f1(G[1] + 20)}`} />${head(G[0] + 16, G[1] + 31, G[0] + 12, G[1] + 20, true)}
     <g class="grp"><rect x=${gx} y=${gt} width=${gw} height=${gh} rx="12" /><text class="lane" x=${gx + 10} y=${gt + 16}>SETUP</text></g>

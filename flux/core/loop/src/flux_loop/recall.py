@@ -400,6 +400,11 @@ LOOKUP_LINE = ("WHAT THE LOOP KNOWS is not pasted here: read it before you desig
                "and your file), `flux loop library [QUERY]` and `flux loop digest PAPER` (the papers). They only read; "
                "add `--json` for data. Never open the record database (`*.db`) yourself: these commands are how it is read.")
 
+#: D1152: the brief's line when the agent has the built-in `flux-loop-commands` skill: the skill says the rest.
+SKILL_LOOKUP_LINE = ("WHAT THE LOOP KNOWS beyond what is quoted above: `flux loop results|tried|ideas|design|diff|library` "
+                     "(add `--json`); your skill `flux-loop-commands` says what each returns. They only read. Never open "
+                     "the record database (`*.db`) yourself.")
+
 #: D1115: the same for an agent answering a box (orchestrate, plan, select, a critic): what it decides on.
 BOX_LOOKUP_LINE = ("WHAT THE LOOP KNOWS beyond what is quoted above: `flux loop results --json` (the measured designs ranked by "
                    "the objectives), `flux loop tried --json` (each design, how far it got, why it stopped), `flux loop ideas "

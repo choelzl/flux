@@ -11,7 +11,10 @@ serves every half of the loop:
     -- progressive, as the agents do; with tools off, the instructions are in the prompt.
 
 A document says `skills: [path, ...]` (beside the document; a folder of skill folders is all
-of them); `flux task run --skill DIR` and `flux ask --skill DIR` add more.
+of them); `flux task run --skill DIR` and `flux ask --skill DIR` add more. D1152: unsaid, the
+loop's `skills/` folder is read (as `library/` and `workbench/` are); every coding agent of the
+loop also gets the built-in `flux-loop-commands` (how the loop is read from inside); `skills:
+{from: [...], off: [name, ...]}` turns single skills off, the built-in one too; `skills: off` all.
 """
 
 from __future__ import annotations
@@ -21,10 +24,16 @@ import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
-__all__ = ["AGENT_DIRS", "Skill", "SkillError", "install", "load_skills", "skill_index", "skill_text"]
+__all__ = ["AGENT_DIRS", "LOOP_SKILLS", "SKILLS_FOLDER", "Skill", "SkillError", "builtin_root", "builtin_skills", "found_skills",
+           "install", "load_skills", "skill_index", "skill_text"]
 
 #: Where each agent looks for project skills, relative to its work directory.
 AGENT_DIRS = (".claude/skills", ".opencode/skills", ".agents/skills")
+#: D1152: a loop's own skills, read without a word in the document -- beside it, as `library/` is.
+SKILLS_FOLDER = "skills"
+#: D1152: the built-in skills every coding agent of a loop receives (the design agent, a box's, a critic, the
+#: lessons' and the digests'): how the loop's record is read from inside, so none opens the database itself.
+LOOP_SKILLS = ("flux-loop-commands",)
 
 _FRONT = re.compile(r"\A---\s*\n(.*?)\n---\s*\n?(.*)\Z", re.S)
 
@@ -131,6 +140,30 @@ def skill_text(skills: list[Skill], name: str, file: str = "") -> str:
     files = s.files()
     return (f"SKILL {s.name}: {s.description}\n\n{s.body}"
             + (f"\n\nFILES it brings (read one with the `skill` tool and `file`): {', '.join(files)}" if files else ""))
+
+
+def builtin_root() -> Path:
+    """Where Flux's own skills are: the repository's `skills/` beside `flux/` -- in a sandbox `/skills`
+    beside `/flux` (flux_cli.sandbox mounts it there) -- or the folder `FLUX_AUTHOR_SKILLS` names."""
+    import os
+
+    return Path(os.environ.get("FLUX_AUTHOR_SKILLS") or Path(__file__).resolve().parents[4].parent / SKILLS_FOLDER)
+
+
+def builtin_skills(names: tuple[str, ...] = LOOP_SKILLS) -> list[Skill]:
+    """These of Flux's own skills (D1123, D1152); none where Flux runs without them."""
+    root = builtin_root()
+    folders = [root / n for n in names if (root / n / "SKILL.md").is_file()]
+    try:
+        return load_skills(folders) if folders else []
+    except SkillError:
+        return []
+
+
+def found_skills(folder: Path) -> bool:
+    """Whether `folder` holds a skill: SKILL.md in it or in a folder directly under it."""
+    folder = Path(folder)
+    return folder.is_dir() and ((folder / "SKILL.md").is_file() or any((d / "SKILL.md").is_file() for d in folder.iterdir()))
 
 
 def install(skills: list[Skill], workdir: Path) -> list[Path]:

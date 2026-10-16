@@ -7,6 +7,7 @@ import { mainMeasurements, relativeMeasurement, resultPreferences } from "./pref
 import { useLoop } from "../loop/context.js";
 import { Pill } from "../components/Tone.js";
 import { Table } from "../components/Table.js";
+import { Check } from "../components/Check.js";
 
 /** The columns of `metrics` and their controls: `visible()` in the order shown (a dictionary's aggregate first,
     then its tests), `hidden(m)`, `controls` (Hidden N, Tests ▸), `toggle(m, on)` (the picker's). */
@@ -106,8 +107,6 @@ export function VerdictPill({ d }) {
   return html`<${Pill} tone=${VERDICT_TONE[d.verdict] || "bad"}>${VERDICT_TONE[d.verdict] ? said : "failed"}<//>`;
 }
 
-const CheckBox = ({ checked, onChange, off, ...rest }) => html`<input type="checkbox" ...${rest} checked=${checked} disabled=${off} onChange=${e => onChange(e.currentTarget.checked)} />`;
-
 /** Settings › Measurements (D1001, D1008, D1013): each metric's column shown or not, main or not, said as a
     percent change or not -- a dictionary's tests folded under its row, its aggregate said beside it. */
 export function MeasurementOptions({ metrics, groups = {}, defaults = metrics.slice(0, 1) }) {
@@ -136,7 +135,7 @@ export function MeasurementOptions({ metrics, groups = {}, defaults = metrics.sl
         <td class="mono" title=${metric}>${tests.length ? html`<button type="button" class="link dict-fold" data-dict=${metric} aria-expanded=${String(unfolded)}
             title=${`Show ${metric}'s ${tests.length} tests`} onClick=${() => setOpen(flip(open, metric, !unfolded))}>${unfolded ? "▾" : "▸"}</button> ` : ""}${parent ? metric.slice(parent.length + 1) : metric}
           ${dicts[metric] ? html`<span class="muted small dict-how" title="set in the document">${` ${[how, tests.length ? `${tests.length} tests` : ""].filter(Boolean).join(" · ")}`}</span>` : ""}</td>
-        <td><${CheckBox} off=${off} data-metric=${metric} aria-label=${`Show ${metric} column`} checked=${!columns.hidden(metric)} onChange=${on => columns.toggle(metric, on)} /></td>
-        <td><${CheckBox} off=${off} data-main-metric=${metric} aria-label=${`Main metric ${metric}`} checked=${main.has(metric)} onChange=${on => pickMain(metric, on)} /></td>
-        <td><${CheckBox} off=${off} data-relative-metric=${metric} aria-label=${`Percent change for ${metric}`} checked=${relative.has(metric)} onChange=${on => pickRelative(metric, on)} /></td></tr>`; })}<//>`;
+        <td><${Check} bare disabled=${off} data-metric=${metric} aria-label=${`Show ${metric} column`} checked=${!columns.hidden(metric)} onChange=${on => columns.toggle(metric, on)} /></td>
+        <td><${Check} bare disabled=${off} data-main-metric=${metric} aria-label=${`Main metric ${metric}`} checked=${main.has(metric)} onChange=${on => pickMain(metric, on)} /></td>
+        <td><${Check} bare disabled=${off} data-relative-metric=${metric} aria-label=${`Percent change for ${metric}`} checked=${relative.has(metric)} onChange=${on => pickRelative(metric, on)} /></td></tr>`; })}<//>`;
 }

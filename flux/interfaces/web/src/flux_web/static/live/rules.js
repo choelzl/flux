@@ -10,7 +10,7 @@ export const AI = /^\s*(agent|llm|model)\b/i;
 export const isCritique = n => CRIT.test(String(n.name));
 
 /** D1082: a design that got past its failures -- finished well, its last step ended well (not one cut off). */
-export const getsPast = p => {
+const getsPast = p => {
   if (phaseKind(p) !== "design" || p.t1 == null || p.failed || p.timedOut || p.interrupted) return false;
   const last = [...(p.kids || [])].sort((a, b) => a.t0 - b.t0).at(-1);
   return !last || (last.t1 != null && !last.failed && !last.interrupted && !last.timedOut);

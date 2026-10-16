@@ -1,7 +1,7 @@
 // Shared presentation for the Results table and the Overview's best designs.
 import { api, enc, toast } from "../ui.js";
 
-export const measurementUnits = { fmax_mhz: "MHz", area_um2: "µm²", power_w: "W", time_ms: "ms", cell_count: "cells" };
+const measurementUnits = { fmax_mhz: "MHz", area_um2: "µm²", power_w: "W", time_ms: "ms", cell_count: "cells" };
 
 export function measurementUnitsFor(results) {
   return { ...measurementUnits, ...Object.fromEntries(Object.entries(results.metric_info || {}).filter(([, s]) => s.unit).map(([m, s]) => [m, s.unit])) };

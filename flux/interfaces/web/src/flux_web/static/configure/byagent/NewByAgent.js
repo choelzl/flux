@@ -13,7 +13,6 @@ import { plural } from "../../format.js";
 import { me } from "../../state.js";
 import { lineDiff } from "../../diff.js";
 import { recallJson, remember } from "../../stored.js";
-import { progressDialog } from "../../components/Modal.js";
 import { Act } from "../../components/Act.js";
 import { AgentPick } from "../../components/AgentPick.js";
 import { AttachBox } from "../../components/AttachBox.js";
@@ -23,31 +22,23 @@ import { Checklist } from "../../components/Checklist.js";
 import { Diff } from "../../components/Diff.js";
 import { Head } from "../../components/Head.js";
 import { Code } from "../../components/Markdown.js";
-import { Pill, Tag } from "../../components/Tone.js";
+import { Pill, Tag, Failed } from "../../components/Tone.js";
 import { AuthorJob, authorActs, useAuthor } from "../../components/AuthorJob.js";
 import { STEPS as CONFIG_STEPS } from "../model.js";
+import { Check } from "../../components/Check.js";
+import { AskMe } from "./ReviseByAgent.js";
+import { sendWithProgress } from "../../uploads.js";
+import { useLoad } from "../../components/Load.js";
 
 const STAGES = ["Ask", "Drafting", "Review", "Ready"];
 /** The configurator's steps a decision belongs to (its ids: the configure route's `?step=`). */
 const STEPS = CONFIG_STEPS.filter(s => s.id !== "save").map(s => [s.id, s.title]);
 const flowKey = () => `flux-byagent:${me.name || ""}`;
 
-let styled = false;
-/** The flow's stylesheet, once (beside flux.css: its own rules, `ba-`). */
-function useStyle() {
-  if (styled) return;
-  styled = true;
-  const link = document.createElement("link");
-  link.rel = "stylesheet"; link.href = "/static/configure/byagent/byagent.css";
-  document.head.appendChild(link);
-}
-
 /** The files an agent reads, sent with what it is told -- D1075: with their progress. */
 async function withFiles(url, fd, items) {
   for (const g of items) fd.append("files", g.file, g.path);
-  const pd = items.length ? progressDialog("Uploading", `${plural(items.length, "file")} for the agent`) : null;
-  try { return await apiUpload(url, fd, pd ? { onProgress: pd.set, signal: pd.signal } : {}); }
-  finally { if (pd) pd.close(); }
+  return items.length ? sendWithProgress("Uploading", `${plural(items.length, "file")} for the agent`, p => apiUpload(url, fd, p), { say: false }) : apiUpload(url, fd);
 }
 
 /** The stages, each reachable once the draft is that far. */
@@ -56,13 +47,13 @@ const StageBar = ({ stage, reach, go }) => html`<${Steps} cls="row ba-stages" la
 
 /** What the author has besides the ask: the facts, no more. */
 function Uses() {
-  const [u, setU] = useState(null);
-  useEffect(() => { api("/new-by-agent/uses").then(setU, () => setU({})); }, []);
+  const read = useLoad(() => api("/new-by-agent/uses"), "uses"), u = read.got?.d;
   return html`<${Card} title="It can use" cls="ba-uses"><ul class="ba-uses-list">
     <li>Files, in <code>library/</code></li>
     ${u?.papers ? html`<li>${`Shared library: ${plural(u.papers, "paper")}`}</li>` : ""}
     ${u?.skills?.length ? html`<li>Skills: ${u.skills.join(", ")}</li>` : ""}
-    ${u?.bundled?.length ? html`<li title=${u.bundled.join(", ")}>Bundled loops, read only</li>` : ""}</ul><//>`;
+    ${u?.bundled?.length ? html`<li title=${u.bundled.join(", ")}>Bundled loops, read only</li>` : ""}</ul>
+    ${read.got?.error ? html`<${Failed} what="The rest could not be read" why=${read.got.error} retry=${read.reload} />` : ""}<//>`;
 }
 
 /** 1. Ask. */
@@ -79,7 +70,7 @@ function Ask({ state, items, setItems, edit, who, askMe, setAskMe, draft: start 
       <label class="stack">What should the loop do?<textarea rows="6" id="ag-ask" value=${state.statement || ""} ref=${askField} onInput=${edit("statement")}
         placeholder="e.g. a signed 8x8 multiplier in SystemVerilog, the smallest that makes 1 GHz placed on ASAP7, exact for every input." /></label>
       <h3>Files to read</h3><${AttachBox} items=${items} onChange=${setItems} />
-      <label class="check"><input type="checkbox" id="ag-ask-me" checked=${askMe} onChange=${e => setAskMe(e.currentTarget.checked)} />Ask me when unclear</label><//>
+      <${AskMe} on=${askMe} set=${setAskMe} /><//>
     <${Uses} /></div>
     <div class="form-actions ba-nav"><span class="grow" /><${Act} cls="primary" onClick=${go}>Draft<//></div>`;
 }
@@ -162,7 +153,7 @@ function Ready({ name, back, made }) {
     : ["bad", "", html`${check} failed${said.length ? ":" : "."}`], ...said.map(l => [/WILL SKIP/.test(l) ? "warn" : "bad", "", html`<span class="mono">${l}</span>`])];
   return html`<div class="ba-grid"><${Card} cls="ba-main"><${Checklist} cls="ba-check" items=${lines} />
       ${res ? html`<details><summary class="muted small">Output</summary><pre class="log small">${res.output}</pre></details>` : ""}
-      <label class="check"><input type="checkbox" id="ba-first-pass" checked=${first} onChange=${e => setFirst(e.currentTarget.checked)} />${`Run one cheap pass first${stage ? ` (${stage} only)` : ""}`}</label><//>
+      <${Check} id="ba-first-pass" checked=${first} onChange=${setFirst}>${`Run one cheap pass first${stage ? ` (${stage} only)` : ""}`}<//><//>
     <${Notice} tone="none" cls="ba-side" what=${`Made as ${name}.`} why="Change anything later in the configurator." /></div>
     <div class="form-actions ba-nav"><button type="button" onClick=${back}>Back</button><span class="grow" />
       <${Act} onClick=${() => make(false, `${appHref(null, name)}/settings/problem`)}>Open in configurator<//>
@@ -172,7 +163,6 @@ function Ready({ name, back, made }) {
 /** A new loop whose problem an agent drafts (D704, D1122). D912: the one draft -- its name and statement are what the
     agent is told, its staged files what it reads. */
 export function NewByAgent({ draft = null, onDraft = () => {}, done = () => {} }) {
-  useStyle();
   const who = useRef(""), own = useRef({}), [, redraw] = useState(0);
   const state = draft ? (draft.state = draft.state || window.FluxCrafter?.base() || {}) : own.current;
   const [items, setItems] = useState(() => draft ? [...draft.staged].map(([path, x]) => ({ path, src: x, file: x.file || new File([x.text], path.split("/").pop(), { type: "text/plain" }) })) : []);

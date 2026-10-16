@@ -51,7 +51,7 @@
     improve: "Local or structural changes.", tune: "Favors nearby parameter and implementation changes.",
     finetune: "Favors small, attributable changes.", variations: "Develops distinct alternatives." };
   /** boxes.py: the boxes a coding agent may answer, and the ones that never are. */
-  var DELEGABLE = ["validate", "orchestrate", "plan", "dse", "generate", "critique", "lessons", "select"];
+  var DELEGABLE = ["validate", "orchestrate", "plan", "dse", "generate", "critique", "lessons", "workbench", "select"];
   var NEVER = ["test", "calibrate"];
   /** The boxes a document may say a half for, in flow order (flux_loop.document FLOW_BOXES, less the
       ones the loop no longer takes as settings: analytical, simulation, records). */
@@ -161,6 +161,12 @@
       choices: [{ value: "off", half: "off", label: "Off" },
                 { value: "mined", half: "rules", label: "Mined" }]
         .concat(agentChoices("Agent writes lessons")) },
+    // D1152: who sums up the agents' workbench in the Setup, written into flow.knowledge as `workbench:` --
+    // unsaid ("default"), whoever sums up the papers
+    workbench: { title: "Workbench digest", says: "Sums up the agents' workbench (tools, notes) when it changed.",
+      choices: [{ value: "default", half: "model", label: "As papers" }, { value: "off", half: "off", label: "Off" },
+                { value: "model", half: "model", label: "Model" }]
+        .concat(agentChoices("Agent reads the workbench")) },
     records: { title: "Record", says: "Keeps every design, measurement and refusal; read back on resume.",
       fixed: "Always on.",
       choices: [{ value: "on", half: "fixed", label: "On (fixed)" }] },
@@ -173,6 +179,7 @@
     FLOW_BOXES.forEach(function (b) { out[b] = BOXES[b].choices[0].value; });
     out.digest = "model";                                // D784: a box of the drawing, written into knowledge
     out.lessons = "off";                                 // D796: likewise, as knowledge.lessons
+    out.workbench = "default";                           // D1152: likewise, as knowledge.workbench
     return out;
   }
 
@@ -250,6 +257,137 @@
     var c = choiceOf(box, v);
     if (!c && typeof v === "string" && v.indexOf("agent:") === 0) return "agent";          // a custom agent (D728)
     return c ? c.half : "rules";
+  }
+
+  // ------------------------------------------------------------------ who works a box
+  /* D1118, D1146: each box's kinds of worker (rules, a model, the coding agent, a script, off) as both views
+     say them -- the web's Graph picks among them, the docs' drawing writes the chosen one under its box. A script
+     works a step only where Flux takes one: Design (`generate: {command}` or `{catalog}`) and Search (a search
+     `command`). `agent` is the coding agent the Graph names (agentOf): the view knows which one it shows. */
+  function isAgentValue(v) { return typeof v === "string" && v.indexOf("agent:") === 0; }
+  /** An agent's name as a box says it ("own settings" for one written with its own, D728). */
+  function agentWord(v) { return v === INLINE_AGENT ? "agent, own settings" : String(v).slice(6); }
+  function whoOpt(k, label, cls, value) {
+    value = value === undefined ? k : value;
+    return { k: k, label: label, cls: cls, is: function (v) { return v === value; }, value: function () { return value; } };
+  }
+  /** A box's kinds of worker, for its current value `cur`: [{k, label, cls, is(v), value()}]. */
+  function whoOptions(box, cur, agent) {
+    var a = { k: "agent", cls: "agent", label: isAgentValue(cur) ? agentWord(cur) : agent, is: isAgentValue,
+              value: function () { return isAgentValue(cur) ? cur : "agent:" + agent; } };
+    function modelOf(vals) {
+      return { k: "model", label: "model", cls: "model", is: function (v) { return vals.indexOf(v) >= 0; },
+               value: function () { return vals.indexOf(cur) >= 0 ? cur : vals[0]; } };
+    }
+    switch (box) {
+      case "validate": return [whoOpt("rules", "rules", "rules"), whoOpt("model", "model", "model"), a];
+      case "plan": return [whoOpt("off", "off", "off"), whoOpt("model", "model", "model"), a];
+      case "feedback": return [whoOpt("human", "notes", "rules"), whoOpt("off", "off", "off")];
+      // D1133: no `orchestrate:` line is Flux's default -- rules pick the kind of work (a model picks the part when there are parts)
+      case "orchestrate": return [whoOpt("default", "default", "rules"), whoOpt("rules", "rules", "rules"), modelOf(["model", "tools"]), a, whoOpt("command", "script", "script")];
+      case "generate": return [whoOpt("model", "model", "model"), a, whoOpt("command", "script", "script"), whoOpt("catalog", "files", "script")];
+      case "critique": return [whoOpt("off", "off", "off"), whoOpt("model", "model", "model"), a];
+      case "calibrate": return [whoOpt("on", "on", "rules"), whoOpt("off", "off", "off")];
+      case "select": return [whoOpt("objectives", "goals", "rules"), a];
+      case "knowledge": return [whoOpt("default", "on", "rules"), whoOpt("none", "off", "off")];
+      case "digest": return [whoOpt("model", "model", "model"), a];
+      case "lessons": return [whoOpt("off", "off", "off"), whoOpt("mined", "mined", "rules"), a];
+      case "workbench": return [whoOpt("model", "model", "model"), a];
+      default: return [];
+    }
+  }
+  /** The kind `cur` is among `options` (the first when none is). */
+  function whoOn(options, cur) {
+    for (var i = 0; i < options.length; i++) if (options[i].is(cur)) return options[i].k;
+    return (options[0] || {}).k;
+  }
+  /** Who works `box` at `cur`: its option ({} for a box with none). */
+  function whoWorks(box, cur, agent) {
+    var opts = whoOptions(box, cur, agent), k = whoOn(opts, cur);
+    for (var i = 0; i < opts.length; i++) if (opts[i].k === k) return opts[i];
+    return {};
+  }
+  /** The agent the Graph names: the first a box (or a critic) is given, else claude (or the first there is). */
+  function agentOf(state) {
+    var flow = (state && state.flow) || {}, crit = criticsOf(state), vals = [];
+    Object.keys(flow).forEach(function (k) { vals.push(flow[k]); });
+    Object.keys(crit).forEach(function (k) { vals.push(crit[k]); });
+    for (var i = 0; i < vals.length; i++) if (isAgentValue(vals[i]) && vals[i] !== INLINE_AGENT) return vals[i].slice(6);
+    return AGENTS.indexOf("claude") >= 0 ? "claude" : AGENTS[0];
+  }
+
+  // ------------------------------------------------------------------ the words both views say
+  /* D1146: the labels, hints, placeholders and option lists the docs page (crafter.js) and the web app's
+     configurator (static/configure/) both show, said once here, by step, in the app's words: short, no leading
+     a/the/your. test_loop_crafter.py fails when either view spells one of these out itself. Option lists are
+     [value, label]; a budget knob is {label, dflt, hint}. */
+  var STEP_TITLES = ["Prompt", "Check & Measure", "Objective", "Graph", "Extra", "Save"];
+  var WORDS = {
+    prompt: { nameHint: "Letters, digits, - and _", fromTools: "from tools", other: "other…", languageName: "Language name",
+      statement: "What to make", statementPlaceholder: "Say it as you would to an engineer: what it does, what matters.",
+      rules: "Rules for every design", rulesPlaceholder: "Names, ports, what is not allowed" },
+    checks: { say: "in order; a failure sends the design back", add: "+ Check", timeLimit: "Time limit, s",
+      countRe: "Failing count", countReHint: "a pattern in its output", countRePlaceholder: "(\\d+) failing",
+      clock: "Clock (MHz)", clockAuto: "empty: from the objective", clockHint: "tighter: faster and bigger",
+      noCatalog: ["The tool list did not load:", "only Custom checks and measurements are offered."],
+      noPreset: "Flux preset", thisLanguage: "this language", chooseCustom: "choose Custom." },
+    measure: { say: "cheapest first", add: "+ Measurement", estimated: "estimated first",
+      prints: "Numbers it prints", printsPlaceholder: "time_ms, score", printsHint: "as name=value",
+      needs: "Tools it needs", needsPlaceholder: "yosys, openroad",
+      addDictionary: "+ Dictionary", directions: [["minimize", "lower is better"], ["maximize", "higher is better"]],
+      aggregates: [["mean", "mean"], ["median", "median"], ["min", "min"], ["max", "max"], ["sum", "sum"], ["none", "none"]],
+      cutoff: "Stop climbing when", addCutoff: "+ Cutoff", cutoffRules: [["at", "is below"], ["below", "is above"], ["within", "trails the best by, %"]],
+      estimate: "Estimate first", estimates: [["off", "no"], ["surrogate", "fitted"], ["command", "script"], ["model", "model"]],
+      fitted: "fitted from past runs", margin: "Skip when it misses by, %",
+      estimateCommand: "Estimate command", estimatePlaceholder: "{python} {home}/estimate.py {artifact}" },
+    objective: { add: "+ Objective…", addLabel: "Add to the objective", none: "(add a measurement first)",
+      dictHint: "the parent aggregate or parent.test" },
+    graph: { aria: "The loop: each box is one step", dseKind: "Kind", dsePolicy: "Policy",
+      searchOn: ["A search over settings is on:", "only a script turns a point into a design; with a model or agent, the settings only reach the commands."],
+      searchPicks: "Search over settings picks next job",
+      searchCommand: "Search command", searchPlaceholder: "{python} {home}/search.py {history} {state}", searchHint: "answers each round with the next candidates",
+      command: "Command", generatePlaceholder: "{python} {home}/gen.py {artifact} {knob}", generateHint: "writes {artifact}; each setting is {its name}",
+      existing: "Existing designs", existingPlaceholder: "designs/a.sv, designs/b.sv", existingHint: "files beside the document, tried in order",
+      prototype: "Prototype first", prototypeHint: "default: with a golden model",
+      prototypes: [["", "default"], ["false", "off"], ["true", "on"], ["python", "in Python"], ["systemc", "in SystemC"]],
+      // D1152: the Knowledge box -- skills, the library, lessons from the record, the workbench's digest
+      knowledge: "Knowledge", knowledgeSays: "What every agent and prompt gets: skills, library, lessons, workbench digest.",
+      skills: "Skills", skillsSays: "Instructions agents load when they apply: folders with a SKILL.md in skills/.",
+      builtIn: "built-in", skillsNone: "No skills in skills/ yet.", skillsDrop: "Drop skill folders into skills/",
+      skillsFrom: "Read from", library: "Library", libraryOff: "Off: no files, papers or text are read.",
+      reads: "What every prompt reads", papersBy: "Papers summed up by",
+      lessons: "Lessons from records", lessonsBy: "Lessons by", workbench: "Workbench digest", workbenchBy: "Summed up by",
+      workbenchSays: "When the workbench changed, before a pass" },
+    budget: { steps: { label: "Designs per pass", dflt: "24" }, passes: { label: "Passes", dflt: "until stopped" },
+      parallel: { label: "Passes at once", dflt: "1", hint: "needs an admin on a server" }, batch: { label: "Designs side by side", dflt: "1" },
+      repair_attempts: { label: "Repairs per design", dflt: "12" }, exploration_quota: { label: "Share kept for new ideas", dflt: "0", hint: "0 to 1" },
+      finalists: { label: "Finalists for the costly one", dflt: "3" }, workers: { label: "Tool runs at once", dflt: "auto", hint: "1 for anything timed" } },
+    extra: { settings: "Settings to search", settingsSay: "{name} in the commands", addSetting: "+ Setting", setting: "Setting", values: "Values, in order",
+      partsSay: "each checked on its own, then composed", partsPlaceholder: "decoder, datapath",
+      partsModes: [["none", "One design"], ["list", "These parts"], ["decompose", "Parts as it decides"]],
+      baselineSay: "pass 0", baselineModes: [["off", "off"], ["before", "first"], ["only", "only"]],
+      baselineFrom: [["project", "project"], ["file", "file"], ["command", "command"], ["metrics", "numbers"]],
+      baselineFile: "baseline.sv", baselineCommand: "{python} {home}/baseline.py {artifact}", addMetric: "+ Metric", deepest: "deepest" },
+    save: { draft: "Save draft", draftSaved: "Draft saved.", saving: "Saving…", saved: "Saved.", kept: "Kept as written", vsSaved: "vs saved" },
+  };
+
+  /** D912: where a draft stands -- the document, its files, the loop's own check, a start -- apart, each [kind, what,
+      words]. `files` {missing} when the page knows them; `save` a page that saves (the check and the start said too). */
+  function plural(n, one) { return n + " " + (n === 1 ? one : one + "s"); }
+  function readiness(msgs, o) {
+    var named = o.named || [], files = o.files, calm = o.calm;
+    var errors = msgs.filter(function (m) { return m.level === "error"; }).length;
+    var rows = [[errors ? (calm ? "todo" : "error") : "ok", "Document", errors ? plural(errors, "thing") + " to " + (calm ? "do" : "fix") + ", below" : "complete"]];
+    var missing = files ? files.missing : null;
+    if (missing) rows.push([missing.length ? "error" : "ok", "Files", missing.length ? "missing " + missing.join(", ") + " (Prompt › Files)"
+      : named.length === 1 ? named[0] + " present" : named.length ? "all " + named.length + " present" : "none named"]);
+    else if (named.length) rows.push(["note", "Files", "put " + named.join(", ") + " beside the document"]);
+    if (o.save === false) return rows;
+    var ck = o.checked || ["note", "not checked yet"];
+    rows.push([ck[0], "Checked", ck[1]]);
+    var go = !errors && !(missing || []).length && ck[0] === "ok";
+    rows.push([go ? "ok" : "note", "Ready to run", go ? "yes" : "after a Check passes"]);
+    return rows;
   }
 
   // ------------------------------------------------------------------ the tool catalog
@@ -531,6 +669,7 @@
       baseline: { mode: "off", source: "project", file: "", command: "", timeout: "", metrics: [] },
       budget: { steps: "", passes: "", parallel: "", batch: "", repair_attempts: "", finalists: "", workers: "", prototype: "" },
       space: [], partsMode: "none", parts: "", params: [],
+      skillsOn: true, skillsFrom: "", skillsOff: [],          // D1152: `skills:` -- on, its folders said, names off
     };
   }
 
@@ -810,6 +949,10 @@
     var pr = (state.params || []).filter(function (x) { return String(x.key || "").trim(); });
     if (pr.length && own("params")) out += "\nparams: " + flowMap(pr.map(function (x) { var c = choicesOf(x.value); return [x.key.trim(), c.length === 1 ? c[0] : String(x.value || "").trim()]; })) + "\n";
 
+    // D1152: the skills -- unsaid, skills/ beside the document and the built-in ones; off, or single skills off
+    var sk = skillsDoc(state);
+    if (sk !== undefined && own("skills")) out += "\nskills: " + inline(sk, false) + "\n";
+
     // D775: the flow, last -- who works each box, and each box's own settings beside it
     var F = [], kf = state.keptFlow || {}, said = flowSaid(state), boxesKept = !own("flow.boxes");
     var kb = boxesKept ? (kf["flow.boxes"] || {}) : null, SPECIAL = ["dse", "knowledge", "select", "critique"];
@@ -911,7 +1054,16 @@
       var lrName = lr && lr.agent && typeof lr.agent === "object" ? lr.agent.preset : null;
       if (ls && ls !== "off") K.lessons = lr && (ls === INLINE_AGENT || (lrName && ls === "agent:" + lrName)) ? toSurface("lessons", lr)   // D1135: its own settings kept
         : typeof ls === "string" && ls.indexOf("agent:") === 0 ? ls.slice(6) : ls;
-      if (kv === "none" || kv === "off") K = K.lessons ? { off: true, lessons: K.lessons } : { off: true };   // `off` stands alone: nothing read
+      var wb = (state.flow || {}).workbench, wr = (state.agentRaw || {}).workbench;   // D1152: the workbench's digest
+      var wrName = wr && wr.agent && typeof wr.agent === "object" ? wr.agent.preset : null;
+      if (wb && wb !== "default") K.workbench = wr && (wb === INLINE_AGENT || (wrName && wb === "agent:" + wrName)) ? toSurface("workbench", wr)
+        : typeof wb === "string" && wb.indexOf("agent:") === 0 ? wb.slice(6) : wb;
+      if (kv === "none" || kv === "off") {                  // `off` stands alone: nothing read; lessons and the workbench apart
+        var KO = { off: true };
+        if (K.lessons) KO.lessons = K.lessons;
+        if (K.workbench) KO.workbench = K.workbench;
+        K = KO;
+      }
       if (Object.keys(K).length === 1 && K.off) F.push("  knowledge: off");
       else if (Object.keys(K).length) F = F.concat(knowledgeLines(K));
     }
@@ -945,6 +1097,22 @@
 
     if (F.length) out += "\nflow:\n" + F.join("\n") + "\n";
     return out;
+  }
+
+  /** D1152: `skills:` as this state says it -- "off", the folders, {from, off}; undefined when unsaid. */
+  function skillsDoc(state) {
+    if (state.skillsOn === false) return "off";
+    var from = list(state.skillsFrom), off = (state.skillsOff || []).slice();
+    if (off.length) return from.length ? { from: from, off: off } : { off: off };
+    return from.length ? from : undefined;
+  }
+  /** Whether the skill `name` is on (D1152): the skills on and it not turned off. */
+  function skillOn(state, name) { return state.skillsOn !== false && (state.skillsOff || []).indexOf(name) < 0; }
+  /** The skill `name` turned on or off. */
+  function setSkill(state, name, on) {
+    var off = (state.skillsOff || []).filter(function (n) { return n !== name; });
+    if (!on) off.push(name);
+    state.skillsOff = off;
   }
 
   /** `flow.knowledge`'s lines: inline, or a block when it has a text (written as prose). */
@@ -995,7 +1163,7 @@
     var inline = v === INLINE_AGENT, field = critic && !inline ? "criticRaw" : "agentRaw", key = critic && inline ? "critique" : b;
     var raw = (state[field] || {})[key], name = inline ? null : v.slice(6);
     var own = raw && raw.agent && typeof raw.agent === "object" ? raw.agent : null;
-    if (raw && !inline && (critic || b === "lessons") && !(own && own.preset === name)) raw = own = null;   // another agent's, left behind
+    if (raw && !inline && (critic || b === "lessons" || b === "workbench") && !(own && own.preset === name)) raw = own = null;   // another agent's, left behind
     return { state: state, field: field, key: key, raw: raw, own: own, name: name };
   }
   /** The agent's settings at `slot` ({} when it has none of its own), or null when no agent works it. */
@@ -1361,7 +1529,7 @@
   var FLUX_ARGV = ["{python}", "-W", "ignore", "-m", "flux_cli.main"];
   var PRESET_ARGV = ["{python}", "-W", "ignore", "-m", "flux_presets"];
   var STATE_KEYS = ["id", "statement", "contract", "language", "knowledge", "parts", "space", "flow", "gate", "stages",
-                    "objectives", "budget", "baseline", "params"];
+                    "objectives", "budget", "baseline", "params", "skills"];
   /** The loop's knobs the configurator's Graph sets beside each box (LoopRequest): when a design explores,
       how a part yields, how many worse edits are tolerated, an agent's turns, how a repair edits and when it reverts,
       how many parts are drafted at once. */
@@ -1506,6 +1674,12 @@
       f.knowledge = Object.assign({}, f.knowledge); delete f.knowledge.lessons;
       if (!Object.keys(f.knowledge).length) delete f.knowledge;
     }
+    if (f.knowledge && typeof f.knowledge === "object" && !Array.isArray(f.knowledge) && "workbench" in f.knowledge) {
+      var wv = f.knowledge.workbench;                                          // D1152: the workbench's digest
+      f.workbench = wv === false ? "off" : toInner("workbench", wv);
+      f.knowledge = Object.assign({}, f.knowledge); delete f.knowledge.workbench;
+      if (!Object.keys(f.knowledge).length) delete f.knowledge;
+    }
     if ("knowledge" in f) {
       var kn = f.knowledge;
       if (kn === "off" || kn === false) f.knowledge = ["none"];          // YAML reads a bare `off` as false
@@ -1623,6 +1797,17 @@
       s.knowledgeText = String(kn.text || "");
       s.knowledgeSheet = String(kn.sheet || "");
     } else if (kn) keep("knowledge", "what is read, in a form the configurator does not edit");
+    // D1152: the skills -- off, the folders read, single skills off
+    var sk = raw.skills, strs = function (v) { return Array.isArray(v) && v.every(function (x) { return typeof x === "string" && x.indexOf(",") < 0; }); };
+    if (sk === false || sk === "off") s.skillsOn = false;
+    else if (typeof sk === "string" && sk.indexOf(",") < 0) s.skillsFrom = sk;
+    else if (strs(sk)) s.skillsFrom = sk.join(", ");
+    else if (sk && typeof sk === "object" && !Array.isArray(sk) && Object.keys(sk).every(function (k) { return k === "from" || k === "off"; })
+             && (sk.from === undefined || sk.from === null || (typeof sk.from === "string" && sk.from.indexOf(",") < 0) || strs(sk.from))
+             && (sk.off === undefined || sk.off === null || typeof sk.off === "string" || strs(sk.off))) {
+      s.skillsFrom = sk.from === undefined || sk.from === null ? "" : typeof sk.from === "string" ? sk.from : sk.from.join(", ");
+      s.skillsOff = sk.off === undefined || sk.off === null ? [] : typeof sk.off === "string" ? [sk.off] : sk.off.slice();
+    } else if (sk !== undefined && sk !== null) keep("skills", "skills in a form the configurator does not edit");
     keep("scope", "the scope each pass works on (`orchestrate.scope`: its list, brief and check), which the configurator does not edit");
 
     // params: plain values, each its type kept
@@ -1833,7 +2018,11 @@
               uniqueName: uniqueName, unitFor: unitFor, dictionarySpec: dictionarySpec, paramOnly: paramOnly, parameterSearch: parameterSearch,
               knobNames: knobNames, choiceOf: choiceOf, list: list, num: num, shown: shown, paramsOf: paramsOf, hasParts: hasParts,
               CRITIC_BOXES: CRITIC_BOXES, criticsOf: criticsOf, setCritic: setCritic, agentOpts: agentOpts, setAgentOpt: setAgentOpt,
-              renameAgent: renameAgent, agentRest: agentRest, probeOf: probeOf, setProbe: setProbe, BUDGET_KEYS: BUDGET_KEYS, keptText: keptText };
+              renameAgent: renameAgent, agentRest: agentRest, probeOf: probeOf, setProbe: setProbe, BUDGET_KEYS: BUDGET_KEYS, keptText: keptText,
+              // D1146: who works a box, the words both views say, where a draft stands
+              whoOptions: whoOptions, whoOn: whoOn, whoWorks: whoWorks, agentOf: agentOf, agentWord: agentWord,
+              skillOn: skillOn, setSkill: setSkill, skillsDoc: skillsDoc,
+              STEP_TITLES: STEP_TITLES, WORDS: WORDS, readiness: readiness };
 
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.FluxCrafterModel = api;

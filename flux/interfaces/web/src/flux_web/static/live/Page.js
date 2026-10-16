@@ -143,7 +143,7 @@ function Body({ store }) {
       <section class="card alt-inspector-card">
         <div class="alt-detail-actions">
           <button type="button" class="small" disabled=${!s.boxView && v.selected == null} title="Show the selected task in the list" onClick=${a.locate}>Locate</button>
-          <a class="btn small alt-log-link" title="The start's whole output" href=${logHref}>Full log</a></div>
+          <a class="btn small alt-log-link" title="Whole output" href=${logHref}>Full log</a></div>
         <div class="alt-inspector-host" tabindex="-1" ref=${host}
           onClickCapture=${e => { if (e.target.closest("summary")) a.pause(); }} onWheelCapture=${e => { if (e.deltaY < 0) a.pause(); }}>
           ${s.boxView && v.box ? html`<${BoxPanel} v=${v} a=${a} box=${v.box} />`

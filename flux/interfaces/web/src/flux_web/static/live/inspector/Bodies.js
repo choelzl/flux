@@ -9,6 +9,7 @@ import { bestOf, candidateOf, cell, colorOf, dictsOf, failingOf, fieldsOf, isToo
   running, stdoutOf, taskLabel, tidyCommand, usualOf } from "./parts.js";
 import { Fact, Facts, Pill, Tag } from "../../components/Tone.js";
 import { Table } from "../../components/Table.js";
+import { Meter } from "../../components/Stat.js";
 
 const lineCount = t => `${linesOf(t).length} line${linesOf(t).length === 1 ? "" : "s"}`;
 
@@ -47,7 +48,7 @@ export function ToolBody({ n, env, mem }) {
   if (running(n)) {
     const took = env.now - n.t0, usual = usualOf(n, env.nodes);
     top = html`<div class="alt-run"><div class="alt-label">${`${dur(took)}${usual ? ` · usually ${dur(usual)}` : ""}`}</div>
-      ${usual ? html`<div class="alt-bar"><i style=${`width:${Math.min(100, 100 * took / usual)}%;background:${colorOf(n)}`} /></div>` : ""}</div>
+      ${usual ? html`<${Meter} cls="flush" frac=${took / usual} color=${colorOf(n)} />` : ""}</div>
       ${linesOf(out).length ? html`<${Pre} k="stdout" cls="val alt-tail" text=${linesOf(out).slice(-8).join("\n")} mem=${mem} />` : ""}`;
   } else {
     const fails = failingOf(out), metrics = metricsOf(out);

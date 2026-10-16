@@ -25,19 +25,19 @@ function Usage({ mine }) {
 /** D814: one card, a tab per tool -- each agent's login and Test, its model, its own variables; Flux's model; the
     variables every agent of one's gets. D924: the connection first. */
 function Agents({ st, myEnv }) {
-  const { lg, panel, terminal } = useLogins();
+  const { lg, said, panel, terminal } = useLogins();
   const offered = st.groups.filter(g => g.agent).map(g => g.agent);
   const panels = Object.fromEntries((lg?.agents || []).filter(a => offered.includes(a.id)).map(a => [a.id,
     html`<div class="agent-panel"><h4 class="set-sub first">Connection</h4><div class="agent-login">${panel(a)}</div></div>`]));
   const rest = (lg?.agents || []).filter(a => !offered.includes(a.id));
   const save = async values => { await api("/settings", { method: "PUT", body: { values } }); };     // D833: quiet, field by field
   const every = { tab: "All agents", el: html`<fieldset class="set-group"><legend>Variables for all runs and agents</legend>
-    <p class="muted small">A loop's own win.</p>
+    <p class="muted small">Loop variables override.</p>
     <${EnvEditor} rows=${myEnv.mine} save=${async v => { await api("/env", { method: "PUT", body: v }); route(); }} scope="me" />
     ${myEnv.server.length ? html`<div class="blk"><h4>Server</h4><${EnvTable} rows=${myEnv.server.map(x => ({ ...x, from: "server" }))} shadowed=${new Set(myEnv.mine.map(x => x.name))} /></div>` : ""}</fieldset>` };
   return html`<${Card} title="Agents"><p class="muted">${st.external ? "Your settings only. Keys are encrypted, never shown."
       : "Empty fields take the server's value; your own endpoint uses only yours. Keys are encrypted, never shown."}</p>
-    <${SettingsForm} st=${st} server=${st.inherited || {}} save=${save} scope="me" panels=${panels} extraTabs=${[every]}
+    ${said}<${SettingsForm} st=${st} server=${st.inherited || {}} save=${save} scope="me" panels=${panels} extraTabs=${[every]}
       agentEnv=${a => { const e = (st.agent_env || {})[a] || { mine: [], server: [] }; return { rows: e.mine, server: e.server, save: async v => { await api(`/agents/${a}/env`, { method: "PUT", body: v }); route(); } }; }} />
     <div>${rest.map(a => html`<div key=${a.id} class="agent-panel"><h4 class="agent-panel-name">${a.label}</h4>${panel(a)}</div>`)}</div>${terminal}<//>`;
 }

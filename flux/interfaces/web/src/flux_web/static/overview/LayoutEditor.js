@@ -2,7 +2,7 @@
 // larger ones in two columns top to bottom (moved, removed, added), previewed with sample data as it changes;
 // Save, Defaults, Cancel. Applies to every loop of the account, across browsers.
 
-import { html, useLayoutEffect, useRef, useState } from "../view.js";
+import { html, useLayoutEffect, useRef, useState, Empty, Notice } from "../view.js";
 import { Overview } from "./Overview.js";
 import { Select } from "../components/Select.js";
 import { Tag } from "../components/Tone.js";
@@ -27,7 +27,7 @@ function List({ ids, catalog, column, used, edit, moveOut }) {
           ${btn("↓", `Move ${catalog[id]} down`, () => edit(n => { [n[i + 1], n[i]] = [n[i], n[i + 1]]; }), i === ids.length - 1)}
           ${small ? "" : btn(column === 0 ? "→" : "←", `Move ${catalog[id]} to column ${2 - column}`, () => moveOut(id))}
           ${btn("×", `Remove ${catalog[id]}`, () => edit(n => { n.splice(i, 1); }), small && ids.length <= 3)}</div></li>`)
-      : html`<li class="overview-layout-empty muted small">No cards.</li>`}</ol>
+      : html`<li class="overview-layout-empty"><${Empty} text="No cards." /></li>`}</ol>
     <div class="overview-layout-row overview-layout-add"><${Select} aria-label=${small ? "Add small card" : `Add card to column ${column + 1}`} value=${adding} onChange=${setToAdd} options=${available} />
       ${btn("Add", small ? "Add small card" : `Add card to column ${column + 1}`, () => edit(n => { n.push(adding); }), !available.length || (small && ids.length >= 5))}</div></div>`;
 }
@@ -72,7 +72,7 @@ export function LayoutEditor({ prefs, example, save, cancel }) {
         <p class="muted small">Sample values; nothing changes until you save.</p>
         <div class="overview-layout-preview" inert><${LoopContext.Provider} value=${{ ...MOCK_CTX, st: example.state }}><${Overview} r=${example.results} notes=${example.notes} bench=${example.workbench}
           use=${example.usage} prefs=${{ layout: draft }} ideas=${example.ideas} /><//></div></section></div>
-    <p class="err" role="alert">${error}</p>
+    ${error ? html`<${Notice} tone="bad" role="alert" why=${error} />` : ""}
     <div class="dlg-actions"><button type="button" disabled=${saving} onClick=${() => { remember(); setDraft(structuredClone(prefs.default)); }}>Defaults</button>
       <button type="button" disabled=${saving} onClick=${cancel}>Cancel</button><button type="button" class="primary" disabled=${saving} onClick=${go}>Save</button></div>`;
 }

@@ -11,6 +11,8 @@ export const Choice = ({ options, value, onChange, label, small = false, cls = "
   role="group" aria-label=${label}>${options.map(([v, text, n]) => html`<button key=${String(v)} type="button" class=${v === value ? "on" : ""} aria-pressed=${String(v === value)}
     onClick=${() => onChange(v)}>${text}${n != null ? html`${" "}<b>${n}</b>` : ""}</button>`)}</div>`;
 
-export const Tabs = ({ items, on, pick, cls = "tabs", ...rest }) => html`<div ...${rest} class=${cls} role="tablist">${items.map(([k, label, badge, title]) =>
-  html`<button key=${String(k)} role="tab" type="button" class=${k === on ? "on" : ""} aria-selected=${k === on ? "true" : "false"} title=${title || null}
+/** D1149: `href(key)` instead of `pick`: each tab a link to its address (the admin's). */
+export const Tabs = ({ items, on, pick, href = null, cls = "tabs", ...rest }) => html`<div ...${rest} class=${cls} role="tablist">${items.map(([k, label, badge, title]) => href
+  ? html`<a key=${String(k)} role="tab" href=${href(k)} class=${k === on ? "on" : ""} aria-selected=${k === on ? "true" : "false"} title=${title || null}>${label}${badge || ""}</a>`
+  : html`<button key=${String(k)} role="tab" type="button" class=${k === on ? "on" : ""} aria-selected=${k === on ? "true" : "false"} title=${title || null}
     onClick=${() => pick(k)}>${label}${badge || ""}</button>`)}</div>`;

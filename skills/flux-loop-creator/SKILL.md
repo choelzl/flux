@@ -28,7 +28,7 @@ mul8/                       # folder name = loop id (letters, digits, _ - .; not
   *.py / lib/               # your check, stage, generator or search scripts
   library/                  # papers and notes the model reads (digested once, see below)
   knowledge/                # a method sheet / helper files named by flow.knowledge
-  skills/                   # skills handed to agents (or `skills:` names other folders)
+  skills/                   # skills handed to the model and agents, read unsaid (`skills:` other folders, `off`, `{off: [names]}`)
   ops/<child>/problem.yaml  # sub-loops: a child folder with its own document
   NAME.problem.yaml         # optional alternate ask over the same folder -> record out/<id>.NAME.db
   workbench/{tools,notes}/  # kept across runs; ONLY agents write here
@@ -94,7 +94,7 @@ A box is a word, an agent name, or `{by: <who>, ...options}` (the old `{agent: X
 | `plan` | `off`; `model`/agent writes a plan per round (it may change budgets and roles, never the gate) |
 | `validate`, `select` | `rules` / `objectives` almost always; an agent on `select` only breaks ties |
 | `critic:` | on the box it judges, e.g. `test: {build: make, critic: claude}` (D1040; there is no `flow.critique`) |
-| `knowledge` | `{files, text, sheet, digest: model|<agent>, lessons: off|mined|<agent>}` or `off` |
+| `knowledge` | `{files, text, sheet, digest: model|<agent>, lessons: off|mined|<agent>, workbench: off|model|<agent>}` or `off` |
 | `test`, `measure` | always yours, never an agent's |
 
 Agent options: `timeout_s` (1800), `session: turn|pass`, `questions: decide|model|operator`,

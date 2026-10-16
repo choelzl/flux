@@ -18,7 +18,7 @@ const script = src => new Promise((ok, no) => {
 const agentsOf = M => api("/agents").then(list => M.setAgents(list.filter(a => a.id !== "model").map(a => ({ name: a.id, label: a.label }))), () => {});
 
 /** The model, its catalog and agents set: a promise of it (null when its script does not load). */
-export function loadModel() {
+function loadModel() {
   if (loading) { loading.then(M => M && agentsOf(M)); return loading; }
   loading = (async () => {
     if (!window.FluxCrafterModel) await script("/crafter-assets/crafter-model.js");
@@ -39,7 +39,8 @@ export function useModel() {
   return M;
 }
 
-/** The configurator's six steps (D941), by the ids an address names (`?step=checks`). */
+/** The configurator's six steps (D941), by the ids an address names (`?step=checks`). Their titles are the model's
+    STEP_TITLES (the docs' page's), here before it loads; test_loop_crafter.py keeps them the same (D1146). */
 export const STEPS = [
   { id: "prompt", title: "Prompt" }, { id: "checks", title: "Check & Measure" }, { id: "objective", title: "Objective" },
   { id: "graph", title: "Graph" }, { id: "extra", title: "Extra" }, { id: "save", title: "Save" }];

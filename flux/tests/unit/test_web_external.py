@@ -4,6 +4,7 @@ home files from a home of their own, and log their agents in from the web into i
 
 from __future__ import annotations
 
+import json
 import os
 import stat
 import sys
@@ -291,3 +292,18 @@ def test_an_agents_test_is_asked_again_each_day_and_a_failure_holds_its_runs(tmp
         time.sleep(0.1)
     else:
         raise AssertionError("the next one due was not tested")
+
+
+def test_a_running_loop_says_its_agents(tmp_path):
+    """D1147: the loop list says beside "running" the agents a start's document hands work to -- read once per
+    version of the document, nothing for a document the run refuses."""
+    from flux_web import runs
+
+    doc = tmp_path / "x.problem.yaml"
+    doc.write_text("statement: s\nlanguage: python\nflow: {generate: {by: codex}, test: {test: ['true'], critic: {by: claude}}}\n")
+    run = {"argv": json.dumps(["flux", "task", "run", str(doc), "--db", "x.db"])}
+    assert runs._agents_of(run) == ["codex", "claude"]
+    doc.write_text("statement: [not, a, document\n")
+    os.utime(doc, (time.time() + 5, time.time() + 5))
+    assert runs._agents_of(run) == []
+    assert runs._agents_of({"argv": json.dumps(["flux", "ask"])}) == []

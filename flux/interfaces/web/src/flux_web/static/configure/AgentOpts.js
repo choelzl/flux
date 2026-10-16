@@ -6,6 +6,7 @@
 import { html } from "../view.js";
 import { Choice } from "../components/Tabs.js";
 import { Pick, Text } from "./fields.js";
+import { Check } from "../components/Check.js";
 
 /** `slot` a box ("generate", "select", "lessons") or "critic:<box>"; nothing when no agent works it. `disabled`: the flow
     is kept as written. */
@@ -16,7 +17,7 @@ export function AgentOpts({ M, state, slot, edit, disabled = false }) {
   const said = ["timeout_s", "session", "questions", "max_questions", "wait_s"].filter(k => o[k] !== undefined).length, rest = M.agentRest(state, slot);
   return html`<details class="cfg-more" data-agent-opts=${slot}><summary>More${said ? html` <span class="muted">· ${said} set</span>` : ""}</summary>
     <div class="cfg-grid2">
-      <${Text} label="Time limit, s" value=${o.timeout_s ?? ""} placeholder="default" disabled=${disabled} set=${set("timeout_s")} />
+      <${Text} label=${M.WORDS.checks.timeLimit} value=${o.timeout_s ?? ""} placeholder="default" disabled=${disabled} set=${set("timeout_s")} />
       ${slot === "generate" ? "" : html`<${Pick} label="Session" value=${o.session || ""} disabled=${disabled} set=${set("session")}
         options=${[["", "fresh each turn"], ["pass", "one per pass"]]} />`}
       <${Pick} label="Questions" hint=${o.questions === "operator" ? "it waits for an answer in Talk" : ""} value=${o.questions || ""} disabled=${disabled}
@@ -37,8 +38,7 @@ export function ProbeFields({ M, state, edit, disabled = false }) {
   };
   return html`<div class="cfg-sub" data-probe><div class="cfg-bar"><h4>Probe <span class="muted">what it may run while designing</span></h4><span class="grow" />
     <${Choice} small label="Probe" value=${p.off ? "off" : "on"} onChange=${v => { if (!disabled) put({ off: v === "off" }); }} options=${[["on", "on"], ["off", "off"]]} /></div>
-    ${p.off ? "" : html`${names.length ? html`<ul class="cfg-lib-reads" aria-label="Gate checks it may run">${names.map(n => html`<li key=${n}><label>
-        <input type="checkbox" data-probe-check=${n} checked=${on(n)} disabled=${disabled} onChange=${() => toggle(n)} /><code>${n}</code></label></li>`)}</ul>` : ""}
+    ${p.off ? "" : html`${names.length ? html`<ul class="cfg-lib-reads" aria-label="Gate checks it may run">${names.map(n => html`<li key=${n}><${Check} data-probe-check=${n} checked=${on(n)} disabled=${disabled} onChange=${() => toggle(n)}><code>${n}</code><//></li>`)}</ul>` : ""}
       <div class="cfg-grid2"><${Text} label="Gate runs" value=${p.runs} placeholder="20" disabled=${disabled || (p.checks && !p.checks.length)} set=${v => put({ runs: v })} />
         <${Text} label="Measure runs" value=${p.stages} placeholder="3" disabled=${disabled} set=${v => put({ stages: v })} /></div>`}</div>`;
 }

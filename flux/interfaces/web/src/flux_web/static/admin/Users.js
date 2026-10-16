@@ -14,6 +14,7 @@ import { SortableTable } from "../components/SortableTable.js";
 import { Select } from "../components/Select.js";
 import { Pill, Tag } from "../components/Tone.js";
 import { Table } from "../components/Table.js";
+import { Check } from "../components/Check.js";
 
 /** D818: a one-time link to choose a password -- an invitation, or a reset; copied, or selected to copy. */
 function LinkBox({ name, url, kind }) {
@@ -36,8 +37,8 @@ const GroupSelect = ({ groups, value, label, onChange = null }) => html`<${Selec
 function Permissions({ u, catalog, v, set }) {
   return html`<div class="stack"><p>${u.role === "admin" ? `Members of ${u.group} have full admin permissions.`
       : "Access to others' loops applies within the group; sharing grants it across groups."}</p>
-    ${Object.entries(catalog.permissions).map(([key, label]) => html`<label class="check"><input type="checkbox" data-permission=${key} checked=${!!v[key]} disabled=${u.role === "admin"}
-      onChange=${e => set({ [key]: e.currentTarget.checked })} />${label}</label>`)}
+    ${Object.entries(catalog.permissions).map(([key, label]) => html`<${Check} data-permission=${key} checked=${!!v[key]} disabled=${u.role === "admin"}
+      onChange=${on => set({ [key]: on })}>${label}<//>`)}
     <p class="muted small">Editing others' loops does not let one run, share, delete or transfer them. Runs use the owner's credentials and limits.</p></div>`;
 }
 const editPermissions = async (u, catalog) => {
@@ -150,7 +151,7 @@ export function Groups({ catalog }) {
     <p class="muted">Applies to members from their next run. Personal settings and permissions stay.</p>
     ${catalog.groups.some(g => g.server_access == null) ? html`<p class="muted small">Keep existing access: members keep their settings until a policy is chosen.</p>` : ""}
     <${Table} cls="list groups" heads=${["Group", { label: "Members", num: true },
-      { label: "Server access", title: "The server's model, agent and environment settings, or members' own only" }, "Actions"]}>
+      { label: "Server access", title: "Server settings, or members' own" }, "Actions"]}>
       ${catalog.groups.map(g => html`<tr key=${g.id} data-group=${g.id}><td><div class="group-label"><span class="strong">${g.name}</span>
           ${g.admin ? html`<${Tag} title="Full admin powers, kept on rename">Server admin<//>` : ""}</div></td>
         <td class="num mono">${String(g.members)}</td><td><${GroupAccess} g=${g} /></td>

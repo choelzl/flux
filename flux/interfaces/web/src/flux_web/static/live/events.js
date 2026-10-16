@@ -2,12 +2,23 @@
 // with recorded journals (flux/tests/unit/test_live_events.py). `apply(model, event)` one journal line; `applyLive`
 // the live state; `settle` a run that ended with tasks still open. Nothing here touches the page.
 
-export const LOOP_MARKS = new Set(["pass", "ended", "waiting", "outputs"]);
+const LOOP_MARKS = new Set(["pass", "ended", "waiting", "outputs"]);
 
 export const model = () => ({ nodes: new Map(), roots: [], marks: [], standings: new Map() });
 
 const isAgent = n => /^\s*agent\s*:/i.test(String(n.name));
 const noteOn = (m, parent, note) => { if (parent) (parent.notes || (parent.notes = [])).push(note); else (m.notes || (m.notes = [])).push(note); };
+
+// D1148: the quiet setup steps (D1047) -- one written at its end, its start dated back, in a journal before D1143
+const QUIET_SETUP = /^\s*(knowledge\s*:|propose\s*:\s*decompose|gate\s*:\s*(tools|the problem))/i;
+/** D1148: a quiet step written after the tasks it ran (a journal before D1143: the workbench's agent turn a top
+    task, the step after it) takes them in, as the engine now writes them -- each sibling that began in the step's
+    time and already ended, no pass mark since (the same pass). Setup then lists the step once, its agent its pill. */
+function takeIn(m, step, sibs) {
+  const lastMark = m.marks.reduce((s, k) => k.name === "pass" ? Math.max(s, k.seq || 0) : s, 0);
+  const inside = sibs.filter(k => k.t1 != null && k.t0 >= step.t0 - .002 && k.seq > lastMark);
+  for (const k of inside) { sibs.splice(sibs.indexOf(k), 1); k.parent = step; step.kids.push(k); }
+}
 
 /** One event of the journal into the model; "hello" (a new start) begins it afresh. Returns what the page may
     want to know besides: {reset} or {question}. */
@@ -18,6 +29,7 @@ export function apply(m, e) {
     const n = { id: e.id, name: e.name, why: e.why, params: e.params, t0: e.t, seq: m.seq = (m.seq || 0) + 1, fields: {}, kids: [], parent: null };
     m.nodes.set(e.id, n);
     const p = e.parent != null && m.nodes.get(e.parent);
+    if (QUIET_SETUP.test(String(e.name))) takeIn(m, n, p ? p.kids : m.roots);
     if (p) { n.parent = p; p.kids.push(n); } else m.roots.push(n);
   } else if (e.ev === "update") {
     const u = m.nodes.get(e.id);

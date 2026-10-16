@@ -146,7 +146,7 @@ Say only what is yours; the rest is inferred.
   `subtasks` (child problems, each its own loop: folders beside the document, `[ops/recip, ops/exp]`,
   each folder's `problem.yaml` saying only what differs -- its `flow`, `budget` and `params` merge key
   by key over the parent's, so a child that says `test:` keeps the parent's stages; the parent's
-  `generate: {command: "... {parts} {artifact}"}` composes their answers into the whole, D801), `params` (the document's settings, any command reads them as `{params}`), `ladder`, `skills`, `baseline`.
+  `generate: {command: "... {parts} {artifact}"}` composes their answers into the whole, D801), `params` (the document's settings, any command reads them as `{params}`), `ladder`, `skills` (the loop's `skills/` is read unsaid, with the built-in `flux-loop-commands` for every agent; `skills: off`, or `{off: [names]}` turns some off), `baseline`.
 
 Placeholders in any command: `{artifact}` (the candidate's file), `{home}` (the document's
 directory), `{workdir}`, `{name}`, `{python}`, and `{knob}` for each knob of `flow.orchestrate.space`. A command

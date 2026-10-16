@@ -14,6 +14,7 @@ import { SettingsForm } from "../settings/SettingsForm.js";
 import { Select } from "../components/Select.js";
 import { remember } from "../stored.js";
 import { Pill, Said, Tag } from "../components/Tone.js";
+import { Check } from "../components/Check.js";
 
 /** D924: how an agent connects, and whether that was verified -- the words the Account and the authoring picker say. */
 export const MECHANISM = { key: "API key", provider: "provider config", login: "interactive login", endpoint: "endpoint, no key", none: "not detected" };
@@ -24,12 +25,11 @@ const list = text => text.split(/[\n,]/).map(x => x.trim()).filter(Boolean);
 
 /** D1025: whether Ask may use it -- saved at once. */
 function AskBox({ who, name, off }) {
-  const change = async e => {
-    const on = e.currentTarget.checked;
+  const change = async on => {
     await api(`/admin/ask/${encodeURIComponent(who)}`, { method: "PUT", body: { on } });
     toast(on ? `${name} answers Ask` : `${name} is no longer offered for Ask`, "ok");
   };
-  return html`<label class="check ask-on" title="Offered in a loop's Ask"><input type="checkbox" checked=${!off.includes(who)} id=${`ask-on-${who}`} onChange=${change} />Offered for Ask</label>`;
+  return html`<${Check} cls="ask-on" title="Offered in a loop's Ask" checked=${!off.includes(who)} id=${`ask-on-${who}`} onChange=${change}>Offered for Ask<//>`;
 }
 
 /** D945: an added agent's name may change -- the loops that name it said first, as they break: looked up a moment
@@ -105,7 +105,7 @@ function AgentPanel({ a, version, askOff }) {
     <details class="set-fold"><summary>Login and files<span class="muted small">${nMore ? ` · ${nMore} set` : " · none"}</span></summary>
       <div class="grid-2 set-fields" ...${rest.box}><label class="stack">Login command${field("login", a.login_default)}</label>
         <label class="stack">Extra arguments${field("args", "none")}</label>
-        <label class="stack" title="The file in a user's home that says they are logged in">Login files (if not usual)${area("login_files", 1, "its usual; e.g. .local/share/nga/auth.json")}</label>
+        <label class="stack" title="Marks a user logged in">Login files (if not usual)${area("login_files", 1, "its usual; e.g. .local/share/nga/auth.json")}</label>
         <label class="stack">Home starts with (paths in the server account's home)${area("home", 2, HOME_PH[a.kind] || "")}</label>
         <label class="stack">Hosts needed under an allowlist${area("hosts", 2, "auth.example.com")}</label></div></details>
     ${a.builtin ? "" : html`<div class="form-actions"><${Act} cls="danger small" onClick=${() => remove(a)}>Remove<//></div>`}</div>`;
@@ -141,7 +141,7 @@ export function Agents({ r, st, genv, askOff }) {
     else extraTabs.push({ tab: a.label, el: html`<fieldset class="set-group with-panel"><legend>${a.label}</legend>${panel}<p class="muted small">Program not found.</p></fieldset>` });
   }
   extraTabs.push({ tab: "All agents", el: html`<fieldset class="set-group"><legend>Variables for all runs and agents</legend>
-    <p class="muted small">A user's and a loop's own win.</p>
+    <p class="muted small">User and loop variables override.</p>
     <${EnvEditor} rows=${genv} save=${async x => { await api("/admin/env", { method: "PUT", body: x }); route(); }} scope="server" /></fieldset>` });
   extraTabs.push({ tab: "+ Add agent", el: html`<${AddAgent} kinds=${r.kinds} />` });
   const save = async values => { if (Object.keys(values).length) await api("/admin/settings", { method: "PUT", body: { values } }); };   // D833: quiet, field by field

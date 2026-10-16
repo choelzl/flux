@@ -21,6 +21,6 @@ export function Applications({ r }) {
       ${r.applications.map(a => html`<tr key=${a.name}><td><strong>${a.name}</strong><div class="mono muted small">${a.document}</div></td>
         <td class="muted small app-what">${a.statement}</td><td class="num mono">${bytes(a.size)}</td>
         <td class="right"><div class="actions end">${a.loop ? html`<a class="btn small primary" href=${`#/app/${enc(a.name)}`}>Open</a>
-          ${a.linked ? html`<${Act} cls="small" onClick=${() => use(a, true)}>Refresh<//>` : html`<span class="muted small" title="A loop of this name exists, not made from this folder">name taken</span>`}`
+          ${a.linked ? html`<${Act} cls="small" onClick=${() => use(a, true)}>Refresh<//>` : html`<span class="muted small" title="Another loop has it">name taken</span>`}`
           : html`<${Act} cls="small primary" onClick=${() => use(a, false)}>Use<//>`}</div></td></tr>`)}<//><//>`;
 }

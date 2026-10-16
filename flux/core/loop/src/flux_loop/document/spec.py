@@ -86,6 +86,14 @@ class TaskSpec:
     when: dict[str, dict[str, list]] = field(default_factory=dict)   # knob -> {knob: choices} it moves under
     seeds: tuple[dict[str, Any], ...] = ()     # points measured before the walk; the rest from the first choices
     skills: tuple[str, ...] = ()                  # D588: skill folders (absolute), for the model and the agents
+    #: D1152: `skills:` as said -- None unsaid (`skills/` beside the document), "off", the folders, or
+    #: {from, off}; the skill names turned off (a built-in one too); whether any skill is on at all
+    skills_said: Any = None
+    skills_off: tuple[str, ...] = ()
+    skills_on: bool = True
+    #: D1152: `flow.knowledge.workbench` -- who sums up the workbench in the Setup: None the papers' digester
+    #: (D1114), "off", "model", or {"agent": spec}
+    bench_by: Any = None
     #: The flow (D542): one key per box of the drawing naming its half, normalised; what it
     #: implies is folded into `roles`, `generator`, `critique`, `budget.calibrate`.
     flow: dict[str, Any] = field(default_factory=dict)
@@ -364,17 +372,8 @@ class TaskSpec:
         language = str(said_language or inferred or "text")
         ext = EXTENSIONS.get(language.lower(), "." + language.lower().replace(" ", ""))
         _check_placeholders(gate, stages, generator, space, baseline)
-        skills_raw = doc.get("skills") or []
-        if isinstance(skills_raw, str):
-            skills_raw = [skills_raw]
-        if not isinstance(skills_raw, list) or not all(isinstance(x, str) for x in skills_raw):
-            raise TaskError("`skills` is a list of folders (a skill, or a folder of skills), beside the document")
-        from ..skills import SkillError, load_skills
-
-        try:
-            skills = tuple(str(sk.path) for sk in load_skills(skills_raw, base=Path(base) if base is not None else None))
-        except SkillError as exc:
-            raise TaskError(f"skills: {exc}") from exc
+        skills, skills_said, skills_off = _skills(doc.get("skills"), base)
+        bench_by = _bench_by(doc.get("bench_digest"))
         workbench = str((Path(base) / "workbench").resolve()) if base is not None else ""
         if "agent" in generator:                          # D1137: a design agent's probe names checks the gate has
             from ..agent import agent_spec
@@ -397,7 +396,8 @@ class TaskSpec:
             home=str(Path(base).resolve()) if base is not None else "",
             record=record, ladder=ladder if ladder else None,
             knowledge_sheet=sheet, digest_by=digest_by,
-            skills=skills, workbench=workbench, language_inferred=bool(inferred),
+            skills=skills, skills_said=skills_said, skills_off=skills_off, skills_on=skills_said != "off",
+            bench_by=bench_by, workbench=workbench, language_inferred=bool(inferred),
         )
 
     def _to_dict(self) -> dict[str, Any]:
@@ -428,7 +428,8 @@ class TaskSpec:
             **({"seeds": [dict(p) for p in self.seeds]} if self.seeds else {}),
             **({"_record": self.record} if self.record not in ("", self.id) else {}),
             **({"ladder": self.ladder} if self.ladder else {}),
-            **({"skills": list(self.skills)} if self.skills else {}),
+            **({"skills": self.skills_said} if self.skills_said is not None else {}),
+            **({"bench_digest": self.bench_by} if self.bench_by is not None else {}),
             **({"critics": {b: dict(c) for b, c in self.critics.items()}} if self.critics else {}),
             **({"scope": {**{k: _as_said(v) for k, v in self.scope.items() if k != "timeout_s"},
                           **({"timeout_s": self.scope["timeout_s"]} if self.scope.get("timeout_s") != 120 else {})}}
@@ -599,11 +600,90 @@ def _paths_beside(parent: dict[str, Any], base: Path) -> dict[str, Any]:
         out["knowledge"] = {k: ([_abs(x) for x in v] if k == "files" and isinstance(v, list) else _abs(v) if k == "sheet" else v)
                             for k, v in know.items()}
     skills = out.get("skills")
-    if skills:
+    from ..skills import SKILLS_FOLDER, found_skills
+
+    own = str((base / SKILLS_FOLDER).resolve()) if found_skills(base / SKILLS_FOLDER) else None
+    if skills is None and own:                             # D1152: the parent's skills/, unsaid, its sub-loops' too
+        out["skills"] = [own]
+    elif isinstance(skills, dict):
+        said = skills.get("from")
+        out["skills"] = {**skills, "from": ([_abs(x) for x in ([said] if isinstance(said, str) else said)]
+                                            if isinstance(said, (str, list)) else said) if said is not None else ([own] if own else [])}
+    elif skills and skills != "off":
         out["skills"] = [_abs(x) for x in ([skills] if isinstance(skills, str) else skills)] if isinstance(skills, (str, list)) else skills
     if isinstance(out.get("space"), dict):
         out["space"] = _space(out["space"])
     return out
+
+
+def _skills(raw: Any, base: Any) -> tuple[tuple[str, ...], Any, tuple[str, ...]]:
+    """`skills:` (D588, D1152): (the skill folders read, what is said, the names turned off). Unsaid: the loop's
+    `skills/` when it holds one; `off` (YAML's false too): none, not the built-in ones either; a folder or a list of
+    them; or `{from: <them>, off: [name, ...]}` -- `from` unsaid is `skills/`, `off` names single skills (a built-in
+    one too: flux_loop.skills.LOOP_SKILLS)."""
+    from ..skills import SKILLS_FOLDER, SkillError, found_skills, load_skills
+
+    if raw is False or raw == "off":
+        return (), "off", ()
+    said, off = raw, []
+    if isinstance(raw, dict):
+        bad = sorted(set(raw) - {"from", "off"})
+        if bad:
+            raise TaskError(f"skills: {', '.join(map(str, bad))} is not a setting; they are from (folders) and off (skill names)")
+        said, off = raw.get("from"), raw.get("off") or []
+        if isinstance(off, str):
+            off = [off]
+        if not isinstance(off, list) or not all(isinstance(x, str) and x.strip() for x in off):
+            raise TaskError("skills.off is a list of skill names to turn off")
+    if said is None:
+        here = Path(base) / SKILLS_FOLDER if base is not None else None
+        folders = [str(here)] if here is not None and found_skills(here) else []
+    else:
+        folders = [said] if isinstance(said, str) else said
+        if not isinstance(folders, list) or not all(isinstance(x, str) for x in folders):
+            raise TaskError("`skills` is off, a list of folders (a skill, or a folder of skills) beside the document, "
+                            "or {from: [folders], off: [skill names]}")
+    try:
+        found = load_skills(folders, base=Path(base) if base is not None else None) if folders else []
+    except SkillError as exc:
+        raise TaskError(f"skills: {exc}") from exc
+    return tuple(str(sk.path) for sk in found if sk.name not in off), raw, tuple(dict.fromkeys(off))
+
+
+def _bench_by(raw: Any) -> Any:
+    """`flow.knowledge.workbench` (D1152): `off`, `model`, or an agent (`claude`, `{by: claude, timeout_s: ..}`)
+    -- who sums up the agents' workbench in the Setup; unsaid (None), whoever digests the papers (D1114)."""
+    if raw is None:
+        return None
+    if raw is False or raw == "off":
+        return "off"
+    if raw == "model" or (isinstance(raw, dict) and raw.get("by") == "model" and len(raw) == 1):
+        return "model"
+    from .surface import _AGENT_OPTS, _who
+
+    if isinstance(raw, dict) and set(raw) == {"by"} and not isinstance(raw["by"], dict):
+        raw = raw["by"]
+    if isinstance(raw, dict) and "by" in raw:
+        opts = {k: v for k, v in raw.items() if k != "by"}
+        bad = sorted(set(opts) - set(_AGENT_OPTS))
+        if bad:
+            raise TaskError(f"flow.knowledge.workbench: {', '.join(bad)} is not an agent's setting")
+        spec = _who("knowledge", raw["by"], opts)
+    elif isinstance(raw, dict) and "agent" in raw:            # already read (an inherited parent's)
+        spec = raw["agent"]
+    else:
+        from .surface import _agents
+
+        if not (isinstance(raw, str) and raw in _agents()):
+            raise TaskError(f"flow.knowledge.workbench is off, model or an agent ({', '.join(_agents())}), not {raw!r}")
+        spec = raw
+    from ..agent import agent_spec
+
+    try:
+        agent_spec(spec)
+    except (ValueError, TypeError) as exc:
+        raise TaskError(f"flow.knowledge.workbench: {exc}") from exc
+    return {"agent": spec}
 
 
 def _subtask_at(parent: dict[str, Any], rel: str, base: Any) -> "TaskSpec":

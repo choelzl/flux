@@ -13,7 +13,7 @@ import { ChecksStep } from "./ChecksStep.js";
 import { ObjectiveStep } from "./ObjectiveStep.js";
 import { GraphStep } from "./GraphStep.js";
 import { ExtraStep } from "./ExtraStep.js";
-import { SaveStep, readiness } from "./SaveStep.js";
+import { SaveStep } from "./SaveStep.js";
 import { agentOf } from "./who.js";
 
 const NO_STORE = { subscribe: () => () => {} };
@@ -43,7 +43,7 @@ export function Configurator({ M, state, step, onStep, touched = false, isNew = 
   const yaml = M.buildYaml(state), msgs = M.check(state), file = `${String(state.id || "").trim() || "my_problem"}/problem.yaml`;
   const quiet = calm && !dirty.current, errors = msgs.filter(m => m.level === "error");
   const named = M.namedFiles(state), files = store ? store.missing(named) : null;
-  const ready = readiness(msgs, { named, files, checked: checked?.(), calm: quiet });
+  const ready = M.readiness(msgs, { named, files, checked: checked?.(), calm: quiet });
   const marks = Object.fromEntries(STEPS.map((s, i) => {
     const bad = errors.some(m => m.step === i), visited = seen.current.has(s.id) && s.id !== at && s.id !== "save";
     return [s.id, visited ? (bad ? (quiet ? "" : "bad") : "done") : ""];
@@ -52,21 +52,21 @@ export function Configurator({ M, state, step, onStep, touched = false, isNew = 
 
   const doSave = async () => {
     if (status.kind === "pending") return;
-    setStatus({ kind: "pending", text: "Saving…" });
-    try { setStatus({ kind: "ok", text: (await save(M.buildYaml(state), state)) || "Saved." }); }
+    setStatus({ kind: "pending", text: M.WORDS.save.saving });
+    try { setStatus({ kind: "ok", text: (await save(M.buildYaml(state), state)) || M.WORDS.save.saved }); }
     catch (e) {
       setStatus({ kind: "err", text: e?.message || String(e) });
       if (e?.field) go(e.field === "id" || e.field === "statement" ? "prompt" : at, e.field);
     }
   };
   const doDraft = () => {
-    try { setStatus({ kind: "ok", text: saveDraft(state, at) || "Draft saved." }); }
+    try { setStatus({ kind: "ok", text: saveDraft(state, at) || M.WORDS.save.draftSaved }); }
     catch (e) { setStatus({ kind: "err", text: e?.message || String(e) }); }
   };
   const i = STEPS.findIndex(s => s.id === at), prev = STEPS[i - 1], next = STEPS[i + 1], last = !next;
   const nav = html`<div class="cfg-nav">${prev ? html`<button type="button" onClick=${() => go(prev.id)}>Back</button>` : ""}<span class="grow" />
     <span class=${cx("cfg-status", status.kind && `t-${status.kind === "err" ? "bad" : status.kind === "ok" ? "ok" : "run"}`)} role="status" aria-live="polite">${status.text}</span>
-    ${saveDraft ? html`<button type="button" class="cfg-draft" onClick=${doDraft}>Save draft</button>` : ""}
+    ${saveDraft ? html`<button type="button" class="cfg-draft" onClick=${doDraft}>${M.WORDS.save.draft}</button>` : ""}
     ${save ? html`<button type="button" class=${cx("cfg-save", last && "primary", status.kind === "pending" && "busy")} disabled=${status.kind === "pending"} onClick=${doSave}>${saveLabel}</button>` : ""}
     ${next ? html`<button type="button" class="primary cfg-next" onClick=${() => go(next.id)}><span class="cfg-next-what">${`Next: ${next.title}`}</span><span class="cfg-next-short">Next</span></button>` : ""}</div>`;
 
@@ -77,7 +77,7 @@ export function Configurator({ M, state, step, onStep, touched = false, isNew = 
     objective: () => html`<${ObjectiveStep} ...${p} />`,
     graph: () => html`<${GraphStep} ...${p} setAgent=${setAgent} go=${go} store=${store} />`,
     extra: () => html`<${ExtraStep} ...${p} extra=${extra} />`,
-    save: () => html`<${SaveStep} msgs=${msgs} ready=${ready} calm=${quiet} go=${go} nav=${nav} changes=${changes} notes=${notes} yaml=${yaml} file=${file} />`,
+    save: () => html`<${SaveStep} M=${M} msgs=${msgs} ready=${ready} calm=${quiet} go=${go} nav=${nav} changes=${changes} notes=${notes} yaml=${yaml} file=${file} />`,
   }[at];
   const wide = at === "graph" || at === "save";
   return html`<div class=${cx("cfg", wide && "wide")} ref=${top} data-step=${at}>

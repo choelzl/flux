@@ -499,9 +499,10 @@ def test_the_drawing_writes_no_removed_box_and_fixes_single_choice_boxes(tmp_pat
     assert "the model picks the next part, rules pick the kind of work" in BUILT["defaults"]["orchestrate"]
     assert "library" in BUILT["defaults"]["knowledge"] and BUILT["defaults"]["lessons"] == "off"
     y = BUILT["agents_everywhere"]["yaml"]
-    assert "knowledge: {\"off\": true, lessons: claude}" in y and "critic: model" in y and "critique" not in y and "test: {agent" not in y
+    assert "knowledge: {\"off\": true, lessons: claude, workbench: claude}" in y and "critic: model" in y and "critique" not in y and "test: {agent" not in y
     t = _load(tmp_path, BUILT["agents_everywhere"])
     assert t.flow["knowledge"] == ["none"] and t.flow["select"] == {"agent": "claude"}
+    assert t.bench_by == {"agent": "claude"}, "D1152: the workbench's digest beside a library turned off"
     p = BUILT["papers_by_agent"]
     assert "knowledge: {digest: opencode}" in p["yaml"] and not _errors(p), p["yaml"]
     assert _load(tmp_path, p).digest_by == "opencode", "D773: the configurator's Background reading by an agent loads as one"
@@ -577,3 +578,59 @@ def test_the_guides_document_the_crafters_flow_and_search_settings():
     for value in BUILT["boxes"]["dse"]["values"]:
         if value != "none" and not value.startswith("agent:"):
             assert value in choices, value
+
+
+WORDS_JS = r"""
+const c = require(process.argv[1]);
+process.stdout.write(JSON.stringify({words: c.WORDS, steps: c.STEP_TITLES}));
+"""
+CONFIGURE = REPO / "flux/interfaces/web/src/flux_web/static/configure"
+_QUOTED = re.compile(r'"((?:[^"\\\n]|\\.)*)"|\'((?:[^\'\\\n]|\\.)*)\'')
+_BETWEEN_TAGS = re.compile(r">([^<>`\n]+)<")
+
+
+def _said(words) -> set[str]:
+    """Every label, hint and placeholder of the model's WORDS: an option list's labels (not its values)."""
+    out: set[str] = set()
+    if isinstance(words, dict):
+        for v in words.values():
+            out |= _said(v)
+    elif isinstance(words, list):
+        for x in words:
+            out |= _said(x[1]) if isinstance(x, list) and len(x) == 2 and isinstance(x[0], str) else _said(x)
+    elif isinstance(words, str):
+        out.add(words)
+    return out
+
+
+def _literals(text: str) -> set[str]:
+    """A JS file's string literals, its templates' fixed parts and an html`` template's text between tags."""
+    out = {re.sub(r"\\(.)", r"\1", m.group(1) if m.group(1) is not None else m.group(2)) for m in _QUOTED.finditer(text)}
+    for chunk in re.findall(r"`([^`]*)`", text):
+        out |= {p.strip(" :") for p in re.split(r"\$\{[^}]*\}", chunk)}
+    out |= {m.group(1).strip() for m in _BETWEEN_TAGS.finditer(text)}
+    return out
+
+
+def test_the_docs_crafter_and_the_web_configurator_say_the_models_words():
+    """D1146: a label, hint, placeholder or option both views show is the model's (WORDS, STEP_TITLES), so the
+    docs' crafter.js and the web's configure/ cannot drift apart: neither spells one out itself. Single words
+    ("Name", "Kind") are left to each view; a phrase is guarded. The web's step list (model.js STEPS, there before
+    the model loads) keeps the model's titles, in order."""
+    r = subprocess.run(["node", "-e", WORDS_JS, str(ASSETS / "crafter-model.js")], capture_output=True, text=True, timeout=60)
+    assert r.returncode == 0, r.stderr
+    got = json.loads(r.stdout)
+    guarded = {s for s in _said(got["words"]) | set(got["steps"]) if re.search(r"[A-Za-z]", s) and re.search(r"[^A-Za-z]", s)}
+    assert {"Time limit, s", "Clock (MHz)", "higher is better", "Estimate first", "decoder, datapath", "Check & Measure",
+            "Save draft"} <= guarded
+    views = [ASSETS / "crafter.js", *sorted(CONFIGURE.glob("*.js"))]
+    for path in views:
+        text = path.read_text()
+        own = guarded - set(got["steps"]) if path.name == "model.js" else guarded
+        spelt = sorted(_literals(text) & own)
+        assert not spelt, f"{path.name} spells out the model's words {spelt}: use WORDS / STEP_TITLES (crafter-model.js)"
+    steps = re.findall(r'\{ id: "(\w+)", title: "([^"]+)" \}', (CONFIGURE / "model.js").read_text())
+    assert [t for _, t in steps] == got["steps"]
+    # who works a box: the model's whoOptions, the web's who.js only hands it on
+    assert "switch (box)" not in (CONFIGURE / "who.js").read_text()
+    assert "whoWorks(" in (ASSETS / "crafter.js").read_text() and "M.whoWorks(" in (CONFIGURE / "Cycle.js").read_text()

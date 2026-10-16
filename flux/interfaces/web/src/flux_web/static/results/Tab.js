@@ -55,15 +55,15 @@ function DecisionLine({ r, names, comparison, onPick }) {
   const ctx = useLoop();
   const dec = r.designs.find(d => d.decision), near = r.designs.find(d => d.closest);
   const nameBtn = d => html`<button class="link mono strong" type="button" title=${d.name} aria-label=${`Open ${d.name}`} onClick=${() => onPick(d)}>${names.get(d)}</button>`;
+  if (!dec && !r.closest) return html`<${Empty} text="No decision yet." />`;
   return html`<div class="decision-line">${dec ? html`<${Pill} tone="ok">decision<//>${nameBtn(dec)}${dec.part ? html`<span class="muted">${`part ${dec.part}`}</span>` : ""}
       <span class="muted">${`measured at ${dec.shown}`}</span>
       ${mainMeasurements(ctx, r.metrics, defaultMainMeasurements(r)).map(m => {
         const display = measurementText(dec, m, r.decision_measurements?.[m] ? () => r.decision_measurements[m] : comparison, num, relativeMeasurement(ctx, m));
         const ag = r.metric_info?.[m]?.aggregate || r.metric_groups?.[m]?.aggregate;     // D1094: "sim_us (sum) 26"
         return html`<span class="mono small" data-summary-metric=${m} title=${display.title}>${`${m}${ag && ag !== "none" ? ` (${ag})` : ""} ${display.text || "—"}`}</span>`; })}`
-    : r.closest ? html`<strong>No feasible design yet</strong><span class="muted">· closest</span>${near ? html`${nameBtn(near)}` : html`<span class="mono">${r.closest.name}</span>`}
-      ${(r.closest.reasons || []).length ? html`<span class="muted small">${`not met: ${r.closest.reasons.join("; ")}`}</span>` : ""}`
-    : html`<span class="muted">No decision yet.</span>`}</div>`;
+    : html`<strong>No feasible design yet</strong><span class="muted">· closest</span>${near ? html`${nameBtn(near)}` : html`<span class="mono">${r.closest.name}</span>`}
+      ${(r.closest.reasons || []).length ? html`<span class="muted small">${`not met: ${r.closest.reasons.join("; ")}`}</span>` : ""}`}</div>`;
 }
 
 export function ResultsTab({ r, view }) {

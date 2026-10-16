@@ -6,6 +6,7 @@ import { html, Notice, useEffect, useState } from "../view.js";
 import { dialog, enc, loopApi, toast, when, withOwner } from "../ui.js";
 import { pageOwner } from "../state.js";
 import { Select } from "../components/Select.js";
+import { Check } from "../components/Check.js";
 
 /** The form: `v` {document, passes, forever, screen, checking, failing} (the dialog's), `set` changing it. */
 function StartForm({ name, pre, v, set }) {
@@ -32,8 +33,8 @@ function StartForm({ name, pre, v, set }) {
     <div class="preflight">${said ? html`<${Notice} tone=${said.ok === true ? "ok" : said.ok === false ? "bad" : "run"} what=${said.text}>
       ${said.output ? html`<details><summary>Check output</summary><pre class="log small">${said.output}</pre></details>` : ""}<//>` : ""}</div>
     <div class="row"><label class="stack">Passes<input type="number" class="start-passes w-90" min="1" value=${v.passes} disabled=${v.forever} onInput=${e => set({ passes: e.currentTarget.value })} /></label>
-      <label class="check"><input type="checkbox" class="start-forever" checked=${v.forever} onChange=${e => set({ forever: e.currentTarget.checked })} />until I stop it</label></div>
-    <label class="check"><input type="checkbox" class="start-screen" checked=${v.screen} onChange=${e => set({ screen: e.currentTarget.checked })} />screen only (skip costly stages)</label>`;
+      <${Check} class="start-forever" checked=${v.forever} onChange=${forever => set({ forever })}>until I stop it<//></div>
+    <${Check} class="start-screen" checked=${v.screen} onChange=${screen => set({ screen })}>screen only (skip costly stages)<//>`;
 }
 
 /** The dialog for a start's options, then the start; true when it started. */

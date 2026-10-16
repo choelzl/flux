@@ -10,7 +10,7 @@ import { Table } from "../components/Table.js";
 export { Stat } from "../components/Stat.js";
 
 /** D1094: a dictionary metric's one number says how it was made -- "sim_us (sum)". */
-export const aggName = (r, m) => { const a = r.metric_info?.[m]?.aggregate || r.metric_groups?.[m]?.aggregate; return a && a !== "none" ? `${m} (${a})` : m; };
+const aggName = (r, m) => { const a = r.metric_info?.[m]?.aggregate || r.metric_groups?.[m]?.aggregate; return a && a !== "none" ? `${m} (${a})` : m; };
 
 /** The main measurements of a design, a cell each: its number (or its change, as the loop shows them), its
     limit under it, green or red by it. `reference(m)`: what it is compared with (the decision's own, D1001). */

@@ -362,15 +362,17 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
     @app.get("/api/new-by-agent/uses")
     def author_uses(user: User = Depends(user_of)) -> dict[str, Any]:
         """What an author can use besides the files given (D1122): the shared library's papers, its skills, the
-        bundled loops it reads."""
+        bundled loops it reads; and (D1152) the built-in skills every loop's agents get, for the Knowledge box."""
         from flux_knowledge.convert import PAPER_SUFFIXES
         from flux_knowledge.retrieval import shared_library
         from flux_loop.author import BUNDLED, DOCUMENT, author_skills
+        from flux_loop.skills import builtin_skills
 
         lib = shared_library()
         papers = sum(1 for p in lib.rglob("*") if p.is_file() and p.suffix.lower() in PAPER_SUFFIXES and not p.name.startswith(".")) if lib.is_dir() else 0
         loops = sorted(p.name for p in BUNDLED.iterdir() if (p / DOCUMENT).is_file()) if BUNDLED.is_dir() else []
-        return {"papers": papers, "skills": [s.name for s in author_skills()], "bundled": loops}
+        return {"papers": papers, "skills": [s.name for s in author_skills()], "bundled": loops,
+                "loop_skills": [{"name": s.name, "description": s.description} for s in builtin_skills()]}
 
     @app.post("/api/apps/new-by-agent")
     async def new_by_agent(name: str = Form(...), prompt: str = Form(...), author: str = Form("opencode"), ask_me: bool = Form(False),

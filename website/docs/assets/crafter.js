@@ -19,6 +19,8 @@
       stagePresets = api.stagePresets, stageTools = api.stageTools, stepIndex = api.stepIndex, toolOf = api.toolOf, toolsFor = api.toolsFor, uniqueName = api.uniqueName,
       unitFor = api.unitFor;
   var hasParts = api.hasParts;
+  // D1146: the words the web app's configurator says too, who works a box, where a draft stands -- the model's
+  var WORDS = api.WORDS, STEP_TITLES = api.STEP_TITLES, whoWorks = api.whoWorks, agentOf = api.agentOf, readinessOf = api.readiness;
 
   // ================================================================== the page
   function h(tag, attrs, kids) {
@@ -132,12 +134,12 @@
       var p = t.params[k];
       if (k === "clock_ps") {
         var auto = autoClock(state), dflt = auto || num(p.default) || 1000;
-        return field("Clock (MHz)", function () {
+        return field(WORDS.checks.clock, function () {
           var v = String(row.params.clock_ps || ""), ps = num(v);
           return ps ? String(Math.round(1e6 / ps)) : v;
         }, function (v) { var ps = clockPs(v); row.params.clock_ps = ps ? String(ps) : v; },
         { compact: true, narrow: true, placeholder: String(Math.round(1e6 / dflt)),
-          hint: "The clock the tools aim for" + (auto ? " (empty: from the objective)" : "") + "; tighter = faster and bigger" });
+          hint: auto ? WORDS.checks.clockAuto + "; " + WORDS.checks.clockHint : WORDS.checks.clockHint });
       }
       return field(p.label + (p.unit ? " (" + p.unit + ")" : ""), function () { return row.params[k]; }, function (v) { row.params[k] = v; },
                    { compact: true, placeholder: shown(p.default), grow: typeof p.default !== "number" });
@@ -158,7 +160,7 @@
             setCheckTool(state, c, v);
           }, { compact: true, structural: true, options: CHECK_TYPES.map(function (x) { return [x.key, x.title]; }) }),
           field("Name", function () { return c.name; }, function (v) { c.name = v; }, { compact: true, narrow: true })];
-        if (!t) line.push(h("span", { class: "fc-warn fc-grow", text: "No " + (ty.preset ? "Flux preset" : ty.title.toLowerCase() + " tool") + " for " + (lang || "this language") + "; choose Custom." }));
+        if (!t) line.push(h("span", { class: "fc-warn fc-grow", text: "No " + (ty.preset ? WORDS.checks.noPreset : ty.title.toLowerCase() + " tool") + " for " + (lang || WORDS.checks.thisLanguage) + ": " + WORDS.checks.chooseCustom }));
         else {
           if (ids.length > 1 || ty.preset) {
             line.push(field(ty.preset ? "Preset" : "Tool", function () { return c.tool; }, function (v) { setCheckTool(state, c, c.type, v); },
@@ -172,16 +174,16 @@
           var more = [h("small", { class: "fc-wide", text: t.what + " Passes " + String(t.pass || "").replace(/^passes /, "") })];
           keys.slice(1).forEach(function (k) { more.push(paramField(t, c, k)); });
           if (isCustom(c.tool)) {
-            more.push(field("Count pattern (optional)", function () { return c.count_re; }, function (v) { c.count_re = v; },
-                            { compact: true, placeholder: "(\\d+) failing", hint: "When it prints failures another way" }));
+            more.push(field(WORDS.checks.countRe, function () { return c.count_re; }, function (v) { c.count_re = v; },
+                            { compact: true, placeholder: WORDS.checks.countRePlaceholder, hint: WORDS.checks.countReHint }));
           }
-          more.push(field("Time limit, s", function () { return c.timeout; }, function (v) { c.timeout = v; }, { compact: true, narrow: true, placeholder: "120" }));
+          more.push(field(WORDS.checks.timeLimit, function () { return c.timeout; }, function (v) { c.timeout = v; }, { compact: true, narrow: true, placeholder: "120" }));
           kids.push(h("div", { class: "fc-line fc-more" }, more));
         }
         return h("div", { class: "fc-row" }, kids);
       });
-      return titled("Checks", [h("span", { class: "fc-hint fc-inline", text: " each must pass, in order" })], [h("div", { class: "fc-rows" }, rows),
-        button("+ Add a check", function () {
+      return titled("Checks", [h("span", { class: "fc-hint fc-inline", text: " " + WORDS.checks.say })], [h("div", { class: "fc-rows" }, rows),
+        button(WORDS.checks.add, function () {
           // a preset made for this language not used yet, else a test script, else any command
           var usedTools = state.checks.map(function (c) { return c.tool; }), usedTypes = state.checks.map(function (c) { return c.type; });
           var preset = toolsFor("preset", lang).filter(function (id) { return usedTools.indexOf(id) < 0; })[0];
@@ -199,7 +201,7 @@
       var rows = state.stages.map(function (st, i) {
         var t = toolOf(st.tool), custom = isCustom(st.tool) || !t, keys = Object.keys((t && t.params) || {});
         var estimated = st.estimate && st.estimate.kind && st.estimate.kind !== "off";
-        var line = [h("span", { class: "fc-idx", text: (estimated ? "~" : "") + String(i + 1), title: estimated ? "estimated first" : null }),
+        var line = [h("span", { class: "fc-idx", text: (estimated ? "~" : "") + String(i + 1), title: estimated ? WORDS.measure.estimated : null }),
           field("Tool", function () { return isPreset(st.tool) ? "preset" : st.tool; }, function (v) {
             if (v === "preset") v = (stagePresets(language(state, true))[0] || stagePresets()[0] || ["custom-stage"])[0];
             var fresh = newStage({ stages: [] }, v); st.tool = v; st.params = fresh.params; st.gates = [];
@@ -214,11 +216,11 @@
         }
         if (keys.length) line.push(paramField(t, st, keys[0]));
         if (custom) {
-          line.push(field("Numbers it prints", function () { return st.metrics; }, function (v) { st.metrics = v; },
-                          { compact: true, placeholder: "time_ms, score", hint: "Printed as name=value" }));
+          line.push(field(WORDS.measure.prints, function () { return st.metrics; }, function (v) { st.metrics = v; },
+                          { compact: true, placeholder: WORDS.measure.printsPlaceholder, hint: WORDS.measure.printsHint }));
         }
         var rep = reports(st);
-        line.push(rowButtons(state.stages, i, [button("+ gate", function () {
+        line.push(rowButtons(state.stages, i, [button(WORDS.measure.addCutoff, function () {
           st.gates.push({ metric: rep[0] || "", rule: "at", value: "" }); changed(true);
         }, "small"), moreButton(st)]));
         var kids = [h("div", { class: "fc-line" }, line)];
@@ -227,22 +229,22 @@
           dictionaries.forEach(function (metric, j) {
             kids.push(h("div", { class: "fc-line" }, [h("span", { class: "fc-gate-word", text: "dictionary" }),
               field("Name", function () { return metric.name; }, function (v) { metric.name = v; }, {compact: true, placeholder: "timings"}),
-              field("Direction", function () { return metric.direction || "minimize"; }, function (v) { metric.direction = v; }, {compact: true, options: [["minimize", "lower is better"], ["maximize", "higher is better"]]}),
+              field("Direction", function () { return metric.direction || "minimize"; }, function (v) { metric.direction = v; }, {compact: true, options: WORDS.measure.directions}),
               field("Unit", function () { return metric.unit || ""; }, function (v) { metric.unit = v; }, {compact: true, narrow: true, placeholder: "ms"}),
               field("Aggregate", function () { return metric.aggregate || "mean"; }, function (v) { metric.aggregate = v; },
-                {compact: true, options: [["mean", "mean"], ["median", "median"], ["min", "min"], ["max", "max"], ["sum", "sum"], ["none", "none"]]}),
+                {compact: true, options: WORDS.measure.aggregates}),
               button("×", function () { dictionaries.splice(j, 1); changed(true); }, "small fc-icon")]));
           });
-          kids.push(button("+ Dictionary", function () { dictionaries.push({name: "", direction: "minimize", unit: ""}); changed(true); }, "fc-add-btn"));
+          kids.push(button(WORDS.measure.addDictionary, function () { dictionaries.push({name: "", direction: "minimize", unit: ""}); changed(true); }, "fc-add-btn"));
           if (dictionaries.length) kids.push(h("small", {text: 'Print timings={"test": 12, "skipped": null} or a JSON object of metrics. Objectives use timings.test. Missing tests stay unmeasured.'}));
         }
         st.gates.forEach(function (g, j) {
-          kids.push(h("div", { class: "fc-line fc-gate" }, [h("span", { class: "fc-gate-word", text: j ? "and" : "go on only if" }),
+          kids.push(h("div", { class: "fc-line fc-gate" }, [h("span", { class: "fc-gate-word", text: j ? "and" : WORDS.measure.cutoff.toLowerCase() }),
             field("Number", function () { return g.metric; }, function (v) { g.metric = v; },
                   { compact: true, options: (st.dictMetrics || []).length ? null : (rep.indexOf(g.metric) < 0 && g.metric ? [g.metric] : []).concat(rep),
-                    hint: "Use a metric name, a parent aggregate or parent.test" }),
+                    hint: "metric name, parent aggregate or parent.test" }),
             field("Rule", function () { return g.rule; }, function (v) { g.rule = v; },
-                  { compact: true, structural: true, options: [["at", "at least"], ["below", "at most"], ["within", "within % of the best"]] }),
+                  { compact: true, structural: true, options: WORDS.measure.cutoffRules }),
             field(g.rule === "within" ? "Percent" : "Value", function () { return g.value; }, function (v) { g.value = v; }, { compact: true, narrow: true }),
             button("×", function () { st.gates.splice(j, 1); changed(true); }, "small fc-icon")]));
         });
@@ -253,30 +255,30 @@
           else if (t) more.push(h("small", { class: "fc-wide", text: t.what + (custom ? "" : " Reports " + Object.keys(t.metrics || {}).map(function (m) {
             return m + (t.metrics[m] ? " (" + t.metrics[m] + ")" : ""); }).join(", ") + ".") }));
           keys.slice(1).forEach(function (k) { more.push(paramField(t, st, k)); });
-          if (custom) more.push(field("Tools it needs", function () { return st.needs; }, function (v) { st.needs = v; }, { compact: true }));
+          if (custom) more.push(field(WORDS.measure.needs, function () { return st.needs; }, function (v) { st.needs = v; }, { compact: true, placeholder: WORDS.measure.needsPlaceholder }));
           var est = st.estimate = st.estimate || { kind: "off", margin: "5", command: "" };
-          more.push(field("Estimate first", function () { return est.kind; }, function (v) { est.kind = v; },
-                          { compact: true, structural: true, hint: "Predict it first; a design estimated to miss a cutoff or limit by more than the margin is skipped",
-                            options: [["off", "off"], ["surrogate", "fitted from past runs"], ["command", "my model script"], ["model", "the AI model"]] }));
+          more.push(field(WORDS.measure.estimate, function () { return est.kind; }, function (v) { est.kind = v; },
+                          { compact: true, structural: true, hint: est.kind === "surrogate" ? WORDS.measure.fitted : "skips a design estimated to miss a cutoff or limit by more than the margin",
+                            options: WORDS.measure.estimates }));
           more.push(h("small", { class: "fc-wide fc-now", text: "Estimate: " + explainEstimate(est) }));
           if (est.kind !== "off") {
-            more.push(field("Margin %", function () { return est.margin; }, function (v) { est.margin = v; }, { compact: true, narrow: true }));
+            more.push(field(WORDS.measure.margin, function () { return est.margin; }, function (v) { est.margin = v; }, { compact: true, narrow: true }));
             if (est.kind === "command") {
-              more.push(field("Estimate command", function () { return est.command; }, function (v) { est.command = v; },
-                              { compact: true, grow: true, placeholder: "{python} {home}/estimate.py {artifact}", hint: "Prints the same name=value numbers" }));
+              more.push(field(WORDS.measure.estimateCommand, function () { return est.command; }, function (v) { est.command = v; },
+                              { compact: true, grow: true, placeholder: WORDS.measure.estimatePlaceholder, hint: "prints the same name=value numbers" }));
             }
           }
           kids.push(h("div", { class: "fc-line fc-more" }, more));
         }
         return h("div", { class: "fc-row" }, kids);
       });
-      var add = button("+ Add a measurement", function () {
+      var add = button(WORDS.measure.add, function () {
         // the first tool made for this language that is not used yet, else a custom command
         var lang = language(state, true), used = state.stages.map(function (x) { return x.tool; });
         state.stages.push(newStage(state, nextStageTool(lang, used)));
         changed(true);
       }, "fc-add-btn");
-      return titled("Measurements", [h("span", { class: "fc-hint fc-inline", text: " cheapest first" })], [h("div", { class: "fc-rows" }, rows), add]);
+      return titled("Measurements", [h("span", { class: "fc-hint fc-inline", text: " " + WORDS.measure.say })], [h("div", { class: "fc-rows" }, rows), add]);
     }
 
     // -- the objective
@@ -284,7 +286,7 @@
       var rep = reported(state);
       var rows = state.objectives.map(function (o, i) {
         var line = [h("span", { class: "fc-idx", text: String(i + 1) }), dictionarySpec(state, o.metric) ? field("Number", function () { return o.metric; }, function (v) { o.metric = v; },
-            {compact: true, hint: "Use the parent aggregate or parent.test"}) : h("code", { class: "fc-obj-metric", text: o.metric }),
+            {compact: true, hint: WORDS.objective.dictHint}) : h("code", { class: "fc-obj-metric", text: o.metric }),
           field("How", function () { return o.label; }, function (v) { o.label = v; }, { compact: true, structural: true, options: LABELS })];
         if (o.label === "atleast" || o.label === "atmost") {
           var u = (dictionarySpec(state, o.metric) || {}).unit || unitFor(o.metric);
@@ -294,8 +296,8 @@
         return h("div", { class: "fc-row" }, [h("div", { class: "fc-line" }, line)]);
       });
       var used = state.objectives.map(function (o) { return o.metric; });
-      var sel = h("select", { "aria-label": "Add to the objective", class: "fc-add" });
-      sel.appendChild(h("option", { value: "", text: rep.length ? "+ Add a number..." : "(add a measurement first)" }));
+      var sel = h("select", { "aria-label": WORDS.objective.addLabel, class: "fc-add" });
+      sel.appendChild(h("option", { value: "", text: rep.length ? WORDS.objective.add : WORDS.objective.none }));
       rep.forEach(function (m) {
         if (used.indexOf(m) < 0) sel.appendChild(h("option", { value: m, text: m + (unitFor(m) ? " (" + unitFor(m) + ")" : "") }));
       });
@@ -320,28 +322,29 @@
     // -- level 1: the prompt (D941: step 1), then the checks, the measurements and the objective
     function renderPrompt() {
       var implied = impliedLanguage(state);                // D832: optional -- the tools usually tell
-      var langs = [["", implied ? "from the tools: " + implied : "from the tools (none tells yet)"]].concat(LANGUAGES.map(function (l) { return [l, l]; })).concat([["other", "other..."]]);
+      var P = WORDS.prompt;
+      var langs = [["", implied ? P.fromTools + ": " + implied : P.fromTools]].concat(LANGUAGES.map(function (l) { return [l, l]; })).concat([["other", P.other]]);
       var what = titled("1. What do you want?", [], [
         h("div", { class: "fc-line" }, [
           field(opts.nameLabel || "Name", function () { return state.id; }, function (v) { state.id = v; },
-                { compact: true, key: "id", placeholder: opts.namePlaceholder || "my_design", hint: opts.nameHint || "Letters, digits, - and _ (1–60 characters)" }),
+                { compact: true, key: "id", placeholder: opts.namePlaceholder || "my_design", hint: opts.nameHint || P.nameHint }),
           field("Language", function () { return state.language; }, function (v) { state.language = v; },
-                { compact: true, options: langs, structural: true, hint: "Optional, when the tools do not tell it" }),
-          state.language === "other" ? field("Language name", function () { return state.languageOther; }, function (v) { state.languageOther = v; }, { compact: true, placeholder: "ini" }) : null,
+                { compact: true, options: langs, structural: true, hint: "optional, when tools do not tell it" }),
+          state.language === "other" ? field(P.languageName, function () { return state.languageOther; }, function (v) { state.languageOther = v; }, { compact: true, placeholder: "ini" }) : null,
           ]),
-        field("What to make (as you would tell an engineer)", function () { return state.statement; },
-              function (v) { state.statement = v; }, { area: true, rows: 3, wide: true, key: "statement" }),
+        field(P.statement, function () { return state.statement; },
+              function (v) { state.statement = v; }, { area: true, rows: 3, wide: true, key: "statement", placeholder: P.statementPlaceholder }),
         h("div", { class: "fc-line" }, [
-          field("Rules for every design (optional)", function () { return state.contract; },
-                function (v) { state.contract = v; }, { area: true, rows: 1, grow: true, placeholder: "Names, ports, what is not allowed" }),
-          field("Files the model reads (optional)", function () { return state.knowledgeFiles; },
-                function (v) { state.knowledgeFiles = v; }, { compact: true, grow: true, placeholder: "spec.md, notes.txt", hint: "Beside the document, separated by commas" })]),
+          field(P.rules, function () { return state.contract; },
+                function (v) { state.contract = v; }, { area: true, rows: 1, grow: true, placeholder: P.rulesPlaceholder }),
+          field("Files the model reads", function () { return state.knowledgeFiles; },
+                function (v) { state.knowledgeFiles = v; }, { compact: true, grow: true, placeholder: "spec.md, notes.txt", hint: "beside the document, separated by commas" })]),
         // D828: who digests library/'s papers is a box of the drawing ("Digest the papers"), not a field here
       ]);
       return what;
     }
     function noCatalog() {
-      return api.catalog().length ? null : h("p", { class: "fc-hint", text: "The tool list did not load; only Custom checks and measurements are offered." });
+      return api.catalog().length ? null : h("p", { class: "fc-hint", text: WORDS.checks.noCatalog.join(" ") });
     }
     function renderLevel1() {
       return h("div", { class: "fc-level" }, [renderPrompt(), noCatalog(), renderChecks(), renderStages(), renderObjective()]);
@@ -443,8 +446,7 @@
       nodes().forEach(function (n) {
         var fixed = n.box === "parts" || isFixed(n.box), half = fixed ? "fixed" : halfOf(state, n.box);
         var box = BOXES[n.box] || { title: "Parts", fixed: "Set under Extra > Parts." };
-        var title = n.id === "crit-division" ? "Critic: division" : n.id === "crit-part" ? "Critic: each part"
-                  : n.id === "crit-decision" ? "Critic: decision" : n.id === "parts" ? "parts: sub-loops, composed" : box.title;
+        var title = n.id === "parts" ? "parts: sub-loops, composed" : api.boxTitle(n.id);      // the web's names too
         var live = !fixed && !readonly;
         var act = readonly && parts.activity ? parts.activity[n.id] : null;      // D726
         var picks = readonly && !!opts.onBox;
@@ -511,7 +513,9 @@
     }
 
     function subtitle(name, half, max) {
-      var text = half === "off" && name === "orchestrate" && state.flow.dse !== "none" ? "the search" : HALVES[half];
+      // D1146: who works it in the web Graph's words (the model's whoWorks: rules, model, the agent's name, script...)
+      var who = name === "dse" || half === "fixed" ? {} : whoWorks(name, state.flow[name], agentOf(state));
+      var text = half === "off" && name === "orchestrate" && state.flow.dse !== "none" ? "the search" : who.label || HALVES[half];
       if (name === "orchestrate" && state.flow.orchestrate === "default" && !parameterSearch(state)) {
         text = hasParts(state) ? "model picks the part" : "default: one design";
       }
@@ -557,11 +561,10 @@
       if (raw) p.appendChild(h("p", { class: "fc-hint fc-now", text: "Own settings, kept as written: " + JSON.stringify(raw.agent) +
         ". Another choice replaces them." }));
       if (openBox === "generate" && paramOnly(state)) {               // D911: what a search runs
-        p.appendChild(h("p", { class: "fc-hint fc-now", text: "A search is on: only a script turns a point into a design; " +
-          "with a model or agent here, the settings only reach the commands." }));
+        p.appendChild(h("p", { class: "fc-hint fc-now", text: WORDS.graph.searchOn.join(" ") }));
       }
       if (openBox === "orchestrate" && parameterSearch(state)) {
-        p.appendChild(h("p", { class: "fc-hint", text: "A search is on, so the search picks the next job." }));
+        p.appendChild(h("p", { class: "fc-hint", text: WORDS.graph.searchPicks + "." }));
       } else if (box.choices.length === 1) {
         p.appendChild(h("p", { class: "fc-hint", text: "This step is fixed: " + box.choices[0].label + "." }));
       } else {
@@ -586,17 +589,17 @@
         });
         p.appendChild(group);
         if (openBox === "generate" && state.flow.generate === "command") {
-          p.appendChild(field("Design command", function () { return state.generateCommand; },
+          p.appendChild(field(WORDS.graph.command, function () { return state.generateCommand; },
                               function (v) { state.generateCommand = v; },
-                              { wide: true, placeholder: "{python} {home}/gen.py {artifact} {knob}", hint: "Each setting is {its name}" }));
+                              { wide: true, placeholder: WORDS.graph.generatePlaceholder, hint: WORDS.graph.generateHint }));
         }
         if (openBox === "generate" && state.flow.generate === "catalog") {
-          p.appendChild(field("Existing designs", function () { return state.generateCatalog; },
-                              function (v) { state.generateCatalog = v; }, { wide: true, placeholder: "designs/a.sv, designs/b.sv", hint: "Files beside the document, separated by commas" }));
+          p.appendChild(field(WORDS.graph.existing, function () { return state.generateCatalog; },
+                              function (v) { state.generateCatalog = v; }, { wide: true, placeholder: WORDS.graph.existingPlaceholder, hint: WORDS.graph.existingHint }));
         }
         if (openBox === "orchestrate" && state.flow.orchestrate === "command") {
-          p.appendChild(field("Search command", function () { return state.orchestrateCommand; },
-                              function (v) { state.orchestrateCommand = v; }, { wide: true, placeholder: "{python} {home}/search.py {history} {state}", hint: "Answers each round with the next candidates" }));
+          p.appendChild(field(WORDS.graph.searchCommand, function () { return state.orchestrateCommand; },
+                              function (v) { state.orchestrateCommand = v; }, { wide: true, placeholder: WORDS.graph.searchPlaceholder, hint: WORDS.graph.searchHint }));
         }
       }
     }
@@ -629,7 +632,7 @@
       parts.svg.setAttribute("viewBox", "0 0 " + LAYOUT.width + " " + LAYOUT.height);
       parts.svg.setAttribute("class", "fc-diagram");
       parts.svg.setAttribute("role", "group");
-      parts.svg.setAttribute("aria-label", "The loop: each box is one step");
+      parts.svg.setAttribute("aria-label", WORDS.graph.aria);
       var legend = h("div", { class: "fc-legend" }, ["rules", "model", "agent", "fixed", "off"].map(function (k) {
         return h("span", { class: "fc-key fc-" + k }, [h("i"), HALVES[k]]);
       }));
@@ -638,7 +641,7 @@
     }
 
     function dseGroupField(key) {
-      return field("DSE policy category", function () { return dseGroup(state.flow.dse); }, function (v) {
+      return field(WORDS.graph.dseKind, function () { return dseGroup(state.flow.dse); }, function (v) {
         // Selecting a category selects its default policy. The category itself is never saved.
         state.flow.dse = dseChoices(v)[0].value;
         if (state.agentRaw) delete state.agentRaw.dse;
@@ -649,7 +652,7 @@
     function renderLevel2() {
       var kept = (state.kept || []).indexOf("flow.boxes") >= 0;
       var choices = dseChoices(dseGroup(state.flow.dse), state.flow.dse).map(function (c) { return [c.value, c.label]; });
-      var policy = field("DSE search policy", function () { return state.flow.dse; }, function (v) {
+      var policy = field(WORDS.graph.dsePolicy, function () { return state.flow.dse; }, function (v) {
         state.flow.dse = v;
         if (state.agentRaw) delete state.agentRaw.dse;
       }, { key: "dse", options: choices, structural: true, disabled: kept, grow: true,
@@ -678,76 +681,68 @@
 
     function renderLevel3() {
       var b = state.budget;
-      var bp = state.baseline || (state.baseline = { mode: "off", source: "project" });
+      var bp = state.baseline || (state.baseline = { mode: "off", source: "project" }), X = WORDS.extra;
       function baselineMetrics() {
         var metrics = bp.metrics || (bp.metrics = []), rep = reported(state);
-        var stageOptions = [["", "deepest"]].concat(resolve(state).stages.map(function (s) { return [s.name, s.name]; }));
+        var stageOptions = [["", X.deepest]].concat(resolve(state).stages.map(function (s) { return [s.name, s.name]; }));
         var rows = metrics.map(function (m, i) {
           return h("div", { class: "fc-row" }, [h("div", { class: "fc-line" }, [
             field("Metric", function () { return m.metric; }, function (v) { m.metric = v; },
               { key: "baseline-metric-" + i, compact: true, structural: true, options: state.stages.some(function (s) { return (s.dictMetrics || []).length; }) ? null : rep.map(function (v) { return [v, v]; }),
-                hint: "Use a metric name, a parent aggregate or parent.test" }),
+                hint: "metric name, parent aggregate or parent.test" }),
             field("Value" + (((dictionarySpec(state, m.metric) || {}).unit || unitFor(m.metric)) ? " (" + ((dictionarySpec(state, m.metric) || {}).unit || unitFor(m.metric)) + ")" : ""), function () { return m.value; }, function (v) { m.value = v; },
               { key: "baseline-value-" + i, compact: true, narrow: true }),
             field("Stage", function () { return m.stage || ""; }, function (v) { m.stage = v; },
               { key: "baseline-stage-" + i, compact: true, options: stageOptions }), rowButtons(metrics, i)])]);
         });
         return h("div", { class: "fc-rows", "data-fc-field": "baseline-metrics" }, rows.concat([
-          button("+ Metric", function () { metrics.push({ metric: rep[0] || "", value: "", stage: "" }); changed(true); }, "fc-add-btn"),
+          button(X.addMetric, function () { metrics.push({ metric: rep[0] || "", value: "", stage: "" }); changed(true); }, "fc-add-btn"),
           h("p", { class: "fc-hint", text: "Reference values for graphs and relative measurements; nothing runs for them." })]));
       }
-      var baseline = sub("Baseline / pass 0", "checked and measured before any edit", [
+      var baseline = sub("Baseline", X.baselineSay, [
         field("Baseline", function () { return bp.mode; }, function (v) { bp.mode = v; },
           { key: "baseline-mode", structural: true, disabled: (state.kept || []).indexOf("baseline") >= 0,
-            options: [["off", "off"], ["before", "first"], ["only", "only"]],
+            options: X.baselineModes,
             hint: "first: pass 0, then the passes; only: pass 0 alone, to check the tools. Rerun when its inputs, settings or tools change; outside the pass budget." }),
         bp.mode !== "off" ? field("From", function () { return bp.source; }, function (v) { bp.source = v; },
-          { key: "baseline-source", structural: true, options: [["project", "project"], ["file", "file"], ["command", "command"], ["metrics", "numbers"]],
-            hint: "project: your scripts as written; file: when they expect a design in {artifact}." }) : null,
+          { key: "baseline-source", structural: true, options: X.baselineFrom,
+            hint: "project: scripts as written; file: when they expect a design in {artifact}." }) : null,
         bp.mode !== "off" && bp.source === "file" ? field("File", function () { return bp.file; }, function (v) { bp.file = v; },
-          { key: "baseline-file", placeholder: "baseline.py", hint: "Relative to the loop folder; a copy is checked and measured." }) : null,
-        bp.mode !== "off" && bp.source === "command" ? field("Command", function () { return bp.command; }, function (v) { bp.command = v; },
-          { key: "baseline-command", placeholder: "{python} {home}/baseline.py {artifact}",
-            hint: "Runs once with the usual placeholders; may write {artifact} or prepare the project." }) : null,
-        bp.mode !== "off" && bp.source === "command" ? field("Time limit, s", function () { return bp.timeout; }, function (v) { bp.timeout = v; },
+          { key: "baseline-file", placeholder: X.baselineFile, hint: "relative to the loop folder; a copy is checked and measured" }) : null,
+        bp.mode !== "off" && bp.source === "command" ? field(WORDS.graph.command, function () { return bp.command; }, function (v) { bp.command = v; },
+          { key: "baseline-command", placeholder: X.baselineCommand,
+            hint: "runs once with the usual placeholders; may write {artifact} or prepare the project" }) : null,
+        bp.mode !== "off" && bp.source === "command" ? field(WORDS.checks.timeLimit, function () { return bp.timeout; }, function (v) { bp.timeout = v; },
           { placeholder: "600" }) : null,
         bp.mode !== "off" && bp.source === "metrics" ? baselineMetrics() : null]);
-      function num(label, key, dflt, hint) {
-        return field(label, function () { return b[key]; }, function (v) { b[key] = v; },
-                     { compact: true, placeholder: dflt, hint: hint + " (budget." + key + "; empty: " + dflt + ")" });
+      function num(key) {                                // D1146: the web Graph's label, default and hint for each knob
+        var k = WORDS.budget[key];
+        return field(k.label, function () { return b[key]; }, function (v) { b[key] = v; },
+                     { compact: true, placeholder: k.dflt, hint: (k.hint ? k.hint + " " : "") + "(budget." + key + "; empty: " + k.dflt + ")" });
       }
-      var budget = h("div", { class: "fc-grid" }, [
-        num("Designs per round", "steps", "24", "Work items in one round"),
-        num("Rounds", "passes", "until stopped", "Before the run stops"),
-        num("Rounds at once", "parallel", "1", "Side by side; on a server an admin allows it"),
-        num("Search designs a round", "batch", "1", "With a search: designs tried side by side per round"),
-        num("Repairs per design", "repair_attempts", "12", "Repairs a draft gets after a check fails"),
-        num("Exploration quota", "exploration_quota", "0", "Share of tries kept for new approaches, 0 to 1"),
-        num("Designs fully measured", "finalists", "3", "How many designs reach the costliest measurement"),
-        num("Tool runs at once", "workers", "auto", "Measurements in parallel; 1 for anything timed"),
-        field("Prototype first", function () { return b.prototype; }, function (v) { b.prototype = v; },
-              { compact: true, hint: "Proves the algorithm first: yes for maths, no for plain logic (budget.prototype; empty: on with a golden model)",
-                options: [["", "default"], ["true", "yes"], ["false", "no"], ["python", "yes, in Python"], ["systemc", "yes, in SystemC"]] })]);
+      var budget = h("div", { class: "fc-grid" }, ["steps", "passes", "parallel", "batch", "repair_attempts", "exploration_quota", "finalists", "workers"].map(num).concat([
+        field(WORDS.graph.prototype, function () { return b.prototype; }, function (v) { b.prototype = v; },
+              { compact: true, hint: WORDS.graph.prototypeHint + " (budget.prototype)", options: WORDS.graph.prototypes })]));
 
       var knobs = state.space.map(function (r, i) {
         return h("div", { class: "fc-row" }, [h("div", { class: "fc-line" }, [
           h("span", { class: "fc-idx", text: String(i + 1) }),
-          field("Setting", function () { return r.knob; }, function (v) { r.knob = v; },
+          field(X.setting, function () { return r.knob; }, function (v) { r.knob = v; },
                 { compact: true, placeholder: "block", hint: "{name} in a command is the value tried" }),
-          field("Choices, in order", function () { return r.choices; }, function (v) { r.choices = v; },
-                { compact: true, grow: true, placeholder: "16, 32, 64", hint: "Separated by commas; a \"quoted\" choice stays text (\"01\", \"a,b\")" }),
+          field(X.values, function () { return r.choices; }, function (v) { r.choices = v; },
+                { compact: true, grow: true, placeholder: "16, 32, 64", hint: "separated by commas; a \"quoted\" value stays text (\"01\", \"a,b\")" }),
           h("div", { class: "fc-row-buttons" }, [button("\u00d7", function () { state.space.splice(i, 1); changed(true); }, "small fc-icon")])])]);
       });
       var searching = state.flow.dse && state.flow.dse !== "none";
-      var space = sub("Settings to search", searching ? "{name} in the commands" : "used once a search policy is picked in the Graph", [
+      var space = sub(X.settings, searching ? X.settingsSay : "used once a search policy is picked in the Graph", [
         h("div", { class: "fc-rows" }, knobs),
-        button("+ Setting", function () { state.space.push({ knob: "", choices: "" }); changed(true); }, "fc-add-btn")]);
+        button(X.addSetting, function () { state.space.push({ knob: "", choices: "" }); changed(true); }, "fc-add-btn")]);
 
-      var split = sub("Parts", "each checked on its own, then composed", [h("div", { class: "fc-line" }, [
-        field("Split the design", function () { return state.partsMode; }, function (v) { state.partsMode = v; },
-              { compact: true, structural: true, options: [["none", "no"], ["list", "into these parts"], ["decompose", "let it decide"]] }),
+      var split = sub("Parts", X.partsSay, [h("div", { class: "fc-line" }, [
+        field("Parts", function () { return state.partsMode; }, function (v) { state.partsMode = v; },
+              { compact: true, structural: true, options: X.partsModes }),
         state.partsMode === "list" ? field("Parts", function () { return state.parts; }, function (v) { state.parts = v; },
-                                           { compact: true, grow: true, placeholder: "decoder, datapath", hint: "Part names, separated by commas" }) : null])]);
+                                           { compact: true, grow: true, placeholder: X.partsPlaceholder, hint: "part names, separated by commas" }) : null])]);
 
       // closed until asked for, or until something in it is in use
       var inUse = !!(searching || state.space.length || hasParts(state) || bp.mode !== "off");
@@ -766,7 +761,7 @@
     // D826: steps instead of one long form -- a step bar, one step at a time, Back and Next; the
     // document, its checklist and the save on the last step (and Save on every step when editing).
     // D941: six -- the prompt, the checks with the measurements, the objective, the graph, the rest, the save
-    var STEPS = ["Prompt", "Check & Measure", "Objective", "Graph", "Extra", "Save"];
+    var STEPS = STEP_TITLES;
     // D828: what each step is for, in a line -- in place of the long form's numbered titles
     var STEP_SAYS = [
       "What to make, the rules every design follows, the files the model reads.",
@@ -817,7 +812,7 @@
       parts.navStatus = h("span", { class: "fc-status", role: "status", "aria-live": "polite" });
       parts.navSave = opts.save ? button(opts.saveLabel || "Save", function () { save(parts.navSave); }, "fc-save" + (last ? " primary" : "")) : null;
       // D941: a new loop's draft kept in this browser, from Save
-      var draftBtn = last && opts.saveDraft ? button("Save draft", saveDraft, "fc-draft") : null;
+      var draftBtn = last && opts.saveDraft ? button(WORDS.save.draft, saveDraft, "fc-draft") : null;
       var nav = h("div", { class: "fc-stepnav" + (opts.save ? "" : " fc-nosave") + (draftBtn ? " fc-has-draft" : "") },
                   [back, h("span", { class: "fc-grow" }), parts.navStatus, draftBtn, parts.navSave, next]);
       body.forEach(function (el) {                       // the long form's titles: the step bar says them
@@ -864,7 +859,7 @@
     /** D941: the draft kept where the page keeps it (`opts.saveDraft(state, step)` returns a line to say). */
     function saveDraft() {
       try {
-        parts.status = { kind: "ok", text: opts.saveDraft(state, STEP_IDS[parts.step || 0]) || "Draft saved." };
+        parts.status = { kind: "ok", text: opts.saveDraft(state, STEP_IDS[parts.step || 0]) || WORDS.save.draftSaved };
       } catch (e) {
         parts.status = { kind: "err", text: (e && e.message) || String(e) };
       }
@@ -884,10 +879,10 @@
     /** Save (or create): one at a time; an error says itself beside `btn` and focuses its box. */
     function save(btn) {
       if (!opts.save || (parts.status && parts.status.kind === "pending")) return;
-      parts.status = { kind: "pending", text: "Saving…" };
+      parts.status = { kind: "pending", text: WORDS.save.saving };
       showStatus();
       Promise.resolve().then(function () { return opts.save(buildYaml(state), state); }).then(function (said) {
-        parts.status = { kind: "ok", text: said || "Saved." };
+        parts.status = { kind: "ok", text: said || WORDS.save.saved };
         showStatus();
       }, function (e) {
         parts.status = { kind: "err", text: (e && e.message) || String(e) };
@@ -903,25 +898,12 @@
       });
     }
 
-    /** D912: where the draft stands -- the document, its files, the check, a start -- apart. */
+    /** D912: where the draft stands -- the document, its files, the check, a start -- apart (the model's, the web's too, D1146). */
     function readiness(msgs) {
-      var errors = msgs.filter(function (m) { return m.level === "error"; }).length;
-      var calm = opts.calmChecks && !parts.touched;
-      var rows = [[errors ? (calm ? "todo" : "error") : "ok", "Document", errors ? errors + " thing(s) to do, below" : "complete"]];
       var named = namedFiles(state), files = opts.files ? opts.files(named) : null;
-      if (files) {
-        var missing = files.missing || [];
-        rows.push([missing.length ? "error" : "ok", "Files", missing.length ? "missing " + missing.join(", ") + " (Files that go with it)"
-          : named.length ? "all " + named.length + " named file(s) present" : "none named"]);
-      } else if (named.length) rows.push(["note", "Files", "put " + named.join(", ") + " beside the document"]);
-      if (opts.save) {
-        // D913b: the loop's own check result, as the start dialog reads it -- [kind, words], or null while unknown
-        var ck = (typeof opts.checked === "function" ? opts.checked() : opts.checked) || ["note", "not checked yet: once saved, Check runs it where it will run"];
-        rows.push([ck[0], "Checked", ck[1]]);
-        var go = !errors && !(files && (files.missing || []).length) && ck[0] === "ok";
-        rows.push([go ? "ok" : "note", "Ready to run", go ? "yes: Start it" : ck[0] === "error" ? "not until the check passes" : "after a Check passes"]);
-      }
-      return rows;
+      // D913b: the loop's own check result, as the start dialog reads it -- [kind, words], or null while unknown
+      return readinessOf(msgs, { named: named, files: files && { missing: files.missing || [] }, calm: opts.calmChecks && !parts.touched,
+        save: !!opts.save, checked: typeof opts.checked === "function" ? opts.checked() : opts.checked });
     }
 
     function renderOutput() {
@@ -972,7 +954,7 @@
       var kn = knobNames(state);
       if (kn.length) rows.push(["Searches", kn.join(", ")]);
       var bp = state.baseline || {};
-      if (bp.mode && bp.mode !== "off") rows.push(["Baseline", "pass 0" + (bp.mode === "only" ? " only" : ", then normal passes") + ": " +
+      if (bp.mode && bp.mode !== "off") rows.push(["Baseline", WORDS.extra.baselineSay + (bp.mode === "only" ? " only" : ", then normal passes") + ": " +
         (bp.source === "file" ? bp.file : bp.source === "command" ? bp.command : "current project")]);
       parts.summary.innerHTML = "";
       rows.forEach(function (x) { parts.summary.appendChild(h("div", {}, [h("dt", { text: x[0] }), h("dd", { text: x[1] })])); });
@@ -1028,7 +1010,7 @@
     // stepped, the save is the step bar's (D913); the whole form keeps its own beside the document
     var saveBtn = opts.save && !stepped ? button(opts.saveLabel || "Save", function () { save(saveBtn); }, "primary") : null;
     var keptNotes = (opts.notes || []).length ? [h("details", { class: "fc-fold fc-kept-fold" }, [
-      h("summary", {}, [h("strong", { text: "Kept as written" }), " ", h("span", { class: "fc-hint", text: "(" + opts.notes.length + ")" })]),
+      h("summary", {}, [h("strong", { text: WORDS.save.kept }), " ", h("span", { class: "fc-hint", text: "(" + opts.notes.length + ")" })]),
       h("ul", { class: "fc-checks" }, opts.notes.map(function (n) { return h("li", { class: "fc-note", text: n }); }))])] : [];
     parts.saveBtn = saveBtn;
     parts.summary = h("dl", { class: "fc-summary" });
@@ -1039,7 +1021,7 @@
     if (opts.changes) {
       parts.diffBody = h("div", { class: "fc-diff" });
       parts.diffFold = h("details", { class: "fc-fold fc-diff-fold" }, [h("summary", {}, [h("strong", { text: "Changes" }), " ",
-        h("span", { class: "fc-hint", text: "vs saved" })]), parts.diffBody]);
+        h("span", { class: "fc-hint", text: WORDS.save.vsSaved })]), parts.diffBody]);
       parts.diffFold.addEventListener("toggle", function () { if (parts.diffFold.open) showChanges(); });
       changes.push(parts.diffFold);
     }

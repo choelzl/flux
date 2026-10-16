@@ -50,8 +50,9 @@ export function Markdown({ text }) {
       const rows = [];
       for (; i < lines.length && /^\s*\|.*\|\s*$/.test(lines[i]); i++) rows.push(lines[i].trim().slice(1, -1).split("|").map(c => c.trim()));
       const body = rows.filter(r => !r.every(c => /^:?-{2,}:?$/.test(c)));
+      const label = j => (body[0][j] || "").replace(/[*_`]/g, "");      // D1149: each cell its column's name, for a phone (as Table's)
       out.push(html`<div class="scroll-x"><table class="list compact md"><thead><tr>${body[0].map(c => html`<th><${Inline} t=${c} /></th>`)}</tr></thead>
-        <tbody>${body.slice(1).map(r => html`<tr>${r.map(c => html`<td><${Inline} t=${c} /></td>`)}</tr>`)}</tbody></table></div>`);
+        <tbody>${body.slice(1).map(r => html`<tr>${r.map((c, j) => html`<td data-label=${label(j)}><${Inline} t=${c} /></td>`)}</tr>`)}</tbody></table></div>`);
     } else if (/^\s*([-*+]|\d+\.)\s+/.test(l)) {
       const ordered = /^\s*\d+\./.test(l), items = [];
       for (; i < lines.length && /^\s*([-*+]|\d+\.)\s+/.test(lines[i]); i++) items.push(lines[i].replace(/^\s*([-*+]|\d+\.)\s+/, ""));

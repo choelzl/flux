@@ -165,7 +165,7 @@ async function createFromText(name, filename, text) {
 }
 
 
-// D754: a phone's width -- the tables stack their rows (app.js), the log wraps (live/Log.js)
+// D754: a phone's width -- the tables stack their rows (components/Table.js), the log wraps (live/Log.js)
 const NARROW = window.matchMedia ? window.matchMedia("(max-width: 640px)") : { matches: false };
 
 export { NARROW, money, plural, api, apiUpload, appHref, loopApi, request, bytes, askText, confirmDialog, createFromText, dialog, dur, enc, fmtTok, loopStream, offline, owned, toast, when, withOwner };

@@ -118,11 +118,12 @@ def _lookup_context(problem: Any, state: Any, workdir: Path) -> str:
 
 def box_turn(box: str, spec: Any, question: str, schema: dict[str, Any], state: Any,
              check: Callable[[dict], str | None] | None = None, home: str = "",
-             problem: Any = None) -> dict[str, Any] | None:
+             problem: Any = None, skills: list[Any] | None = None) -> dict[str, Any] | None:
     """The agent's answer to `question` for `box`, checked; None when it fell back (said, and
     on the record). Given the `problem`, the brief carries its LIBRARY section (D648)."""
     from .agent import DECIDE, agent_spec, converse, library_section, run_turn, workbench_link, workbench_section
-    from .recall import BOX_LOOKUP_LINE
+    from .recall import BOX_LOOKUP_LINE, SKILL_LOOKUP_LINE
+    from .skills import LOOP_SKILLS, install
 
     a = agent_spec(spec)
     # before the pass has its trace directory (validate runs first), the scratch directory
@@ -138,6 +139,12 @@ def box_turn(box: str, spec: Any, question: str, schema: dict[str, Any], state: 
         workdir = root / f"{n:03d}"
         workdir.mkdir()
         out = workdir / "out.json"
+    listed = getattr(problem, "agent_skill_list", None)     # D1152: the loop's skills, the built-in ones too
+    if skills is None:
+        skills = listed() if callable(listed) else []
+    if skills and not (sess is not None and sess.turns > 1):
+        install(skills, workdir)
+    lookup = SKILL_LOOKUP_LINE if any(getattr(s, "name", "") in LOOP_SKILLS for s in skills) else BOX_LOOKUP_LINE
     library = library_section(problem, question, state) if problem is not None else ""
     bench = str(getattr(getattr(problem, "task", None), "workbench", "") or state.__dict__.get("workbench") or "")  # D677
     workbench_link(bench, workdir)
@@ -149,7 +156,7 @@ def box_turn(box: str, spec: Any, question: str, schema: dict[str, Any], state: 
                 + " and nothing else; what is being judged is quoted above. " if home else
                 "Everything you need is quoted above. ")
              + f"Do not run "
-             f"the gate or the measurement stages: the loop runs them. {BOX_LOOKUP_LINE} Write your answer to `{out}` as ONE JSON "
+             f"the gate or the measurement stages: the loop runs them. {lookup} Write your answer to `{out}` as ONE JSON "
              f"object matching this schema, then reply with one line saying so:\n"
              f"{json.dumps(schema, indent=1)}\n" + (f"\n{shelf}\n" if shelf else ""))
     prompt_file = workdir / (f"BRIEF-{sess.turns:03d}.md" if sess is not None else "BRIEF.md")
@@ -211,6 +218,7 @@ class AgentLessons:
 
     def __init__(self, agent: Any) -> None:
         self.agent = agent
+        self.skills: list[Any] = []                         # D1152: the loop's agents' skills, set by its problem
 
     def render(self, state: Any) -> str:
         if "_agent_lessons" in state.__dict__:
@@ -246,7 +254,7 @@ class AgentLessons:
                     return f"lesson {i + 1} cites " + (f"rows {bad} that do not exist" if bad else "no row")
             return None
 
-        doc = box_turn("extract", self.agent, question, schema, state, check=cited)
+        doc = box_turn("extract", self.agent, question, schema, state, check=cited, skills=self.skills)
         text = "\n".join(f"- {les['text'].strip()} (rows {', '.join(map(str, les['rows']))})"
                          for les in (doc or {}).get("lessons") or [])
         state.__dict__["_agent_lessons"] = text

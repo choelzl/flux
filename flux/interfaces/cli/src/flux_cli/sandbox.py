@@ -66,6 +66,8 @@ LOOP_IN = "/sandbox"
 SLOTS_IN = "/flux-slots"            # D1027: every run's endpoint slots, one folder of the host's
 CACHE_IN = "/sandbox-cache"
 SOURCE_IN = "/flux"
+#: D1152: the repository's skills, beside the source as on the host (flux_loop.skills.builtin_root finds them there)
+SKILLS_IN = "/skills"
 #: On one's own machine, the Flux home starts with the agents' configuration and logins of the
 #: real home, where it lacks them. Not `~/.config/flux`: the host has read flux.env already and
 #: passes its settings in, so the key file itself stays outside.
@@ -260,6 +262,8 @@ def mounts_for(args: Any, command: str) -> tuple[list[str], list[str]]:
     source = _source_root()
     if source is not None:
         ro.append(str(source))
+        if (source.parent / "skills").is_dir():               # D1152: the built-in skills every loop agent gets
+            ro.append(str(source.parent / "skills"))
     ro.append(os.getcwd())
     # D714: the Python running flux -- a pip venv, its interpreter, an editable install's source --
     # wherever it lives; without it a `pip install` user's flux cannot import itself inside
@@ -434,6 +438,8 @@ def path_mapping(args: Any, command: str, app: Path, home: Path) -> list[tuple[s
     source = _source_root()
     if source is not None:
         pairs.append((str(source), SOURCE_IN))
+        if (source.parent / "skills").is_dir():
+            pairs.append((str(source.parent / "skills"), SKILLS_IN))
         configured = os.environ.get("FLUX_ROOT")
         if configured and Path(configured).resolve() == source:
             alias = str(Path(configured).absolute())

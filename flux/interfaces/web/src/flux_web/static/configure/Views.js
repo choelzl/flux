@@ -15,6 +15,7 @@ import { PermissionChoice, hasPermissions } from "../components/PermissionChoice
 import { filesStore } from "./files.js";
 import { FilesPanel } from "./FilesPanel.js";
 import { Select } from "../components/Select.js";
+import { Check } from "../components/Check.js";
 
 export { NewByAgent } from "./byagent/NewByAgent.js";
 export { ReviseByAgent } from "./byagent/ReviseByAgent.js";
@@ -68,7 +69,7 @@ async function cloneDialog(name, owner) {
   const permissions = me.role === "admin" ? (await L.api("/env")).advanced : {};
   const keep = hasPermissions(permissions);
   const body = ({ v, set }) => html`<div class="stack"><label class="stack">New loop name<input value=${v.to} class="mono" id="clone-to" autocomplete="off" onInput=${e => set({ to: e.currentTarget.value })} /></label>
-    <label class="check"><input type="checkbox" id="clone-wb" checked=${v.workbench} onChange=${e => set({ workbench: e.currentTarget.checked })} />with workbench (agents' notes and tools)</label>
+    <${Check} id="clone-wb" checked=${v.workbench} onChange=${workbench => set({ workbench })}>with workbench (agents' notes and tools)<//>
     <p class="muted small">${"Copies the problem, not runs, sharing or variables. " + (keep ? "Special permissions reset unless kept below." : "Admin overrides are not copied.")}</p>
     <${PermissionChoice} settings=${permissions} id="clone-keep-permissions" keep=${v.keep_permissions} set=${on => set({ keep_permissions: on })} /></div>`;
   const go = await dialog(`Clone ${owner && owner !== me.name ? owner + "'s " : ""}${name}`, body, [["Cancel", null],

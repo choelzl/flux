@@ -47,7 +47,7 @@ def put(r, name, path, text):
 
 
 def select_file(r, path):
-    picked = r.b.js("""const a = [...document.querySelectorAll('.files-card ul.files li a')]
+    picked = r.b.js("""const a = [...document.querySelectorAll('.files-card ul.files li .file-link')]
         .find(a => a.textContent.endsWith(arguments[0])); if (!a) return false; a.click(); return true;""", path)
     if not picked:
         raise AssertionError(f"file not listed: {path}")
@@ -229,7 +229,7 @@ def general_flows(r, watch):
                 expected = {"stats": ["tokens_out", "state", "designs"], "columns": [["usage"], ["decision", "best", "last_pass"]]}
                 b.js("window.__overviewSaveFails=true; return 1")
                 r.dialog_button("Save")
-                b.wait("document.querySelector('dialog.overview-layout-dialog .err')?.textContent.includes('Layout save unavailable')", what="save failure")
+                b.wait("document.querySelector('dialog.overview-layout-dialog .notice.t-bad')?.textContent.includes('Layout save unavailable')", what="save failure")
                 r.check("a failed save keeps the editor and draft open", b.js("return document.querySelector('dialog.overview-layout-dialog[open] [data-layout-list=stats] li select').value === 'tokens_out'") and json.loads(r.api(path)["body"])["layout"] == defaults)
                 b.js("window.__overviewSaveFails=false; return 1")
                 r.dialog_button("Save")
@@ -666,7 +666,7 @@ def general_flows(r, watch):
                 r.check("Live removes task filters and duplicate follow text", b.js("return !document.querySelector('.alt-task-tools, .alt-status, [aria-label=\"Find Live tasks\"], [aria-label=\"Live task status\"]') && document.querySelector('.alt-controls button').textContent==='Following'"))
                 r.check("task inspection gets most of the desktop width", b.js("return document.querySelector('.alt-inspector-card').clientWidth > document.querySelector('.alt-visual-card').clientWidth * 1.7"))
                 b.click('.alt-tree .alt-pass-heading[data-pass="1"]')
-                r.check("D982: a pass's row shows the pass in the inspector: its steps and where its time went", b.js("const d=document.querySelector('.alt-pass-detail');return !!d && d.querySelector('h2').textContent==='Pass 1' && !!d.querySelector('.alt-bar.tall') && [...d.querySelectorAll('.alt-step-row .alt-task-name')].some(n=>n.textContent.startsWith('Design · first'))"))
+                r.check("D982: a pass's row shows the pass in the inspector: its steps and where its time went", b.js("const d=document.querySelector('.alt-pass-detail');return !!d && d.querySelector('h2').textContent==='Pass 1' && !!d.querySelector('.meter.stacked.tall') && [...d.querySelectorAll('.alt-step-row .alt-task-name')].some(n=>n.textContent.startsWith('Design · first'))"))
                 b.click('.alt-tree [data-task="1"]')     # D1055: a task and its one command -- its panel is the command's
                 r.check("a tool inspector shows command, stdin, stdout and neutral debug stderr together", b.js("const d=document.querySelector('.alt-detail');return ['python3 check.py','case one','CHECK OK','DEBUG diagnostic'].every(t=>d.textContent.includes(t)) && !d.querySelector('.err')"))
                 b.js("document.querySelector('.alt-detail details[data-fold=stdout] summary').click(); return 1")
@@ -689,7 +689,7 @@ def general_flows(r, watch):
                 r.check("changing representation keeps pass and pinned task", b.js("return document.querySelector('[aria-label=\"Live pass\"]').value==='all' && document.querySelector('.alt-detail').dataset.task==='1'"))
                 b.click('.alt-chip[data-chain="2"]')
                 b.wait("document.querySelector('.alt-chip.sel')?.textContent==='2'", what="pass 2's flow")
-                r.check("a running pass shows the boxes still to come as waiting, an agent's box with its pill", b.js("return !!document.querySelector('.alt-flow-box[data-box=design] .alt-glow') && [...document.querySelectorAll('.alt-flow-box[data-box=design] .alt-ai-box-text')].some(t=>t.textContent==='AI') && !!document.querySelector('.alt-flow-box[data-box=check] .alt-box.wait') && !!document.querySelector('.alt-flow-box[data-box=measure] .alt-box.wait')"))
+                r.check("a running pass shows the boxes still to come as waiting, an agent's box with its pill", b.js("return !!document.querySelector('.alt-flow-box[data-box=design] .alt-glow') && [...document.querySelectorAll('.alt-flow-box[data-box=design] .svg-pill.ai text')].some(t=>t.textContent==='AI') && !!document.querySelector('.alt-flow-box[data-box=check] .alt-box.wait') && !!document.querySelector('.alt-flow-box[data-box=measure] .alt-box.wait')"))
                 b.wait("document.querySelector('.alt-flow-box[data-box=choose] .alt-box-note')", what="Choose objective note")
                 r.check("long objective notes sit below Choose, stay inside the box, and expose their full text on hover", b.js("""const box=document.querySelector('.alt-flow-box[data-box=choose]'), note=box.querySelector('.alt-box-note');
                   const n=note.getBoundingClientRect(), t=box.querySelector('.alt-box-title').getBoundingClientRect(), r=box.querySelector('.alt-box').getBoundingClientRect();
@@ -847,7 +847,7 @@ def general_flows(r, watch):
                     b.click(f'.alt-flow-box[data-box="{key}"] .alt-box-title')
                     r.check(f"completed phase box is clickable: {key}", b.js("return document.querySelector('.alt-detail').dataset.task===String(arguments[0]) && document.querySelector('.alt-flow-box[data-box=\"'+arguments[1]+'\"]').getAttribute('aria-pressed')==='true'", task_id, key))
                 r.check("a critique is in the box it judges, badged, with no box of its own",
-                        b.js("return !document.querySelector('.alt-flow-box[data-box=critic]') && !!document.querySelector('.alt-flow-box[data-box=choose] .alt-critic-pill') && !document.querySelector('.alt-flow-box[data-box=check] .alt-critic-pill')"))
+                        b.js("return !document.querySelector('.alt-flow-box[data-box=critic]') && !!document.querySelector('.alt-flow-box[data-box=choose] .svg-pill.critic') && !document.querySelector('.alt-flow-box[data-box=check] .svg-pill.critic')"))
                 r.button("Tree", ".subrow .subtabs")
                 choose("Live start", "11")
                 b.wait("document.querySelector('.alt-visual').textContent.includes('No task journal for this start')", what="missing historical data")
@@ -1304,12 +1304,12 @@ objectives: [{metric: timings.fast, goal: 15, direction: minimize},
                     "const d = document.querySelector('dialog.agent-dlg .agent-turn .alt-chat'); return !!d && !!d.querySelector('.cv-think') && d.textContent.includes('Design two is best')"))
                 b.js("document.querySelector('dialog.agent-dlg .head .close').click(); return 1")
                 b.click(f'.ask-reply[data-reply-to="{root}"]')
-                b.wait("document.querySelector('.ask-compose-head').textContent.includes('Reply to:')", what="reply context")
+                b.wait("document.querySelector('.ask-compose .composer-head').textContent.includes('Reply to:')", what="reply context")
                 b.js("const q = document.querySelector('#ask-q'); q.value = 'Explain the numbers'; q.dispatchEvent(new Event('input')); return 1")
                 b.click(".drawer .head .close")
                 b.click(".ask-fab")
                 b.wait("document.querySelector('.drawer.open #ask-q') && getComputedStyle(document.querySelector('.drawer')).transform === 'none'", what="reopened chat")
-                r.check("closing Ask preserves the follow-up and its draft", b.js("return document.querySelector('#ask-q').value === 'Explain the numbers' && document.querySelector('.ask-compose-head').textContent.includes('Reply to:')"))
+                r.check("closing Ask preserves the follow-up and its draft", b.js("return document.querySelector('#ask-q').value === 'Explain the numbers' && document.querySelector('.ask-compose .composer-head').textContent.includes('Reply to:')"))
                 b.click(".ask-send")
                 b.wait("window.__askPosted.length === 1 && document.querySelectorAll('.ask-turn').length === 3", what="follow-up response",
                        said="JSON.stringify({posted: window.__askPosted.length, turns: document.querySelectorAll('.ask-turn').length, q: document.querySelector('#ask-q')?.value,"
@@ -1320,13 +1320,13 @@ objectives: [{metric: timings.fast, goal: 15, direction: minimize},
                 r.check("collapsing a conversation shows only its initial prompt", b.js("const c = document.querySelector('.selected-thread'), visible = [...c.querySelectorAll('.ask-message')].filter(el => el.getClientRects().length); return visible.length === 1 && visible[0].querySelector('p').textContent === 'Why is this design best?' && c.querySelector('.ask-collapse').getAttribute('aria-expanded') === 'false' && !c.querySelector('.ask-turn .ask-reply').getClientRects().length && !!c.querySelector('.ask-reply-top').getClientRects().length"))
                 b.click(".drawer .head .close"); b.click(".ask-fab")
                 b.wait("document.querySelector('.drawer.open .selected-thread.collapsed') && getComputedStyle(document.querySelector('.drawer')).transform === 'none'", what="reopened collapsed chat")
-                r.check("closing Ask preserves the collapsed conversation and its reply context", b.js("return document.querySelector('.selected-thread .ask-collapse').textContent === 'Expand' && document.querySelector('.ask-compose-head').textContent.includes('Reply to:')"))
+                r.check("closing Ask preserves the collapsed conversation and its reply context", b.js("return document.querySelector('.selected-thread .ask-collapse').textContent === 'Expand' && document.querySelector('.ask-compose .composer-head').textContent.includes('Reply to:')"))
                 b.js('document.querySelector(`[data-ask-toggle="${arguments[0]}"]`).focus(); return 1', root)
                 b.keys(b.ENTER)
                 r.check("keyboard expansion restores the answers and follow-up messages", b.js("const c = document.querySelector('.selected-thread'); return !c.classList.contains('collapsed') && c.querySelector('.ask-collapse').getAttribute('aria-expanded') === 'true' && [...c.querySelectorAll('.ask-message')].every(el => el.getClientRects().length) && c.querySelectorAll('.ask-user p').length === 2"))
                 b.click(".ask-new")
-                b.wait("document.querySelector('.ask-compose-head').textContent === 'New conversation'", what="new chat composer")
-                r.check("New chat clears the reply context", b.js("return document.querySelector('.ask-compose-head').textContent") == "New conversation")
+                b.wait("document.querySelector('.ask-compose .composer-head').textContent === 'New conversation'", what="new chat composer")
+                r.check("New chat clears the reply context", b.js("return document.querySelector('.ask-compose .composer-head').textContent") == "New conversation")
                 b.js("window.__askFail = true; const q = document.querySelector('#ask-q'); q.value = 'Keep this draft'; q.dispatchEvent(new Event('input')); return 1")
                 b.click(".ask-send")
                 b.wait("window.__e2e.bad.some(t => t.includes('Try again shortly'))", what="failed send explained")
@@ -1356,7 +1356,7 @@ objectives: [{metric: timings.fast, goal: 15, direction: minimize},
                 b.click(".drawer .head .close"); b.click(".ask-fab")
                 b.wait("document.querySelector('.ask-reply') && getComputedStyle(document.querySelector('.drawer')).transform === 'none'", what="finished conversation")
                 b.click(f'.ask-reply[data-reply-to="{root}"]')
-                b.wait("document.querySelector('.ask-compose-head').textContent.includes('Reply to:')", what="selected conversation")
+                b.wait("document.querySelector('.ask-compose .composer-head').textContent.includes('Reply to:')", what="selected conversation")
                 b.js("document.querySelector('.ask-history').scrollTop = 0; document.querySelectorAll('.toast .x').forEach(x => x.click()); return 1")
                 b.shot(r.shots / "ask-chat-desktop.png", full=True)
                 r.check("watcher sharing for the chat fixture", r.api(f"/apps/{name}/shares", "PUT", {"user": "cy", "perm": "watch"})["status"] == 200)

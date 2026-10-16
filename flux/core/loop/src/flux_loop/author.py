@@ -184,17 +184,10 @@ def brief(ask: Ask, *, inline: bool, error: str = "", report: str = "", current:
 
 def author_skills() -> list[Any]:
     """The author's skills (D1123) from the repository's `skills/` (`FLUX_AUTHOR_SKILLS` names another folder);
-    none where Flux runs without its repository."""
-    import os
+    none where Flux runs without its repository (flux_loop.skills.builtin_skills, a loop's agents' too)."""
+    from .skills import builtin_skills
 
-    from .skills import SkillError, load_skills
-
-    root = Path(os.environ.get("FLUX_AUTHOR_SKILLS") or FLUX_ROOT.parent / "skills")
-    folders = [root / n for n in AUTHOR_SKILLS if (root / n / "SKILL.md").is_file()]
-    try:
-        return load_skills(folders) if folders else []
-    except SkillError:
-        return []
+    return builtin_skills(AUTHOR_SKILLS)
 
 
 def install_author_skills(workdir: Path) -> list[str]:

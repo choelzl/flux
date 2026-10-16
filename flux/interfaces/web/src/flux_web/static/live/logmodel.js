@@ -2,10 +2,10 @@
 // partial last line held back), each with the run's own time when the stamper wrote one; what a line is (a start's
 // marker, a problem, a warning, good news); a filter (text, or /regex/). Plain functions, no page.
 
-export const PROBLEM = /\b(error|errors|traceback|exception|failed|failure|refused|did not build|timed out|killed)\b|✗/i;
+const PROBLEM = /\b(error|errors|traceback|exception|failed|failure|refused|did not build|timed out|killed)\b|✗/i;
 const WARN = /\b(warning|nudged|retry|stopping|interrupted|could not)\b/i;
 const GOOD = /\b(ADMITTED|DECISION|passed|decided)\b/;
-export const MARK = /^── started (.+?) ──$/;
+const MARK = /^── started (.+?) ──$/;
 const STAMP = /^(\d{4}-\d\d-\d\d \d\d:\d\d:\d\d)\.\d{3} /;   // flux_web.stamp.STAMP_RE (D732)
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 

@@ -192,5 +192,6 @@ def test_a_box_agent_reads_the_record_through_flux_loop_not_the_database(loop, t
     assert box_turn("orchestrate", spec, "Which design next?", {"type": "object", "properties": {"ok": {"type": "boolean"}}},
                     state, problem=problem) == {"ok": True}, said
     seen = json.loads(next((tmp_path / "pass").rglob("seen.json")).read_text())
-    assert "flux loop results --json" in seen["brief"] and "Never open the record database" in seen["brief"]
+    assert "flux loop results" in seen["brief"] and "Never open the record database" in seen["brief"]
+    assert "your skill `flux-loop-commands`" in seen["brief"], "D1152: the built-in skill says the rest"
     assert seen["probe"] and json.loads(seen["results"])["designs"][0]["name"] == "mul8#3"

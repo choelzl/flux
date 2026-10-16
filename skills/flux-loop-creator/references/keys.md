@@ -16,7 +16,7 @@ file is the subset you need most often; defaults in parentheses.
 | `params` | Free map, reaches commands as `{params}` (params.json). |
 | `parts` | List / map name -> description / `decompose` (max 8). Not with `subtasks`. |
 | `subtasks` | List of child folders, inline maps with `id`, or `decompose`; `max_subtasks` (4). |
-| `skills` | Folder or list of folders of skills for agents. |
+| `skills` | Unsaid: `skills/` beside the document, plus the built-in `flux-loop-commands` for every agent. `off` (none at all), a folder or list of folders, or `{from: [folders], off: [skill names]}` (a built-in one too). |
 | `baseline` | `true`, `{file}`, `{command, timeout_s}`, `{metrics: [{metric, value, stage}]}`, `only: true`. |
 | `ladder` | true / false / map. |
 
@@ -36,7 +36,7 @@ Refused: `id` (the folder is the id) and every old top-level form (`gate`, `stag
 | `select` | objectives, agent (tie-breaker only), `{finalists: 3}` |
 | `calibrate` | on, off |
 | `feedback` | human, off |
-| `knowledge` | `{files, text, sheet, digest: model|<agent>, lessons: off|mined|<agent>}` or `off` |
+| `knowledge` | `{files, text, sheet, digest: model|<agent>, lessons: off|mined|<agent>, workbench: off|model|<agent>}` or `off` (`workbench` unsaid: whoever digests) |
 
 Any box: a word, an agent name (`claude`, `codex`, `opencode`, or a server agent), or
 `{by: <who>, ...}`. Critics: `critic: <who>` on the box judged (orchestrate, test, select).

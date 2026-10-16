@@ -42,6 +42,33 @@ _OWN_FOLDERS = ("CODEX_HOME", "CLAUDE_CONFIG_DIR", "OPENCODE_CONFIG_DIR", "NGA_D
                 "XDG_DATA_HOME", "XDG_STATE_HOME", "XDG_CACHE_HOME")
 
 
+_AGENTS_OF: dict[tuple[str, float], list[str]] = {}
+
+
+def _agents_of(run: dict[str, Any]) -> list[str]:
+    """The coding agents a running start's document hands work to (flux_loop.agent_check.agents_used), read once per
+    document version (D1147): the loop list says them beside "running"."""
+    argv = json.loads(run.get("argv") or "[]")
+    if len(argv) < 4 or argv[1:3] != ["task", "run"]:
+        return []
+    doc = Path(argv[3])
+    try:
+        key = (str(doc), doc.stat().st_mtime)
+    except OSError:
+        return []
+    if key not in _AGENTS_OF:
+        try:
+            from flux_loop import load_task
+            from flux_loop.agent_check import agents_used
+            from flux_loop.document import confined
+
+            with confined(doc.parent):                     # D905: the host reads nothing outside the loop
+                _AGENTS_OF[key] = agents_used(load_task(str(doc)))
+        except Exception:  # noqa: BLE001 -- a document the run refuses says so on its own page
+            _AGENTS_OF[key] = []
+    return _AGENTS_OF[key]
+
+
 def home_ready(store: Store, user: User) -> Path:
     """`user`'s Flux home (D744), started from the admin's list of home files where it lacks
     them -- copied from this server account's home, never over what the user has."""
@@ -682,7 +709,10 @@ class RunManager:
             st = ops.status(cid, run["db"])
             if st.get("started") and float(st["started"]) >= float(run["started"]):   # this start's registration
                 info.update(passes=st.get("passes"), at_rest=st.get("at_rest"), stop_requested=bool(st.get("stop") or action),
-                            container=st.get("container"), baseline=bool(st.get("baseline")))
+                            container=st.get("container"), baseline=bool(st.get("baseline")),
+                            pass_since=st.get("last_pass_ended") or run["started"])      # D1147: the current pass's start
+        if running:
+            info["agents"] = _agents_of(run)
         info["events"] = bool(rdir and os.path.exists(os.path.join(rdir, "events.jsonl")))
         info["question"] = self.open_question(run, rdir) if running else None
         return info

@@ -9,7 +9,7 @@ import { restoreScroll, scrollState } from "../scroll.js";
 import { Act } from "../components/Act.js";
 import { MECHANISM, VERIFIED } from "../admin/Agents.js";
 import { usePoll } from "../components/Load.js";
-import { Pill, Said } from "../components/Tone.js";
+import { Pill, Said, Failed } from "../components/Tone.js";
 
 const FIELD_WORD = { endpoint: "endpoint", key: "key", auth: "token", token: "login token", model: "model" };
 /** Links as links, the rest as text. */
@@ -79,27 +79,31 @@ function AgentLogin({ a, test, login }) {
 
 /** The agents and the terminal: `lg` what /logins said; `placed` the agents drawn in their own tab (their panel). */
 export function useLogins() {
-  const [lg, setLg] = useState(null), [session, setSession] = useState(0), testing = useRef(new Set());
-  const read = async () => {
-    const got = await api("/logins").catch(() => null);
-    if (!got) return;
+  const [lg, setLg] = useState(null), [failed, setFailed] = useState(null), [session, setSession] = useState(0), testing = useRef(new Set());
+  const read = async (live = () => true) => {
+    let got;
+    try { got = await api("/logins"); } catch (x) { if (live() && x.message !== "log in") setFailed(x.message); return null; }
+    if (!live()) return null;
+    setFailed(null);
     // D751: an agent is used in your loops once its test passed; D768: a login that ended well is tested at once, on the server
     for (const a of got.agents) if (testing.current.has(a.id) && !a.testing && a.tested)
       toast(a.tested.ok ? `${a.label} is ready` : `${a.label} failed its test: see its steps`, a.tested.ok ? "ok" : "warn");
     testing.current = new Set(got.agents.filter(a => a.testing).map(a => a.id));
     setLg(got);
     if (got.session?.running && !session) setSession(n => n + 1);
+    return got;
   };
-  useEffect(() => { read(); }, []);
-  useEffect(() => { if (!lg || !testing.current.size) return; const t = setTimeout(read, 2000); return () => clearTimeout(t); }, [lg]);
+  // read when drawn, and every 2 s while an agent is being tested (D1149)
+  const poll = usePoll(async live => (await read(live)) && testing.current.size ? 2000 : null);
   const test = async (a, loop = "") => {
     toast(`Testing ${a.label}${loop ? ` for ${loop}` : ""}…`, "info");
     const got = await api(`/agents/${a.id}/test${loop ? `?loop=${enc(loop)}` : ""}`, { method: "POST" });
     toast(got.ok ? `${a.label} is ready${loop ? ` for ${loop}` : ""}` : `${a.label} is not ready: see its steps`, got.ok ? "ok" : "warn");
-    await read();
+    await poll.now();
   };
   const login = async a => { await api(`/logins/${a.id}`, { method: "POST" }); setSession(n => n + 1); };
   const panel = a => html`<${AgentLogin} key=${a.id} a=${a} test=${test} login=${login} />`;
-  const terminal = session ? html`<${Terminal} session=${session} onEnded=${read} />` : "";
-  return { lg, panel, terminal };
+  const terminal = session ? html`<${Terminal} session=${session} onEnded=${poll.now} />` : "";
+  const said = failed && !lg ? html`<${Failed} what="Agent logins could not be read" why=${failed} retry=${poll.now} />` : "";
+  return { lg, said, panel, terminal };
 }

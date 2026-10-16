@@ -122,6 +122,9 @@ def _layout(doc: Any) -> Any:
             know["off"] = True
     elif isinstance(fk, dict):
         know.update(fk)
+    bench = doc.get("bench_digest")                        # D1152: who sums up the workbench
+    if bench is not None:
+        know["workbench"] = _by_doc(bench["agent"], {}) if isinstance(bench, dict) else bench
     if know:
         flow["knowledge"] = "off" if know == {"off": True} else know
     else:

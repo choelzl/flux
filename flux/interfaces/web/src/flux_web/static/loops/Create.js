@@ -5,9 +5,8 @@
 import { Card, html, useRef, useState } from "../view.js";
 import { api, createFromText, enc, toast } from "../ui.js";
 import { plural } from "../format.js";
-import { sendFiles } from "../uploads.js";
+import { sendFiles, sendWithProgress } from "../uploads.js";
 import { bound } from "../components/Autosave.js";
-import { progressDialog } from "../components/Modal.js";
 import { Act } from "../components/Act.js";
 import { CodeEditor } from "../components/CodeEditor.js";
 import { Uploader, placedFiles } from "../components/Uploader.js";
@@ -31,15 +30,8 @@ export function UploadForm() {
       location.hash = `#/app/${enc(made.name)}/settings/problem`;
       return;
     }
-    const pd = progressDialog("Uploading", `${plural(chosen.length, "file")} to ${n}`);
-    try {
-      const sent = await sendFiles(n, chosen, { create: true, onProgress: pd.set, signal: pd.signal });
-      pd.close();
-      toast(`${n} uploaded: ${plural(sent, "file")}`, "ok"); location.hash = `#/app/${enc(n)}`;
-    } catch (x) {
-      pd.close();
-      toast(pd.signal.aborted ? `The upload was cancelled: ${x.message}.` : `The upload failed: ${x.message}`, pd.signal.aborted ? "warn" : "bad", { timeout: 12000 });
-    }
+    const sent = await sendWithProgress("Uploading", `${plural(chosen.length, "file")} to ${n}`, p => sendFiles(n, chosen, { create: true, ...p }));
+    if (sent != null) { toast(`${n} uploaded: ${plural(sent, "file")}`, "ok"); location.hash = `#/app/${enc(n)}`; }
   };
   return html`<${Card}><div class="upload">
     <label class="stack">Name<input placeholder="my_loop" pattern="[A-Za-z0-9_\\-]{1,60}" maxlength="60" class="full" id="up-name" autocomplete="off" ...${bound(name, setName)} /></label>

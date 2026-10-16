@@ -12,7 +12,7 @@ import { Act } from "./Act.js";
 /** A choice listed under a question (`- a`, `1. a`, `a) a`) -- flux_loop.author.question_options' pattern. */
 const OPTION = /^\s*(?:[-*•]|\d+[.)]|\(?[a-zA-Z][.)])\s+/;
 /** The answer "You decide" sends: the agent chooses, and says what it chose. */
-export const YOU_DECIDE = "You decide: choose what fits the ask best, and say what you chose.";
+const YOU_DECIDE = "You decide: choose what fits the ask best, and say what you chose.";
 
 /** The line of a question that asks (the one ending in "?"), else its first. */
 export const asks = q => String(q || "").split("\n").filter(l => l.trim() && !OPTION.test(l)).find(l => l.trim().endsWith("?")) || String(q || "").split("\n")[0];

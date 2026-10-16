@@ -15,8 +15,10 @@ import { Controls } from "../live/Page.js";
 import { Talk } from "./Talk.js";
 import { Drawer } from "./Drawer.js";
 import { CheckButton, NotRun } from "./Cards.js";
-import { Composer } from "./Notes.js";
-import { Crumbs, LoopHead, Tabs } from "./Head.js";
+import { NoteComposer } from "./Notes.js";
+import { LoopHead } from "./Head.js";
+import { Crumbs } from "../components/Crumbs.js";
+import { Tabs } from "../components/Tabs.js";
 import { Ask, AskLine } from "../components/Ask.js";
 import { LoopContext } from "./context.js";
 import { AgentsBody, FilesBody, IdeasBody, LiveBody, OverviewBody, ResultsBody, SettingsBody } from "./Bodies.js";
@@ -141,7 +143,7 @@ export function LoopPage({ name, owner, info, path }) {
         : html`<${SettingsBody} key=${k} />`;
     }
   };
-  const steer = mine && st.running ? html`<${Composer} name=${name} mine=${mine} send=${ctx.sendNote} n=${notesSent} />` : null;
+  const steer = mine && st.running ? html`<${NoteComposer} name=${name} mine=${mine} send=${ctx.sendNote} n=${notesSent} />` : null;
   const toggle = open => setTalk(t => ({ open, opened: t.opened || open }));
   // D919, D1131: the agent's question -- a line on every tab, answered on its card in Talk (by a note, as before)
   const asking = question && st.running ? question : null;

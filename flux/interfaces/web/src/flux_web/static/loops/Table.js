@@ -2,14 +2,14 @@
 // state, its last activity, its designs (this run / every run), the decision's main measurements; Start, Stop
 // and Restart where one may -- and the list with its search and its state chips.
 
-import { Empty, html, useState } from "../view.js";
+import { Ago, Empty, html, useState } from "../view.js";
 import { enc } from "../ui.js";
 import { can, me, pageRefresh } from "../state.js";
 import { num } from "../format.js";
 import { mainMeasurements, measurementText, relativeMeasurement } from "../results/preferences.js";
 import { startLoop, stopLoop, restartLoop } from "../loops.js";
 import { Act } from "../components/Act.js";
-import { LastSaid, StatePill } from "../components/StatePill.js";
+import { StatePill } from "../components/StatePill.js";
 import { SortableTable } from "../components/SortableTable.js";
 import { Pill, Tag } from "../components/Tone.js";
 import { Choice } from "../components/Tabs.js";
@@ -31,9 +31,14 @@ function LoopActions({ l, name, owner, href }) {
       ${canRun ? html`<${Act} cls=${`small${restartNow ? " danger solid" : ""}`} title=${restartNow ? "Restart scheduled: press again to abandon the pass." : "Restart after this pass"}
         onClick=${() => restartLoop(name, restartNow, owner).then(redrawn)}>Restart<//>` : ""}`;
   }
-  return html`${canRun ? html`<${Act} cls="small primary" onClick=${async () => { if (await startLoop(name, owner)) location.hash = href; }}>Start<//>` : ""}
-    ${owner ? "" : html`<a class="btn small" href=${`#/app/${enc(name)}/settings/problem`}>Configure</a>`}`;
+  return canRun ? html`<${Act} cls="small primary" onClick=${async () => { if (await startLoop(name, owner)) location.hash = href; }}>Start<//>` : null;
 }
+
+/** D1147: when a running loop started and when its current pass did (State says running, Designs the passes'
+    work); a loop at rest, when it was last active. */
+const Activity = ({ l }) => l.running
+  ? html`since <${Ago} t=${l.since} />${l.pass_since ? html`, last <${Ago} t=${l.pass_since} />` : ""}`
+  : l.last_active ? html`last <${Ago} t=${l.last_active} />` : "never run";
 
 /** The decision's main measurements, met or missed, as the loop shows them (D837). */
 function Best({ l, name, owner }) {
@@ -62,7 +67,7 @@ export function LoopsTable({ loops, who = false, memo = "flux-sort-loops" }) {
     const href = owner ? `#/u/${enc(owner)}/app/${enc(name)}` : `#/app/${enc(name)}`;
     return html`<tr class="clickable" onClick=${e => { if (!e.target.closest("a, button")) location.hash = href; }}>
       ${who ? html`<td>${l.owner}</td>` : ""}<td><a href=${href} class="strong">${name}</a></td>
-      <td><${StatePill} st=${l} />${l.question ? html`<${Pill} tone="warn">asks<//>` : ""}</td><td class="muted"><${LastSaid} st=${l} /></td>
+      <td><${StatePill} st=${l} />${l.question ? html`<${Pill} tone="warn">asks<//>` : ""}${(l.agents || []).map(a => html`<${Tag} k="var(--agent)" cls="loop-agent">${a}<//>`)}</td><td class="muted"><${Activity} l=${l} /></td>
       <td class="num mono" title=${s.designs ? `${s.this_run || 0} this run, ${s.designs} in all, ${s.accepted} accepted` : null}>
         ${s.designs ? html`${String(s.this_run || 0)}<span class="muted">${` / ${s.designs}`}</span>` : html`<span class="muted">—</span>`}</td>
       <td class="mono loop-main-measurements"><${Best} l=${l} name=${name} owner=${owner} /></td>

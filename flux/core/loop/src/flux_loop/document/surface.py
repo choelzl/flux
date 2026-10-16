@@ -97,6 +97,14 @@ def _by_surface(flow: dict[str, Any]) -> dict[str, Any]:
             flow["knowledge"] = k
         else:
             flow.pop("knowledge")
+    k = flow.get("knowledge")
+    if isinstance(k, dict) and "workbench" in k:           # D1152: who sums up the workbench, beside the library
+        k = dict(k)
+        flow["_bench"] = k.pop("workbench")
+        if k:
+            flow["knowledge"] = k
+        else:
+            flow.pop("knowledge")
     out = dict(flow)
     for box, value in flow.items():
         if box in ("test", "measure") or box not in FLOW_BOXES:
@@ -232,6 +240,8 @@ def _lift(doc: dict[str, Any]) -> dict[str, Any]:
         doc["scope"] = o.pop("scope")
         raw = {**raw, "orchestrate": o} if o else {k: v for k, v in raw.items() if k != "orchestrate"}
     flow = _by_surface(raw) if strict else dict(raw)
+    if "_bench" in flow:
+        doc["bench_digest"] = flow.pop("_bench")
     for box in ("test", "measure"):
         if isinstance(raw.get(box), dict) and ("agent" in raw[box] or "by" in raw[box]):
             raise TaskError(f"flow.{box} is never delegated to an agent: it establishes facts (D460)")

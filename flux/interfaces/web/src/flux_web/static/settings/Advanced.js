@@ -5,6 +5,7 @@
 import { Card, html, Notice, useState } from "../view.js";
 import { confirmDialog } from "../ui.js";
 import { bound, useAutosave } from "../components/Autosave.js";
+import { Check } from "../components/Check.js";
 
 const names = text => [...new Set(text.split(/[\n,]/).map(x => x.trim()).filter(Boolean))];
 // D936: host folders in the sandbox, one per line: host path:path inside:ro|rw
@@ -36,8 +37,7 @@ function AdvancedForm({ a, sandboxedServer, save }) {
     tmp_size: opt(v.tmp_size), parallel: v.parallel, allow: v.allow.split(/[\n,]/).map(x => x.trim()).filter(Boolean), raw_network: v.raw_network,
     mounts: mountsOf(v.mounts), nix_packages: names(v.nix), nixchip_packages: names(v.chip) }));
   // turning the sandbox off asks first
-  const sandbox = async e => {
-    const on = e.currentTarget.checked;
+  const sandbox = async (on, e) => {
     if (!on && !await confirmDialog("Run this loop on the host?", ["Outside the sandbox:", "its commands and agents run on this machine as the server's user"], { ok: "Run on the host", danger: true })) {
       e.currentTarget.checked = true; return;
     }
@@ -45,10 +45,10 @@ function AdvancedForm({ a, sandboxedServer, save }) {
     saveNow();
   };
   const num = (k, label, ph) => html`<label class="stack">${label}<input id=${`adv-${k}`} placeholder=${ph} class="w-120" ...${bound(v[k], x => set({ [k]: x }))} /></label>`;
-  const check = (k, id, label) => html`<label class="check"><input type="checkbox" id=${id} checked=${v[k]} onChange=${e => set({ [k]: e.currentTarget.checked })} />${label}</label>`;
+  const check = (k, id, label) => html`<${Check} id=${id} checked=${v[k]} onChange=${x => set({ [k]: x })}>${label}<//>`;
   const area = (k, id, label, ph) => html`<label class="stack">${label}<textarea id=${id} rows="2" class="mono" placeholder=${ph} ...${bound(v[k], x => set({ [k]: x }))} /></label>`;
   return html`<div ...${box}><p class="muted">From the next start.</p>
-    <label class="check"><input type="checkbox" id="adv-sandbox" data-autosave-skip checked=${v.sandbox} onChange=${sandbox} />Run in the sandbox (off: trusted code only)</label>
+    <${Check} id="adv-sandbox" data-autosave-skip checked=${v.sandbox} onChange=${sandbox}>Run in the sandbox (off: trusted code only)<//>
     ${sandboxedServer ? "" : html`<${Notice} tone="warn" what="This server runs without a sandbox:" why="these apply once it has one." />`}
     <div class="row">${num("memory", "Memory", "no limit")}${num("cpus", "CPUs", "no limit")}${num("pids", "Processes", "4096")}${num("tmp_size", "Scratch /tmp", "no limit")}</div>
     ${check("parallel", "adv-parallel", "Allow parallel work")}

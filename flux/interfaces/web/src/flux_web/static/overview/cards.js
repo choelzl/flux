@@ -73,7 +73,7 @@ export function overviewCards(o) {
         ${ctx.mine ? html`<${Bin} what="note" title="Remove this note?" said="Removed unless the loop read it already."
           remove=${async () => { await loopApi(ctx.name).api(`/notes/${enc(n.id)}`, { method: "DELETE" }); toast("Note removed", "ok"); ctx.drawBody(); }} />` : ""}</div>`)}</div><//>` : null,
     workbench: a => bench.length ? html`<${Card} ...${a} title="Workbench"><ul class="bench">${bench.slice(0, 5).map(b => html`<li key=${b.path}>
-        <a href="javascript:void 0" onClick=${go("Files", "workbench")}>${b.path.split("/").pop()}</a><small class="muted"> <${Ago} t=${b.mtime} /></small>
+        <button type="button" class="link file-link" onClick=${go("Files", "workbench")}>${b.path.split("/").pop()}</button><small class="muted"> <${Ago} t=${b.mtime} /></small>
         ${b.first ? html`<div class="first">${b.first}</div>` : ""}</li>`)}</ul><//>` : null,
     usage: a => html`<${Card} ...${a} title="Agents" actions=${button("Agents", "Agents")}>${total ? html`
         <p>${`${plural(total.turns, "turn")} · ${dur(total.seconds) || "0s"}`}</p>

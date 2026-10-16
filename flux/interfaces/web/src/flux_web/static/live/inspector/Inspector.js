@@ -14,6 +14,7 @@ import { ChooseBody, CriticBody, NotesFold, SearchBody, StepsBody, ToolBody } fr
 import { candidateOf, colorOf, has, headOf, isAgent, isModel, isTool, metricsOf, plain, running, stdoutOf, taskLabel } from "./parts.js";
 import { Pill, Tag } from "../../components/Tone.js";
 import { Head, Tool } from "../../components/Head.js";
+import { Meter } from "../../components/Stat.js";
 
 /** D1094: who did the work, in words -- the program a command ran, the agent or model that answered, its try
     (D1075: the tree's); an engine's own step name says nothing the title does not (it is the tooltip). */
@@ -45,6 +46,9 @@ function Body({ n, env, a, mem }) {
   if (isModel(n)) return html`<div class="task-inspector agent-turn"><${ModelChat} n=${n} env=${env} mem=${mem} /></div>`;
   if (isTool(n)) return html`<${ToolBody} n=${n} env=${env} mem=${mem} />`;
   if (n.kids.length === 1 && isTool(n.kids[0]) && !(n.kids[0].kids || []).length) return html`<${ToolBody} n=${n.kids[0]} env=${env} mem=${mem} />`;
+  // D1148: a setup step that is only its agent's or model's turn (the workbench's digest) shows that turn
+  const turn = n.kids.length === 1 && !(n.kids[0].kids || []).length && (isAgent(n.kids[0]) || isModel(n.kids[0])) && phaseKind(n) === "setup" ? n.kids[0] : null;
+  if (turn) return html`<${Body} n=${turn} env=${env} a=${a} mem=${memoryOf(turn.id)} />`;
   const hd = headOf(n);
   if (hd === "dse") return html`<${SearchBody} n=${n} a=${a} env=${env} />`;
   if (["decide", "frontier", "decision", "select"].includes(hd) || /^propose:\s*what next/i.test(n.name)) return html`<${ChooseBody} n=${n} a=${a} env=${env} />`;
@@ -90,7 +94,7 @@ export function PassSummary({ p, nodes, a, N, head = true }) {
       <span class="muted">${dur(t1 - t0)}</span><//>` : ""}
     ${cand ? html`<div key="tried" class="alt-tried"><div class="alt-label">Tried</div><b>${cand}</b><span class="mono muted small">${Object.entries(meas).slice(0, 3).map(([k, v]) => `${k} ${num(v)}`).join(" · ")}</span></div>` : ""}
     <div><div class="alt-label">Where the time went</div>
-      <div class="alt-bar tall">${order.map(k => html`<i style=${`width:${100 * kinds[k] / total}%;background:${COLORS[k]}`} title=${`${workLabel(k)} ${dur(kinds[k])}`} />`)}</div>
+      <${Meter} cls="tall" parts=${order.map(k => [kinds[k] / total, COLORS[k], `${workLabel(k)} ${dur(kinds[k])}`])} />
       <div class="mono muted small">${order.slice().sort((x, y) => kinds[y] - kinds[x]).filter(k => kinds[k] >= 1).map(k => `${workLabel(k)} ${dur(kinds[k])}`).join(" · ") || "all under a second"}</div></div>
     ${steps.length ? html`<div class="alt-steps">${steps.map(x => html`<${StepRow} key=${x.id} x=${x} a=${a} N=${N} />`)}</div>` : ""}`;
 }

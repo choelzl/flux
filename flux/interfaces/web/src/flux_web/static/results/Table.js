@@ -7,6 +7,7 @@ import { dictionaryClasses, measurementLabels, measurementText } from "./prefere
 import { GroupRow, MeasurementHeader, VerdictBadge } from "./columns.js";
 import { Choice } from "../components/Tabs.js";
 import { Table } from "../components/Table.js";
+import { Check } from "../components/Check.js";
 
 const PAGE = 200;
 export const keyOf = d => JSON.stringify([d.part || "", d.base || d.name, d.key || ""]);
@@ -60,7 +61,7 @@ export function ResultsTable({ t, selected, onOpen, onCompare }) {
             `${m}${unit[m] ? ` (${unit[m]})` : ""}${l ? ` · ${l.direction === "maximize" ? "at least" : "at most"} ${l.goal}` : ""}`,
             l ? html`<div class="lim">${`${l.direction === "maximize" ? "≥" : "≤"} ${l.goal}`}</div>` : null); })}</tr>`}>
       ${shown.map(d => html`<tr key=${keyOf(d)} class=${`clickable ${d.verdict}${d.decision ? " decided" : ""}${keyOf(d) === selected ? " sel" : ""}`} onClick=${() => onOpen(d)}>
-        <td class="pick"><input type="checkbox" title="compare" aria-label=${`Compare ${d.name}`} checked=${picked.some(p => keyOf(p) === keyOf(d))}
+        <td class="pick"><${Check} bare title="compare" aria-label=${`Compare ${d.name}`} checked=${picked.some(p => keyOf(p) === keyOf(d))}
           onClick=${e => { e.stopPropagation(); tick(d, e.currentTarget.checked); }} onKeyDown=${e => { if (e.key === "Enter") { e.preventDefault(); e.currentTarget.click(); } }} /></td>
         <td class="mono" title=${`${d.name} · ${d.shown}${d.last ? " · " + d.last : ""}`}>${d.decision ? html`<span class="star" title="decision">★ </span>` : ""}
           <button type="button" class="link mono open-design" title=${`Open ${d.name}`} aria-label=${`Open ${d.name}`} onClick=${e => { e.stopPropagation(); onOpen(d); }}>

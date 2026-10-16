@@ -10,13 +10,14 @@ import { Act } from "../components/Act.js";
 import { LoopsBrowser } from "../loops/Table.js";
 import { Select } from "../components/Select.js";
 import { Pill, Said } from "../components/Tone.js";
+import { Check } from "../components/Check.js";
 
 /** A notification to every user, or to those ticked: `v` {text, kind, all, to}. */
 const NotifyForm = ({ users, v, set }) => html`<div class="stack"><textarea rows="3" placeholder="Message" class="full" value=${v.text} onInput=${e => set({ text: e.currentTarget.value })} />
     <div class="row"><${Select} value=${v.kind} onChange=${kind => set({ kind })} options=${[["info", "info"], ["warn", "warning"], ["bad", "alert"]]} />
-      <label class="check"><input type="checkbox" class="notify-all" checked=${v.all} onChange=${e => set({ all: e.currentTarget.checked })} />everyone</label></div>
-    <div class="notify-who" hidden=${v.all}>${users.map(u => html`<label key=${u} class="check"><input type="checkbox" value=${u} checked=${v.to.includes(u)}
-      onChange=${e => set({ to: e.currentTarget.checked ? [...v.to, u] : v.to.filter(x => x !== u) })} />${u}</label>`)}</div></div>`;
+      <${Check} class="notify-all" checked=${v.all} onChange=${all => set({ all })}>everyone<//></div>
+    <div class="notify-who" hidden=${v.all}>${users.map(u => html`<${Check} key=${u} value=${u} checked=${v.to.includes(u)}
+      onChange=${on => set({ to: on ? [...v.to, u] : v.to.filter(x => x !== u) })}>${u}<//>`)}</div></div>`;
 async function notifyDialog() {
   const users = (await api("/admin/usage").catch(() => [])).map(u => u.user);
   const got = await dialog("Send notification", ({ v, set }) => html`<${NotifyForm} users=${users} v=${v} set=${set} />`,

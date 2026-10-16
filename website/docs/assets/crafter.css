@@ -15,30 +15,24 @@
   --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --radius: 10px;
+  /* the halves of a box: flux.css --half-* (the app's, light), copied -- the docs cannot load flux.css (D1146) */
+  --half-rules: #2b7a86; --half-model: #6a4bd8; --half-agent: #d45eae; --half-fixed: #5f6670; --half-off: #9aa0a8;
 }
 [data-md-color-scheme="slate"] .flux-crafter {
   --bg: #131518; --panel: #1b1e22; --ink: #e5e7ea; --muted: #939aa3; --line: #2b3036; --soft: #22262b;
   --accent: #6f9dff; --accent-ink: #0d1420; --ok: #4cc27e; --bad: #ff6b61; --warn: #e3a53d;
   --shadow: 0 1px 2px rgba(0, 0, 0, .4); color-scheme: dark;
+  /* flux.css :root[data-theme="dark"] --half-*, copied */
+  --half-rules: #6cc4cf; --half-model: #a996ff; --half-agent: #e27cc0; --half-fixed: #aab1bb; --half-off: #7d838c;
 }
 
-/* ---- the drawing's halves: a colour each, its fill mixed into the panel (so both themes) */
+/* ---- the drawing's halves: a colour each (--half-*, the app's tokens), its fill mixed into the panel (so both themes) */
 .flux-crafter {
-  --fc-rules: #2b7a86; --fc-model: #6a4bd8; --fc-agent: #d45eae; --fc-fixed: #5f6670; --fc-off: #9aa0a8;
-  --fc-rules-bg: color-mix(in srgb, var(--fc-rules) 13%, var(--panel));
-  --fc-model-bg: color-mix(in srgb, var(--fc-model) 13%, var(--panel));
-  --fc-agent-bg: color-mix(in srgb, var(--fc-agent) 13%, var(--panel));
-  --fc-fixed-bg: color-mix(in srgb, var(--fc-fixed) 12%, var(--panel));
+  --fc-rules-bg: color-mix(in srgb, var(--half-rules) 13%, var(--panel));
+  --fc-model-bg: color-mix(in srgb, var(--half-model) 13%, var(--panel));
+  --fc-agent-bg: color-mix(in srgb, var(--half-agent) 13%, var(--panel));
+  --fc-fixed-bg: color-mix(in srgb, var(--half-fixed) 12%, var(--panel));
   --fc-off-bg: transparent;
-}
-[data-md-color-scheme="slate"] .flux-crafter,
-:root[data-theme="dark"] body:not([data-md-color-scheme]) .flux-crafter {
-  --fc-rules: #6cc4cf; --fc-model: #a996ff; --fc-agent: #e27cc0; --fc-fixed: #aab1bb; --fc-off: #7d838c;
-}
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) body:not([data-md-color-scheme]) .flux-crafter {
-    --fc-rules: #6cc4cf; --fc-model: #a996ff; --fc-agent: #e27cc0; --fc-fixed: #aab1bb; --fc-off: #7d838c;
-  }
 }
 
 /* ---- the docs page: the app's rules the crafter uses (flux.css: .card, h3, controls, label.stack, .subtabs) */
@@ -197,11 +191,11 @@
 .fc-key { display: inline-flex; align-items: center; gap: 6px; }
 .fc-key i { width: 14px; height: 10px; border-radius: 3px; border: 2px solid var(--fc-c); background: var(--fc-b); }
 .fc-key.fc-off i { border-style: dashed; }
-.fc-rules { --fc-c: var(--fc-rules); --fc-b: var(--fc-rules-bg); }
-.fc-model { --fc-c: var(--fc-model); --fc-b: var(--fc-model-bg); }
-.fc-agent { --fc-c: var(--fc-agent); --fc-b: var(--fc-agent-bg); }
-.fc-fixed { --fc-c: var(--fc-fixed); --fc-b: var(--fc-fixed-bg); }
-.fc-off   { --fc-c: var(--fc-off);   --fc-b: var(--fc-off-bg); }
+.fc-rules { --fc-c: var(--half-rules); --fc-b: var(--fc-rules-bg); }
+.fc-model { --fc-c: var(--half-model); --fc-b: var(--fc-model-bg); }
+.fc-agent { --fc-c: var(--half-agent); --fc-b: var(--fc-agent-bg); }
+.fc-fixed { --fc-c: var(--half-fixed); --fc-b: var(--fc-fixed-bg); }
+.fc-off   { --fc-c: var(--half-off);   --fc-b: var(--fc-off-bg); }
 .fc-drawing { display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; }
 .flux-crafter svg.fc-diagram { width: 100%; max-width: 560px; height: auto; display: block; font-family: var(--sans); }
 .fc-box { cursor: pointer; }
@@ -226,10 +220,10 @@
 .fc-drop { fill: var(--bad); font-size: 15px; font-weight: 700; }
 .fc-box.fc-static, .fc-box.fc-inert { cursor: default; }
 .fc-box.fc-inert:hover rect { stroke-width: 2; }
-.fc-box.fc-static rect { fill: var(--fc-fixed-bg); stroke: var(--fc-fixed); stroke-width: 1.2; stroke-dasharray: none; }
+.fc-box.fc-static rect { fill: var(--fc-fixed-bg); stroke: var(--half-fixed); stroke-width: 1.2; stroke-dasharray: none; }
 .fc-box.fc-static:hover rect { stroke-width: 1.2; }
 .fc-box.fc-static .fc-box-name, .fc-box.fc-static .fc-box-half, .fc-box.fc-static .fc-box-small { fill: var(--muted); }
-.fc-box rect.fc-stack { fill: var(--fc-fixed-bg); stroke: var(--fc-fixed); stroke-width: 1; }
+.fc-box rect.fc-stack { fill: var(--fc-fixed-bg); stroke: var(--half-fixed); stroke-width: 1; }
 .fc-lock { fill: var(--muted); }
 .fc-lock-shackle { fill: none; stroke: var(--muted); stroke-width: 1.3; }
 .fc-lists { font-size: 12.5px; overflow-wrap: anywhere; }

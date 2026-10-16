@@ -107,6 +107,22 @@ class PromptProblem(PrototypeMixin, MeasureMixin, KnowledgeMixin, DraftMixin, Pa
         """The document's skills (D588): what the `skill` tool loads and the agents receive."""
         return list(self.__dict__.get("_skills") or [])
 
+    def agent_skill_list(self) -> list[Any]:
+        """D1152: what every coding agent of the loop receives (the design agent, a box's, a critic, the lessons' and
+        the digests'): the document's skills and the built-in ones (flux_loop.skills.LOOP_SKILLS) it did not turn off;
+        none with `skills: off`. The model's `skill` tool keeps the document's own: the built-in ones run commands."""
+        got = self.__dict__.get("_agent_skills")
+        if got is None:
+            own = self.skill_list()
+            got = []
+            if getattr(self.task, "skills_on", True):
+                from .skills import builtin_skills
+
+                names, off = {s.name for s in own}, set(getattr(self.task, "skills_off", ()))
+                got = own + [s for s in builtin_skills() if s.name not in off and s.name not in names]
+            self.__dict__["_agent_skills"] = got
+        return list(got)
+
     # ---- what the document says
     def ladder(self):
         """The document's `ladder:` (D517): true is the default ladder, an object its fields."""

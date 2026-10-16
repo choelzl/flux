@@ -8,6 +8,7 @@ import { bound, useAutosave } from "../components/Autosave.js";
 import { Select } from "../components/Select.js";
 import { Pill } from "../components/Tone.js";
 import { Table } from "../components/Table.js";
+import { Check } from "../components/Check.js";
 
 const EVERY_UNITS = [["min", 1 / 60], ["h", 1], ["d", 24]];
 const PARAM_LABEL = { days: "older than (days)", keep: "keep (names, comma-separated)", min_free_pct: "alert below (% free)",
@@ -31,12 +32,12 @@ function TaskForm({ t, loops }) {
   const field = ([k, val]) => {
     const label = PARAM_LABEL[k] || k, change = x => set({ params: { ...v.params, [k]: x } });
     return typeof val === "boolean"
-      ? html`<label class="check"><input type="checkbox" data-k=${k} checked=${v.params[k]} onChange=${e => change(e.currentTarget.checked)} />${label}</label>`
+      ? html`<${Check} data-k=${k} checked=${v.params[k]} onChange=${change}>${label}<//>`
       : html`<label class="stack">${label}<input type=${typeof val === "number" ? "number" : "text"} min="0" data-k=${k}
           ...${bound(v.params[k], x => change(typeof val === "number" ? Number(x) : x))} /></label>`;
   };
   return html`<div class="mt-edit" ...${box}><p class="muted">${t.what}</p>
-    <label class="check"><input type="checkbox" checked=${v.on} onChange=${e => set({ on: e.currentTarget.checked })} />on a schedule</label>
+    <${Check} checked=${v.on} onChange=${on => set({ on })}>on a schedule<//>
     <div class="row"><span>every</span><input type="number" min="1" step="1" class="w-80" aria-label="every" ...${bound(v.n, n => set({ n }))} />
       <${Select} aria-label="unit" options=${EVERY_UNITS.map(([k]) => k)} value=${v.unit} onChange=${unit => set({ unit })} /></div>
     ${Object.entries(t.params).map(field)}

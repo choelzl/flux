@@ -187,3 +187,55 @@ def test_a_passs_own_setup_is_its_first_box():
       const setup = b.find(x => x.key === "setup");
       return [b.map(x => x.key), setup.kind, setup.title, setup.state, setup.runs.map(n => n.id), s.map(x => x.key)]; }""")
     assert got == [["setup", "search", "design", "check", "measure", "choose"], "setup", "Setup", "run", [1, 2, 3], ["Document", "Parts"]]
+
+
+def views(tmp_path, events, js):
+    """The views as the page draws them -- the journal on stdin replayed (events.js), the tree's and the graph's
+    lines worked out (rows.js) -- `js` given the modules and the model."""
+    shutil.copytree(STATIC / "live", tmp_path / "live")
+    shutil.copy(STATIC / "format.js", tmp_path / "format.js")
+    (tmp_path / "package.json").write_text('{"type": "module"}')
+    (tmp_path / "run.js").write_text("""import * as LT from "./live/events.js"; import * as M from "./live/model.js";
+import * as V from "./live/views.js"; import * as R from "./live/rules.js"; import { lines } from "./live/rows.js";
+import { readFileSync } from "fs";
+const m = LT.model();
+for (const l of readFileSync(0, "utf8").split("\\n")) if (l.trim()) LT.apply(m, JSON.parse(l));
+const sc = M.taskScope(m, "all");
+const v = { selected: null, model: m, membership: sc.membership, J: R.judge(m, sc.membership), N: R.namer(["x"]), goals: [],
+  isFolded: () => false, opened: new Set(), allTries: new Set(), pass: "all", passView: null, passNotes: () => [],
+  noteShort: n => n.name, scopeRows: sc.rows, tests: [] };
+const said = l => l.type !== "row" ? l.type : [l.name.map(s => typeof s === "string" ? s : s.b || s.text || "").join("").trim(),
+  l.pills.map(p => p.text).join(","), l.act.task ? l.act.task.id : null];
+process.stdout.write(JSON.stringify((__BODY__)({ LT, M, V, R, lines, m, sc, v, said })));""".replace("__BODY__", js))
+    r = subprocess.run(["node", str(tmp_path / "run.js")], input="".join(json.dumps(e) + "\n" for e in events),
+                       capture_output=True, text=True, timeout=30)
+    assert r.returncode == 0, r.stderr
+    return json.loads(r.stdout)
+
+
+def _digest(old, marked=False):
+    st = lambda i, t, name, why, parent=None: {"ev": "start", "id": i, "t": t, "parent": parent, "name": name, "why": why}  # noqa: E731
+    en = lambda i, t: {"ev": "end", "id": i, "t": t, "seconds": 1, "failed": False, "output": {}}  # noqa: E731
+    head = [{"t": 0, "ev": "hello", "pid": 1}, st(1, 1, "validate", "the document"), en(1, 2)]
+    head += [{"ev": "mark", "name": "pass", "t": 2.5, "why": '{"n": 1}'}] if marked else []
+    body = ([st(3, 3.1, "agent: claude", "digest workbench"), en(3, 9), st(2, 3.0, "knowledge: workbench", "its README"), en(2, 9.1)] if old
+            else [st(2, 3.0, "knowledge: workbench", "its README"), st(3, 3.1, "agent: claude", "digest workbench", 2), en(3, 9), en(2, 9.1)])
+    return head + body + [st(4, 10, "generation: x", "drafts"), st(5, 10.1, "agent: claude", "x#1", 4), en(5, 20), en(4, 20)]
+
+
+@pytest.mark.parametrize("old", [False, True])
+def test_the_workbench_digest_is_one_setup_row_its_agent_its_pill(tmp_path, old):
+    """D1148: Setup listed the workbench twice -- "workbench" and "claude" (AI) -- in the tree's Setup, the Library
+    box's runs and list, a pass's Setup line: a journal written before D1143 had the turn beside its step. One row,
+    the step, its agent its pill (D1050: a wrapper is named as itself), opening the agent's turn."""
+    start = views(tmp_path / "s", _digest(old), """({ lines, m, sc, v, said, V }) => {
+      const rows = sc.rows.filter(r => (sc.membership.get(r.node.id) ?? null) === null);
+      const lib = V.flowBoxes(rows, null, false).find(b => b.key === "Library");
+      return { tree: lines(sc.rows, v).tree().map(said).filter(l => l[0] !== "Pass 1" && !/^Design/.test(l[0])),
+        runs: lib.runs.map(n => n.id), who: lib.who, list: lines(rows.filter(r => lib.ids.has(r.node.id)), v).boxList(lib.runs, "k", "setup").map(said) }; }""")
+    assert start == {"tree": [["Setup", "", None], ["Setup workbench", "AI", 2], ["validate", "", 1], ["workbench", "AI", 3]],
+                     "runs": [2], "who": "AI", "list": [["workbench", "AI", 3]]}
+    passed = views(tmp_path / "p", _digest(old, marked=True), """({ lines, sc, v, said, V }) => {
+      const rows = sc.rows.filter(r => sc.membership.get(r.node.id) === 1), setup = V.flowBoxes(rows, 1, false).find(b => b.key === "setup");
+      return { tree: lines(sc.rows, v).tree().map(said).filter(l => /^Setup ·/.test(l[0])), runs: setup.runs.map(n => n.id) }; }""")
+    assert passed == {"tree": [["Setup · workbench", "AI", 3]], "runs": [2]}

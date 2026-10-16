@@ -38,7 +38,7 @@ function Queue({ idea, refresh }) {
   return idea.queued
     ? html`<div class="idea-queue"><${Tag} k="var(--accent)" title="Tested in this order">${idea.queued === 1 ? "next pass" : `queued · ${idea.queued}`}<//>
         <${Act} cls="small" onClick=${turn} title="Take it off the queue">Unqueue<//></div>`
-    : html`<div class="idea-queue"><${Act} cls="small" onClick=${turn} title="The next free pass builds a design for it">Queue<//></div>`;
+    : html`<div class="idea-queue"><${Act} cls="small" onClick=${turn} title="Next free pass designs it">Queue<//></div>`;
 }
 
 /** D1127: every untested idea queued at once, or the whole queue emptied. */
@@ -47,7 +47,7 @@ function QueueAll({ data, refresh }) {
   const untested = data.ideas.filter(i => i.status === "proposed" && !i.queued).length, queued = (data.queue || []).length;
   const all = async on => { toast((await loopApi(ctx.name).api("/ideas/queue-all", { method: "POST", body: { on } })).ok, "ok"); refresh(); };
   return html`<div class="idea-queue-all"><${Act} cls="small" disabled=${!untested} onClick=${() => all(true)}
-      title="The next passes test them, oldest first">${`Queue all untested (${untested})`}<//>
+      title="Oldest first">${`Queue all untested (${untested})`}<//>
     <${Act} cls="small" disabled=${!queued} onClick=${() => all(false)}>${`Unqueue all (${queued})`}<//></div>`;
 }
 
