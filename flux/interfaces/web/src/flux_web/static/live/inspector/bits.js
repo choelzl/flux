@@ -3,7 +3,7 @@
 
 import { Glyph, html, useLayoutEffect, useRef, useState } from "../../view.js";
 import { bytes, dur } from "../../format.js";
-import { restoreScroll, scrollState } from "../../scroll.js";
+import { restoreScroll, scrollState, shown as visible, useFollow } from "../../scroll.js";
 import { colorOf, running, stateOf, summaryOf, taskLabel, tidyCommand } from "./parts.js";
 import { useLoad } from "../../components/Load.js";
 import { Fact, Pill } from "../../components/Tone.js";
@@ -34,20 +34,16 @@ export function Fold({ k, title, summary, mem, cls = "", children }) {
     <summary><b>${title}</b>${summary ? html`<span class="alt-fold-summary">${summary}</span>` : ""}</summary>${children}</details>`;
 }
 
-const atEnd = el => el.scrollHeight - el.scrollTop - el.clientHeight < 24;
-const visible = el => el.getClientRects().length && !el.closest("details:not([open])");
 /** A text that keeps its place in this task; `follow`: a text that grows stays at its end while one reads
     its end (a new one opens there) -- not a prompt, not what it was given. */
 export function Pre({ k, text, cls = "val", mem, follow = true }) {
-  const ref = useRef(null), end = useRef(true);
-  if (ref.current && visible(ref.current)) end.current = atEnd(ref.current);   // as it stood before this draw
+  const ref = useRef(null);
+  useFollow(ref, follow);                                     // first: a place kept below overrides it
   useLayoutEffect(() => {
-    const el = ref.current, saved = mem?.scroll.get(k);
-    const place = () => { if (saved) restoreScroll(el, saved, { follow }); else if (follow) el.scrollTop = el.scrollHeight; };
-    if (visible(el)) place(); else el.closest("details")?.addEventListener("toggle", () => { if (visible(el)) place(); }, { once: true });
+    const el = ref.current, saved = mem?.scroll.get(k), place = () => restoreScroll(el, saved, { follow });
+    if (saved) { if (visible(el)) place(); else el.closest("details")?.addEventListener("toggle", () => { if (visible(el)) place(); }, { once: true }); }
     return () => { if (mem && visible(el)) mem.scroll.set(k, scrollState(el)); };
   }, []);
-  useLayoutEffect(() => { if (follow && end.current && visible(ref.current)) ref.current.scrollTop = ref.current.scrollHeight; });
   return html`<pre class=${cls} data-k=${k} ref=${ref}>${text}</pre>`;
 }
 

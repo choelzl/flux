@@ -3,40 +3,39 @@
 // older ones folded unless chosen), an answer's thinking and commands, Reply, a new chat; the agent's open question
 // on its card at the top (D1131); while the loop runs, a note to it.
 
-import { Ago, Card, Empty, Glyph, html, Skeleton, useEffect, useLayoutEffect, useRef, useState } from "../view.js";
-import { api, dialog, loopApi, toast } from "../ui.js";
-import { dur, plural } from "../format.js";
+import { Ago, Card, Empty, html, Notice, Skeleton, useEffect, useLayoutEffect, useRef, useState } from "../view.js";
+import { api, loopApi, toast } from "../ui.js";
+import { dur } from "../format.js";
 import { me } from "../state.js";
 import { AgentPick } from "../components/AgentPick.js";
 import { restoreScroll, scrollState } from "../scroll.js";
 import { Act } from "../components/Act.js";
 import { Bin } from "../components/Bin.js";
 import { Markdown } from "../components/Markdown.js";
-import { Conversation, liveWork } from "../components/Conversation.js";
+import { AgentTurn } from "../live/inspector/Chat.js";
+import { FullscreenHead, openModal } from "../components/Modal.js";
 import { usePoll } from "../components/Load.js";
 import { Pill, Tag } from "../components/Tone.js";
 
-/** D993: the answering agent's thinking, commands and replies, as Live shows an agent; followed while it answers. */
-function AgentTurn({ url }) {
-  const [got, setGot] = useState(null), box = useRef(null);
+/** D993, D1144: the answering agent's thinking, commands and replies, drawn by Live's own view of an agent; read again
+    while it answers. `a` the question; `name` its loop. */
+function AskAgent({ a, name }) {
+  const [got, setGot] = useState(null), url = loopApi(name).at(`/asks/${a.id}/agent`);
   usePoll(async live => {
     const g = await api(url).catch(x => ({ error: x.message }));
     if (!live()) return null;
     setGot(g);
-    if (g.running) return 2000;
-    requestAnimationFrame(() => { if (box.current) box.current.parentElement.scrollTop = box.current.parentElement.scrollHeight; });
-    return null;
+    return g.running ? 2000 : null;
   });
   if (!got) return html`<${Skeleton} lines=${3} />`;
-  const steps = Array.isArray(got.steps) ? got.steps : [], total = Number(got["steps total"] || steps.length), think = got["thinking (live tail)"] || "";
-  const stats = [got.agent, got["tokens (reported)"], got.elapsed, got["tool calls"] ? `${String(got["tool calls"]).split("\n").length}+ tool calls` : ""].filter(Boolean);
-  return html`<div ref=${box}>${stats.length ? html`<p class="muted small">${stats.join(" · ")}</p>` : ""}
-    ${total > steps.length ? html`<p class="muted small">${`${plural(total - steps.length, "earlier step")} not shown`}</p>` : ""}
-    ${steps.length ? html`<div class="ask-conversation"><${Conversation} steps=${steps} k=${url} offset=${total - steps.length} live=${!!got.running} /></div>`
-      : think ? html`<details class="cv-step cv-think" open><summary>Thinking</summary><pre class="cv-body cv-thought">${think}</pre></details>`
-      : html`<p class="muted">${got.error || (got.running ? "Nothing recorded yet." : "No thinking or commands recorded.")}</p>`}
-    ${got.running && !liveWork(steps, got.running) ? html`<div class="alt-chat-now"><${Glyph} tone="run" />${`${got.status || "working"}…`}</div>` : ""}
-    ${got.stderr ? html`<details class="ask-output"><summary>stderr</summary><pre class="log small">${got.stderr}</pre></details>` : ""}</div>`;
+  if (got.error && !got.steps) return html`<${Notice} tone="bad" what="Not read" why=${got.error} />`;
+  const read = (file, start, count) => loopApi(name).api(`/steps?file=${encodeURIComponent(file)}&start=${start}&count=${count}`);
+  return html`<${AgentTurn} id=${`ask:${name}:${a.id}`} fields=${got} running=${!!got.running} t0=${a.started} t1=${a.ended} steps=${read} />`;
+}
+/** Thinking & commands: a dialog over most of the screen (a phone's whole screen). */
+function showAgent(a, name) {
+  const m = openModal(html`<${FullscreenHead} title=${`Thinking & commands · ${a.author}`} close=${() => m.close()} />
+    <div class="agent-dlg-body"><${AskAgent} a=${a} name=${name} /></div>`, { cls: "dlg agent-dlg", label: "Thinking & commands", onCancel: () => m.close() });
 }
 
 /** A question and its answer. */
@@ -116,7 +115,7 @@ export function Talk({ name, mine, canAsk, ask = null, askAt = 0, steer, steerOp
     fold: (id, on) => setFolds(f => { const c = new Set(f.collapsed), e = new Set(f.expanded); c.delete(id); e.delete(id); (on ? c : e).add(id); return { collapsed: c, expanded: e }; }),
     stop: async a => { toast((await loopApi(name).api(`/asks/${a.id}/stop`, { method: "POST" })).ok, "ok"); read(); },
     remove: async a => { await loopApi(name).api(`/asks/${a.id}`, { method: "DELETE" }); read(); },
-    thinking: a => dialog(`Thinking and commands · ${a.author}`, html`<div class="agent-view ask-agent-view"><${AgentTurn} url=${loopApi(name).at(`/asks/${a.id}/agent`)} /></div>`, [["Close", null]]) };
+    thinking: a => showAgent(a, name) };
   const threads = new Map();
   for (const a of [...list].sort((x, y) => x.started - y.started || x.id.localeCompare(y.id))) (threads.get(a.thread_id || a.id) || threads.set(a.thread_id || a.id, []).get(a.thread_id || a.id)).push(a);
   const ordered = [...threads.values()].sort((x, y) => y.at(-1).started - x.at(-1).started);

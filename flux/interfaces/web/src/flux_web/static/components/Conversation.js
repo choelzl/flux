@@ -1,4 +1,4 @@
-// Flux web (D1095): an agent's conversation (D712) as components -- what it did, in order: its words as
+// Flux web (D1095): an agent's conversation (D712) as components -- drawn inside Live's chat (live/inspector/Chat.js, D1144) -- what it did, in order: its words as
 // text, its thinking and each tool call (input and output) folded, opened on a click and kept open across
 // redraws (D1030: the work between two answers one dashed line, opened to its steps; the answers in view).
 
@@ -32,7 +32,7 @@ function Step({ st, id, live }) {
 export const liveWork = (steps, live) => !!live && steps.length > 0 && steps[steps.length - 1].k !== "text";
 
 /** `offset`: how many earlier steps are not in `steps` (a live row sends its latest); `quiet`: no line saying so. */
-export function Conversation({ steps, k = "", offset = 0, live = false, scroll = false, quiet = false }) {
+export function Conversation({ steps, k = "", offset = 0, live = false, quiet = false }) {
   const items = [];
   if (offset > 0 && !quiet) items.push(html`<p class="muted small">${`${offset} earlier step${offset === 1 ? "" : "s"} hidden`}</p>`);
   for (let i = 0; i < steps.length;) {
@@ -61,5 +61,5 @@ export function Conversation({ steps, k = "", offset = 0, live = false, scroll =
       <div class="cv-work-steps">${work.map((x, n) => html`<${Step} key=${`${k}:${offset + first + n}`} st=${x} id=${`${k}:${offset + first + n}`} live=${live && first + n === steps.length - 1} />`)}</div></details>`);
     i = j;
   }
-  return html`<div class=${cx("cv", scroll && "cv-live-box")} data-k=${`cv-${k}`}>${items.length ? items : html`<${Empty} text="Nothing yet." />`}</div>`;
+  return html`<div class="cv" data-k=${`cv-${k}`}>${items.length ? items : html`<${Empty} text="Nothing yet." />`}</div>`;
 }

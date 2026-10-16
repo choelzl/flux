@@ -126,7 +126,7 @@ class Journal:
         except (OSError, TypeError, ValueError):
             pass
 
-    def phase_start(self, name: str, why: str, params: dict) -> int:
+    def phase_start(self, name: str, why: str, params: dict, started: float | None = None) -> int:
         with self._lock:
             self._n += 1
             pid = self._n
@@ -138,8 +138,13 @@ class Journal:
         # Output updates remain bounded; shortening a prompt would hide its original instructions.
         if name.startswith("agent:") and isinstance((params or {}).get("prompt"), str):
             given["prompt"] = params["prompt"]
-        self._write({"ev": "start", "id": pid, "parent": parent, "name": name, "why": _cut(why), "params": given})
+        self._write({**({"t": round(started, 3)} if started is not None else {}),
+                     "ev": "start", "id": pid, "parent": parent, "name": name, "why": _cut(why), "params": given})
         return pid
+
+    def phase_begun(self, name: str, why: str, params: dict, started: float) -> int:
+        """D1143: a quiet step a task opened under -- a task from its own start (`started`, wall clock)."""
+        return self.phase_start(name, why, params, started)
 
     def _parent(self) -> int | None:
         stack = self._stacks.get(threading.get_ident(), [])

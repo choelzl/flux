@@ -185,3 +185,13 @@ def test_a_run_of_one_unmarked_pass_keeps_its_later_setup_steps_in_the_pass():
               start(4, 4), start(5, 5, name="knowledge: mentor"), start(6, 6, parent=5, name="tool:x"), start(7, 7, name="evaluation")]
     got = evaluate(events, "(() => { const m = taskScope(model, 'all').membership; return [1, 2, 3, 4, 5, 6, 7].map(i => m.get(i)); })()")
     assert got == [None, None, 1, 1, 1, 1, 1]
+
+
+def test_an_agents_digest_before_the_first_mark_is_the_starts_setup():
+    """D1143: the workbench's README by an agent, a top task in a journal written before the quiet step held its
+    turn -- it was Pass 1's work; it is the start's Setup, as its step is."""
+    events = [start(1, 1, name="agent: claude"), end(1, 2), start(2, 1, name="knowledge: workbench"), end(2, 2),
+              start(3, 3, name="generation: x draft 1"), end(3, 4)]
+    events[0]["why"] = "digest workbench"
+    got = evaluate(events, "[1, 2, 3].map(id => taskPass(model.nodes.get(id), model.marks))")
+    assert got == [None, None, 1]

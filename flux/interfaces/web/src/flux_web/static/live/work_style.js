@@ -13,6 +13,9 @@ export function kindOf(name, why = "") {
   const at = name.indexOf(":"), head = (at < 0 ? name : name.slice(0, at)).trim(), rest = at < 0 ? "" : name.slice(at + 1).trim();
   // D996: orchestrating decides what to search and design -- the Search box's, by a model or an agent
   if (head === "orchestrate" || head === "agent" && String(why || "").trim().toLowerCase().split(/\s+/)[0] === "orchestrate") return "search";
+  // D1143: an agent digesting the library or the workbench is the Setup's -- a top task in a journal written before
+  // its quiet step held it (the workbench's README was an agent's: Design)
+  if (head === "agent" && String(why || "").trim().toLowerCase().split(/\s+/)[0] === "digest") return "setup";
   if (head === "agent" || head === "llm" || name.startsWith("model")) return null;    // workers inherit the work they assist
   if (head === "tool") {
     const word = String(why || "").toLowerCase().split(/\s+/).filter(Boolean)[0] || "";

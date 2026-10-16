@@ -43,6 +43,22 @@ def test_tasks_are_named_kind_first_then_what():
                    "Setup · mentor", "Setup · papers"]
 
 
+
+def test_the_workbench_digest_is_the_passs_setup_not_its_design():
+    """D1143: the workbench's README was written by an agent turn inside the quiet `knowledge: workbench` --
+    no task while it ran, so the turn was a top task, an agent's: Design. A journal written so still draws it in
+    Setup (an agent's `digest` turn is the library's); one written now has the turn under its step."""
+    got = run("""m => {
+      const mk = (id, name, why, parent, t0, t1 = t0 + 1) => ({id, name, why, parent, t0, t1, kids: []});
+      const old = mk(1, "agent: claude", "digest workbench", null, 0, 5), after = mk(2, "knowledge: workbench", "its README", null, 0, 5);
+      const gen = mk(3, "generation: x draft 1", "", null, 6);
+      const step = mk(4, "knowledge: workbench", "its README", null, 0, 5), turn = mk(5, "agent: claude", "digest workbench", step, 0.1, 5);
+      step.kids = [turn];
+      const box = (nodes, key) => (m.flowBoxes(nodes.map(node => ({node})), 2, true).find(b => b.key === key)?.runs || []).map(n => n.id);
+      return [box([old, after, gen], "setup"), box([old, after, gen], "design"), box([step, turn, gen], "setup"),
+              m.taskLabel(step), m.flowBoxes([old, after].map(node => ({node})), null, false).map(b => [b.key, b.runs.map(n => n.id)])]; }""")
+    assert got == [[1, 2], [3], [4], "Setup · workbench", [["Library", [1, 2]]]]
+
 def test_a_pass_flow_has_its_boxes_and_composing_after_measuring_is_no_repair():
     got = run(f"""m => {{ {TREE} const b = m.flowBoxes(rows, 6, false);
       return {{keys: b.map(x => x.key), states: b.map(x => x.state), design: b.find(x => x.key === "design").count, repaired: m.repaired(b)}}; }}""")

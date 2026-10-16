@@ -2,7 +2,7 @@
 // Agent), revising it (Settings › Problem › Agent), or either seen from the Overview. A strip: the run glyph (✓ or ✗
 // once it ended), the agent, what it does now (its latest work line), the time it took, Stop, Details. Under it its
 // question (components/Ask.js) and, a revision ended, what it changed. Details: its work as lines, the files (written
-// / yours), then folded its conversation, what it was asked, its log and its stderr. One poll (`useAuthor`) follows it.
+// / yours), then folded its conversation (D1144: as Live draws an agent), what it was asked, its log and its stderr. One poll (`useAuthor`) follows it.
 
 import { Glyph, Notice, cx, html, useRef, useState } from "../view.js";
 import { loopApi, toast } from "../ui.js";
@@ -11,7 +11,7 @@ import { lineDiff } from "../diff.js";
 import { usePoll } from "./Load.js";
 import { Act } from "./Act.js";
 import { Ask, asks } from "./Ask.js";
-import { Conversation } from "./Conversation.js";
+import { AgentTurn } from "../live/inspector/Chat.js";
 import { Diff } from "./Diff.js";
 import { Tag } from "./Tone.js";
 
@@ -81,8 +81,8 @@ export function AuthorJob({ name, st, onStop = null, answer = null, open = false
   const tone = running ? "run" : st.connection_error ? "warn" : st.ok ? "ok" : "bad";
   const now = running ? st.now || f.status || (rows.length ? plainSaid(rows[rows.length - 1]) : "") || st.progress?.phase || "starting"
     : st.connection_error && !st.ever ? "reconnecting…" : st.ok ? (st.revise ? `done: ${st.revise} revised and checked` : "done: checked and saved") : AUTHOR_FAILED[0];
-  const steps = f.steps || [f["thinking (live tail)"] ? { k: "think", text: f["thinking (live tail)"] } : null, f["reply (live tail)"] ? { k: "text", text: f["reply (live tail)"] } : null].filter(Boolean);
-  const total = f["steps total"] || steps.length;
+  const said = ["steps", "steps total", "steps file", "thinking (live tail)", "reply (live tail)"].filter(x => f[x] != null);
+  const total = f["steps total"] || (f.steps || []).length || (f["thinking (live tail)"] ? 1 : 0) + (f["reply (live tail)"] ? 1 : 0);
   const changed = diff && !running && st.revise && st.before && st.after && st.before !== st.after;
   return html`<section class=${cx("card aj", cls)} data-author-state=${tone} data-author-finished=${!st.connection_error && !running && st.ok ? "true" : null}>
     <div class="aj-strip"><${Glyph} tone=${tone} label=${running ? "running" : st.ok ? "done" : st.connection_error ? "reconnecting" : "failed"} />
@@ -98,8 +98,8 @@ export function AuthorJob({ name, st, onStop = null, answer = null, open = false
       ${rows.length || running ? html`<${Lines} st=${st} rows=${rows} />` : ""}
       ${st.files?.length ? html`<div class="aj-files">${st.files.map(x => html`<span key=${x.path} class="aj-file"><code>${x.path}</code>${x.by === "yours" ? html`<${Tag}>yours<//>` : html`<${Tag} k="var(--agent)">written<//>`}</span>`)}</div>` : ""}
       <div class="aj-folds">
-        ${steps.length ? html`<details data-author-section="conversation"><summary>${`conversation (${plural(total, "step")})`}</summary>
-            <${Conversation} steps=${steps} k=${`author-${name}-${st.started}`} offset=${Math.max(0, total - steps.length)} live=${running} scroll /></details>`
+        ${total ? html`<details data-author-section="conversation"><summary>${`conversation (${plural(total, "step")})`}</summary>
+            <${AgentTurn} id=${`author-${name}-${st.started}`} fields=${Object.fromEntries(said.map(x => [x, f[x]]))} running=${running} t0=${st.started || 0} t1=${st.ended} /></details>`
           : f["tool calls"] ? html`<details data-author-section="conversation"><summary>conversation</summary><pre class="val small">${f["tool calls"]}</pre></details>` : ""}
         ${st.prompt ? html`<details data-author-section="prompt"><summary>prompt</summary><pre class="val small">${st.prompt}</pre></details>` : ""}
         <details data-author-section="log"><summary>log</summary><pre class="log small aj-log" data-k="author-log">${(st.log || []).join("\n") || "Nothing logged yet."}</pre></details>

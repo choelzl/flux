@@ -41,8 +41,8 @@ function TaskHead({ n, env, a }) {
 
 /** What a task gave, by its kind (D1055: a stage or check whose one child is its command is the command's). */
 function Body({ n, env, a, mem }) {
-  if (isAgent(n)) return html`<div class="task-inspector"><${AgentChat} n=${n} env=${env} mem=${mem} /></div>`;
-  if (isModel(n)) return html`<div class="task-inspector"><${ModelChat} n=${n} env=${env} mem=${mem} /></div>`;
+  if (isAgent(n)) return html`<div class="task-inspector agent-turn"><${AgentChat} n=${n} env=${env} mem=${mem} /></div>`;
+  if (isModel(n)) return html`<div class="task-inspector agent-turn"><${ModelChat} n=${n} env=${env} mem=${mem} /></div>`;
   if (isTool(n)) return html`<${ToolBody} n=${n} env=${env} mem=${mem} />`;
   if (n.kids.length === 1 && isTool(n.kids[0]) && !(n.kids[0].kids || []).length) return html`<${ToolBody} n=${n.kids[0]} env=${env} mem=${mem} />`;
   const hd = headOf(n);

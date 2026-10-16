@@ -21,7 +21,7 @@ PHASES = [("agent: claude", ""), ("llm: propose", ""), ("model call", ""), ("too
           ("gate: the problem", ""), ("gate: admitted", ""), ("generation: build x", ""), ("generation: current", ""),
           ("build: lib", ""), ("test: gate", ""), ("simulation: screen", ""), ("evaluation", ""),
           ("template-fill: compose", ""), ("decide", ""), ("frontier", ""), ("critique: decision", ""),
-          ("DSE: batch", ""), ("orchestrate: next step", ""), ("agent: claude", "orchestrate"), ("plan: round", ""), ("search: tree", ""), ("Setup", ""), ("unknown thing", "")]
+          ("DSE: batch", ""), ("orchestrate: next step", ""), ("agent: claude", "orchestrate"), ("agent: claude", "digest workbench"), ("agent: claude", "digest paper.pdf"), ("knowledge: workbench", ""), ("plan: round", ""), ("search: tree", ""), ("Setup", ""), ("unknown thing", "")]
 
 
 def run(js):
@@ -80,3 +80,10 @@ def test_an_agents_turn_taken_into_its_draft_is_agent_activity_while_it_runs():
       const now = 10, end = n => n.t1 ?? now;
       return [m.aiWorking(draft), m.aiWorking(plain), m.aiWorking(model), m.aiWorking(tool), m.ownSpans(draft, end)]; }""")
     assert got == [True, False, True, True, [[0, 10]]], "the running turn's activity is drawn up to now"
+
+
+def test_an_agents_digest_is_setup_work():
+    """D1143: an agent's turn digesting the library or the workbench (`why` "digest ...") is the Setup's, even with no
+    setup step above it (a journal written before the quiet step held its turn) -- it was an agent's: Design."""
+    assert kind_of("agent: claude", "digest workbench") == "setup" and kind_of("agent: codex", "digest a.pdf") == "setup"
+    assert kind_of("agent: claude", "lo#2") is None

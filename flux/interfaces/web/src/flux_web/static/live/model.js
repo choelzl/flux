@@ -21,7 +21,9 @@ export function taskPass(node, marks) {
   if (/^\s*(validate|digest|plan\b|lessons)/i.test(String(root.name))) return null;
   // D1012: no mark yet -- the first pass is not marked: its work is Pass 1, as Live says; its setup
   // (the papers, the library, the tools' gate) the start's Setup, as Live keeps it
-  if (!first) return /^\s*(knowledge|records|feedback|extract|setup|gate:\s*(tools|the problem)|propose:\s*decompose)/i.test(String(root.name)) ? null : 1;
+  // D1143: an agent's digest on its own (a journal written before its quiet step held it) is that Setup too
+  const digest = /^\s*agent\s*:/i.test(String(root.name)) && /^\s*digest\b/i.test(String(root.why || ""));
+  if (!first) return digest || /^\s*(knowledge|records|feedback|extract|setup|gate:\s*(tools|the problem)|propose:\s*decompose)/i.test(String(root.name)) ? null : 1;
   if (Number(first.n) <= 0) return null;
   return Number(first.n) - 1;
 }

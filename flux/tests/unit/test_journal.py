@@ -236,3 +236,35 @@ def test_the_window_is_found_in_the_marks_index_as_by_reading_back(tmp_path):
     (d / "marks.jsonl").unlink()
     assert indexed == [window_start(str(d / "events.jsonl"), w, budget=b) for w, b in cases]
     assert indexed[0][1] == 2 and indexed[3] is None and indexed[2][2] is not None, indexed
+
+
+def test_a_quiet_step_that_holds_a_task_is_its_parent(tmp_path):
+    """D1143: a quiet step (D1047) had no task while it ran -- the agent turn the workbench's README took in
+    `knowledge: workbench` was a top task, drawn as an agent's Design, and the step itself came after it. A quiet
+    step a task opens under is a task from its own start, the task under it; one with none is still a note."""
+    j = Journal(str(tmp_path / "events.jsonl"))
+    flux_profile.add_listener(j)
+    try:
+        with flux_profile.phase("pass"):
+            with flux_profile.phase("knowledge: prepare", quiet=True):
+                pass
+            with flux_profile.phase("knowledge: workbench", why="its README", quiet=True) as out:
+                import time as _time
+
+                _time.sleep(0.05)
+                with flux_profile.phase("agent: claude", why="digest workbench"):
+                    pass
+                with flux_profile.phase("frontier", quiet=True):        # quiet inside it, after its task: a note on it
+                    pass
+                out["files"] = 2
+    finally:
+        flux_profile.remove_listener(j)
+    events, _ = read_events(str(tmp_path / "events.jsonl"))
+    by = {(e["ev"], e.get("name")): e for e in events}
+    step, turn = by[("start", "knowledge: workbench")], by[("start", "agent: claude")]
+    assert turn["parent"] == step["id"] and step["parent"] == by[("start", "pass")]["id"]
+    assert step["t"] <= turn["t"] - 0.04, "the step's start is its own, not its first task's"
+    assert by[("end", "knowledge: workbench")]["output"] == {"files": 2}
+    assert by[("note", "frontier")]["parent"] == step["id"]
+    assert ("note", "knowledge: prepare") in by and ("start", "knowledge: prepare") not in by
+    assert [e["ev"] for e in events if e.get("name") == "knowledge: workbench"] == ["start", "end"]

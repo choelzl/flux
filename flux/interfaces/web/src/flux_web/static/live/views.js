@@ -48,7 +48,7 @@ export function taskLabel(n) {
   if (/^\s*(llm\b|model)/i.test(name)) return rest ? `Model · ${rest}` : "Model";
   const kind = workLabel(phaseKind(n));
   if (SETUP_SAYS[low]) return `Setup · ${SETUP_SAYS[low]}`;
-  if (head === "knowledge") return `Setup · ${/^digest/i.test(rest) ? "papers" : /^mentor/i.test(rest) ? "mentor" : "inputs"}`;
+  if (head === "knowledge") return `Setup · ${/^digest/i.test(rest) ? "papers" : /^mentor/i.test(rest) ? "mentor" : /^workbench/i.test(rest) ? "workbench" : "inputs"}`;
   // D1063: a design's generator says the design it made ("Design · x=1"), its program the line's note
   if (head === "tool" && kind === "Design" && candidateOf(n)) return `${kind} · ${candidateOf(n)}`;
   // D1064: a stage's command says the design it measures ("Measure · slow · x#4")
@@ -95,7 +95,7 @@ export const passName = p => p == null ? "Setup" : Number(p) === 0 ? "Pass 0 · 
 export const passShort = p => p == null ? "S" : Number.isInteger(Number(p)) ? String(p) : "R";
 
 // the boxes of each flow, in order; a pass shows the boxes it is still to reach as waiting
-const SETUP_BOXES = [["Document", n => /^(validate|gate)\b/i.test(n.name)], ["Parts", n => /^(propose:\s*decompose|critique:\s*decomposition)/i.test(n.name)], ["Library", n => /^(knowledge|records)\b/i.test(n.name)],
+const SETUP_BOXES = [["Document", n => /^(validate|gate)\b/i.test(n.name)], ["Parts", n => /^(propose:\s*decompose|critique:\s*decomposition)/i.test(n.name)], ["Library", n => /^(knowledge|records)\b/i.test(n.name) || kindOf(n.name, n.why) === "setup" && /^\s*agent\s*:/i.test(n.name)],
   ["Papers", n => /digest|paper/i.test(n.name)], ["Plan", n => /^plan\b/i.test(n.name)]];
 const PASS_KINDS = ["plan", "search", "design", "check", "measure", "choose"];   // D1054: a pass that planned (its part) shows it      // D1034: a critique is in the box it judges
 

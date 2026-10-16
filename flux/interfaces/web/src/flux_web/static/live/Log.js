@@ -8,6 +8,7 @@ import { NARROW, enc, loopApi } from "../ui.js";
 import { isProblem, latestStart, lineClass, logAt, logLines, matcher } from "./logmodel.js";
 import { ViewerFrame, ViewerTools, useViewer } from "../viewer.js";
 import { recall, remember } from "../stored.js";
+import { atEnd } from "../scroll.js";
 import { useLoop } from "../loop/context.js";
 import { Pill } from "../components/Tone.js";
 import { Tool, Tools } from "../components/Head.js";
@@ -64,8 +65,8 @@ export function Log({ store }) {
     if (o.follow) el.scrollTop = el.scrollHeight;
   });
   const onScroll = e => {                                   // scrolling up pauses the follow
-    const el = e.currentTarget, atEnd = el.scrollTop + el.clientHeight >= el.scrollHeight - 30;
-    if (!atEnd && o.follow) set({ follow: false });
+    const el = e.currentTarget;
+    if (!atEnd(el, 30) && o.follow) set({ follow: false });
     if (!o.wrap) setScroll(el.scrollTop);
   };
   const times = on => { remember("flux-log-times", on ? "on" : "off"); row.current = 0; set({ times: on }); };

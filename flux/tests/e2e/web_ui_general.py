@@ -5,8 +5,10 @@ Run through web_ui.py; each step creates and deletes its own loop, without a mod
 
 from __future__ import annotations
 
+import base64
 import json
 import os
+import time
 from contextlib import contextmanager
 from pathlib import Path
 from urllib.parse import quote
@@ -1003,8 +1005,10 @@ def general_flows(r, watch):
                 r.page(f"#/app/{name}/results/ideas", "document.querySelector('.ideas-table')", "Ideas")
                 r.check("Ideas is accessible before any measured design", b.js("return document.querySelector('.subtabs .on').textContent === 'Ideas' && document.querySelectorAll('.ideas-table > tbody > tr').length === 2"))
                 r.check("idea notes render literally and pending ideas stay untested", b.js("return !document.querySelector('.ideas-view img') && document.querySelector('.ideas-table').textContent.includes(arguments[0]) && document.querySelector('.ideas-table').textContent.includes('Not tested yet')", title))
-                b.click(".ideas-table details summary")
-                r.check("idea history includes failures, passes and measured numbers", b.js("return document.querySelector('details[open] .idea-evaluations').textContent.includes('incorrect corner case') && document.querySelector('details[open]').textContent.includes('cycles 8') && [...document.querySelectorAll('.idea-evaluations tbody tr')].map(r => r.cells[0].textContent).join(',') === '1,2,3'"))
+                b.click(".ideas-table .idea-evidence")
+                r.check("idea history opens in a full-width row under the idea, with failures, passes and measured numbers (D1145)", b.js("const row = document.querySelector('.ideas-table > tbody > tr.idea-evals-row'), td = row && row.cells[0]; return td.colSpan === 4 && td.getBoundingClientRect().width > 0.9 * document.querySelector('.ideas-table').getBoundingClientRect().width && row.textContent.includes('incorrect corner case') && row.textContent.includes('cycles 8') && [...document.querySelectorAll('.idea-evaluations tbody tr')].map(r => r.cells[0].textContent).join(',') === '1,2,3'"))
+                if os.environ.get("FLUX_E2E_SHOTS"):
+                    b.shot(os.path.join(os.environ["FLUX_E2E_SHOTS"], "ideas-evaluations.png"))
                 r.check("a long evaluation neither widens the notebook nor shows every number and its whole error at once (D1042)", b.js(
                     "const w = document.querySelector('.ideas-view > .scroll-x'), row = document.querySelectorAll('.idea-evaluations tbody tr')[2];"
                     "return w.scrollWidth <= w.clientWidth + 1 && row.querySelectorAll(':scope td > .idea-metrics > .idea-metric').length === 6"
@@ -1015,14 +1019,14 @@ def general_flows(r, watch):
                 r.button("Close", "dialog.fullscreen-view")
                 b.click(".fullscreen-button")
                 b.wait("document.querySelector('dialog.fullscreen-view .ideas-table')", what="fullscreen notebook")
-                r.check("fullscreen preserves the open evaluation history", b.js("return !!document.querySelector('dialog details[open]')"))
+                r.check("fullscreen shows the open evaluation history", b.js("return !!document.querySelector('dialog .idea-evals-row')"))
                 r.button("Close", "dialog.fullscreen-view")
                 b.cmd("WebDriver:SetWindowRect", {"width": 480, "height": 900})
                 r.check("notebook tables scroll within their view on a narrow screen", b.js("return document.documentElement.scrollWidth <= innerWidth + 2"))
                 b.cmd("WebDriver:SetWindowRect", {"width": 1280, "height": 900})
                 b.js("window.__ideasData.ideas.push({id:'idea-next', part:'core', title:'Another alternative', hypothesis:'Try a different structure', test:'', status:'proposed', evaluations:[]}); return 1")
                 r.button("Refresh")
-                b.wait("document.querySelectorAll('.ideas-table > tbody > tr').length === 3", what="refreshed ideas")
+                b.wait("document.querySelectorAll('.ideas-table > tbody > tr:not(.idea-evals-row)').length === 3", what="refreshed ideas")
                 r.clean("ideas notebook")
             finally:
                 b.cmd("WebDriver:SetWindowRect", {"width": 1280, "height": 900})
@@ -1053,7 +1057,7 @@ def general_flows(r, watch):
                   stage:'bench', status:'ok', metrics:{cycles:0}, error:'', at:'2026-10-09T10:00:00Z'}]}]}; return 1;""")
                 r.button("Refresh")
                 b.wait("document.querySelector('.ideas-table')", what="first recorded idea")
-                b.click(".ideas-table summary")
+                b.click(".ideas-table .idea-evidence")
                 r.check("zero measurements display and older trials tolerate missing pass numbers", b.js("return document.querySelector('.idea-evaluations tbody tr').cells[0].textContent === '—' && document.querySelector('.idea-evaluations').textContent.includes('cycles 0')"))
                 b.js("window.__ideasNavigationDeferred = true; return 1")
                 r.button("Refresh")
@@ -1295,10 +1299,10 @@ objectives: [{metric: timings.fast, goal: 15, direction: minimize},
                     'const o = document.querySelector(`[data-ask-toggle="${arguments[0]}"]`).closest(".ask-card"), n = document.querySelector(`[data-ask-toggle="${arguments[1]}"]`).closest(".ask-card");'
                     ' return o.classList.contains("collapsed") && !!o.querySelector(".head .ask-reply-top")?.getClientRects().length && !n.classList.contains("collapsed")', other, root))
                 b.click(f'.ask-thinking[data-ask-thinking="{root}"]')       # D993
-                b.wait("document.querySelector('dialog .ask-agent-view .cv-text')", what="the agent's thinking and commands")
-                r.check("an answer's agent turn reads as Live reads an agent (D993)", b.js(
-                    "const d = document.querySelector('dialog .ask-agent-view'); return d.querySelector('.cv-think') && d.textContent.includes('Design two is best')"))
-                b.js("document.querySelector('dialog.dlg .dlg-actions button').click(); return 1")
+                b.wait("document.querySelector('dialog.agent-dlg .agent-turn .cv-text')", what="the agent's thinking and commands")
+                r.check("an answer's agent turn is drawn by Live's own agent view (D993, D1144)", b.js(
+                    "const d = document.querySelector('dialog.agent-dlg .agent-turn .alt-chat'); return !!d && !!d.querySelector('.cv-think') && d.textContent.includes('Design two is best')"))
+                b.js("document.querySelector('dialog.agent-dlg .head .close').click(); return 1")
                 b.click(f'.ask-reply[data-reply-to="{root}"]')
                 b.wait("document.querySelector('.ask-compose-head').textContent.includes('Reply to:')", what="reply context")
                 b.js("const q = document.querySelector('#ask-q'); q.value = 'Explain the numbers'; q.dispatchEvent(new Event('input')); return 1")
@@ -1368,6 +1372,105 @@ objectives: [{metric: timings.fast, goal: 15, direction: minimize},
                 b.cmd("WebDriver:SetWindowRect", {"width": 1200, "height": 900})
 
     r.step("ask conversations", ask_conversations)
+
+    def agent_views():
+        """D1144: an agent's turn is drawn by Live's inspector wherever it is read -- Live, the Agents tab, Talk's Thinking &
+        commands (a wide dialog, a phone's whole screen): the same chat, its long command and output inside their own block,
+        nothing scrolling sideways. Each in a frame of a desktop's and a phone's width, light and dark (FLUX_E2E_SHOTS: shot)."""
+        with loop(r, "ui-agent-views") as name:
+            now = b.js("return Date.now()/1000")
+            cmd = "python3 scripts/measure.py --design out/candidate-07/rtl/top.v --clock 692MHz " + " ".join(f"--case tests/case_{i:03d}.json" for i in range(24))
+            out = "\n".join(f"case_{i:03d}: latency={40 + i % 7} cycles area=5{i:03d}um2 slack_ps=" + ",".join(str(j * 3) for j in range(40)) for i in range(40))
+            steps = [{"k": "text", "text": "Reading the record and the latest measurements first."},
+                     {"k": "think", "text": "Design two met timing at 692 MHz; design seven is smaller but its slack is negative on case 12.\n" * 6, "at": now - 60},
+                     {"k": "tool", "name": "Bash", "call": "Bash: " + cmd, "input": {"command": cmd}, "out": out, "at": now - 50},
+                     {"k": "tool", "name": "Read", "call": "Read: problem.yaml", "input": {"file_path": "problem.yaml"}, "out": "statement: General browser regression", "at": now - 45},
+                     {"k": "tool", "name": "Bash", "call": "Bash: make lint", "input": {"command": "make lint"}, "out": "lint: top.v:41: width mismatch", "error": True, "at": now - 40},
+                     {"k": "text", "text": "**Design two is best**: it meets timing on every case, and its area is within 3% of design seven."}]
+            turn = {"k": 1, "kind": "agent", "agent": "claude", "ts": now - 30, "seconds": 42, "ok": True, "rc": 0, "tokens_in": 12345, "tokens_out": 678,
+                    "tool_calls": 3, "prompt": "Which design is best, and why?\n" + "\n".join(f"Context line {i}" for i in range(60)), "steps": steps,
+                    "stderr": "warn: a slow read", "workdir": f"/loops/{name}/agents/generate/1"}
+            ask = {"id": "20261016-120000", "thread_id": "20261016-120000", "question": "Why is design two best?", "answer": "It meets timing on every case.",
+                   "author": "claude", "by": "bob", "started": now - 100, "ended": now - 40, "running": False, "log": []}
+            agent = {"running": False, "author": "claude", "agent": "claude", "status": "done", "steps": steps, "steps total": len(steps),
+                     "tokens (reported)": "12,345 in · 678 out", "stderr": "warn: a slow read"}
+
+            def task(id, t, nm, parent=None, **params):
+                return {"ev": "start", "id": id, "t": t, "name": nm, "parent": parent, "params": params}
+            events = [{"ev": "hello", "t": now - 30}, {"ev": "mark", "name": "pass", "t": now - 29, "why": '{"n":1}'},
+                      task(1, now - 28, "generation: current", **{"pass": 1}),
+                      task(4, now - 27, "agent: claude", 1, prompt=turn["prompt"], command="claude --print")]
+            history = {"starts": [{"id": 31, "record_id": 31, "started": now - 30, "running": True}], "campaigns": []}
+            # the frame's own fetch and EventSource answer for this loop (installed once its first page is up)
+            mock = """const w = document.getElementById('phone').contentWindow, base = '/api/apps/' + arguments[0], [turn, ask, agent, history, events, steps] = [...arguments].slice(1);
+              const real = w.fetch.bind(w), reply = d => new w.Response(JSON.stringify(d), {headers: {'Content-Type': 'application/json'}});
+              w.fetch = async (u, o) => {
+                const url = new URL(String(u), w.location.href), p = url.pathname;
+                if (p === base + '/turns') return reply({turns: [turn]});
+                if (p === base + '/asks') return reply([ask]);
+                if (p === base + '/asks/' + ask.id + '/agent') return reply(agent);
+                if (p === base + '/runs') return reply(history);
+                if (p === base + '/run-data') return new w.Response('');
+                const response = await real(u, o);
+                if (p !== base && p !== base + '/state') return response;
+                const data = await response.json(), state = p === base ? data.state : data;
+                state.running = true; state.last_active = Date.now() / 1000; return reply(data);
+              };
+              w.EventSource = class extends w.EventTarget {
+                static CLOSED = 2;
+                constructor(url) { super(); this.url = url; this.readyState = 1; this.closed = false;
+                  setTimeout(() => { if (this.closed) return; this.onopen?.(); this.emit('events', events); this.emit('ready', {});
+                    this.emit('live', {updates: {4: {steps, 'steps total': steps.length, status: 'reading', agent: 'claude', stderr: 'warn: a slow read'}}}); }, 0); }
+                emit(kind, data) { if (!this.closed) this.dispatchEvent(new w.MessageEvent(kind, {data: JSON.stringify(data)})); }
+                close() { this.closed = true; this.readyState = 2; }
+              }; return 1;"""
+            shots = Path(os.environ["FLUX_E2E_SHOTS"]) if os.environ.get("FLUX_E2E_SHOTS") else None
+            if shots:
+                shots.mkdir(parents=True, exist_ok=True)
+            doc = "document.getElementById('phone').contentDocument"
+            views = {"live": ("/live", ".alt-detail"), "agents": ("/agents", ".detail-card"), "ask": ("/ask", "dialog[open]")}
+            b.cmd("WebDriver:SetWindowRect", {"width": 1340, "height": 1000})     # a 1280 px frame whole in the window
+            try:
+                for theme in ("light", "dark"):
+                    b.js("localStorage.setItem('flux-theme', arguments[0]); return 1", theme)
+                    for width in (1280, 390):
+                        for view, (tab, where) in views.items():
+                            b.js("document.body.innerHTML = ''; const f = document.createElement('iframe'); f.id = 'phone';"
+                                 "f.style.cssText = `width:${arguments[0]}px;height:860px;border:0`; f.src = '/?av=' + Date.now() + '#/';"
+                                 "document.body.append(f); return 1", width)
+                            b.wait(f"(() => {{ const d = {doc}; return d && d.querySelector('#main table.list, #main .empty'); }})()", timeout=20, what="the frame's first page")
+                            b.js(mock, name, turn, ask, agent, history, events, steps)
+                            b.js("document.getElementById('phone').contentWindow.location.hash = arguments[0]; return 1", f"#/app/{name}{tab}")
+                            if view == "ask":
+                                b.wait(f"(() => {{ const d = {doc}, x = d.querySelector('.drawer.open .ask-thinking'); return x && getComputedStyle(d.querySelector('.drawer')).transform === 'none'; }})()",
+                                       what="Talk open")
+                                b.js(f"{doc}.querySelector('.ask-thinking').click(); return 1")
+                            b.wait(f"{doc}.querySelector('{where} .cv-text')", what=f"{view}'s agent turn")
+                            # the work between the answers opened, its first command opened: the long line and its output in view
+                            b.js(f"const d = {doc}, s = arguments[0]; d.querySelectorAll(s + ' .cv-work').forEach(w => w.open = true);"
+                                 " const t = d.querySelector(s + ' .cv-tool'); if (t) t.open = true;"
+                                 " if (s !== 'dialog[open]') d.querySelector(s + ' .agent-turn')?.scrollIntoView({block: 'start'}); return 1", where)
+                            time.sleep(0.6)
+                            at = f"{width}px {theme}"
+                            r.check(f"{view}: an agent's turn is Live's chat (D1144), {at}", b.js(f"return !!{doc}.querySelector(arguments[0] + ' .agent-turn .alt-chat .cv')", where))
+                            wide = b.js(f"const d = {doc}, w = d.defaultView, g = d.querySelector('dialog[open]');"
+                                        " return [d.documentElement.scrollWidth, w.innerWidth, g ? g.scrollWidth : 0, g ? g.clientWidth : 0]")
+                            r.check(f"{view}: nothing scrolls sideways, {at}", wide[0] <= wide[1] + 1 and wide[2] <= wide[3] + 1, wide)
+                            if view == "ask":
+                                size = b.js(f"const d = {doc}, w = d.defaultView, g = d.querySelector('dialog[open]').getBoundingClientRect(); return [g.width, g.height, w.innerWidth, w.innerHeight]")
+                                r.check(f"ask: Thinking & commands takes most of the screen, {at}",
+                                        size[0] >= size[2] * (.97 if size[2] < 700 else .8) and size[1] >= size[3] * .8, size)
+                            if shots:
+                                (shots / f"agent-view-{view}-{width}px-{theme}.png").write_bytes(
+                                    base64.b64decode(b.cmd("WebDriver:TakeScreenshot", {"id": b.find("#phone"), "full": False})["value"]))
+                r.clean("agent views")
+            finally:
+                b.js("localStorage.removeItem('flux-theme'); return 1")
+                b.cmd("WebDriver:SetWindowRect", {"width": 1280, "height": 900})
+                b.cmd("WebDriver:Navigate", {"url": f"{r.url}/?after-agent-views={time.time()}#/"})
+                b.wait("document.querySelector('#main')", timeout=20)
+
+    r.step("agent views", agent_views)
 
     def loop_ownership():
         original, renamed, transferred = "_ui-Loop-Owner09", "-ui-Loop-Renamed09", "9_ui-loop-transferred"

@@ -37,6 +37,9 @@ class _Tee:
     def phase_start(self, name, why, params):
         return [_call(lis, "phase_start", name, why, params) for lis in self.listeners]
 
+    def phase_begun(self, name, why, params, started):
+        return [_begun(lis, name, why, params, started) for lis in self.listeners]
+
     def phase_update(self, token, name, output):
         for lis, tok in zip(self.listeners, token or [None] * len(self.listeners)):
             _call(lis, "phase_update", tok, name, output)
@@ -78,6 +81,40 @@ def _call(lis, method: str, *args):
         return fn(*args)
     except Exception:  # noqa: BLE001 -- the instrument never fails the run
         return None
+
+
+def _begun(lis, name: str, why: str, params, started: float):
+    """D1143: a task that began at `started` (wall clock) -- a quiet step opened late; `phase_start` for a
+    listener that keeps no time of its own."""
+    if hasattr(lis, "phase_begun"):
+        return _call(lis, "phase_begun", name, why, params, started)
+    return _call(lis, "phase_start", name, why, params)
+
+
+#: D1143: the quiet steps open on this thread with no task yet -- one is opened when a task starts under it
+_PENDING = threading.local()
+
+
+def _pending() -> list[dict]:
+    if not hasattr(_PENDING, "frames"):
+        _PENDING.frames = []
+    return _PENDING.frames
+
+
+def _open_quiet(lis) -> None:
+    """D1143: a task starts under quiet steps still without one: each becomes a task from its own start, the
+    outer first, so what runs in it is under it (an agent's turn in `knowledge: workbench` was a top task --
+    Design -- and the step a task after it)."""
+    for f in _pending():
+        if not f["open"] and f["lis"] is lis:
+            f["open"] = True
+            f["token"] = _begun(lis, f["name"], f["why"], f["params"], time.time() - (time.perf_counter() - f["t0"]))
+            with _LOCK:
+                stack = _stack()
+                for i, entry in enumerate(stack):
+                    if entry[0] == f["name"] and entry[1] == f["t0"]:
+                        stack[i] = (entry[0], entry[1], f["token"])
+                        break
 
 
 def _refresh() -> None:
@@ -285,7 +322,8 @@ def phase(name: str, why: str = "", quiet: bool = False, absorb: bool = False, i
 
     D1047: `quiet` -- bookkeeping (a frontier, a brief, the tools' gate): no task while it runs; at its
     end a note on the task it ran in (`phase_note`) when it went well and fast, else a task after
-    the fact (`phase_after`) -- a failure or a slow step is still seen as one.
+    the fact (`phase_after`) -- a failure or a slow step is still seen as one. D1143: a task that starts in it
+    (an agent's turn) makes it a task from its own start, the task under it.
 
     D1050: `absorb` -- a wrapper whose job is one agent or model turn (a draft, a critique, the plan);
     `inline` -- that turn. The wrapper's first inline turn opens no task of its own: its inputs join
@@ -305,11 +343,15 @@ def phase(name: str, why: str = "", quiet: bool = False, absorb: bool = False, i
         if tags:
             params = {**tags, **params}
         if not quiet:
+            _open_quiet(lis)
             try:
                 token = lis.phase_start(name, why, params)
             except Exception:  # noqa: BLE001
                 lis = None
     t0 = time.perf_counter()
+    pending = {"name": name, "why": why, "params": params, "t0": t0, "token": None, "open": False, "lis": lis} if quiet and lis is not None else None
+    if pending is not None:
+        _pending().append(pending)
     with _LOCK:
         stack = _stack()
         stack.append((name, t0, token))
@@ -325,6 +367,10 @@ def phase(name: str, why: str = "", quiet: bool = False, absorb: bool = False, i
     finally:
         if frame is not None and frames and frames[-1] is frame:
             frames.pop()
+        if pending is not None:
+            _PENDING.frames = [f for f in _pending() if f is not pending]
+            token = pending["token"]
+            quiet = not pending["open"]    # D1143: a task opened under it -- it is a task, ended as one
         secs = time.perf_counter() - t0
         with _LOCK:
             stack = _stack()
@@ -336,6 +382,7 @@ def phase(name: str, why: str = "", quiet: bool = False, absorb: bool = False, i
                 if not quiet:
                     lis.phase_end(token, name, secs, failed, output)
                 elif failed or secs >= QUIET_S:
+                    _open_quiet(lis)       # D1143: the quiet steps it ran in, a task when it is one
                     _call(lis, "phase_after", name, why, params, secs, failed, output)
                 else:
                     _call(lis, "phase_note", name, why, params, output)

@@ -1,12 +1,14 @@
 // Live's inspector (D984, D1095): an agent's turn, or a model's call, as a chat that keeps up -- the
 // prompt and what was fed back on the right, its words on the left, its thinking and commands as quiet
 // rows; it opens at the newest end and follows it while one is there; scrolling up shows the history in
-// steps without moving one's place; scrolled up, new activity waits behind "↓ latest".
+// steps without moving one's place; scrolled up, new activity waits behind "↓ latest". D1144: the one view of an
+// agent's turn -- the Agents tab, Talk's Thinking & commands and an author's conversation draw theirs with it (AgentTurn).
 
-import { Empty, Glyph, Notice, html, useLayoutEffect, useRef } from "../../view.js";
+import { Empty, Glyph, Notice, html, useLayoutEffect, useRef, useState } from "../../view.js";
+import { atEnd, useFollow } from "../../scroll.js";
 import { Conversation, liveWork } from "../../components/Conversation.js";
 import { Markdown } from "../../components/Markdown.js";
-import { Fold, Pre } from "./bits.js";
+import { Fold, Pre, memoryOf } from "./bits.js";
 import { fieldsOf, linesOf, running } from "./parts.js";
 import { Facts } from "../../components/Tone.js";
 
@@ -20,26 +22,21 @@ function moreChat(n, env, box) {
   chatLimit.set(n.id, (chatLimit.get(n.id) || CHAT_STEP) + CHAT_STEP);
   env.redraw();
 }
-const atBottom = box => box.scrollHeight - box.scrollTop - box.clientHeight < 24;
-
 function ChatBox({ n, env, mem, more, children }) {
-  const box = useRef(null), jump = useRef(null), end = useRef(true);
-  if (box.current) end.current = atBottom(box.current);       // as it stood before this draw
-  const place = () => {
-    const b = box.current, anchor = fetching.has(n.id) ? null : chatAnchor.get(n.id);   // a page on its way: the place kept for it
-    if (anchor != null) { chatAnchor.delete(n.id); b.scrollTop = b.scrollHeight - anchor.left; }
-    else if (end.current) b.scrollTop = b.scrollHeight;
-    if (jump.current) jump.current.hidden = atBottom(b);
-  };
+  const box = useRef(null), jump = useRef(null), end = useFollow(box);   // at its newest end while one is there
   useLayoutEffect(() => {                                      // a task opened: at its newest end, or where one left it
     const saved = mem.scroll.get("chat");
     if (saved) { box.current.scrollTop = saved.top; end.current = false; }
     return () => mem.scroll.set("chat", { top: box.current?.scrollTop ?? 0 });
   }, []);
-  useLayoutEffect(place);
+  useLayoutEffect(() => {
+    const b = box.current, anchor = fetching.has(n.id) ? null : chatAnchor.get(n.id);   // a page on its way: the place kept for it
+    if (anchor != null) { chatAnchor.delete(n.id); b.scrollTop = b.scrollHeight - anchor.left; }
+    if (jump.current) jump.current.hidden = atEnd(b);
+  });
   return html`<div class="alt-chat-wrap">
     <div class="alt-chat cv" data-k="chat" tabindex="0" aria-label="Conversation" ref=${box}
-      onScroll=${e => { const b = e.currentTarget; if (jump.current) jump.current.hidden = atBottom(b); if (more && b.scrollTop < 40) moreChat(n, env, b); }}
+      onScroll=${e => { const b = e.currentTarget; if (jump.current) jump.current.hidden = atEnd(b); if (more && b.scrollTop < 40) moreChat(n, env, b); }}
       onWheel=${e => { if (more && e.deltaY < 0 && e.currentTarget.scrollTop <= 0) moreChat(n, env, e.currentTarget); }}>${children}</div>
     <button type="button" class="alt-chat-jump" hidden ref=${jump} onClick=${() => { box.current.scrollTop = box.current.scrollHeight; }}>↓ latest</button></div>`;
 }
@@ -79,7 +76,7 @@ function transcriptSteps(n, env, agent) {
     fromTranscript.set(n.id, null);
     env.turnSteps(n.t0, n.t1, agent).then(got => { fromTranscript.set(n.id, got.steps || []); env.redraw(); }).catch(() => fromTranscript.set(n.id, []));
   }
-  return fromTranscript.get(n.id);
+  return env.turnSteps ? fromTranscript.get(n.id) : [];
 }
 const lostSaid = (n, kept, steps, lost) => running(n) ? `${lost} earlier step${lost === 1 ? "" : "s"}, shown when the turn ends`
   : kept === steps ? `${lost} earliest step${lost === 1 ? " was" : "s were"} not kept`
@@ -89,9 +86,9 @@ const lostSaid = (n, kept, steps, lost) => running(n) ? `${lost} earlier step${l
     failed and went silent, a signal -- and what comes of it. */
 function stopSaid(n, f, nodes) {
   const exit = Number(f.exit), signal = { 143: "TERM", 137: "KILL", [-15]: "TERM", [-9]: "KILL" }[exit];
-  const next = [...nodes.values()].find(k => k !== n && k.t0 >= (n.t1 ?? n.t0) && k.name === n.name && k.why === n.why);
-  const loopRuns = [...nodes.values()].some(x => x.t1 == null);
-  const after = next ? " The next try continues its session." : loopRuns
+  const next = nodes && [...nodes.values()].find(k => k !== n && k.t0 >= (n.t1 ?? n.t0) && k.name === n.name && k.why === n.why);
+  const loopRuns = nodes && [...nodes.values()].some(x => x.t1 == null);
+  const after = !nodes ? "" : next ? " The next try continues its session." : loopRuns
     ? " Its session is kept for the next try."
     : " Its session was kept; no next try followed in this pass.";
   if (n.timedOut || f["timed out"]) return `Reached its time limit${f["timed out"] ? ` (${String(f["timed out"]).replace(/^stopped /, "")})` : ""} and Flux stopped it.` + after;
@@ -142,4 +139,21 @@ export function ModelChat({ n, env, mem }) {
       ${reply ? html`<div class="cv-text alt-reply">${shown !== reply ? html`<pre class="mono">${shown}</pre>` : html`<${Markdown} text=${reply.trim()} />`}</div>` : ""}
       ${f.error ? html`<div class="alt-chat-more bad">${String(f.error)}</div>` : ""}
       ${running(n) ? html`<div class="alt-chat-now"><${Glyph} tone="run" />answering…</div>` : ""}<//>`;
+}
+
+/** D1144: a turn read elsewhere -- the Agents tab, Talk's Thinking & commands, an author's conversation -- drawn as
+    Live draws one: `id` its own key (its folds and places kept by it), `fields` what the turn reported in Live's
+    words (steps, steps total, steps file, agent, status, stdout, stderr, exit, the tokens), `prompt`, `running`, its
+    times; `steps(file, start, count)` reads its earlier steps from its file; `model`: a model's call (`params`: its
+    model, system and prompt; `fields`: reply, thinking, error). A turn that kept no steps says its thinking or reply. */
+export function AgentTurn({ id, fields = {}, prompt = "", running: live = false, t0 = 0, t1 = null, timedOut = false, model = false, params = {}, steps = null }) {
+  const [, redraw] = useState(0);
+  const f = { ...fields };
+  if (!model && !(Array.isArray(f.steps) && f.steps.length)) {
+    const think = f.thinking ?? f["thinking (live tail)"], said = f.reply ?? f["reply (live tail)"];
+    f.steps = [think ? { k: "think", text: String(think) } : null, said ? { k: "text", text: String(said) } : null].filter(Boolean);
+  }
+  const n = { id, name: model ? "model" : "agent", params: { ...params, prompt }, fields: f, output: {}, t0, t1: live ? null : (t1 ?? t0), timedOut };
+  const env = { redraw: () => redraw(x => x + 1), steps, nodes: null };
+  return html`<div class="task-inspector agent-turn"><${model ? ModelChat : AgentChat} n=${n} env=${env} mem=${memoryOf(id)} /></div>`;
 }

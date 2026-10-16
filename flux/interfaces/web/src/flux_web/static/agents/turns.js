@@ -1,12 +1,11 @@
 // Flux web, Agents tab (D1095): the turns -- one a line, and one in detail.
 
 import { dur, fmtTok, money } from "../ui.js";
-import { Conversation } from "../components/Conversation.js";
-import { Prose } from "../components/Markdown.js";
-import { ViewerFrame, ViewerTools, showRaw, useViewer } from "../viewer.js";
-import { Ago, html } from "../view.js";
+import { AgentTurn } from "../live/inspector/Chat.js";
+import { ViewerFrame, ViewerTools, useViewer } from "../viewer.js";
+import { Ago, Notice, html } from "../view.js";
 import { Fact, Pill } from "../components/Tone.js";
-import { Head, Tool } from "../components/Head.js";
+import { Head } from "../components/Head.js";
 
 const ROLES = { generate: "design", critique: "critic" };
 /** D1092: what the turn was for (design, critic, prototype, plan); D1094: a role or nothing -- "model" is its kind. */
@@ -55,28 +54,23 @@ const MAIN = new Set(["model", "exit", "tokens in", "tokens out", "token usage",
 const TurnFact = ({ k, v }) => html`<${Fact} label=${k} value=${String(v)} cls=${k === "folder" ? "small" : ""}
   tone=${k === "exit" && v !== 0 && v !== "0" ? (Number(v) === 124 ? "warn" : "bad") : null} />`;
 
-/** One turn's detail: its head, the prompt and the viewer's tools, its facts, its conversation (or its text). */
+/** One turn's detail: its head and the viewer's tools, its facts, then the turn as Live draws one (D1144): the prompt a
+    folded bubble, its conversation (a model's reply), stderr folded. */
 export function TurnDetail({ full, k }) {
   const view = useViewer();
   const facts = factsOf(full), more = facts.filter(([f]) => !MAIN.has(f));
-  const talk = Array.isArray(full.steps) && full.steps.length ? html`<${Conversation} steps=${full.steps} k=${`turn${k}`} />` : null;
-  // its conversation (or, a turn without one, its text), one flat list
-  const tail = (talk ? [
-    full.error && html`<div class="blk"><h3>error</h3><${Prose} text=${full.error} /></div>`,
-    talk,
-    full.stderr && html`<details class="blk"><summary>stderr</summary><${Prose} text=${full.stderr} /></details>`,
-    full.prompt && html`<details class="blk"><summary>Prompt (${String(full.prompt).length.toLocaleString()} chars)</summary><${Prose} text=${full.prompt} /></details>`,
-  ] : [
-    ...["error", "reply", "prompt", "stderr"].filter(f => full[f]).map(f => html`<div key=${f} class="blk"><h3>${f}</h3><${Prose} text=${full[f]} /></div>`),
-    ...((full.hops || []).length ? [html`<h3>Tool calls</h3>`, ...full.hops.map(x => html`<pre class="val">${x}</pre>`)] : []),
-  ]).filter(Boolean);
-  const prompt = () => showRaw(full.prompt, "Agent prompt");
+  const model = full.kind === "model", steps = Array.isArray(full.steps) ? full.steps : [];
+  const fields = model ? { reply: full.reply, error: full.error }
+    : { steps, "steps total": steps.length, reply: full.reply, stderr: full.stderr, ...(full.endpoint_recovery ? { "endpoint recovery": full.endpoint_recovery } : {}) };
   return html`<${ViewerFrame} v=${view} title="Agent turn"><div class="detail">
-    <${Head} title=${full.agent || full.model || full.kind} tools=${html`${full.prompt ? html`<${Tool} icon="prompt" label="Prompt" cls="agent-prompt-button" onClick=${prompt} />` : ""}
-        <${ViewerTools} v=${view} title="Agent turn" rawText=${JSON.stringify(full, null, 2)} />`}><span class="muted"><${Ago} t=${full.ts} /> · ${dur(full.seconds)}</span><//>
+    <${Head} title=${full.agent || full.model || full.kind} tools=${html`<${ViewerTools} v=${view} title="Agent turn" rawText=${JSON.stringify(full, null, 2)} />`}>
+      <span class="muted"><${Ago} t=${full.ts} /> · ${dur(full.seconds)}</span><//>
     <div class="facts">${facts.filter(([f]) => MAIN.has(f)).map(([f, v]) => html`<${TurnFact} key=${f} k=${f} v=${v} />`)}</div>
     ${more.length ? html`<details class="facts-more"><summary>More: ${more.map(([f]) => f).join(", ")}</summary>
       <div class="facts">${more.map(([f, v]) => html`<${TurnFact} key=${f} k=${f} v=${v} />`)}</div></details>` : ""}
-    ${tail}
+    ${full.error && !model ? html`<${Notice} tone="bad" what="Error" why=${String(full.error)} />` : ""}
+    <${AgentTurn} id=${`turn:${k}:${full.ts}`} fields=${fields} prompt=${String(full.prompt || "")} model=${model} params=${{ model: full.model }}
+      t0=${(full.ts || 0) - (full.seconds || 0)} t1=${full.ts || 0} timedOut=${full.rc === 124} />
+    ${(full.hops || []).length ? html`<details class="blk"><summary>${`Tool calls (${full.hops.length})`}</summary>${full.hops.map(x => html`<pre class="val">${x}</pre>`)}</details>` : ""}
   </div><//>`;
 }

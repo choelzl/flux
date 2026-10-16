@@ -34,6 +34,8 @@ def kind_of(name: str, why: str = "") -> str | None:
     head, rest = head.strip(), rest.strip()
     if head == "orchestrate" or head == "agent" and why.lower().split()[:1] == ["orchestrate"]:
         return "search"                                # D996: it decides what to search and design
+    if head == "agent" and why.lower().split()[:1] == ["digest"]:
+        return "setup"                                 # D1143: the library's or the workbench's digest
     if head in ("agent", "llm") or name.startswith("model"):
         return None                                    # workers inherit the work they assist
     if head == "tool":

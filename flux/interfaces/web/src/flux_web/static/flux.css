@@ -866,7 +866,7 @@ ul.files li.ignored a, ul.files li.ignored small { opacity: .55; }
 .aj-folds > details { min-width: 0; }
 .aj-folds > details[open] { flex-basis: 100%; }
 .aj-folds summary, .aj-diff summary { cursor: pointer; font-size: 13px; color: var(--muted); }
-.aj-folds .cv-live-box { margin: 8px 0 0; }
+.aj-folds .agent-turn { margin: 8px 0 0; }
 
 /* D919, D1131: an agent's question (components/Ask.js) -- the line on a loop's page, the card in Talk or inline */
 .qline, .qbox { border-radius: 8px; border: 1px solid color-mix(in srgb, var(--agent) 35%, var(--line)); background: color-mix(in srgb, var(--agent) 7%, var(--panel)); }
@@ -985,6 +985,17 @@ button.alt-chat-more { border: 0; background: transparent; cursor: pointer; } bu
 .alt-chat-now { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--muted); }
 .alt-chat-jump { position: absolute; right: 14px; bottom: 12px; border: 0; border-radius: 14px; padding: 3px 10px; font-size: 12px; background: var(--accent); color: var(--accent-ink); box-shadow: 0 2px 8px rgba(0,0,0,.18); }
 .alt-usage { margin-bottom: 6px; }
+/* D1144: Talk's Thinking & commands -- Live's agent view in a dialog over most of the screen, a phone's whole screen;
+   the chat fills it, a long line wraps or scrolls in its own block */
+dialog.dlg.agent-dlg { width: min(1280px, calc(100vw - 48px)); max-width: none; height: calc(100dvh - 48px); max-height: none;
+  padding: 14px 16px; box-sizing: border-box; }
+dialog.dlg.agent-dlg[open] { display: flex; flex-direction: column; }
+dialog.agent-dlg > .head { flex: none; }
+.agent-dlg-body { flex: 1; min-height: 0; min-width: 0; overflow: auto; }
+.agent-dlg .alt-chat { max-height: calc(100dvh - 230px); }
+@media (max-width: 640px) {
+  dialog.dlg.agent-dlg { width: 100vw; height: 100dvh; max-height: 100dvh; margin: 0; border: 0; border-radius: 0; padding: 10px 12px; }
+}
 .alt-tried { margin: 2px 0 10px; } .alt-tried b { font-size: 16px; margin-right: 8px; } .alt-pass-heading.sel .alt-task-name { text-decoration: underline; }
 .alt-task-name { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .alt-task-name small { display: block; font-weight: normal; }
@@ -1007,8 +1018,8 @@ svg.gantt .bar.interrupted { stroke: var(--warn); stroke-dasharray: 4 3; }
 svg.gantt .bar.timeout { stroke: var(--warn); }                          /* D997: an agent's time limit */
 .alt-detail { max-height: 74vh; padding-bottom: 12px; }
 .alt-detail .facts:empty { display: none; }
-.alt-detail .task-inspector .val { overflow-wrap: anywhere; }
-.alt-detail .inspector-input { border-top: 1px solid var(--line); padding-top: 8px; margin-top: 12px; }
+.task-inspector .val { overflow-wrap: anywhere; }
+.agent-turn .inspector-input { border-top: 1px solid var(--line); padding-top: 8px; margin-top: 12px; }
 .alt-detail .crumbs { overflow-wrap: anywhere; }
 @media (max-width: 960px) { .alt-split { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 600px) { .alt-selectors { width: 100%; margin-left: 0; } .alt-selectors label { flex: 1 1 100%; } .alt-selectors select { flex: 1; width: 100%; } }
@@ -1040,7 +1051,6 @@ td.bad { color: var(--bad); }
 /* D712: an agent's conversation -- its words as text, thinking and tool calls folded */
 .cv { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; }
 .cv > * { min-width: 0; }
-.cv.cv-live-box { max-height: 70vh; overflow-y: auto; overflow-x: hidden; padding-right: 4px; }
 .cv-text { padding: 2px 2px 2px 10px; border-left: 3px solid var(--accent); }
 .cv-text .md > :first-child { margin-top: 0; }
 .cv-text .md > :last-child { margin-bottom: 0; }
@@ -1377,11 +1387,17 @@ svg.chart.key.wide { width: 16px; height: 9px; }
 .best-said { font-weight: 600; }
 
 .set-fields .inline .save-mark { min-width: 0; }
-.ideas-table td { white-space: normal; overflow-wrap: anywhere; min-width: 7rem; max-width: 28rem; vertical-align: top; }
+.ideas-table td { white-space: normal; overflow-wrap: anywhere; min-width: 7rem; max-width: 22rem; vertical-align: top; }
+.ideas-table td:nth-child(1) { max-width: 16rem; }
+.ideas-table > tbody > tr.idea-open > td { border-bottom: none; }
+.ideas-table > tbody > tr.idea-evals-row > td { max-width: none; padding: 0 8px 12px; }
+.idea-evals-row .scroll-x { border: 1px solid var(--line); border-radius: var(--radius); background: color-mix(in srgb, var(--muted) 5%, transparent); }
+.idea-evidence { white-space: nowrap; }
 .ideas-table small, .idea-evaluations small { display: block; }
 .ideas-table p { margin: 0 0 .4rem; }
 .idea-evaluations { table-layout: fixed; width: 100%; }
 .idea-evaluations th:nth-child(1), .idea-evaluations td:nth-child(1) { width: 3.2rem; }
+.idea-evaluations th:nth-child(2), .idea-evaluations td:nth-child(2) { width: 9rem; }
 .idea-evaluations th:nth-child(3), .idea-evaluations td:nth-child(3), .idea-evaluations th:nth-child(4), .idea-evaluations td:nth-child(4) { width: 5.5rem; }
 .ideas-table .idea-evaluations td { min-width: 0; max-width: none; }
 .idea-metrics { display: flex; flex-wrap: wrap; gap: 3px; }
@@ -1397,8 +1413,6 @@ svg.chart.key.wide { width: 16px; height: 9px; }
 }
 
 /* D955: Results › Library -- each digested paper folded, its digest's text wrapped (a phone too) */
-/* D993: an ask's agent turn, read in a dialog as Live reads an agent */
-.ask-agent-view { width: min(860px, 86vw); max-height: 70vh; overflow: auto; }
 /* D998: a long list scrolls in its own box, its header kept in view -- picking an old row needs no page scroll */
 .rows-scroll { max-height: min(72vh, 900px); overflow: auto; }
 .rows-scroll thead { position: sticky; top: 0; z-index: 2; background: var(--panel); }
