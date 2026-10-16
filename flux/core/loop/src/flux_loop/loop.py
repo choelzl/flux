@@ -205,6 +205,9 @@ def run_loop(problem: Problem, request: LoopRequest, *, proposer: Any | None = N
     if depth == 0 and getattr(problem, "digesting", lambda: False)():   # D771: the papers digested in the Setup, before the Reading (D774)
         with _phase("knowledge: digest", why="library papers, each once") as out:
             out.update(problem.digest(state) or {})
+    if depth == 0 and callable(getattr(problem, "bench_readme", None)) and getattr(getattr(problem, "task", None), "workbench", ""):
+        with _phase("knowledge: workbench", why="its README, when it changed", quiet=True) as out:     # D1114
+            out.update(problem.bench_readme(state) or {})
     if depth == 0:            # a sub-loop does not own the live panels (D455)
         _publish(problem, state, todo, goals, "resumed", searching=hunting)
         _publish_mentor(problem, state)

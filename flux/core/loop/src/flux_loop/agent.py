@@ -416,8 +416,9 @@ def _first_line(path: Path) -> str:
 
 #: D1111: the workbench's index, written by the loop -- the brief points at it instead of listing the folder.
 WORKBENCH_README = "README.md"
-_README_HEAD = ("# The workbench\n\nWritten by the loop from each file's first line whenever the workbench changes; edits "
-                "here are overwritten. Give every tool and note a first line saying what it is.\n")
+_README_HEAD = ("# The workbench\n\nWritten by the loop's setup when the workbench changed; edits here are overwritten. Give "
+                "every tool and note a first line saying what it is.\n")
+_STAMP = ".index.json"                    # what the README was written from: each file and when it changed
 
 
 def _bench_files(root: Path) -> list[Path]:
@@ -427,44 +428,57 @@ def _bench_files(root: Path) -> list[Path]:
                   key=lambda p: str(p.relative_to(root)))
 
 
-def workbench_index(bench: str) -> tuple[Path, int] | None:
-    """D1111: `workbench/README.md` -- each folder, then each file in it with its first line, its size and when it last
-    changed -- written again when a file is newer than it (or one was removed). (its path, how many files); None
-    without a workbench."""
-    if not bench:
-        return None
+def bench_files(bench: str) -> dict[str, float]:
+    """Each file of the workbench (not its index), relative path -> when it last changed; {} without one."""
+    root = Path(bench) if bench else None
+    if root is None or not root.is_dir():
+        return {}
+    return {str(p.relative_to(root)): p.stat().st_mtime for p in _bench_files(root)}
+
+
+def bench_stale(bench: str) -> bool:
+    """Whether the workbench changed since its README was written (a file added, changed or removed)."""
     root = Path(bench)
-    if not root.is_dir():
-        return None
-    files, readme = _bench_files(root), root / WORKBENCH_README
     try:
-        stamp = readme.stat().st_mtime if readme.is_file() else -1.0
-        listed = readme.read_text(errors="replace").count("\n- `") if readme.is_file() else -1
-    except OSError:
-        stamp, listed = -1.0, -1
-    if stamp >= 0 and listed == len(files) and all(p.stat().st_mtime <= stamp for p in files):
-        return readme, len(files)
+        was = json.loads((root / _STAMP).read_text())
+    except (OSError, ValueError):
+        return True
+    return not (root / WORKBENCH_README).is_file() or was != bench_files(bench)
+
+
+def bench_listing(bench: str) -> str:
+    """Every file of the workbench by folder, each with its first line, size and date: the index's own part."""
     import time as _time
 
-    lines, folder = [_README_HEAD], None
-    for p in files:
+    root, lines, folder = Path(bench), [], None
+    for p in _bench_files(root):
         rel = p.relative_to(root)
         here = str(rel.parent) if rel.parent != Path(".") else "(top)"
         if here != folder:
             folder = here
             lines.append(f"\n## {here}\n")
         st = p.stat()
-        first = _first_line(p)
-        lines.append(f"- `{rel}` -- {first or '(no first line)'} ({st.st_size} B, {_time.strftime('%Y-%m-%d', _time.localtime(st.st_mtime))})")
-    if not files:
-        lines.append("\n(empty)")
-    tmp = readme.with_name(f".{WORKBENCH_README}.{os.getpid()}")
+        lines.append(f"- `{rel}` -- {_first_line(p) or '(no first line)'} ({st.st_size} B, {_time.strftime('%Y-%m-%d', _time.localtime(st.st_mtime))})")
+    return "\n".join(lines) if lines else "\n(empty)"
+
+
+def write_bench_readme(bench: str, about: str = "", by: str = "") -> Path | None:
+    """D1111, D1114: `workbench/README.md` -- what the workbench holds and what it is for (`about`, written by the
+    setup's model or agent; none without one), then every file -- and the stamp it was written from. Atomic."""
+    root = Path(bench)
+    if not root.is_dir():
+        return None
+    head = _README_HEAD + (f"\n{about.strip()}\n" if about.strip() else "") + (f"\n_Described by {by}._\n" if by and about.strip() else "")
+    readme = root / WORKBENCH_README
+    files = bench_files(bench)
     try:
-        tmp.write_text("\n".join(lines) + "\n")
-        tmp.replace(readme)                          # whole or not at all: agents read it while others write
+        for path, text in ((readme, head + "\n# Every file\n" + bench_listing(bench) + "\n"), (root / _STAMP, json.dumps(files))):
+            tmp = path.with_name(f".{path.name}.{os.getpid()}")
+            tmp.write_text(text)
+            tmp.replace(path)                        # whole or not at all: agents read it while others write
     except OSError:
         return None
-    return readme, len(files)
+    return readme
 
 
 def workbench_section(bench: str) -> str:
@@ -472,8 +486,9 @@ def workbench_section(bench: str) -> str:
     a listing of the folder); "" without one."""
     if not bench:
         return ""
-    got = workbench_index(bench)
-    n = got[1] if got else 0
+    n = len(bench_files(bench))
+    if n and not (Path(bench) / WORKBENCH_README).is_file():
+        write_bench_readme(bench)                    # D1114: a first index; the setup describes it from then on
     held = ("It is empty: you are the first." if not n else
             f"It holds {n} {'file' if n == 1 else 'files'}: `workbench/{WORKBENCH_README}` lists them, each with its first "
             "line -- read it first.")

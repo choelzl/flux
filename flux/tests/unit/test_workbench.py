@@ -42,18 +42,12 @@ def test_the_brief_lists_what_it_holds_and_the_link_reaches_it(tmp_path):
     index = (bench / "README.md").read_text()
     assert "## tools" in index and "- `tools/fit.py` -- Fit a cubic per segment of GELU." in index
     assert "- `notes/gelu.md` -- The negative tail needs 2 more bits" in index and "README.md`" not in index
-    import os
-    import time
-    stamp = (bench / "README.md").stat().st_mtime_ns
-    workbench_section(str(bench))
-    assert (bench / "README.md").stat().st_mtime_ns == stamp, "unchanged workbench: the index is not written again"
+    from flux_loop.agent import bench_stale
+
+    assert not bench_stale(str(bench))
     (bench / "notes" / "gelu.md").unlink()
-    workbench_section(str(bench))
-    assert "gelu.md" not in (bench / "README.md").read_text(), "a removed file leaves the index"
-    later = time.time() + 5
-    (bench / "tools" / "fit.py").write_text('"""Fit a quartic now."""\n')
-    os.utime(bench / "tools" / "fit.py", (later, later))
-    assert "It holds 1 file" in workbench_section(str(bench)) and "Fit a quartic now." in (bench / "README.md").read_text()
+    assert bench_stale(str(bench)) and "gelu.md" in (bench / "README.md").read_text(), \
+        "D1114: the brief writes a first index only; the setup keeps it current"
     workbench_link(str(bench), work)                                     # a second turn: the link stays
 
 
@@ -68,3 +62,31 @@ def test_an_agent_writes_through_the_link_and_claude_gets_the_folder(tmp_path):
     turn = run_turn(spec, spec.argv, {"prompt": "p", "workbench": str(bench)}, workdir=work)
     assert turn.ok and (bench / "notes" / "n.md").read_text() == "seen" and str(bench) in turn.text
     assert agent_spec("claude").add_dir == ("--add-dir",) and agent_spec("opencode").add_dir == ()
+
+
+def test_the_setup_describes_the_workbench_when_it_changed(tmp_path):
+    """D1114: the Setup writes the README again when the workbench changed: what its tools and notes are for, by the
+    model (or the digesting agent), then every file; without a model, the file list alone; unchanged, nothing."""
+    from flux_llm import ScriptedProposer
+    from flux_loop import LoopRequest, LoopState, PromptProblem
+
+    home = tmp_path / "gelu"
+    home.mkdir()
+    task = TaskSpec.from_dict({"id": "gelu", "statement": "A GELU in fp16.", "flow": {"test": "true"}}, base=home)
+    bench = Path(task.workbench)
+    (bench / "tools").mkdir(parents=True)
+    (bench / "tools" / "fit.py").write_text('"""Fit a cubic per segment of GELU."""\n')
+    model = ScriptedProposer(["- `tools/fit.py` fits the segment polynomials: run it before changing the table."])
+    state = LoopState(request=LoopRequest(), say=lambda _m: None, proposer=model, feedback=None)
+    problem = PromptProblem(task)
+    got = problem.bench_readme(state)
+    readme = (bench / "README.md").read_text()
+    assert got["files"] == 1 and "fits the segment polynomials" in readme and "# Every file" in readme
+    assert "- `tools/fit.py` -- Fit a cubic per segment of GELU." in readme and "A GELU in fp16." in model.prompts[0]
+    assert problem.bench_readme(state) == {}, "unchanged: not written again"
+    (bench / "notes").mkdir()
+    (bench / "notes" / "tail.md").write_text("# The tail needs 2 more bits\n")
+    alone = LoopState(request=LoopRequest(), say=lambda _m: None, proposer=None, feedback=None)
+    assert problem.bench_readme(alone)["described by"].startswith("nobody")
+    readme = (bench / "README.md").read_text()
+    assert "tail.md` -- The tail needs 2 more bits" in readme and "fits the segment polynomials" not in readme

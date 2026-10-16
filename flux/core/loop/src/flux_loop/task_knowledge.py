@@ -138,6 +138,51 @@ class KnowledgeMixin:
                 out[k] = (out[k] + v) if isinstance(v, int) and isinstance(out.get(k), int) else v
         return out
 
+    def bench_readme(self, state: LoopState) -> dict[str, Any]:
+        """D1114: the workbench's README, written again in the Setup when the workbench changed -- what its tools and
+        notes are for, by whoever digests the papers (`knowledge.digest`: the model, or a coding agent reading the
+        files itself), then every file; without either, the file list alone. What was done, for the task pane."""
+        from .agent import bench_files, bench_stale, write_bench_readme
+
+        bench = self.task.workbench
+        files = bench_files(bench)
+        if not files or not bench_stale(bench):
+            return {}
+        about, by = "", ""
+        brief = ("Write the overview of a workbench: a folder where coding agents keep the tools they built (scripts that "
+                 "compute, generate or analyse) and the notes they took (methods, what failed and why) while working on "
+                 f"this problem:\n{self.task.statement[:1500]}\n\nIn at most 25 lines of markdown: what the tools and the "
+                 "notes are for, grouped by what they help with; which to read first; a note that contradicts another. Name "
+                 "files by their path. No preamble, no list of every file (one is appended).")
+        try:
+            if self.task.digest_by is not None:
+                ask = _agent_digest(self.task.digest_by)
+                about, by = ask(str(Path(bench).resolve()), brief + f"\n\nThe workbench is the folder {Path(bench).resolve()}: "
+                                "read its files with your tools.")
+            elif getattr(state, "proposer", None) is not None:
+                from .agent import bench_listing
+
+                shown, used = [], 0
+                for rel in sorted(files, key=lambda r: -files[r])[:40]:            # the newest first, within a budget
+                    try:
+                        head = "\n".join((Path(bench) / rel).read_text(errors="replace").splitlines()[:30])
+                    except OSError:
+                        continue
+                    if used + len(head) > 24000:
+                        break
+                    shown.append(f"--- {rel}\n{head}")
+                    used += len(head)
+                got = state.proposer.propose(brief + "\n\nTHE FILES (each one's first lines):\n" + bench_listing(bench)
+                                             + "\n\n" + "\n\n".join(shown))
+                about, by = (got.text or "").strip(), str(getattr(state.proposer, "model", "") or "the model")
+        except Exception as exc:  # noqa: BLE001 -- the file list is still written
+            state.say(f"  workbench: not described ({exc!s:.200}); its file list is")
+            about = ""
+        from flux_knowledge.digest import unwrapped
+
+        write_bench_readme(bench, unwrapped(about) if about else "", by)
+        return {"files": len(files), "described by": by if about else "nobody (the file list only)"}
+
     def mentor_sections(self, state: LoopState) -> list[tuple[str, str]]:
         out = [("task", self.task.statement + ("\n\n" + self.task.contract if self.task.contract else ""))]
         if self.task.knowledge:

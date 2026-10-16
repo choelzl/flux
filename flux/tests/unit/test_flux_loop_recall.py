@@ -160,3 +160,37 @@ def test_no_record_yet_is_said_not_made(tmp_path, monkeypatch):
     code, text = run("tried", "--loop", str(home))
     assert code == 2 and "not run" in text and not (home / "out" / "fresh.db").exists()
     assert recall.LOOKUP_LINE.startswith("WHAT THE LOOP KNOWS is not pasted here")
+
+
+BOX_AGENT = """import json, os, subprocess, sys
+from pathlib import Path
+brief, out = Path(sys.argv[1]).read_text(), Path(sys.argv[2])
+got = subprocess.run([sys.executable, "-c", "import sys; from flux_cli.main import main; sys.exit(main())", "loop", "results", "--json"],
+                     capture_output=True, text=True)
+(out.parent / "seen.json").write_text(json.dumps({"brief": brief, "probe": os.environ.get("FLUX_PROBE", ""), "results": got.stdout}))
+out.write_text(json.dumps({"ok": True}))
+print("written")
+"""
+
+
+def test_a_box_agent_reads_the_record_through_flux_loop_not_the_database(loop, tmp_path):
+    """D1115: a box's agent (the orchestrator, a critic) is told `flux loop` and its turn has the loop's context, so
+    `flux loop results` in its turn reads this loop's record; the brief says not to open the database itself."""
+    from types import SimpleNamespace
+
+    from flux_loop import PromptProblem
+    from flux_loop.boxes import box_turn
+    from flux_loop.document import load_task
+
+    fake = tmp_path / "box.py"
+    fake.write_text(BOX_AGENT)
+    spec = {"command": [__import__("sys").executable, str(fake), "{prompt_file}", "{artifact}"], "output": "text", "timeout_s": 60}
+    said: list[str] = []
+    state = SimpleNamespace(workdir=str(tmp_path / "pass"), say=said.append, records=SimpleNamespace(campaign_id="mul8", store=None, remember=lambda *_a, **_k: None),
+                            request=SimpleNamespace(db=str(loop / "out" / "mul8.db")), proposer=None, lessons=[])
+    problem = PromptProblem(load_task(loop))
+    assert box_turn("orchestrate", spec, "Which design next?", {"type": "object", "properties": {"ok": {"type": "boolean"}}},
+                    state, problem=problem) == {"ok": True}, said
+    seen = json.loads(next((tmp_path / "pass").rglob("seen.json")).read_text())
+    assert "flux loop results --json" in seen["brief"] and "Never open the record database" in seen["brief"]
+    assert seen["probe"] and json.loads(seen["results"])["designs"][0]["name"] == "mul8#3"

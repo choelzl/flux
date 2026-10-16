@@ -100,12 +100,29 @@ def _pass_session(state: Any, box: str, tool: str, root: Path) -> Any:
     return sess
 
 
+def _lookup_context(problem: Any, state: Any, workdir: Path) -> str:
+    """D1115: the turn's context for `flux loop` (the document, the record, the campaign; no probe budget): a box agent
+    reads the record through it, not the database; "" without a document."""
+    task = getattr(problem, "task", None)
+    if task is None:
+        return ""
+    from .probe import probe_context
+
+    rec = getattr(state, "records", None)
+    try:
+        return probe_context(task, workdir, "", None, record=str(getattr(state.request, "db", "") or ""),
+                             campaign=str(getattr(rec, "campaign_id", "") or ""))
+    except Exception:  # noqa: BLE001 -- the commands are help; the box answers without them
+        return ""
+
+
 def box_turn(box: str, spec: Any, question: str, schema: dict[str, Any], state: Any,
              check: Callable[[dict], str | None] | None = None, home: str = "",
              problem: Any = None) -> dict[str, Any] | None:
     """The agent's answer to `question` for `box`, checked; None when it fell back (said, and
     on the record). Given the `problem`, the brief carries its LIBRARY section (D648)."""
     from .agent import DECIDE, agent_spec, converse, library_section, run_turn, workbench_link, workbench_section
+    from .recall import BOX_LOOKUP_LINE
 
     a = agent_spec(spec)
     # before the pass has its trace directory (validate runs first), the scratch directory
@@ -132,13 +149,14 @@ def box_turn(box: str, spec: Any, question: str, schema: dict[str, Any], state: 
                 + " and nothing else; what is being judged is quoted above. " if home else
                 "Everything you need is quoted above. ")
              + f"Do not run "
-             f"the gate or the measurement stages: the loop runs them. Write your answer to `{out}` as ONE JSON "
+             f"the gate or the measurement stages: the loop runs them. {BOX_LOOKUP_LINE} Write your answer to `{out}` as ONE JSON "
              f"object matching this schema, then reply with one line saying so:\n"
              f"{json.dumps(schema, indent=1)}\n" + (f"\n{shelf}\n" if shelf else ""))
     prompt_file = workdir / (f"BRIEF-{sess.turns:03d}.md" if sess is not None else "BRIEF.md")
     subs = {"prompt": brief, "prompt_file": str(prompt_file), "artifact": str(out), "workdir": str(workdir),
             "part": box, "name": box, "python": sys.executable, "workbench": bench,
-            "home": home or "."}                       # D1038: an agent of one's own may name its files, as a design's does
+            "home": home or ".",                      # D1038: an agent of one's own may name its files, as a design's does
+            "probe": _lookup_context(problem, state, workdir)}       # D1115: `flux loop` reads this loop's record
     resume = sess.id if sess is not None and a.resume else None
     shape = json.dumps(schema, indent=1)
     message = ""
