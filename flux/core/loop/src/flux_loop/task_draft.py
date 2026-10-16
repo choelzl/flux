@@ -133,6 +133,8 @@ class DraftMixin:
         probe_ctx = probe_context(self.task, workdir, sg or "", budget, **_where(state))
         resume = sess.id if agent.resume and sess.id and prior is not None and failure else None
         message = ""
+        if not (agent.resume and sess.id and sess.timed_out):
+            sess.design_t0 = time.time()               # D1104: a new design (or repair) begins; a continue goes on with it
         if agent.resume and sess.id and sess.timed_out:
             # D999: its last turn ran out of time mid-design -- the same session finishes it, the file as it left it
             resume = sess.id
@@ -142,7 +144,8 @@ class DraftMixin:
             if sess.timeouts >= max(0, int(getattr(state.request, "agent_continues", 3))) - 1:     # the last of its full turns
                 # D1088: said -- after this turn only a short one is left, to hand in what there is
                 message += ("THIS IS YOUR LAST FULL TURN. Stop exploring alternatives: bring the design to a state that "
-                            "builds and passes the checks, and write it. After this turn you only get a few minutes to hand it in.\n")
+                            "builds and passes the checks, write it, and confirm it with `flux probe gate` -- a file that passes is "
+                            "kept, and handed in if your time runs out. After this turn you only get a few minutes to hand it in.\n")
             message += "\n\n" + instructions(path)
         elif resume:
             # the session holds the brief: what failed, the file, fix it (D669)
@@ -184,8 +187,9 @@ class DraftMixin:
             state.say(f"  {agent.tool} cannot start ({broken}); the pass stops instead of trying again")
             return None, state.agent_broken
         if sess.timeouts >= max(1, int(getattr(state.request, "agent_continues", 3))):            # its full turns all ran out of time
-            graced = self._grace(state, sess, agent, path, subs, prompt_file, safe)
-            if graced is None:                         # no final turn, or it wrote nothing: what was left is not a design
+            graced = self._hand_in(state, sess, agent, path, subs, prompt_file, safe, turn,
+                                   prior.artifact if prior is not None else None)
+            if graced is None:                         # nothing that passed, no final turn or it wrote nothing: no design
                 return None, self._out_of_time(state, sess, turn, path, agent)
             turn = graced
             sess.timed_out, sess.timeouts = False, 0          # D1088: it handed one in -- judged as any draft
@@ -213,36 +217,103 @@ class DraftMixin:
         return None, (f"the coding agent {agent.tool} exited {turn.rc} and wrote no {path.name}{still}"
                       + (f": {tail}" if tail else ""))
 
-    def _grace(self, state: LoopState, sess: Any, agent: Any, path: Path, subs: dict, prompt_file: Path, safe: str) -> Any:
-        """D1088: the continues used up, one short last turn in the same session -- no more experiments, the
-        design handed in as it stands -- so a pass that ran out of time still has something to check. Its turn
-        when it wrote the design; None when it wrote nothing, cannot resume its session, or the grace is off
-        (`agent_grace_s: 0`)."""
+    def _gate_says(self, path: Path, part: str | None, workdir: Path) -> tuple[bool, str]:
+        """D1104: the loop's own gate on a file, as `flux probe gate` runs it, outside the agent's budget and log."""
+        from .probe import probe, probe_context
+
+        root = workdir / ".flux-grace"
+        root.mkdir(exist_ok=True)
+        ctx = probe_context(self.task, root, part or "", {"gate": 10 ** 6, "stages": 0})
+        code, text = probe("gate", str(path), None, ctx_path=ctx)
+        return code == 0, re.sub(r"\n?\[gate probe \d+ of \d+\]", "", text).strip()
+
+    def _kept(self, sess: Any, prior: str | None) -> Path | None:
+        """D1104: the newest file that passed `flux probe gate` since this design began -- not one of an earlier
+        design, and not the draft it was asked to change."""
+        from .probe import KEPT
+
+        root = Path(sess.workdir) / ".flux-probes"
+        kept = sorted((p for p in root.glob(f"{KEPT}*") if p.stat().st_mtime >= sess.design_t0 - 1), key=lambda p: p.stat().st_mtime_ns) \
+            if root.is_dir() else []
+        for p in reversed(kept):
+            try:
+                if prior is None or p.read_text() != prior:
+                    return p
+            except OSError:
+                continue
+        return None
+
+    def _hand_in(self, state: LoopState, sess: Any, agent: Any, path: Path, subs: dict, prompt_file: Path, safe: str,
+                 turn: Any, prior: str | None) -> Any:
+        """D1088, D1104: its continues used up -- what the pass gets instead of nothing. The design as it stands when
+        the gate passes it (no final turn); else one short final turn told the gate's failure, whose file is handed in
+        when the gate passes it; else the last file the gate passed in its probes; else whatever the final turn wrote
+        (judged, refused as any draft). None: nothing to hand in."""
+        part = subs.get("part") or None
+        workdir = Path(subs["workdir"])
+        kept = self._kept(sess, prior)
+        if path.is_file():
+            ok, why = self._gate_says(path, part, workdir)
+            if ok:
+                state.say(f"  {agent.tool}: out of time, but its design passes the gate as it stands: handed in without a final turn")
+                return turn
+        else:
+            why = f"no {path.name} written yet"
+        graced, wrote = self._grace(state, sess, agent, path, subs, prompt_file, safe, why, kept)
+        if wrote and kept is not None:
+            ok, _why = self._gate_says(path, part, workdir)
+            if ok:
+                state.say(f"  {agent.tool}: handed in {path.name} in its final turn; it passes the gate")
+                return graced
+        if kept is not None:
+            path.write_text(kept.read_text())
+            state.say(f"  {agent.tool}: " + ("its final design does not pass the gate" if wrote else "no design from a final turn")
+                      + f": handed in the last version that passed the gate ({time.strftime('%H:%M:%S', time.localtime(kept.stat().st_mtime))}, kept from its probe)")
+            return graced or turn
+        if wrote:
+            state.say(f"  {agent.tool}: handed in {path.name} in its final turn")
+            return graced
+        return None
+
+    def _grace(self, state: LoopState, sess: Any, agent: Any, path: Path, subs: dict, prompt_file: Path, safe: str,
+               why: str, kept: Path | None) -> tuple[Any, bool]:
+        """D1088, D1104: one short last turn in the same session whose only job is the gate: the gate's failure in its
+        message, one gate probe, no measurements; the kept file that passed offered to copy back. (its turn, whether it
+        wrote the design); (None, False) when the grace is off (`agent_grace_s: 0`) or its session cannot resume."""
         import dataclasses
 
         from .agent import converse
-        from .ideas import instructions
+        from .probe import probe_context
 
         want = getattr(state.request, "agent_grace_s", None)
         grace = min(600.0, max(300.0, agent.timeout_s / 4)) if want is None else float(want)    # 5 to 10 minutes
         if grace <= 0 or not (agent.resume and sess.id):
-            return None
-        message = (f"TIME IS UP. This is your final turn, and it is short ({grace:.0f} s). Do not experiment, test or explore "
-                   f"any further. Write your best design as it stands to `{path}` now -- complete enough to build, "
-                   "whatever is unfinished left as simply as it can be -- then reply with one line saying the file is written.\n")
-        message += "\n\n" + instructions(path)
+            return None, False
+        message = (f"TIME IS UP. This is your final turn, and it is short ({grace:.0f} s). Its only job: make `{path}` pass "
+                   "the loop's gate. Do not experiment, optimise, explore, read papers or write scripts.\n\n"
+                   f"The gate on the file as it stands:\n{why[-2500:]}\n\n"
+                   "Fix exactly that, in as few edits as you can. If the fix is not small, simplify instead: take out what is "
+                   "unfinished or half-changed until what is left is correct.")
+        if kept is not None:
+            message += (f" A version that passed the gate earlier in this session is kept at `{kept}`: if you cannot fix "
+                        f"the file in a few edits, copy that one over `{path}` -- it is what the loop takes if this turn fails.")
+        message += (f"\nYou may run `flux probe gate {path}` once to confirm. Then reply with one line saying the file is written.\n")
         grace_file = prompt_file.with_name(f"PROMPT-{safe}-grace.md")
         grace_file.write_text(message)
-        state.say(f"  {agent.tool}: out of time after its continues; a final {grace:.0f} s turn to hand in its design")
+        state.say(f"  {agent.tool}: out of time after its continues; a final {grace:.0f} s turn to make its design pass the gate")
+        rec = getattr(state, "records", None)
+        ctx = probe_context(self.task, Path(subs["workdir"]), subs.get("part") or "", {"gate": 1, "stages": 0},
+                            record=str(getattr(state.request, "db", "") or ""), campaign=str(getattr(rec, "campaign_id", "") or ""))
         t0, before = time.monotonic(), path.stat().st_mtime_ns if path.is_file() else None
-        turn, _asked = converse(dataclasses.replace(agent, timeout_s=grace), {**subs, "prompt_file": str(grace_file)},
+        turn, _asked = converse(dataclasses.replace(agent, timeout_s=grace), {**subs, "prompt_file": str(grace_file), "probe": ctx},
                                 workdir=Path(subs["workdir"]), artifact=path, prompt_file=grace_file, answer=None,
                                 say=state.say, session=sess.id, message=message)
         self._session_turn(state, sess, turn, "generate", subs.get("part") or None, agent.tool, path.is_file(),
-                           f"final turn: exited {turn.rc}, wrote no {path.name}", message, t0, "")
+                           f"final turn: exited {turn.rc}, wrote no {path.name}", message, t0, ctx)
         wrote = path.is_file() and path.stat().st_mtime_ns != before      # written in this turn, not left from before
-        state.say(f"  {agent.tool}: " + (f"handed in {path.name} in its final turn" if wrote else "wrote nothing in its final turn"))
-        return turn if wrote else None
+        if not wrote:
+            state.say(f"  {agent.tool}: wrote nothing in its final turn")
+        return turn, wrote
 
     def _out_of_time(self, state: LoopState, sess: Any, turn: Any, path: Path, agent: Any) -> str:
         """D1026: the design agent ran past its time limit on its first turn and on every continue: the

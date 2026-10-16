@@ -21,7 +21,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-__all__ = ["PROBE_DEFAULT", "budget_of", "probe", "probe_context", "probe_line", "probes_done"]
+__all__ = ["PROBE_DEFAULT", "budget_of", "last_passed", "probe", "probe_context", "probe_line", "probes_done"]
 
 #: The budget per turn unless the agent's `probe:` says otherwise.
 PROBE_DEFAULT = {"gate": 20, "stages": 3}
@@ -65,10 +65,35 @@ def probe_line(stages: list[str], budget: dict[str, int] | None, proto: bool = F
                  f"(up to: {each} times)")
     from .agent import DENIED
 
+    line += (". A file that passes the gate is kept: if your time runs out on a later edit, the last one that passed is "
+             "what the loop gets -- so probe the gate whenever the design is whole")
     if set(allowed) >= set(DENIED):
         return line + ". Each prints what the loop would see, with its exact commands and flags, and is on the record."
     raw = (f" (except {', '.join(allowed)}, which you may run yourself)" if allowed else "")
     return line + f". Each prints what the loop would see. Use them, not the raw tools, which are denied{raw}."
+
+
+#: A file that passed the gate in a turn is kept beside the turn's context as `passed-<sha><suffix>`.
+KEPT = "passed-"
+
+
+def _keep(ctx_path: str, src: Path, text: str, sha: str) -> str:
+    """Keep a copy of a file the gate passed (D1104): what the loop hands in if the agent's time runs out
+    on a later, broken edit."""
+    dest = Path(ctx_path).parent / f"{KEPT}{sha}{src.suffix}"
+    try:
+        dest.write_text(text)
+        os.utime(dest)                               # the latest pass is the newest, even when a file passed twice
+    except OSError:
+        return ""
+    return str(dest)
+
+
+def last_passed(workdir: Path) -> Path | None:
+    """The newest file that passed `flux probe gate` in this work directory's turns, or None."""
+    root = Path(workdir) / ".flux-probes"
+    kept = sorted(root.glob(f"{KEPT}*"), key=lambda p: p.stat().st_mtime_ns) if root.is_dir() else []
+    return kept[-1] if kept else None
 
 
 def probes_done(ctx_path: str) -> list[dict[str, Any]]:
@@ -208,10 +233,10 @@ def probe(kind: str, file: str, stages: str | list[str] | None = None, ctx_path:
             cmd = [c.replace("{artifact}", str(src.resolve())) for c in ctx["proto"]]
             run = run_tool(cmd, cwd=str(src.resolve().parent), timeout_s=600, what="probe proto")
             text_out = ((run.stdout or "") + "\n" + (run.stderr or "")).strip()
-            _log(ctx, row("gate", run.ok, text_out[-300:], t0))
+            _log(ctx, row("gate", run.ok, text_out[-300:], t0, **({"kept": _keep(ctx_path, src, text, sha)} if run.ok else {})))
             return (0 if run.ok else 1), text_out[-6000:] + f"\n[gate probe {used + 1} of {cap}]"
         ok, report, line = _gate(ctx, ctx_path, src, text, used + 1)
-        _log(ctx, row("gate", ok, line, t0))
+        _log(ctx, row("gate", ok, line, t0, **({"kept": _keep(ctx_path, src, text, sha)} if ok else {})))
         out.append(report + f"\n[gate probe {used + 1} of {cap}]")
         if not ok:
             return 1, "\n".join(out)

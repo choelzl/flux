@@ -68,7 +68,8 @@ flux probe measure design.sv --stage screen --stage confirm   # each on its own,
 ```
 
 Exit 0 pass / within limits, 1 fail, 2 refused (no probe context, probe budget spent, unknown
-stage). The cap per turn is the box's `probe: {gate: 20, stages: 3}`; the output ends with
+stage). **A file that passes the gate is kept**: if your time runs out on a later edit, the
+last one that passed is what the loop takes -- probe the gate whenever the design is whole. The cap per turn is the box's `probe: {gate: 20, stages: 3}`; the output ends with
 `[gate probe k of cap]`. In a prototype turn only `gate` is allowed. Each probe is recorded as
 your own check, not as the loop's verdict.
 

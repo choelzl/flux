@@ -247,6 +247,7 @@ class AgentSession:
     schema: str = ""                       # a box's answer schema, said once per session
     timed_out: bool = False                # D999: its last turn ran past the time limit -- the next one continues it
     timeouts: int = 0                      # D1026: its turns in a row that ran past the limit
+    design_t0: float = 0.0                 # D1104: when the design its turns work on began (a file the gate passed before is another design's)
 
 
 @dataclass

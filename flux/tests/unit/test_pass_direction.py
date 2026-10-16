@@ -110,7 +110,8 @@ def test_a_design_agent_out_of_time_gets_a_final_turn_to_hand_in_its_design(tmp_
     turns = _turns(tmp_path)
     assert [t["mode"] for t in turns][:3] == ["first", "resume", "resume"], turns
     assert "TIME IS UP" in turns[2]["text"] and "Do not experiment" in turns[2]["text"], turns[2]["text"][:300]
-    assert any("a final 3 s turn to hand in its design" in m for m in said) and any("handed in" in m for m in said), said
+    assert "The gate on the file as it stands" in turns[2]["text"], turns[2]["text"][:600]       # D1104: told what to fix
+    assert any("a final 3 s turn to make its design pass the gate" in m for m in said) and any("handed in" in m for m in said), said
     why = " ".join(r for _n, r in out.refused)
     assert "OUT OF TIME" not in why and not out.stopped.startswith("out of time"), (out.stopped, why)
 
@@ -127,3 +128,77 @@ def test_a_design_agent_that_cannot_start_stops_the_pass_instead_of_trying_again
     out = run_loop(PromptProblem(task), request_for(task, db=str(tmp_path / "d.db")), proposer=None, log=said.append)
     assert out.stopped.startswith("the design agent cannot start") and "missing.py" in out.stopped, out.stopped
     assert sum("cannot start" in m and "pass stops" in m for m in said) == 1, [m for m in said if "cannot start" in m]
+
+
+WHOLE = SLOW.replace(SLOW[SLOW.index("if mode == \"first\":"):], """artifact.write_text("\\n".join(str(i) for i in range(10)) + "\\n")   # whole and correct, then past its time limit
+time.sleep(30)
+""")
+
+KEEPS = SLOW.replace(SLOW[SLOW.index("if mode == \"first\":"):], """if mode == "first":                  # a whole design, probed (the gate passes: kept), then broken by a later edit
+    artifact.write_text("\\n".join(str(i) for i in range(10)) + "\\n")
+    from flux_loop.probe import probe
+    code, said = probe("gate", str(artifact))
+    with open(here / "probes.txt", "a") as f:
+        f.write(f"{code} {said}\\n")
+    artifact.write_text("0\\n1\\n")
+time.sleep(30)                           # every turn past its limit, the final one too: it fixes nothing
+""")
+
+
+def _slow_task(tmp_path: Path, script: str, continues: int = 2, grace: float = 3):
+    slow = tmp_path / "slow.py"
+    slow.write_text(script)
+    d = {"id": "digits", **json.loads(DIGITS.read_text())}
+    d["flow"] = {**d.get("flow", {}), "generate": {"by": {
+        "command": [sys.executable, str(slow), "first", "{prompt_file}", "{artifact}"],
+        "resume": [sys.executable, str(slow), "resume", "{session}", "{answer}", "{artifact}"],
+        "output": "opencode", "timeout_s": 3}}}
+    d["budget"] = {"steps": 3, "repair_attempts": 2, "prototype": False, "agent_continues": continues, "agent_grace_s": grace}
+    return TaskSpec.from_dict(d)
+
+
+def test_out_of_time_with_a_design_that_passes_the_gate_hands_it_in_without_a_final_turn(tmp_path):
+    """D1104: the loop's gate on the file as it stands first -- it passes, so no final turn is spent on it."""
+    task = _slow_task(tmp_path, WHOLE)
+    said: list[str] = []
+    out = run_loop(PromptProblem(task), request_for(task, db=str(tmp_path / "d.db")), proposer=None, log=said.append)
+    assert not any("TIME IS UP" in t["text"] for t in _turns(tmp_path)), "no final turn"
+    assert any("passes the gate as it stands: handed in without a final turn" in m for m in said), said
+    assert out.decision is not None, out.refused
+
+
+def test_out_of_time_after_breaking_a_design_hands_in_the_last_one_the_gate_passed(tmp_path):
+    """D1104: a file that passed `flux probe gate` is kept; the final turn fixes nothing and times out again, so the
+    kept one is handed in -- the pass has a design instead of a wasted turn."""
+    task = _slow_task(tmp_path, KEEPS)
+    said: list[str] = []
+    out = run_loop(PromptProblem(task), request_for(task, db=str(tmp_path / "d.db")), proposer=None, log=said.append)
+    assert (tmp_path / "probes.txt").read_text().startswith("0 GATE: passed"), (tmp_path / "probes.txt").read_text()
+    grace = [t for t in _turns(tmp_path) if "TIME IS UP" in t["text"]]
+    assert grace and "is kept at" in grace[0]["text"] and "flux probe gate" in grace[0]["text"], grace
+    assert any("handed in the last version that passed the gate" in m for m in said), said
+    assert out.decision is not None, out.refused
+
+
+def test_the_kept_design_is_this_designs_and_not_the_draft_it_was_asked_to_change(tmp_path):
+    """D1104: only a file the gate passed since this design began counts, and never the draft it was given to change."""
+    import os
+    import time as _time
+
+    from flux_loop.types import AgentSession
+
+    task = _slow_task(tmp_path, WHOLE)
+    problem = PromptProblem(task)
+    sess = AgentSession("claude", tmp_path / "w")
+    root = sess.workdir / ".flux-probes"
+    root.mkdir(parents=True)
+    old, prior, mine = root / "passed-a.txt", root / "passed-b.txt", root / "passed-c.txt"
+    old.write_text("an earlier design\n")
+    os.utime(old, (_time.time() - 100, _time.time() - 100))
+    sess.design_t0 = _time.time() - 10
+    mine.write_text("this design, probed\n")
+    os.utime(mine, (_time.time() - 5, _time.time() - 5))
+    prior.write_text("the draft it was asked to change\n")
+    assert problem._kept(sess, "the draft it was asked to change\n") == mine
+    mine.unlink()
+    assert problem._kept(sess, "the draft it was asked to change\n") is None, "the earlier design's file is not this one's"
