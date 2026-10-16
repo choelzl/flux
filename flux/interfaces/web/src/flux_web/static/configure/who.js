@@ -11,18 +11,18 @@ const opt = (k, label, cls, value = k) => ({ k, label, cls, is: v => v === value
 /** A box's kinds of worker, for its current value `cur` and the agent the Graph names. */
 export function whoOptions(M, box, cur, agent) {
   const a = { k: "agent", cls: "agent", label: isAgent(cur) ? agentWord(M, cur) : agent, is: isAgent, value: () => isAgent(cur) ? cur : `agent:${agent}` };
-  const modelOf = vals => ({ k: "model", label: "a model", cls: "model", is: v => vals.includes(v), value: () => vals.includes(cur) ? cur : vals[0] });
+  const modelOf = vals => ({ k: "model", label: "model", cls: "model", is: v => vals.includes(v), value: () => vals.includes(cur) ? cur : vals[0] });
   switch (box) {
-    case "validate": return [opt("rules", "rules", "rules"), opt("model", "a model", "model"), a];
-    case "plan": return [opt("off", "off", "off"), opt("model", "a model", "model"), a];
-    case "feedback": return [opt("human", "your notes", "rules"), opt("off", "off", "off")];
+    case "validate": return [opt("rules", "rules", "rules"), opt("model", "model", "model"), a];
+    case "plan": return [opt("off", "off", "off"), opt("model", "model", "model"), a];
+    case "feedback": return [opt("human", "notes", "rules"), opt("off", "off", "off")];
     case "orchestrate": return [opt("rules", "rules", "rules"), modelOf(["default", "model", "tools"]), a, opt("command", "script", "script")];
-    case "generate": return [opt("model", "a model", "model"), a, opt("command", "script", "script"), opt("catalog", "your files", "script")];
-    case "critique": return [opt("off", "off", "off"), opt("model", "a model", "model"), a];
+    case "generate": return [opt("model", "model", "model"), a, opt("command", "script", "script"), opt("catalog", "files", "script")];
+    case "critique": return [opt("off", "off", "off"), opt("model", "model", "model"), a];
     case "calibrate": return [opt("on", "on", "rules"), opt("off", "off", "off")];
-    case "select": return [opt("objectives", "your goals", "rules"), a];
-    case "knowledge": return [opt("default", "the library", "rules"), opt("none", "off", "off")];
-    case "digest": return [opt("model", "a model", "model"), a];
+    case "select": return [opt("objectives", "goals", "rules"), a];
+    case "knowledge": return [opt("default", "library", "rules"), opt("none", "off", "off")];
+    case "digest": return [opt("model", "model", "model"), a];
     case "lessons": return [opt("off", "off", "off"), opt("mined", "mined", "rules"), a];
     default: return [];
   }

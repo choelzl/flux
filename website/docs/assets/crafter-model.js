@@ -101,7 +101,7 @@
       choices: [{ value: "rules", half: "rules", label: "Built-in checks" },
                 { value: "model", half: "model", label: "Built-in checks, then a model reads it and objects" }]
         .concat(agentChoices("A coding agent reads the document and objects")) },
-    orchestrate: { title: "Orchestrate", says: "Decides what to work on next.",
+    orchestrate: { title: "Search", says: "Decides what to try next.",
       choices: [{ value: "default", half: "model", label: "Standard: the model picks the next part, rules pick the kind of work" },
                 { value: "rules", half: "rules", label: "Rules only" },
                 { value: "model", half: "model", label: "A model picks" },

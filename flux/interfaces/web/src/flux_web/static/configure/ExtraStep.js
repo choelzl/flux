@@ -14,10 +14,10 @@ function Baseline({ M, state, edit }) {
   const metrics = bp.metrics || (bp.metrics = []);
   const unit = m => (M.dictionarySpec(state, m) || {}).unit || M.unitFor(m);
   return html`<div class="cfg-grid2">
-      <${Pick} label="Start by measuring" k="baseline-mode" disabled=${kept} value=${bp.mode} set=${v => edit(() => { bp.mode = v; })}
-        options=${[["off", "nothing (default)"], ["before", "a baseline, then the passes"], ["only", "a baseline only: check the tools"]]} />
-      ${bp.mode !== "off" ? html`<${Pick} label="The baseline" k="baseline-source" value=${bp.source} set=${v => edit(() => { bp.source = v; })}
-        options=${[["project", "the project as it is"], ["file", "a design file, unchanged"], ["command", "what a command prepares"], ["metrics", "numbers you give"]]} />` : ""}
+      <${Pick} label="Baseline" k="baseline-mode" disabled=${kept} value=${bp.mode} set=${v => edit(() => { bp.mode = v; })}
+        options=${[["off", "off"], ["before", "first"], ["only", "only"]]} />
+      ${bp.mode !== "off" ? html`<${Pick} label="From" k="baseline-source" value=${bp.source} set=${v => edit(() => { bp.source = v; })}
+        options=${[["project", "project"], ["file", "file"], ["command", "command"], ["metrics", "numbers"]]} />` : ""}
       ${bp.mode !== "off" && bp.source === "file" ? html`<${Text} label="Its file" k="baseline-file" value=${bp.file} placeholder="baseline.sv" set=${v => edit(() => { bp.file = v; })} />` : ""}
       ${bp.mode !== "off" && bp.source === "command" ? html`<${Text} label="Command" k="baseline-command" mono value=${bp.command} placeholder="{python} {home}/baseline.py {artifact}"
           set=${v => edit(() => { bp.command = v; })} /><${Text} label="Time limit, s" value=${bp.timeout} placeholder="600" set=${v => edit(() => { bp.timeout = v; })} />` : ""}</div>
@@ -26,7 +26,7 @@ function Baseline({ M, state, edit }) {
           : html`<${Select} aria-label="Metric" data-fc-field=${`baseline-metric-${i}`} value=${m.metric} options=${rep} onChange=${v => edit(() => { m.metric = v; })} />`}
         <input aria-label="Value" class="narrow" data-fc-field=${`baseline-value-${i}`} value=${m.value} onInput=${e => edit(() => { m.value = e.currentTarget.value; })} />
         ${unit(m.metric) ? html`<span class="muted small">${unit(m.metric)}</span>` : ""}
-        <${Select} aria-label="Stage" data-fc-field=${`baseline-stage-${i}`} value=${m.stage || ""} options=${[["", "the deepest stage"], ...r.stages.map(s => [s.name, s.name])]}
+        <${Select} aria-label="Stage" data-fc-field=${`baseline-stage-${i}`} value=${m.stage || ""} options=${[["", "deepest"], ...r.stages.map(s => [s.name, s.name])]}
           onChange=${v => edit(() => { m.stage = v; })} />
         <span class="grow" /><${Tool} icon="close" label="Remove" onClick=${() => edit(() => { metrics.splice(i, 1); })} /></div>`)}
       <div><button type="button" class="small" onClick=${() => edit(() => { metrics.push({ metric: rep[0] || "", value: "", stage: "" }); })}>+ Add baseline metric</button></div></div>` : ""}`;
@@ -54,7 +54,7 @@ export function ExtraStep({ M, state, edit, extra }) {
           ${state.partsMode === "list" ? html`<${Text} label="Parts" value=${state.parts} placeholder="decoder, datapath" hint="each checked on its own, then composed"
             set=${v => edit(() => { state.parts = v; })} />` : ""}`}
       ${(state.kept || []).includes("subtasks") ? html`<${Notice} tone="none" what="Sub-loops:" why="kept as written; change them in Direct edit." />` : ""}</section>
-    <section class="cfg-sec"><h3>Baseline <span class="muted">pass 0: checked and measured before any design is made</span></h3><${Baseline} M=${M} state=${state} edit=${edit} /></section>
+    <section class="cfg-sec"><h3>Baseline <span class="muted">pass 0</span></h3><${Baseline} M=${M} state=${state} edit=${edit} /></section>
     <section class="cfg-sec"><h3>Parameters <span class="muted">reach the commands in the file {params} names</span></h3>
       ${(state.params || []).length ? html`<${Table} heads=${["Name", "Value", ""]} cls="list compact cfg-table">${state.params.map((x, i) => row(state.params, "key", "value", i, "Parameter", "Its value"))}<//>` : ""}
       <div><button type="button" class="small" onClick=${() => edit(() => { (state.params = state.params || []).push({ key: "", value: "" }); })}>+ Parameter</button></div></section>

@@ -571,9 +571,9 @@ def flows(r: Run) -> None:
         r.check("a step's address opens it: ?step=graph (D1116)", b.js("return !!document.querySelector('.cfg-rail button.on[data-step=graph]')"))
         r.check("the DSE dropdown loads the saved preference", b.js("return document.querySelector('[data-fc-field=dse]').value") == "improve")
         r.check("a saved preference selects its category", b.js("return document.querySelector('[data-fc-field=dse-group]').value") == "preferences")
-        r.check("the drawing says the search policy", b.js("return document.querySelector('.cfg-cycle [data-node=dse]').textContent").endswith("improve"))
+        r.check("the drawing says the search policy", "improve" in b.js("return document.querySelector('.cfg-cycle [data-node=dse]').textContent"))
         b.js("const p = document.querySelector('[data-fc-field=dse]'); p.value = 'explore'; p.dispatchEvent(new Event('change')); return 1")
-        r.check("the drawing follows the dropdown", b.js("return document.querySelector('.cfg-cycle [data-node=dse]').textContent").endswith("explore"))
+        r.check("the drawing follows the dropdown", "explore" in b.js("return document.querySelector('.cfg-cycle [data-node=dse]').textContent"))
         for value in ("explore", "none"):
             b.js("const p = document.querySelector('[data-fc-field=dse]'); p.value = arguments[0]; p.dispatchEvent(new Event('change')); return 1", value)
             saved_ok("the DSE setting saved")
@@ -2973,6 +2973,13 @@ def flows(r: Run) -> None:
             time.sleep(1.0)
             h = h.replace("?", "-")
             b.shot(out / f"{user}-{h.strip('#/').replace('/', '-') or 'loops'}.png", full=True)
+        for h in ("#/configure?step=graph", "#/app/sw/settings/problem?step=graph", "#/app/sw/settings/problem?step=extra"):   # the configurator
+            if who != "bob":
+                r.login("bob")
+                who = "bob"
+            r.page(h, "document.querySelector('.cfg .cfg-body')", h)
+            time.sleep(1.0)
+            b.shot(out / f"bob-{h.strip('#/').replace('/', '-').replace('?', '-').replace('=', '-')}.png", full=True)
         r.check(f"screenshots in {out}", True)
     if os.environ.get("FLUX_E2E_SHOTS"):
         r.step("screens", screens)

@@ -333,6 +333,7 @@ dialog.dlg > h2 { font-size: 16px; margin-bottom: 8px; }
 .cfg-sub h4 { margin: 0; font-size: 12.5px; } .cfg-sub h4 .muted { font-weight: 400; }
 .cfg-rows { display: grid; gap: 6px; }
 .cfg-bar { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; }
+.cfg-who-row { display: inline-flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .cfg-inline { display: inline-flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; min-width: 0; max-width: 100%; }
 .cfg-says { margin: 0; color: var(--muted); font-size: 13px; }
 .cfg-xrow { border: 1px solid var(--line); border-radius: 8px; background: var(--panel); min-width: 0; }
@@ -383,17 +384,13 @@ details.cfg-fold > summary { padding: 8px 0; font-weight: 600; }
 .cfg-panel .cfg-grid2 { grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); }
 svg.cfg-cycle { display: block; width: 100%; height: auto; }
 .cfg-cycle .ring { fill: none; stroke: var(--line); stroke-width: 12; }
-.cfg-cycle .bx { stroke-width: 1.4; }
-.cfg-cycle .bx.rules { fill: color-mix(in srgb, var(--half-rules) 12%, var(--panel)); stroke: var(--half-rules); }
-.cfg-cycle .bx.model { fill: color-mix(in srgb, var(--half-model) 12%, var(--panel)); stroke: var(--half-model); }
-.cfg-cycle .bx.agent { fill: color-mix(in srgb, var(--half-agent) 12%, var(--panel)); stroke: var(--half-agent); }
-.cfg-cycle .bx.script { fill: color-mix(in srgb, var(--half-fixed) 14%, var(--panel)); stroke: var(--ink); }
-.cfg-cycle .bx.fixed { fill: var(--soft); stroke: var(--half-fixed); }
+.cfg-cycle .bx { stroke-width: 1.4; fill: color-mix(in srgb, var(--k) 13%, var(--panel)); stroke: var(--k); }
 .cfg-cycle .bx.off { fill: var(--panel); stroke: var(--muted); stroke-dasharray: 4 3; }
 .cfg-cycle .t { font: 600 12px var(--sans); fill: var(--ink); }
 .cfg-cycle .w { font: 11px var(--sans); fill: var(--muted); }
-.cfg-cycle .w.rules { fill: var(--half-rules); } .cfg-cycle .w.model { fill: var(--half-model); } .cfg-cycle .w.agent { fill: var(--half-agent); } .cfg-cycle .w.script { fill: var(--ink); }
-.cfg-cycle .w.crit { font-size: 10px; }
+.cfg-cycle .pill rect { stroke: none; } .cfg-cycle .pill text { font: 600 9.5px var(--sans); }
+.cfg-cycle .pill.ai rect { fill: color-mix(in srgb, var(--agent) 18%, var(--panel)); } .cfg-cycle .pill.ai text { fill: color-mix(in srgb, var(--agent) 75%, var(--ink)); }
+.cfg-cycle .pill.critic rect { fill: color-mix(in srgb, var(--work-critic) 22%, var(--panel)); } .cfg-cycle .pill.critic text { fill: color-mix(in srgb, var(--work-critic) 70%, var(--ink)); }
 .cfg-cycle .e { fill: none; stroke: var(--muted); stroke-width: 1.3; }
 .cfg-cycle .e.soft { stroke-dasharray: 4 3; }
 .cfg-cycle .e.back { stroke: var(--bad); stroke-dasharray: 3 3; }

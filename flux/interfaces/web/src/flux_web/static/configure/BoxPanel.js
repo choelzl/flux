@@ -5,6 +5,7 @@
 import { Notice, html } from "../view.js";
 import { Head } from "../components/Head.js";
 import { Pick, Text, Who } from "./fields.js";
+import { Select } from "../components/Select.js";
 import { isAgent, whoOn, whoOptions } from "./who.js";
 
 /** A budget knob of the loop, empty for its default (greyed). */
@@ -13,20 +14,25 @@ const Knob = ({ state, edit, label, k, dflt, hint }) => html`<${Text} label=${la
 
 const Goto = ({ go, step, what, children }) => html`<p class="cfg-says">${children} <button type="button" class="link" onClick=${() => go(step)}>${what}</button></p>`;
 
-export function BoxPanel({ M, state, box, agent, edit, go, kept }) {
+export function BoxPanel({ M, state, box, agent, setAgent = () => {}, edit, go, kept }) {
   const f = state.flow, b = M.BOXES[box] || { title: box };
   const choose = (bx, opts) => k => edit(() => {
     f[bx] = opts.find(o => o.k === k).value();
     if (state.agentRaw) delete state.agentRaw[bx];               // another choice: its own settings go (D728)
   });
+  const labels = M.AGENT_LABELS();
+  /** D1128: which coding agent, beside the choice when an agent works the box (its own settings aside) */
+  const which = (cur, set) => isAgent(cur) && cur !== M.INLINE_AGENT && !kept ? html`<${Select} aria-label="Which coding agent" value=${cur.slice(6)}
+    options=${M.AGENTS.map(a => [a, labels[a] || a])} onChange=${a => { setAgent(a); edit(() => set(`agent:${a}`)); }} />` : "";
   const who = (bx = box) => {
     const opts = whoOptions(M, bx, f[bx], agent);
-    return html`<${Who} label=${`Who works ${M.BOXES[bx].title}`} fixed=${kept} options=${opts} on=${whoOn(opts, f[bx])} pick=${choose(bx, opts)} />`;
+    return html`<span class="cfg-who-row"><${Who} label=${`Who works ${M.BOXES[bx].title}`} fixed=${kept} options=${opts} on=${whoOn(opts, f[bx])} pick=${choose(bx, opts)} />
+      ${which(f[bx], v => { f[bx] = v; if (state.agentRaw) delete state.agentRaw[bx]; })}</span>`;
   };
   const critic = bx => {
     const cur = M.criticsOf(state)[bx], opts = whoOptions(M, "critique", cur, agent);
     return html`<div class="cfg-bar"><span class="muted small">Critic</span><${Who} label=${`The critic on ${M.BOXES[bx].title}`} fixed=${kept} options=${opts}
-      on=${whoOn(opts, cur)} pick=${k => edit(() => { M.setCritic(state, bx, opts.find(o => o.k === k).value()); })} /></div>`;
+      on=${whoOn(opts, cur)} pick=${k => edit(() => { M.setCritic(state, bx, opts.find(o => o.k === k).value()); })} />${which(cur, v => M.setCritic(state, bx, v))}</div>`;
   };
   const K = (label, k, dflt, hint) => html`<${Knob} state=${state} edit=${edit} label=${label} k=${k} dflt=${dflt} hint=${hint} />`;
   const raw = state.agentRaw && state.agentRaw[box] && isAgent(f[box]);
@@ -44,7 +50,7 @@ export function BoxPanel({ M, state, box, agent, edit, go, kept }) {
       break;
     }
     case "orchestrate":
-      if (M.parameterSearch(state)) { head = html`<span class="tag cfg-who-tag on-rules">the search</span>`; body = html`<${Goto} go=${go} step="extra" what="Extra › Settings to search">A search over settings picks the next job:<//>`; break; }
+      if (M.parameterSearch(state)) { head = html`<span class="tag cfg-who-tag on-rules">settings</span>`; body = html`<${Goto} go=${go} step="extra" what="Extra › Settings to search">A search over settings picks the next job:<//>`; break; }
       body = html`${f.orchestrate === "command" ? html`<div class="cfg-grid2"><${Text} label="Search command" mono wide value=${state.orchestrateCommand}
             placeholder="{python} {home}/search.py {history} {state}" hint="it answers each round with the next candidates" set=${v => edit(() => { state.orchestrateCommand = v; })} />
           <${Text} label="Time limit, s" value=${state.orchestrateTimeout} placeholder="600" set=${v => edit(() => { state.orchestrateTimeout = v; })} /></div>`
@@ -69,11 +75,11 @@ export function BoxPanel({ M, state, box, agent, edit, go, kept }) {
           ${K("Final turn, s", "agent_grace_s", "a quarter of its time")}</div></div>` : ""}`;
       break;
     case "test":
-      head = html`<span class="tag cfg-who-tag on-fixed">your checks</span>`;
+      head = html`<span class="tag cfg-who-tag on-fixed">checks</span>`;
       body = html`<${Goto} go=${go} step="checks" what="Check & Measure">Its commands are set in<//>${critic("test")}`;
       break;
     case "measure":
-      head = html`<span class="tag cfg-who-tag on-fixed">your measurements</span>`;
+      head = html`<span class="tag cfg-who-tag on-fixed">measurements</span>`;
       body = html`<${Goto} go=${go} step="checks" what="Check & Measure">Its commands are set in<//>
         <div class="cfg-grid2">${K("Tool runs at once", "workers", "auto", "1 for anything timed")}</div>${M.criticsOf(state).measure !== "off" ? critic("measure") : ""}`;
       break;
@@ -81,7 +87,7 @@ export function BoxPanel({ M, state, box, agent, edit, go, kept }) {
       body = html`<${Goto} go=${go} step="objective" what="Objective">What it decides by is set in<//>${critic("select")}`;
       break;
     case "records":
-      head = html`<span class="tag cfg-who-tag on-fixed">always</span>`;
+      head = html`<span class="tag cfg-who-tag on-fixed">kept</span>`;
       body = html`<div class="cfg-grid2">${K("Passes", "passes", "until stopped")}${K("Time per pass, s", "budget_s", "no limit")}
         ${K("Worse edits tolerated", "regress_after", "2")}${K("Passes at once", "parallel", "1", "an admin allows it on a server")}</div>`;
       break;
