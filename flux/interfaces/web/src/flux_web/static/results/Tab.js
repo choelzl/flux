@@ -3,6 +3,7 @@
 // the improvement by design); the selected design's detail in whichever shows, kept from one to the other.
 
 import { Ago, Card, Empty, html, useMemo, useRef, useState } from "../view.js";
+import { num } from "../format.js";
 import { api, enc, loopApi, toast } from "../ui.js";
 import { measurementComparison } from "./measurements.js";
 import { defaultMainMeasurements, designLabels, mainMeasurements, measurementText, measurementUnitsFor, relativeMeasurement } from "./preferences.js";
@@ -18,8 +19,6 @@ import { Pill, Tag } from "../components/Tone.js";
 import { Tool } from "../components/Head.js";
 import { Table } from "../components/Table.js";
 
-const fmt = v => v == null ? "" : v !== 0 && Math.abs(v) < 0.01 ? Number(v).toExponential(2)
-  : Math.abs(v) >= 1000 || Number.isInteger(v) ? String(Math.round(v * 100) / 100) : String(Number(Number(v).toPrecision(4)));
 const own = (ctx, n) => String(n) === ctx.name ? "whole" : String(n).startsWith(`${ctx.name}#`) ? String(n).slice(ctx.name.length) : String(n);
 
 /** D1094: the designs only their checks judged -- refused there, or passed with no stage measuring them
@@ -59,7 +58,7 @@ function DecisionLine({ r, names, comparison, onPick }) {
   return html`<div class="decision-line">${dec ? html`<${Pill} tone="ok">decision<//>${nameBtn(dec)}${dec.part ? html`<span class="muted">${`part ${dec.part}`}</span>` : ""}
       <span class="muted">${`measured at ${dec.shown}`}</span>
       ${mainMeasurements(ctx, r.metrics, defaultMainMeasurements(r)).map(m => {
-        const display = measurementText(dec, m, r.decision_measurements?.[m] ? () => r.decision_measurements[m] : comparison, fmt, relativeMeasurement(ctx, m));
+        const display = measurementText(dec, m, r.decision_measurements?.[m] ? () => r.decision_measurements[m] : comparison, num, relativeMeasurement(ctx, m));
         const ag = r.metric_info?.[m]?.aggregate || r.metric_groups?.[m]?.aggregate;     // D1094: "sim_us (sum) 26"
         return html`<span class="mono small" data-summary-metric=${m} title=${display.title}>${`${m}${ag && ag !== "none" ? ` (${ag})` : ""} ${display.text || "—"}`}</span>`; })}`
     : r.closest ? html`<strong>No feasible design yet</strong><span class="muted">· closest</span>${near ? html`${nameBtn(near)}` : html`<span class="mono">${r.closest.name}</span>`}
@@ -86,14 +85,14 @@ export function ResultsTab({ r, view }) {
       if (row) row.scrollIntoView({ block: "nearest" }); else root.current?.querySelector(`${view === "graphs" ? ".graphs" : ".split.results"} .detail-card`)?.scrollIntoView({ block: "nearest" });
     });
   };
-  const detail = open ? html`<${DesignDetail} key=${keyOf(open)} d=${open} fmt=${fmt} reload=${reload} />` : html`<div class="detail"><${Empty} text="Select a design." /></div>`;
+  const detail = open ? html`<${DesignDetail} key=${keyOf(open)} d=${open} fmt=${num} reload=${reload} />` : html`<div class="detail"><${Empty} text="Select a design." /></div>`;
   return html`<${ViewerFrame} v=${full} title="Results"><div ref=${root}>
     <${Card} cls="objective-card" title="Objective" meta=${`${r.objectives}${r.total > r.designs.length ? ` · the newest ${r.designs.length} of ${r.total} designs` : ""}`}
         tools=${html`<${ViewerTools} v=${full} title="Results" rawUrl=${`${base}/results${qs}${qs ? "&" : "?"}raw=true`} />${r.answer ? html`<${Tool} icon="download" label="Answer (JSON)" href=${`/api/apps/${enc(name)}/file?path=runs/answer.json&download=1${q}`} />` : ""}
           <${Tool} icon="report" label="Report" href=${`${base}/report${qs}`} target="_blank" rel="noopener" />`}>
       <${DecisionLine} r=${r} names=${names} comparison=${comparison} onPick=${pick} /><${Invalidated} r=${r} reload=${reload} /><//>
-    ${seen.has("results") ? html`<div key="results" hidden=${view === "graphs"}><div class="split results"><${Card}><${ResultsTable} t=${{ r, names, unit, fmt, comparison, columns, values }} selected=${open && keyOf(open)}
-            onOpen=${setOpen} onCompare=${pair => compare(ctx, r, pair, directions, fmt)} /><//><${Card} cls="detail-card">${detail}<//></div>
+    ${seen.has("results") ? html`<div key="results" hidden=${view === "graphs"}><div class="split results"><${Card}><${ResultsTable} t=${{ r, names, unit, fmt: num, comparison, columns, values }} selected=${open && keyOf(open)}
+            onOpen=${setOpen} onCompare=${pair => compare(ctx, r, pair, directions, num)} /><//><${Card} cls="detail-card">${detail}<//></div>
         <${Checked} r=${r} /></div>` : null}
     ${seen.has("graphs") ? html`<div key="graphs" hidden=${view !== "graphs"}><${Graphs} r=${r} directions=${directions} onPick=${pick} detail=${detail} /></div>` : null}</div><//>`;
 }

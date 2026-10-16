@@ -1,7 +1,7 @@
 // Flux web (D697, D758, D820, D925, D1095): environment variables -- a table of them (a server-origin row says
 // From Server, never its value; one overridden by another badged), and for whoever may change them a row to add one.
 
-import { html, useState } from "../view.js";
+import { Empty, html, useState } from "../view.js";
 import { bound } from "./Autosave.js";
 import { toast } from "../ui.js";
 import { Act } from "./Act.js";
@@ -23,7 +23,7 @@ export function EnvEditor({ rows, save, scope }) {
   const list = rows.length ? html`<${Table} cls="list compact env">${rows.map(x => html`<tr key=${x.name}><td class="mono">${x.name}</td>
       <td class="mono">${x.secret ? html`<span class="muted">secret · set</span>` : x.value}</td>
       <td class="right">${save ? html`<${Act} cls="small" onClick=${async () => { await save({ name: x.name, value: null }); toast(`${x.name} removed`, "ok"); }}>Remove<//>` : ""}</td></tr>`)}<//>`
-    : html`<p class="muted">None yet.</p>`;
+    : html`<${Empty} text="None yet." />`;
   if (!save) return list;
   const add = async () => {
     const n = name.trim();

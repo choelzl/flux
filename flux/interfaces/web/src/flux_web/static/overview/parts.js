@@ -3,7 +3,7 @@
 
 import { html } from "../view.js";
 import { measurementText, relativeMeasurement } from "../results/preferences.js";
-import { num4 } from "../charts/marks.js";
+import { num } from "../format.js";
 import { useLoop } from "../loop/context.js";
 import { Table } from "../components/Table.js";
 
@@ -18,7 +18,7 @@ export function MainNumbers({ r, d, main, compare, unit }) {
   const ctx = useLoop();
   return html`<div class="decision-nums">${main.map(m => {
     const lim = (r.limits || []).find(l => l.metric === m), ok = d.meets?.[m];
-    const display = measurementText(d, m, compare(m), num4, relativeMeasurement(ctx, m));
+    const display = measurementText(d, m, compare(m), num, relativeMeasurement(ctx, m));
     return html`<div class=${`num-cell${ok === false ? " misses" : ok === true ? " meets" : ""}`} data-summary-metric=${m}
         title=${`${display.title}${unit[m] ? " (" + unit[m] + ")" : ""}${ok === true ? " · meets the limit" : ok === false ? " · misses the limit" : ""}`}>
       <small>${aggName(r, m)}</small><div class="big mono">${display.text || "—"}</div>

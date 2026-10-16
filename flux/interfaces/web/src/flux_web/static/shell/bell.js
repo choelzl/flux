@@ -29,7 +29,7 @@ function notify(text, kind, href) {
   emit();
 }
 
-let polling = false, beat = 0;
+let polling = false;
 async function once() {
   bellFor(me.name);
   let loops;
@@ -54,14 +54,13 @@ async function once() {
   if (changed && bell.primed && pageRefresh) pageRefresh().catch(() => {});
   bell.primed = true;
 }
-/** Every 10 s: one at a time (D917) -- a hidden tab every 30 s, still in time for a desktop notice. */
+/** One read of one's loops, one at a time (D917); the bell (shell/Bar.js) asks every 10 s, a hidden tab every 30 s,
+    still in time for a desktop notice. */
 export async function pollLoops() {
   if (!me || polling) return;
-  if (document.hidden && beat++ % 3) return;
   polling = true;
   try { await once(); } finally { polling = false; }
 }
-setInterval(pollLoops, 10000);
 
 export const bellState = () => bell;
 /** What the bell holds changed: for `useChanges`. */

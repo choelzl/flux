@@ -7,7 +7,7 @@
 // from the draft on (a draft in its meta until it is made); this browser remembers which, so the flow resumes.
 
 import { Card, Notice, Skeleton, html, useEffect, useRef, useState } from "../../view.js";
-import { api, apiUpload, appHref, confirmDialog, enc, loopApi, toast } from "../../ui.js";
+import { api, apiUpload, appHref, confirmDialog, loopApi, toast } from "../../ui.js";
 import { dur, plural } from "../../format.js";
 import { me } from "../../state.js";
 import { lineDiff } from "../../diff.js";
@@ -17,19 +17,22 @@ import { Act } from "../../components/Act.js";
 import { AgentPick } from "../../components/AgentPick.js";
 import { AttachBox } from "../../components/AttachBox.js";
 import { Choice } from "../../components/Tabs.js";
+import { Steps } from "../../components/Steps.js";
+import { Checklist } from "../../components/Checklist.js";
 import { Diff } from "../../components/Diff.js";
 import { Head } from "../../components/Head.js";
 import { Code } from "../../components/Markdown.js";
 import { Pill, Tag } from "../../components/Tone.js";
 import { Activity, Failed, NewFiles, Question, useAuthor, useStyle } from "./parts.js";
+import { STEPS as CONFIG_STEPS } from "../model.js";
 
-export const STAGES = ["Ask", "Drafting", "Review", "Ready"];
+const STAGES = ["Ask", "Drafting", "Review", "Ready"];
 /** The configurator's steps a decision belongs to (its ids: the configure route's `?step=`). */
-export const STEPS = [["prompt", "Prompt"], ["checks", "Check & Measure"], ["objective", "Objective"], ["graph", "Who works"], ["extra", "Extra"]];
+const STEPS = CONFIG_STEPS.filter(s => s.id !== "save").map(s => [s.id, s.title]);
 const flowKey = () => `flux-byagent:${me.name || ""}`;
 
 /** The files an agent reads, sent with what it is told -- D1075: with their progress. */
-export async function withFiles(url, fd, items) {
+async function withFiles(url, fd, items) {
   for (const g of items) fd.append("files", g.file, g.path);
   const pd = items.length ? progressDialog("Uploading", `${plural(items.length, "file")} for the agent`) : null;
   try { return await apiUpload(url, fd, pd ? { onProgress: pd.set, signal: pd.signal } : {}); }
@@ -37,9 +40,8 @@ export async function withFiles(url, fd, items) {
 }
 
 /** The stages, each reachable once the draft is that far. */
-const StageBar = ({ stage, reach, go }) => html`<div class="subtabs ba-stages" role="tablist" aria-label="Stage">${STAGES.map((s, i) =>
-  html`<button key=${s} type="button" role="tab" class=${i === stage ? "on" : ""} aria-selected=${String(i === stage)} disabled=${!reach(i)}
-    onClick=${() => go(i)}><span class="n">${i + 1}</span>${s}</button>`)}</div>`;
+const StageBar = ({ stage, reach, go }) => html`<${Steps} cls="row ba-stages" label="Stage" at=${stage} go=${go}
+  items=${STAGES.map((s, i) => ({ key: i, title: s, disabled: !reach(i) }))} />`;
 
 /** What the author has besides the ask: the facts, no more. */
 function Uses() {
@@ -66,7 +68,7 @@ function Ask({ state, items, setItems, edit, who, askMe, setAskMe, draft: start 
       <label class="stack">What should the loop do?<textarea rows="6" id="ag-ask" value=${state.statement || ""} ref=${askField} onInput=${edit("statement")}
         placeholder="What the loop should make, and what matters: e.g. a signed 8x8 multiplier in SystemVerilog, the smallest that makes 1 GHz placed on ASAP7, exact for every input." /></label>
       <h3>Files it should read</h3><${AttachBox} items=${items} onChange=${setItems} />
-      <label class="check"><input type="checkbox" id="ag-ask-me" checked=${askMe} onChange=${e => setAskMe(e.currentTarget.checked)} />Ask me when the spec is unclear</label><//>
+      <label class="check"><input type="checkbox" id="ag-ask-me" checked=${askMe} onChange=${e => setAskMe(e.currentTarget.checked)} />Ask me when it is unclear</label><//>
     <${Uses} /></div>
     <div class="form-actions ba-nav"><span class="grow" /><${Act} cls="primary" onClick=${go}>Draft the loop<//></div>`;
 }
@@ -101,8 +103,7 @@ function Review({ name, st, poll, flow, save, who, askMe, check }) {
   const read = async () => {
     const d = await loopApi(name).api("/author/decisions");
     setGot(d);
-    const r = d.document ? await fetch(loopApi(name).url(`/file?path=${enc(d.document)}`), { credentials: "same-origin" }) : null;
-    setDoc(r?.ok ? await r.text() : "");
+    setDoc(d.document ? await loopApi(name).text(d.document).catch(() => "") : "");
   };
   useEffect(() => { if (!revising) read().catch(e => toast(e.message, "bad")); }, [revising, st?.ended]);
   if (!got || doc == null) return html`<${Card}><${Skeleton} lines=${6} /><//>`;
@@ -151,11 +152,10 @@ function Ready({ name, back, made }) {
     const r = await loopApi(name).api("/author/make", { method: "POST", body: { first_pass: pass } });
     toast(r.ok, "ok"); made(); location.hash = then;
   };
-  return html`<div class="ba-grid"><${Card} cls="ba-main"><ul class="ba-log ba-check">
-      ${!res ? html`<li class="ba-line now"><i class="g spin" aria-hidden="true" /><span><code>flux task check</code> on the draft…</span></li>`
-        : res.ok ? html`<li class="ba-line"><i class="g g-ok" aria-hidden="true" /><span><code>flux task check</code> passed: the document loads, its files and tools are here.</span></li>`
-        : html`<li class="ba-line"><i class="g g-bad" aria-hidden="true" /><span><code>flux task check</code> failed${said.length ? ":" : "."}</span></li>`}
-      ${said.map(l => html`<li class="ba-line sub" key=${l}><i class=${`g g-${/WILL SKIP/.test(l) ? "warn" : "bad"}`} aria-hidden="true" /><span class="mono">${l}</span></li>`)}</ul>
+  const check = html`<code>flux task check</code>`;
+  const lines = [!res ? ["run", "", html`${check} on the draft…`] : res.ok ? ["ok", "", html`${check} passed: the document loads, its files and tools are here.`]
+    : ["bad", "", html`${check} failed${said.length ? ":" : "."}`], ...said.map(l => [/WILL SKIP/.test(l) ? "warn" : "bad", "", html`<span class="mono">${l}</span>`])];
+  return html`<div class="ba-grid"><${Card} cls="ba-main"><${Checklist} cls="ba-check" items=${lines} />
       ${res ? html`<details><summary class="muted small">What it printed</summary><pre class="log small">${res.output}</pre></details>` : ""}
       <label class="check"><input type="checkbox" id="ba-first-pass" checked=${first} onChange=${e => setFirst(e.currentTarget.checked)} />${`Run one cheap pass when it is made${stage ? ` (${stage} only)` : ""}`}</label><//>
     <${Notice} tone="none" cls="ba-side" what=${`Made as ${name} in your loops.`} why="Anything can change later in the configurator." /></div>

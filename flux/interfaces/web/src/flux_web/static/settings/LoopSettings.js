@@ -2,7 +2,7 @@
 // configure.js's) -- its measurements, its variables over the user's and the server's, its sharing, its name and
 // owner, the admin's advanced settings, its own clean-up, Reset and Delete.
 
-import { Ago, Card, html, Notice, useState } from "../view.js";
+import { Ago, Card, Empty, html, Notice, useState } from "../view.js";
 import { askText, confirmDialog, dialog, enc, loopApi, toast } from "../ui.js";
 import { me } from "../state.js";
 import { route } from "../app.js";
@@ -20,7 +20,7 @@ import { Table } from "../components/Table.js";
 const Measurements = ({ results }) => html`<${Card} title="Measurements" cls="measurement-preferences">
   <p class="muted">Visible controls table columns. Main selects metrics for loop lists, decision summaries and default charts. % formats summaries as percent change from the matching baseline, otherwise P90 performance of accepted designs. Tables have their own Absolute/Relative toggle. Saved with this project and shared across browsers; calculations still use every metric. Only owners, editors and admins can save changes.</p>
   ${results.metrics?.length ? html`<div><${MeasurementOptions} metrics=${results.metrics} groups=${results.metric_groups || {}} defaults=${defaultMainMeasurements(results)} /></div>`
-    : html`<p class="muted">No measurements yet.</p>`}<//>`;
+    : html`<${Empty} text="No measurements yet." />`}<//>`;
 
 function Variables({ e, reload }) {
   const ctx = useLoop();

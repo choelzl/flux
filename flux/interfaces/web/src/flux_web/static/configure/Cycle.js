@@ -25,7 +25,7 @@ const line = (x1, y1, x2, y2, soft) => html`<path class=${cx("e", soft && "soft"
 const cut = (s, n = 16) => s.length > n ? s.slice(0, n - 1) + "…" : s;
 
 /** What works a box, in a word, and whether it is off or AI: [word, "off" | "ai" | ""]. */
-export function workerOf(M, state, box, agent) {
+function workerOf(M, state, box, agent) {
   const f = state.flow || {};
   if (box === "test") return [state.checks.length ? plural(state.checks.length, "check") : "no checks", ""];
   if (box === "measure") return [state.stages.length ? plural(state.stages.length, "measurement") : "none", ""];

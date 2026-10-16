@@ -2,7 +2,7 @@
 // text, its thinking and each tool call (input and output) folded, opened on a click and kept open across
 // redraws (D1030: the work between two answers one dashed line, opened to its steps; the answers in view).
 
-import { cx, Glyph, html } from "../view.js";
+import { Empty, cx, Glyph, html } from "../view.js";
 import { Markdown } from "./Markdown.js";
 
 const convOpen = new Set();          // which steps a person opened, by key: kept across redraws and tasks
@@ -61,5 +61,5 @@ export function Conversation({ steps, k = "", offset = 0, live = false, scroll =
       <div class="cv-work-steps">${work.map((x, n) => html`<${Step} key=${`${k}:${offset + first + n}`} st=${x} id=${`${k}:${offset + first + n}`} live=${live && first + n === steps.length - 1} />`)}</div></details>`);
     i = j;
   }
-  return html`<div class=${cx("cv", scroll && "cv-live-box")} data-k=${`cv-${k}`}>${items.length ? items : html`<p class="muted">Nothing yet.</p>`}</div>`;
+  return html`<div class=${cx("cv", scroll && "cv-live-box")} data-k=${`cv-${k}`}>${items.length ? items : html`<${Empty} text="Nothing yet." />`}</div>`;
 }

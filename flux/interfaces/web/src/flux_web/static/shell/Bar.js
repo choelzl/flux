@@ -6,7 +6,8 @@ import { api, toast } from "../ui.js";
 import { me, setMe } from "../state.js";
 import { ICONS } from "../components/Icons.js";
 import { Tag } from "../components/Tone.js";
-import { bellChanges, bellState, clearBell, seenAll } from "./bell.js";
+import { bellChanges, bellState, clearBell, pollLoops, seenAll } from "./bell.js";
+import { usePoll } from "../components/Load.js";
 import { recall, remember } from "../stored.js";
 
 /** Where one can go; the tab of the page one is on, marked. */
@@ -20,6 +21,7 @@ export function Nav({ here }) {
 function Bell() {
   const [open, setOpen] = useState(false), [perm, setPerm] = useState(() => "Notification" in window ? Notification.permission : null);
   useChanges(bellChanges);
+  usePoll(async () => { await pollLoops(); return document.hidden ? 30000 : 10000; }, [], { first: 10000 });
   useEffect(() => { const close = () => setOpen(false); document.addEventListener("click", close); return () => document.removeEventListener("click", close); }, []);
   const b = bellState(), canAsk = perm === "default";
   return html`<div class="bell-wrap"><button class="bell" title="Notifications" aria-label="Notifications" onClick=${e => { e.stopPropagation(); setOpen(!open); seenAll(); }}>

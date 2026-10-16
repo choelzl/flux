@@ -6,9 +6,9 @@
 import { recallJson, remember } from "./stored.js";
 
 const COLLATE = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
-export const isMissing = v => v == null || v === "" || (typeof v === "number" && isNaN(v))
+const isMissing = v => v == null || v === "" || (typeof v === "number" && isNaN(v))
   || (Array.isArray(v) && v.every(x => x == null || x === ""));
-export function cmpSort(x, y) {
+function cmpSort(x, y) {
   if (Array.isArray(x) || Array.isArray(y)) {
     const a = [].concat(x), b = [].concat(y);
     for (let i = 0; i < Math.max(a.length, b.length); i++) {

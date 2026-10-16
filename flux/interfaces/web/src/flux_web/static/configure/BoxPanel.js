@@ -4,7 +4,7 @@
 
 import { Notice, html } from "../view.js";
 import { Head } from "../components/Head.js";
-import { Pick, Text, Who } from "./fields.js";
+import { Pick, Text, Who, WhoTag } from "./fields.js";
 import { Select } from "../components/Select.js";
 import { isAgent, whoOn, whoOptions } from "./who.js";
 
@@ -50,7 +50,7 @@ export function BoxPanel({ M, state, box, agent, setAgent = () => {}, edit, go, 
       break;
     }
     case "orchestrate":
-      if (M.parameterSearch(state)) { head = html`<span class="tag cfg-who-tag on-rules">settings</span>`; body = html`<${Goto} go=${go} step="extra" what="Extra › Settings to search">A search over settings picks the next job:<//>`; break; }
+      if (M.parameterSearch(state)) { head = html`<${WhoTag} kind="rules">settings<//>`; body = html`<${Goto} go=${go} step="extra" what="Extra › Settings to search">A search over settings picks the next job:<//>`; break; }
       body = html`${f.orchestrate === "command" ? html`<div class="cfg-grid2"><${Text} label="Search command" mono wide value=${state.orchestrateCommand}
             placeholder="{python} {home}/search.py {history} {state}" hint="it answers each round with the next candidates" set=${v => edit(() => { state.orchestrateCommand = v; })} />
           <${Text} label="Time limit, s" value=${state.orchestrateTimeout} placeholder="600" set=${v => edit(() => { state.orchestrateTimeout = v; })} /></div>`
@@ -75,11 +75,11 @@ export function BoxPanel({ M, state, box, agent, setAgent = () => {}, edit, go, 
           ${K("Final turn, s", "agent_grace_s", "a quarter of its time")}</div></div>` : ""}`;
       break;
     case "test":
-      head = html`<span class="tag cfg-who-tag on-fixed">checks</span>`;
+      head = html`<${WhoTag} kind="fixed">checks<//>`;
       body = html`<${Goto} go=${go} step="checks" what="Check & Measure">Its commands are set in<//>${critic("test")}`;
       break;
     case "measure":
-      head = html`<span class="tag cfg-who-tag on-fixed">measurements</span>`;
+      head = html`<${WhoTag} kind="fixed">measurements<//>`;
       body = html`<${Goto} go=${go} step="checks" what="Check & Measure">Its commands are set in<//>
         <div class="cfg-grid2">${K("Tool runs at once", "workers", "auto", "1 for anything timed")}</div>${M.criticsOf(state).measure !== "off" ? critic("measure") : ""}`;
       break;
@@ -87,7 +87,7 @@ export function BoxPanel({ M, state, box, agent, setAgent = () => {}, edit, go, 
       body = html`<${Goto} go=${go} step="objective" what="Objective">What it decides by is set in<//>${critic("select")}`;
       break;
     case "records":
-      head = html`<span class="tag cfg-who-tag on-fixed">kept</span>`;
+      head = html`<${WhoTag} kind="fixed">kept<//>`;
       body = html`<div class="cfg-grid2">${K("Passes", "passes", "until stopped")}${K("Time per pass, s", "budget_s", "no limit")}
         ${K("Worse edits tolerated", "regress_after", "2")}${K("Passes at once", "parallel", "1", "an admin allows it on a server")}</div>`;
       break;
@@ -95,7 +95,7 @@ export function BoxPanel({ M, state, box, agent, setAgent = () => {}, edit, go, 
       body = html`<${Goto} go=${go} step="prompt" what="Prompt › Files">The files the model reads are marked in<//>`;
       break;
     case "digest":
-      if (f.knowledge === "none") { head = html`<span class="tag cfg-who-tag on-off">off</span>`; body = html`<p class="cfg-says">The library is off: no paper is read.</p>`; }
+      if (f.knowledge === "none") { head = html`<${WhoTag} kind="off">off<//>`; body = html`<p class="cfg-says">The library is off: no paper is read.</p>`; }
       break;
     default:
   }

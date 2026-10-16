@@ -4,10 +4,9 @@
 
 import { Ago, Card, Empty, html } from "../view.js";
 import { enc, loopApi, toast } from "../ui.js";
-import { dur, fmtTok, plural } from "../format.js";
+import { dur, fmtTok, num, plural } from "../format.js";
 import { designLabels, measurementText, relativeMeasurement, resultPreferences } from "../results/preferences.js";
 import { designPoints, groupList } from "../charts/data.js";
-import { num4 } from "../charts/marks.js";
 import { BestChart } from "../charts/BestChart.js";
 import { ParetoChart } from "../charts/ParetoChart.js";
 import { VerdictBadge } from "../results/columns.js";
@@ -22,10 +21,10 @@ export function overviewCards(o) {
   const { st, goTab } = ctx, designs = r.designs || [], total = use?.total, metric = main[0], notebook = ideas?.ideas;
   const go = (tab, sub = "") => () => goTab(tab, sub);
   const button = (label, tab, sub = "") => html`<button type="button" class="small" onClick=${go(tab, sub)}>${label}</button>`;
-  const measured = v => Number.isFinite(v) ? num4(v) : "—";
+  const measured = v => Number.isFinite(v) ? num(v) : "—";
   const percent = v => Number.isFinite(v) ? `${Number(v.toFixed(1)) > 0 ? "+" : ""}${Number(v.toFixed(1))}%` : "—";
   const reference = m => dec ? r.decision_measurements?.[m] || comparison(dec, m) : null;
-  const primary = dec && metric ? measurementText(dec, metric, () => reference(metric), num4, relativeMeasurement(ctx, metric)) : null;
+  const primary = dec && metric ? measurementText(dec, metric, () => reference(metric), num, relativeMeasurement(ctx, metric)) : null;
   const change = metric ? reference(metric) : null;
   const limits = (r.limits || []).map(l => {
     const stage = l.stage || dec?.shown, value = dec?.stages?.[stage]?.[l.metric];
@@ -89,7 +88,7 @@ export function overviewCards(o) {
         : html`<ul class="overview-ideas">${recent.map(({ idea, latest }) => {
           const metrics = Object.entries(latest?.metrics || {}).filter(([, value]) => Number.isFinite(value));
           const evidence = latest ? [`Pass ${latest.pass ?? "—"}`, latest.stage, latest.status,
-            ...metrics.slice(0, 3).map(([m, value]) => `${m}=${num4(value)}`), metrics.length > 3 ? `+${metrics.length - 3} metrics` : ""].filter(Boolean).join(" · ") : "Not tested yet";
+            ...metrics.slice(0, 3).map(([m, value]) => `${m}=${num(value)}`), metrics.length > 3 ? `+${metrics.length - 3} metrics` : ""].filter(Boolean).join(" · ") : "Not tested yet";
           return html`<li data-idea-id=${idea.id}>
             <div class="overview-idea-head"><button type="button" class="link strong" onClick=${go("Results", "ideas")}>${idea.title}</button>
               <${Pill} tone=${idea.status === "failed" ? "bad" : idea.status === "interrupted" ? "warn" : "none"}>${idea.status || "proposed"}<//></div>
@@ -131,7 +130,7 @@ export function overviewCards(o) {
         ? html`<${SummaryTable} heads=${["Design", "Status", ...main]}>${recent.map(d => html`<tr key=${d.name}>
             <td><button type="button" class="link mono" title=${`${d.name} · ${d.shown}`} onClick=${go("Results")}>${labels.get(d)}</button></td>
             <td class="num"><${VerdictBadge} verdict=${d.verdict} reason=${(d.why || []).join("; ")} /></td>
-            ${main.map(m => { const v = measurementText(d, m, comparison, num4, relativeMeasurement(ctx, m)); return html`<${ValueCell} v=${v.text || "—"} title=${v.title} />`; })}</tr>`)}<//>`
+            ${main.map(m => { const v = measurementText(d, m, comparison, num, relativeMeasurement(ctx, m)); return html`<${ValueCell} v=${v.text || "—"} title=${v.title} />`; })}</tr>`)}<//>`
         : html`<${Empty} text="No search designs measured yet." />`}<//>`;
     },
     pass_history: a => html`<${Card} ...${a} title="Recent passes" actions=${button("History", "Live", "history")}>${(r.passes || []).length

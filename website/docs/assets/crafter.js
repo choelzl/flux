@@ -655,7 +655,7 @@
           dseHint(state) });
       var selectors = h("div", { class: "fc-line fc-dse-selectors" }, [dseGroupField("dse-group"), policy]);
       if (!opts.foldSteps) {
-        return h("div", { class: "fc-level" }, [titled("2. Who does each step?", [h("span", { class: "fc-hint fc-inline", text: " click a box to change it; the defaults are usually right" })], [selectors].concat(drawing()))]);
+        return h("div", { class: "fc-level" }, [titled("2. Graph", [h("span", { class: "fc-hint fc-inline", text: " click a box to change it; the defaults are usually right" })], [selectors].concat(drawing()))]);
       }
       if (parts.stepsOpen === undefined) parts.stepsOpen = false;
       var body = h("div", {}, drawing());
@@ -665,7 +665,7 @@
         body.hidden = !parts.stepsOpen;
         toggle.setAttribute("aria-expanded", parts.stepsOpen ? "true" : "false");
         if (parts.stepsOpen) renderDiagram();
-      } } }, ["2. Who does each step?", h("span", { class: "fc-hint fc-inline", text: " the defaults are usually right: open to choose a model, an agent or rules per step" })]);
+      } } }, ["2. Graph", h("span", { class: "fc-hint fc-inline", text: " the defaults are usually right: open to choose a model, an agent or rules per step" })]);
       return h("section", { class: "fc-section fc-advanced" }, [h("h3", {}, [toggle]), selectors, body]);
     }
 

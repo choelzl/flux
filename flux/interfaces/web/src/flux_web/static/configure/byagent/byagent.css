@@ -2,12 +2,8 @@
    decisions. Colours are flux.css's tokens (the agent's pink: --agent); nothing here is themed twice. */
 
 .ba-flow { display: grid; gap: 12px; }
-.ba-stages { margin: 0; flex-wrap: wrap; justify-self: start; }
-.ba-stages button { display: inline-flex; align-items: center; gap: 7px; }
-.ba-stages button:disabled { opacity: .45; cursor: default; }
-.ba-stages .n { display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; font: 600 11px/1 var(--sans);
-  background: color-mix(in srgb, var(--muted) 18%, transparent); color: var(--muted); }
-.ba-stages button.on .n { background: var(--agent); color: var(--on-tone); }
+.ba-stages { justify-self: start; }
+.steps.ba-stages button.on .n { background: var(--agent); border-color: var(--agent); color: var(--on-tone); }
 .ba-draft-line { margin: -4px 0 0; }
 
 /* the main column and the side: the files, what it can use, the document */
@@ -32,7 +28,6 @@
 .ba-line > span { min-width: 0; overflow-wrap: anywhere; }
 .ba-line .mono { font-size: 12.5px; }
 .ba-line.now { color: var(--muted); }
-.ba-line.sub { padding-left: 20px; }
 .ba-line.k-ask > span { color: color-mix(in srgb, var(--agent) 72%, var(--ink)); }
 
 /* its question: the answers as buttons, a free answer */
@@ -69,5 +64,5 @@
 @media (max-width: 520px) {
   .ba-decision { grid-template-columns: minmax(0, 1fr); }
   .ba-decision .ba-acts { grid-row: auto; }
-  .ba-stages button { padding: 4px 8px; }
+  .steps.ba-stages button { padding: 4px 8px 4px 4px; }
 }

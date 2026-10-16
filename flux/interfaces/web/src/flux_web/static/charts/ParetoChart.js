@@ -4,9 +4,9 @@
 // misses one is drawn hollow, outside the scope faint.
 
 import { Empty, html } from "../view.js";
-import { plural } from "../format.js";
+import { num, plural } from "../format.js";
 import { baselinePoints, designPoints, directionOf, frontier, inScope, verdictOf } from "./data.js";
-import { Legend, Mark, Ring, num4, pointTitle, stylesOf } from "./marks.js";
+import { Legend, Mark, Ring, pointTitle, stylesOf } from "./marks.js";
 
 const W = 560, H = 300, L = 62, R = 14, T = 14, B = 34;
 let serial = 0;
@@ -46,19 +46,19 @@ export function ParetoChart({ designs, xm, ym, stage, objectives, onPick, styles
       ${legend ? html`<${Legend} S=${S} front rejected=${pts.some(p => p.verdict === "rejected")} pending=${pts.some(p => p.pending)} baseline=${xr.length + yr.length > 0} />` : ""}</figcaption>
     <svg viewBox=${`0 0 ${W} ${H}`} class="chart pareto" role="img" aria-label=${`${ym} against ${xm}: ${said || `${plural(front.length, "design")} on the feasible front`}`}>
       <line x1=${L} x2=${W - R} y1=${H - B} y2=${H - B} class="axis" /><line x1=${L} x2=${L} y1=${T} y2=${H - B} class="axis" />
-      ${ticks(y0, y1).map(v => html`<line x1=${L} x2=${W - R} y1=${Y(v)} y2=${Y(v)} class="grid" /><text x=${L - 6} y=${Y(v) + 4} class="tick" text-anchor="end">${num4(v)}</text>`)}
-      ${ticks(x0, x1).map(v => html`<line x1=${X(v)} x2=${X(v)} y1=${T} y2=${H - B} class="grid" /><text x=${X(v)} y=${H - B + 14} class="tick" text-anchor="middle">${num4(v)}</text>`)}
+      ${ticks(y0, y1).map(v => html`<line x1=${L} x2=${W - R} y1=${Y(v)} y2=${Y(v)} class="grid" /><text x=${L - 6} y=${Y(v) + 4} class="tick" text-anchor="end">${num(v)}</text>`)}
+      ${ticks(x0, x1).map(v => html`<line x1=${X(v)} x2=${X(v)} y1=${T} y2=${H - B} class="grid" /><text x=${X(v)} y=${H - B + 14} class="tick" text-anchor="middle">${num(v)}</text>`)}
       <defs><clipPath id=${clip}><rect x=${L} y=${T} width=${W - L - R} height=${H - T - B} /></clipPath></defs>
       <g class="pareto-plot" clip-path=${`url(#${clip})`}>
         ${gx != null ? html`<line x1=${X(gx)} x2=${X(gx)} y1=${T} y2=${H - B} class="limit" />` : ""}
         ${gy != null ? html`<line x1=${L} x2=${W - R} y1=${Y(gy)} y2=${Y(gy)} class="limit" />` : ""}
-        ${xr.map(p => { const v = p.metrics[xm]; return html`<line x1=${X(v)} x2=${X(v)} y1=${T} y2=${H - B} class="baseline-ref" data-metric=${xm} data-value=${v}><title>${`${p.name} · Baseline (pass 0) · ${xm} ${num4(v)} at ${p.stage}`}</title></line>`; })}
-        ${yr.map(p => { const v = p.metrics[ym]; return html`<line x1=${L} x2=${W - R} y1=${Y(v)} y2=${Y(v)} class="baseline-ref" data-metric=${ym} data-value=${v}><title>${`${p.name} · Baseline (pass 0) · ${ym} ${num4(v)} at ${p.stage}`}</title></line>`; })}
+        ${xr.map(p => { const v = p.metrics[xm]; return html`<line x1=${X(v)} x2=${X(v)} y1=${T} y2=${H - B} class="baseline-ref" data-metric=${xm} data-value=${v}><title>${`${p.name} · Baseline (pass 0) · ${xm} ${num(v)} at ${p.stage}`}</title></line>`; })}
+        ${yr.map(p => { const v = p.metrics[ym]; return html`<line x1=${L} x2=${W - R} y1=${Y(v)} y2=${Y(v)} class="baseline-ref" data-metric=${ym} data-value=${v}><title>${`${p.name} · Baseline (pass 0) · ${ym} ${num(v)} at ${p.stage}`}</title></line>`; })}
         ${front.length > 1 ? html`<path d=${line} class="front" />` : ""}
         ${drawn.map(p => { const r = on.has(p) ? 4.5 : 3.2;
           return html`<${Mark} st=${S.of(p.group)} x=${X(p.x)} y=${Y(p.y)} r=${r} attrs=${{ "data-name": p.name, "data-group": p.group, class: `pt ${p.verdict}${on.has(p) ? " on-front" : ""}${p.decision ? " decided" : ""}${counts(p) ? "" : " out"}`,
               style: onPick ? "cursor:pointer" : null, onClick: onPick ? () => onPick(p.d) : null }}>
-            <title>${pointTitle(p, [`${xm} ${num4(p.x)} · ${ym} ${num4(p.y)}${on.has(p) ? " · on the feasible front" : ""}`])}</title><//>
+            <title>${pointTitle(p, [`${xm} ${num(p.x)} · ${ym} ${num(p.y)}${on.has(p) ? " · on the feasible front" : ""}`])}</title><//>
             ${p.decision ? html`<${Ring} x=${X(p.x)} y=${Y(p.y)} r=${r} />` : ""}`; })}</g>
       <text x=${(W + L - R) / 2} y=${H - 6} class="tick" text-anchor="middle">${`${xm} · ${dx === "minimize" ? "lower" : "higher"} is better`}</text>
       <text x="12" y=${(H - B + T) / 2} class="tick" text-anchor="middle" transform=${`rotate(-90 12 ${(H - B + T) / 2})`}>${`${ym} · ${dy === "minimize" ? "lower" : "higher"} is better`}</text>

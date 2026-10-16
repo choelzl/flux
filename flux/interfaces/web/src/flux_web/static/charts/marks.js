@@ -4,7 +4,6 @@
 import { html } from "../view.js";
 import { groupList, groupStyles } from "./data.js";
 
-export const num4 = v => v == null ? "" : Math.abs(v) >= 1000 ? String(Math.round(v)) : Math.abs(v) < 0.01 && v !== 0 ? v.toExponential(2) : String(Number(v.toPrecision(4)));
 /** D915: the charts' group colours -- `opts.styles` (groupStyles of the results' groups, built once by the page)
     else the groups given, else those plotted. */
 export const stylesOf = (opts, items) => opts.styles || groupStyles(opts.groups || groupList(items));

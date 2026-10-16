@@ -105,7 +105,8 @@ def run_inspector(js):
     """D1095: the inspector's readers, live/inspector/parts.js -- plain functions, under node."""
     uri = lambda f: "data:text/javascript;base64," + base64.b64encode(  # noqa: E731
         (STATIC / f).read_text().replace('"./work_style.js"', json.dumps(WS)).replace('"./model.js"', json.dumps(MODEL)).encode()).decode()
-    src = (STATIC / "live/inspector/parts.js").read_text().replace('"../work_style.js"', json.dumps(WS)).replace('"../views.js"', json.dumps(uri("live/views.js")))
+    src = (STATIC / "live/inspector/parts.js").read_text().replace('"../work_style.js"', json.dumps(WS)).replace('"../views.js"', json.dumps(uri("live/views.js"))) \
+        .replace('"../../format.js"', json.dumps(uri("format.js")))
     mod = "data:text/javascript;base64," + base64.b64encode(src.encode()).decode()
     r = subprocess.run(["node", "-e", f"import({json.dumps(mod)}).then(m => process.stdout.write(JSON.stringify(({js})(m))));"], capture_output=True, text=True, timeout=30)
     assert r.returncode == 0, r.stderr

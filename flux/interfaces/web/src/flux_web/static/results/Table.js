@@ -72,6 +72,3 @@ export function ResultsTable({ t, selected, onOpen, onCompare }) {
         <span class="muted">${` ${shown.length} of ${all.length} shown`}</span></div>` : ""}`
       : html`<${Empty} text="No design matches." />`}</div>`;
 }
-
-/** Where a design is in the table as it is drawn (its filter and sort aside): the page that holds it. */
-export const pageFor = index => Math.ceil((index + 1) / PAGE) * PAGE;

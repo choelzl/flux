@@ -3,7 +3,7 @@
 // and the agent's open question with the time left to answer it.
 
 import { Card, html, useState } from "../view.js";
-import { dur } from "../format.js";
+import { dur, questionLeft } from "../format.js";
 import { Act } from "../components/Act.js";
 import { Crumbs } from "../components/Crumbs.js";
 import { PageHead } from "../components/PageHead.js";
@@ -33,7 +33,7 @@ export function LoopHead({ name, info, st, perm, mine, canRun, acts }) {
     only the time left is said again. */
 export function AskBanner({ question, mine, send }) {
   const [ans, setAns] = useState("");
-  const left = Math.max(0, Math.round(question.asked + question.wait_s - Date.now() / 1000));
+  const left = questionLeft(question);
   return html`<${Card} cls="ask" title="Agent asks" meta=${left ? `${dur(left)} left` : "timed out"}>
     <pre class="question">${question.question}</pre>
     ${mine ? html`<textarea rows="3" placeholder="Your answer" value=${ans} onInput=${e => setAns(e.currentTarget.value)} /><div class="form-actions">

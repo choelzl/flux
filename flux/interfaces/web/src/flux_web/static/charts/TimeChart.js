@@ -4,13 +4,13 @@
 
 import { html, useRef, useState } from "../view.js";
 import { timeSegments } from "./data.js";
-import { num4 } from "./marks.js";
+import { num } from "../format.js";
 
 const W = 420, H = 130, L = 62, R = 8, T = 10, B = 20;
 
 /** D1085: an SVG path through `pts` ([x, y], x rising) as a monotone cubic (Fritsch-Carlson): smooth, and never
     above the highest or below the lowest of two neighbours -- a rate's curve stays at or over zero. */
-export function smoothPath(pts) {
+function smoothPath(pts) {
   const n = pts.length, f = v => v.toFixed(1);
   if (n < 3) return pts.map(([x, y], j) => `${j ? "L" : "M"}${f(x)},${f(y)}`).join("");
   const dx = [], m = [], t = new Array(n);
@@ -30,7 +30,7 @@ export function smoothPath(pts) {
   return d;
 }
 
-export function TimeChart({ samples, series, title, top = null, level = null, levelLabel = "", intervals = false, fmt = num4 }) {
+export function TimeChart({ samples, series, title, top = null, level = null, levelLabel = "", intervals = false, fmt = num }) {
   const [hover, setHover] = useState(null), tipRef = useRef(null), svgRef = useRef(null);
   const pts = samples.filter(s => series.some(se => se.get(s) != null));
   if (pts.length < 2) return html`<figure class="tchart"><figcaption><strong>${title}</strong></figcaption><p class="muted small">Not enough samples yet.</p></figure>`;

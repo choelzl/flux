@@ -14,7 +14,7 @@ const mountsOf = text => text.split("\n").map(x => x.trim()).filter(Boolean).map
 });
 
 /** What it is, in a line. */
-export function advancedSaid(e) {
+function advancedSaid(e) {
   const a = e.advanced || {};
   return [a.sandbox === false ? "runs on the host, without the sandbox" : "runs in the sandbox",
     ...["memory", "cpus", "pids", "tmp_size"].filter(k => a[k] != null).map(k => `${e.advanced_said[k].split(" (")[0]}: ${a[k]}`),

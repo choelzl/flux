@@ -92,6 +92,7 @@ function OverTime({ n }) {
   const chips = html`<${Choice} small label="Range" value=${hours} onChange=${hrs => { historyHours = hrs; setHours(hrs); }} options=${RANGES} />`;
   if (!got) return html`<${Card} title="Over time" actions=${chips}><${Skeleton} lines=${4} /><//>`;
   const { hx, tr } = got, ts = tr ? tr.samples : [], ss = hx.samples, last = ss.at(-1), cpus = last ? last.cpus : null;
+  // a rate keeps its own precision (one decimal under 10, "0.004" never rounded to zero): not a measured number
   const rate = v => v >= 1000 ? `${(v / 1000).toFixed(1)}k/s` : `${v > 0 && v < 1 ? Number(v.toPrecision(2)) : v >= 10 ? Math.round(v) : v.toFixed(1)}/s`;
   const sum = (s, d) => s[`${d}_agent`] + s[`${d}_model`], pct = v => `${Math.round(v * 100)}%`;
   const tokens = d => [{ label: "all", get: s => sum(s, d) }, { label: "agents", get: s => s[`${d}_agent`] }, { label: "Flux's model", get: s => s[`${d}_model`] }];

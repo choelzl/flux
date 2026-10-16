@@ -2,7 +2,7 @@
 // part at a time: what went wrong (starts, agent Tests), what was used (by user, by agent, the loops that used
 // most; the disk as it is now), how the endpoints did and what the network refused.
 
-import { Ago, Card, Skeleton, cx, html, useState } from "../view.js";
+import { Ago, Card, Empty, Skeleton, cx, html, useState } from "../view.js";
 import { api, confirmDialog, enc, toast, when } from "../ui.js";
 import { bytes, dur, fmtTok, plural } from "../format.js";
 import { route } from "../app.js";
@@ -40,7 +40,7 @@ function Failures({ f }) {
   return html`${f.starts.length ? html`<${Table} heads=${["When", "Loop", "Why"]}>
       ${f.starts.slice(0, 20).map(s => html`<tr key=${`${s.when}|${s.user}|${s.app}`}><td class="muted"><${When} t=${s.when} /></td><td><${LoopLink} u=${s.user} a=${s.app} /></td>
         <td class="mono small why-cell">${(s.why || []).slice(-2).join(" · ") || `exit ${s.rc}`}</td></tr>`)}<//>`
-    : html`<p class="muted">No start failed.</p>`}
+    : html`<${Empty} text="No start failed." />`}
     ${f.tests.length ? html`<h3>Agent Tests whose latest run failed</h3><${Table} heads=${["User", "Agent", "Step", "Why", "When"]}>
       ${f.tests.map(t => html`<tr key=${`${t.user}|${t.agent}|${t.step}|${t.when}`}><td>${t.user}</td><td>${t.agent}</td><td>${t.step}</td><td class="small">${t.why}</td><td class="muted"><${When} t=${t.when} /></td></tr>`)}<//>` : ""}`;
 }
@@ -77,7 +77,7 @@ function Usage({ u }) {
         foot=${html`<${Totals} label="Total shown"><${Total} label="Turns" value=${String(sum(u.top.map(t => t.turns)))} mono=${false} />
           <${Total} label="Tokens" value=${fmtTok(sum(u.top.map(t => t.tokens)))} /><${Total} label="Cost" value=${`$${sum(u.top.map(t => t.cost)).toFixed(2)}`} />
           <${Total} label="Time" value=${dur(sum(u.top.map(t => t.seconds)))} mono=${false} /><//>`} />` : ""}`
-    : html`<p class="muted">No model or agent turn in this time.</p>`}
+    : html`<${Empty} text="No model or agent turn in this time." />`}
     <div class="row end"><${Act} cls="small" onClick=${reprice}>Price past turns…<//></div>`;
 }
 
@@ -91,13 +91,13 @@ const Endpoints = ({ eps }) => eps.length ? html`<${SortableTable} memo="flux-in
   row=${e => html`<tr><td><${Tag}>${e.kind}<//> <span class="mono small">${e.where}</span></td><td class="num">${String(e.turns)}</td>
     <td class=${cx("num", e.rate > 0.2 && "bad")}>${`${e.failed} (${Math.round(100 * e.rate)}%)`}</td><td class="num">${dur(e.p50)}</td><td class="num">${dur(e.p95)}</td>
     <td class="muted"><${When} t=${e.last} /></td><td class="small why-cell" title=${e.last_error || ""}>${e.last_error ? html`<${When} t=${e.last_error_at} />${`: ${e.last_error.slice(0, 140)}`}` : "—"}</td>
-    <td class="right"><${Forget} kind="endpoint" k=${e.key} what=${e.where} /></td></tr>`} />` : html`<p class="muted">No turn in this time.</p>`;
+    <td class="right"><${Forget} kind="endpoint" k=${e.key} what=${e.where} /></td></tr>`} />` : html`<${Empty} text="No turn in this time." />`;
 const Network = ({ net }) => html`<${Card} title="Network refused">${net.length ? html`<${SortableTable} memo="flux-insights-net-sort" first=${1} rows=${net} keyOf=${n => n.key}
   cols=${[{ label: "Host", key: n => `${n.host}:${n.port}`, asc: true }, { label: "Times", key: n => n.count, num: true },
     { label: "By", key: n => n.loops.map(([a]) => a).join(","), asc: true }, { label: "Last", key: n => n.last }, { label: "" }]}
   row=${n => html`<tr><td class="mono">${`${n.host}:${n.port}`}</td><td class="num">${String(n.count)}</td><td class="small">${n.loops.map(([a, c]) => `${a} ×${c}`).join(", ")}</td>
     <td class="muted"><${When} t=${n.last} /></td><td class="right"><${Forget} kind="network" k=${n.key} what=${`${n.host}:${n.port}`} /></td></tr>`} />`
-  : html`<p class="muted">Nothing refused in this time.</p>`}<//>`;
+  : html`<${Empty} text="Nothing refused in this time." />`}<//>`;
 
 /** D920: the disk as it is now -- not historical, so no period; when it was measured said. */
 function Disk() {

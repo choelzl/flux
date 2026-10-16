@@ -3,7 +3,7 @@
 // field folded -- and a pass at a glance (P11).
 
 import { Empty, html, useLayoutEffect } from "../../view.js";
-import { dur } from "../../format.js";
+import { dur, num } from "../../format.js";
 import { showRaw } from "../../viewer.js";
 import { restoreScroll, scrollState } from "../../scroll.js";
 import { WORK_COLORS as COLORS, ownSpans, phaseKind, workLabel } from "../work_style.js";
@@ -11,7 +11,7 @@ import { passName } from "../views.js";
 import { Block, Fold, StepRow, TaskPill, memoryOf } from "./bits.js";
 import { AgentChat, ModelChat } from "./Chat.js";
 import { ChooseBody, CriticBody, NotesFold, SearchBody, StepsBody, ToolBody } from "./Bodies.js";
-import { candidateOf, colorOf, fmt, has, headOf, isAgent, isModel, isTool, metricsOf, plain, running, stdoutOf, taskLabel } from "./parts.js";
+import { candidateOf, colorOf, has, headOf, isAgent, isModel, isTool, metricsOf, plain, running, stdoutOf, taskLabel } from "./parts.js";
 import { Pill, Tag } from "../../components/Tone.js";
 import { Head, Tool } from "../../components/Head.js";
 
@@ -88,7 +88,7 @@ export function PassSummary({ p, nodes, a, N, head = true }) {
   return html`${head ? html`<${Head} cls="alt-ihead" title=${passName(p)}>
       <${Pill} tone=${live ? "run" : failed ? "bad" : "ok"}>${live ? "running" : failed ? "failed" : "done"}<//>
       <span class="muted">${dur(t1 - t0)}</span><//>` : ""}
-    ${cand ? html`<div key="tried" class="alt-tried"><div class="alt-label">Tried</div><b>${cand}</b><span class="mono muted small">${Object.entries(meas).slice(0, 3).map(([k, v]) => `${k} ${fmt(v)}`).join(" · ")}</span></div>` : ""}
+    ${cand ? html`<div key="tried" class="alt-tried"><div class="alt-label">Tried</div><b>${cand}</b><span class="mono muted small">${Object.entries(meas).slice(0, 3).map(([k, v]) => `${k} ${num(v)}`).join(" · ")}</span></div>` : ""}
     <div><div class="alt-label">Where the time went</div>
       <div class="alt-bar tall">${order.map(k => html`<i style=${`width:${100 * kinds[k] / total}%;background:${COLORS[k]}`} title=${`${workLabel(k)} ${dur(kinds[k])}`} />`)}</div>
       <div class="mono muted small">${order.slice().sort((x, y) => kinds[y] - kinds[x]).filter(k => kinds[k] >= 1).map(k => `${workLabel(k)} ${dur(kinds[k])}`).join(" · ") || "all under a second"}</div></div>

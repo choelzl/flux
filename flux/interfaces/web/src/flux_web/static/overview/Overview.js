@@ -23,6 +23,6 @@ export function Overview({ r, notes, bench, use, prefs, ideas = null }) {
     ${st.failed && (st.error || []).length ? html`<${Card} cls="why-failed" role="alert" title="Why it stopped"
       actions=${html`<button class="small" onClick=${() => goTab("Live", "log")}>Log</button>`}><pre class="why-lines">${st.error.join("\n")}</pre><//>` : ""}
     ${q && st.running ? html`<${Card} cls="ask" title="Agent asks"
-      actions=${html`<button class="small primary" onClick=${() => goTab("Live")}>Answer</button>`}><pre class="question">${q.question}</pre><//>` : ""}
+      actions=${html`<button class="small primary" onClick=${() => goTab("Live")}>Answer in Live</button>`}><pre class="question">${q.question}</pre><//>` : ""}
     <div class="grid-2 ov">${prefs.layout.columns.map((ids, column) => html`<div class="col" data-overview-column=${column}>${ids.map(id => card(cards, id))}</div>`)}</div>`;
 }

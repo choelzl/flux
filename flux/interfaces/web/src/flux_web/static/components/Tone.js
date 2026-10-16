@@ -19,7 +19,7 @@ export const Pill = ({ tone = "none", small = false, icon = false, cls = "", tit
   ? html`<span ...${rest} class=${cx("pill icon", `t-${tone}`, small && "small", cls)} role="img" aria-label=${title} title=${title}><${Glyph} tone=${tone} /></span>`
   : html`<span ...${rest} class=${cx("pill", `t-${tone}`, small && "small", cls)} title=${title || null}><${Glyph} tone=${tone} />${children}</span>`;
 
-/** D1108: a label in a line that is not a state -- a role, "mock data", "ai", a critic: no glyph, neutral, or tinted
+/** D1108: a label in a line that is not a state -- a role, "mock data", "AI", a critic: no glyph, neutral, or tinted
     by `k` (a kind's colour: an agent's pink, a box's kind); `count` a tally (×3, an unread number) in figures; a
     button with `onClick` (a parent task that opens). */
 export const Tag = ({ k, count = false, onClick, cls = "", title, children, ...rest }) => {

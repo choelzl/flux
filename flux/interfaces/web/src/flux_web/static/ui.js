@@ -75,10 +75,12 @@ function apiUpload(path, form, { onProgress = () => {}, signal } = {}) {
 }
 /** A loop's server calls (D701, D1095): `at(path)` its address -- `/apps/<name><path>`, its `owner` named when given,
     else the page's (`owned`); `api(path, opts)`, `request(path, opts)` as `api` and `request` there; `url(path)` a
-    link to it. */
+    link to it; `text(file)` a file of the loop as text (D1130: through `request`, so a session ended or the server
+    out of reach is said as for any call). */
 function loopApi(name, owner = null) {
   const at = (path = "") => `/apps/${enc(name)}${path}${owner ? `${path.includes("?") ? "&" : "?"}owner=${enc(owner)}` : ""}`;
-  return { at, api: (path, opts) => api(at(path), opts), request: (path, opts) => request(at(path), opts), url: path => "/api" + owned(at(path)) };
+  return { at, api: (path, opts) => api(at(path), opts), request: (path, opts) => request(at(path), opts), url: path => "/api" + owned(at(path)),
+    text: file => request(at(`/file?path=${enc(file)}`)).then(r => r.text()) };
 }
 async function api(path, opts = {}) {
   const r = await request(path, opts);

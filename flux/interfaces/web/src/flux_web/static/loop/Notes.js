@@ -4,7 +4,7 @@
 
 import { Ago, cx, html, useEffect, useLayoutEffect, useRef, useState } from "../view.js";
 import { enc, loopApi, toast } from "../ui.js";
-import { dur } from "../format.js";
+import { dur, questionLeft } from "../format.js";
 import { Bin } from "../components/Bin.js";
 
 /** `question` the agent's open one (or null); `send(text)` sends a note or an answer; `n` changes when one was sent. */
@@ -21,7 +21,7 @@ export function Composer({ name, mine, question, send, n }) {
     try { await send(said); setText(""); read(); } catch (x) { toast(x.message, "bad"); } finally { setBusy(false); }
   };
   const remove = async x => { await loopApi(name).api(`/notes/${enc(x.id)}`, { method: "DELETE" }); toast("The note is removed", "ok"); read(); };
-  const left = question ? Math.max(0, Math.round(question.asked + question.wait_s - Date.now() / 1000)) : 0;
+  const left = questionLeft(question);
   return html`<div class=${cx("composer", question && "asking")}>
     <div class="composer-ask">${question ? html`<strong>Agent asks</strong><span class="muted">${left ? ` · ${dur(left)} left` : " · timed out"}</span><pre class="question">${question.question}</pre>` : ""}</div>
     <div class="composer-row"><textarea rows="1" class="composer-in" aria-label="A note to the loop" ref=${ta} value=${text} onInput=${e => setText(e.currentTarget.value)}

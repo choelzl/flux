@@ -1,11 +1,9 @@
 // Flux web: pages as Preact components (D1095) -- written with htm's tagged templates, no build step.
 // Preact and htm are vendored (static/vendor), their imports made relative.
-// Every page is a component; a component goes where a node is wanted (the configurator's crafter) through `node`.
 
 import { html, render } from "./vendor/htm-preact.module.js";
 import { options } from "./vendor/preact.module.js";
 import { useEffect, useLayoutEffect, useRef, useState } from "./vendor/hooks.module.js";
-import { cleanup } from "./state.js";
 import { agoText, when } from "./format.js";
 import { Head } from "./components/Head.js";
 
@@ -81,32 +79,3 @@ export const Empty = ({ text, action, children }) => html`<${Notice} quiet cls="
 const WIDTHS = [92, 76, 84, 60, 70, 88, 54];
 export const Skeleton = ({ lines = 5 }) => html`<div class="skeleton" aria-busy="true" aria-label="Loading">
   ${Array.from({ length: lines }, (_, i) => html`<div class="sk-line" style=${`width:${WIDTHS[i % 7]}%`}></div>`)}</div>`;
-
-const mounted = new Map();       // host -> seen on the page once
-let sweeping = 0;
-/** Unmount the hosts that were on the page and have left it -- after the task that mounted, so a host taken off
-    and put back in the same step (a toolbar under redrawn sub-tabs) is kept. */
-function sweep() {
-  sweeping = 0;
-  for (const [host, seen] of mounted) {
-    if (host.isConnected) mounted.set(host, true);
-    else if (seen) { render(null, host); mounted.delete(host); }
-  }
-}
-/** A component drawn into `host`, a node of a page: unmounted when the page goes (the route's cleanup), or once
-    `host` has left the page (a tab drawn over it) -- one not placed yet stays. */
-export function mount(host, vnode) {
-  render(vnode, host);
-  if (!mounted.has(host)) cleanup.push(() => { if (mounted.delete(host)) render(null, host); });
-  mounted.set(host, host.isConnected || !!mounted.get(host));
-  queueMicrotask(() => { if (host.isConnected && mounted.has(host)) mounted.set(host, true); });    // placed by its caller
-  if (!sweeping) sweeping = setTimeout(sweep);
-  return host;
-}
-
-/** A component in a node of its own, for what places nodes (the crafter): unmounted with the route. */
-export function node(vnode) {
-  const host = document.createElement("div");
-  host.style.display = "contents";
-  return mount(host, vnode);
-}

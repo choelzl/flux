@@ -2,9 +2,10 @@
 // visited with nothing to fix is ticked, one with something to fix is marked. D913: on a phone, "Step 2 of 6" and a
 // menu of the steps in their place.
 
-import { cx, html } from "../view.js";
+import { html } from "../view.js";
 import { plural } from "../format.js";
 import { Select } from "../components/Select.js";
+import { Steps } from "../components/Steps.js";
 import { STEPS } from "./model.js";
 import { agentWord, isAgent } from "./who.js";
 
@@ -30,9 +31,7 @@ export function sums(M, state, { files = 0, missing = 0, errors = 0, calm = fals
 /** `at` the step shown; `marks[id]` "done" or "bad"; `go(id)`. */
 export function Rail({ at, sum, marks, go }) {
   const i = STEPS.findIndex(s => s.id === at);
-  return html`<nav class="card cfg-rail" aria-label="Steps">${STEPS.map((s, n) => html`<button type="button" key=${s.id} data-step=${s.id}
-      class=${cx(s.id === at && "on", marks[s.id])} aria-current=${s.id === at ? "step" : null} onClick=${() => go(s.id)}>
-      <span class="num">${marks[s.id] === "done" ? "✓" : n + 1}</span><span class="t">${s.title}</span><span class="sum">${sum[s.id]}</span></button>`)}</nav>
+  return html`<${Steps} cls="rail card cfg-rail" at=${at} go=${go} items=${STEPS.map(s => ({ key: s.id, title: s.title, state: marks[s.id] || "", sum: sum[s.id] }))} />
     <div class="cfg-stephead"><span class="cfg-stepof">${`Step ${i + 1} of ${STEPS.length}`}</span>
       <${Select} aria-label="Step" value=${at} onChange=${go} options=${STEPS.map(s => [s.id, s.title])} /></div>`;
 }

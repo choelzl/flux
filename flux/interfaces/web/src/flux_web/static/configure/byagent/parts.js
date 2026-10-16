@@ -1,9 +1,9 @@
 // Flux web, New loop › Agent and Revise by agent (D704, D1122-D1125): the pieces both draw -- the author's work as
 // short lines with the run glyph, its question with its answers as buttons, the new loop's files and who made them.
 
-import { Glyph, Notice, html, useEffect, useState } from "../../view.js";
+import { Empty, Glyph, Notice, html, useEffect, useState } from "../../view.js";
 import { loopApi, toast } from "../../ui.js";
-import { plural } from "../../format.js";
+import { plural, questionLeft } from "../../format.js";
 import { usePoll } from "../../components/Load.js";
 import { Act } from "../../components/Act.js";
 import { Tag } from "../../components/Tone.js";
@@ -74,7 +74,7 @@ export function Question({ name, q, onAnswered }) {
     onAnswered();
   };
   const lines = q.question.split("\n").filter(l => !OPTION.test(l)).join("\n").trim();
-  const left = q.asked && q.wait_s ? Math.max(0, Math.round(q.asked + q.wait_s - Date.now() / 1000)) : null;
+  const left = questionLeft(q);
   return html`<div class="ba-question" role="group" aria-label="The agent asks">
     <div class="ba-q-head"><b>The agent asks</b>${left != null ? html`<small class="muted">${`it decides itself in ${Math.ceil(left / 60)} min`}</small>` : ""}</div>
     <p class="ba-q-text">${lines || q.question}</p>
@@ -87,9 +87,12 @@ export function Question({ name, q, onAnswered }) {
 /** The new loop's files: `written` the agent's, `yours` those given to read. */
 export const NewFiles = ({ files }) => files?.length
   ? html`<ul class="ba-files">${files.map(f => html`<li key=${f.path}><code>${f.path}</code>${f.by === "yours" ? html`<${Tag}>yours<//>` : html`<${Tag} k="var(--agent)">written<//>`}</li>`)}</ul>`
-  : html`<p class="muted small">None yet.</p>`;
+  : html`<${Empty} text="None yet." />`;
+
+/** An author that ended without a document, said alike wherever its job is drawn: [what, why]. */
+export const AUTHOR_FAILED = ["No document that passes its checks.", "Its log says why: try again, or write the document yourself."];
 
 /** How the job ended, when it did not end well. */
 export const Failed = ({ st }) => st && st.ever && !st.running && !st.ok
-  ? html`<${Notice} tone="bad" what="No document that passes its checks." why="Its log says why.">
+  ? html`<${Notice} tone="bad" what=${AUTHOR_FAILED[0]} why=${AUTHOR_FAILED[1]}>
       <details><summary>The log</summary><pre class="log small">${(st.log || []).join("\n") || "Nothing logged."}</pre></details><//>` : null;

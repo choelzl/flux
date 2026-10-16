@@ -6,6 +6,7 @@
 import { html, useEffect, useMemo, useRef, useState } from "../view.js";
 import { api, appHref, confirmDialog, enc, loopApi, toast } from "../ui.js";
 import { me, setPageRefresh } from "../state.js";
+import { usePoll } from "../components/Load.js";
 import { startLoop, stopLoop, restartLoop } from "../loops.js";
 import { Configure, ModeTabs, modesOf } from "../configure/Configure.js";
 import { createStore } from "../live/store.js";
@@ -88,18 +89,18 @@ export function LoopPage({ name, owner, info, path }) {
   // Talk (loop/Talk.js): conversations keep their own reply context; loop notes still join the next design prompt
   const steerOpen = useMemo(() => ({ open: false, get() { return this.open || !!now.current.question; }, set(o) { this.open = o; } }), []);
 
+  // every 5 s, one at a time; D917: a hidden tab asks nothing (it catches up when shown)
+  const beat = useRef(0);
+  usePoll(async live => {
+    if (ctx.poll.out) return 5000;
+    await ctx.refresh().catch(() => {});
+    // the Overview follows a running loop (D693, D696): once a minute
+    if (live() && ++beat.current % 12 === 0 && now.current.at.tab === "Overview" && now.current.st.running) setTick(k => k + 1);
+    return 5000;
+  }, [], { first: 5000, hidden: false });
   useEffect(() => {
-    let beat = 0;
-    const tick = setInterval(async () => {
-      if (document.hidden || ctx.poll.out) return;          // D917: a hidden tab asks nothing (it catches up when shown); one at a time
-      await ctx.refresh().catch(() => {});
-      // the Overview follows a running loop (D693, D696): once a minute
-      if (++beat % 12 === 0 && now.current.at.tab === "Overview" && now.current.st.running && !document.hidden) setTick(k => k + 1);
-    }, 5000);
-    const shown = () => { if (!document.hidden) ctx.refresh().catch(() => {}); };
-    document.addEventListener("visibilitychange", shown);
     setPageRefresh(() => ctx.refresh());
-    return () => { clearInterval(tick); document.removeEventListener("visibilitychange", shown); ctx.leaving.abort(); store.close(); };
+    return () => { ctx.leaving.abort(); store.close(); };
   }, []);
   const placed = useRef(false);
   useEffect(() => {                                       // the address follows the tab, the sub-tab and the mode

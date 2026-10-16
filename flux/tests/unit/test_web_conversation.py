@@ -24,7 +24,7 @@ const find = (node, pred, out = []) => { if (node && typeof node === 'object') {
   const htm = new vm.SourceTextModule(fs.readFileSync(htmPath, 'utf8'), { context });
   await htm.link(() => { throw new Error('htm imports nothing'); }); await htm.evaluate();
   const html = htm.namespace.default.bind(h);
-  const mocks = { '../view.js': { html, cx: (...a) => a.filter(Boolean).join(' '), Glyph: () => '' }, './Markdown.js': { Markdown: ({ text }) => text } };
+  const mocks = { '../view.js': { html, cx: (...a) => a.filter(Boolean).join(' '), Glyph: () => '', Empty: ({ text }) => text }, './Markdown.js': { Markdown: ({ text }) => text } };
   const mod = new vm.SourceTextModule(fs.readFileSync(convPath, 'utf8'), { context });
   await mod.link(s => new vm.SyntheticModule(Object.keys(mocks[s]), function () { for (const [n, v] of Object.entries(mocks[s])) this.setExport(n, v); }, { context }));
   await mod.evaluate();

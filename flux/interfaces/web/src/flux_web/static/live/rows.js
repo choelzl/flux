@@ -61,7 +61,7 @@ export function lines(rows, v) {
   const span = nodes => dur(Math.max(...nodes.map(n => n.t1 ?? now)) - Math.min(...nodes.map(n => n.t0)));
   const fold = (key, collapsed, label) => ({ key, collapsed, label });
   const colour = (n, kind = phaseKind(n)) => COLORS[kind] || (AI.test(String(n.params?.turn || n.name)) ? AGENT_COLOR : COLORS.setup);
-  const aiPill = (n, title) => ({ k: AGENT_COLOR, text: "ai", title });
+  const aiPill = (n, title) => ({ k: AGENT_COLOR, text: "AI", title });
   const partial = nodes => nodes.some(n => J.hardFail(n) || n.rejected || J.marked(n.id));
   // D1044: a box's line says the box, then what it worked on; a step under it drops the box's name
   const said = (n, box) => {
@@ -120,7 +120,7 @@ export function lines(rows, v) {
     const opensTries = phaseKind(first) === "design";             // D1045: a step repeated elsewhere is one line, ×N
     const ai = nodes.some(n => aiOf.has(n.id) || AI.test(String(n.params?.turn || n.name)));
     toggleRow(key, depth, box ? "box" : "step", COLORS[phaseKind(first)] || COLORS.setup, nodes, said(first, box),
-      [{ count: true, text: `×${run.length}`, title: `${run.length} tries in this pass` }, ai ? { k: AGENT_COLOR, text: "ai" } : null].filter(Boolean),
+      [{ count: true, text: `×${run.length}`, title: `${run.length} tries in this pass` }, ai ? { k: AGENT_COLOR, text: "AI" } : null].filter(Boolean),
       span(nodes), opensTries ? fold(key, collapsed, taskLabel(first)) : null);
     if (!collapsed && opensTries) newestFirst(key, run.map((r, i) => [r, i]), ([r, i]) => {
       const what = candidateOf(r.node) || note(r.node);
@@ -198,7 +198,7 @@ export function lines(rows, v) {
       mark: running ? "spin" : !failedStep && (opens.timedOut || t.lead.timedOut) ? markOf(opens.timedOut ? opens : t.lead, J)
         : doneMark(!!failedStep || !!t.lead.failed, all.some(n => J.marked(n.id))),
       name: [asPart ? shortMade : t.part || `try ${i}`, what && !asPart ? { cls: "alt-what", text: ` ${shortMade}`, title: what } : "", fail ? { cls: "alt-what", text: ` · ${fail}` } : ""],
-      pills: aiOf.has(t.lead.id) || AI.test(String(t.lead.params?.turn || t.lead.name)) ? [{ k: AGENT_COLOR, text: "ai" }] : [],
+      pills: aiOf.has(t.lead.id) || AI.test(String(t.lead.params?.turn || t.lead.name)) ? [{ k: AGENT_COLOR, text: "AI" }] : [],
       time: span(all) });
     if (!collapsed) runs(under, depth + 1);
   };
@@ -238,7 +238,7 @@ export function lines(rows, v) {
         : doneMark(ended(nodes.filter(n => !isCritique(n))) || (rejected && nodes.every(isCritique)), all.some(n => J.hardFail(n) || n.rejected || aiOf.get(n.id)?.failed)),
       name: [{ b: workLabel(kind) }, what ? { cls: "alt-what", text: ` ${N.shortAll(what)}`, title: what } : "", nodes.length === 1 && note(first) ? { cls: "alt-what", text: ` · ${note(first)}` } : ""],
       pills: [tries && tries.length > 1 ? { count: true, text: `×${tries.length}` } : null,      // D1067: how many, a critic, the ai
-        crit ? { k: COLORS.critic, text: "critic" } : null, ai ? { k: AGENT_COLOR, text: "ai" } : null].filter(Boolean),
+        crit ? { k: COLORS.critic, text: "critic" } : null, ai ? { k: AGENT_COLOR, text: "AI" } : null].filter(Boolean),
       time: span(all) });
     if (collapsed) return;
     if (tries) newestFirst(key, tries.map((t, i) => [t, i]), ([t, i]) => tryLine(t, i + 1, depth + 1), depth + 1, holdsTry);

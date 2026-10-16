@@ -18,9 +18,10 @@ import { Configurator } from "./Configurator.js";
 import { stepOfHash, stepToHash, useModel } from "./model.js";
 import { CloneForm, DirectEdit, NewByAgent, ReviseByAgent, confirmDiff } from "./Views.js";
 import { Select } from "../components/Select.js";
+import { Tabs } from "../components/Tabs.js";
 import { recallJson, remember } from "../stored.js";
 
-export const MODES = { configurator: "Configurator", upload: "Create or upload", edit: "Direct edit", agent: "Agent", clone: "Clone a loop" };
+const MODES = { configurator: "Configurator", upload: "Create or upload", edit: "Direct edit", agent: "Agent", clone: "Clone a loop" };
 export const modesOf = name => name ? ["configurator", "edit", "agent"] : ["upload", "configurator", "agent", "clone"];
 
 // ---- D912: the one creation draft -- the configurator's state and step, the files staged with it
@@ -33,7 +34,7 @@ function storedDraft() {
   return got && got.state ? { ...newDraft(), state: got.state, step: got.step || 0 } : null;
 }
 const forgetDraft = () => remember(draftKey(), null);
-export const currentDraft = () => (DRAFT = DRAFT || storedDraft() || newDraft());
+const currentDraft = () => (DRAFT = DRAFT || storedDraft() || newDraft());
 const draftDone = draft => { if (DRAFT === draft) { DRAFT = null; forgetDraft(); } };
 function draftUsed(d) {
   const s = d && d.state;
@@ -119,7 +120,7 @@ function ConfigureNew({ M, draft, onDraft }) {
     return "Created.";
   };
   const saveDraft = (state, step) => {
-    localStorage.setItem(draftKey(), JSON.stringify({ state, step }));
+    remember(draftKey(), { state, step });
     return draft.staged.size ? "Draft saved in this browser (its staged files stay with this page)." : "Draft saved in this browser.";
   };
   return html`<${Configurator} M=${M} state=${draft.state} step=${stepOfHash() || draft.step} onStep=${id => { draft.step = id; stepToHash(id); }}
@@ -137,8 +138,8 @@ function DraftLine({ draft, discard }) {
 }
 
 /** The ways' tabs (`small`: as sub-tabs) and, on a phone, one compact menu (D913). */
-export const ModeTabs = ({ name, mode, pick, small = false }) => html`<div class=${(small ? "subtabs" : "tabs") + " config-modes"} role="tablist">
-    ${modesOf(name).map(k => html`<button role="tab" type="button" class=${k === mode ? "on" : ""} aria-selected=${k === mode ? "true" : "false"} onClick=${() => pick(k)}>${MODES[k]}</button>`)}</div>
+export const ModeTabs = ({ name, mode, pick, small = false }) => html`<${Tabs} cls=${(small ? "subtabs" : "tabs") + " config-modes"} on=${mode} pick=${pick}
+    items=${modesOf(name).map(k => [k, MODES[k]])} />
   <${Select} class="mode-menu" aria-label=${name ? "How to change it" : "How to make it"} value=${mode} onChange=${pick} options=${modesOf(name).map(k => [k, MODES[k]])} />`;
 
 /** The way chosen, its view; `tabs` false when the tabs stand elsewhere (a loop's Settings › Problem). */
@@ -155,5 +156,5 @@ export function Configure({ name, owner, mode, pick, tabs = true }) {
   const view = mode === "configurator" ? (name ? html`<${ConfigureLoop} key=${`of:${name}`} M=${M} name=${name} owner=${owner} />` : html`<${ConfigureNew} key=${`new:${gen}`} M=${M} draft=${draft} onDraft=${onDraft} />`)
     : mode === "upload" ? html`<${UploadForm} />` : mode === "edit" ? html`<${DirectEdit} name=${name} />` : mode === "clone" ? html`<${CloneForm} />`
     : name ? html`<${ReviseByAgent} name=${name} /> ` : html`<${NewByAgent} draft=${draft} onDraft=${onDraft} done=${() => draftDone(draft)} />`;
-  return html`${tabs ? html`<${ModeTabs} name=${name} mode=${mode} pick=${pick} />` : ""}<${DraftLine} draft=${draft} discard=${discard} /><div>${view}</div>`;
+  return html`${tabs ? html`<${ModeTabs} name=${name} mode=${mode} pick=${pick} />` : ""}<${DraftLine} draft=${mode === "agent" ? null : draft} discard=${discard} /><div>${view}</div>`;
 }

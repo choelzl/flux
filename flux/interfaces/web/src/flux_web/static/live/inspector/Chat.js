@@ -3,7 +3,7 @@
 // rows; it opens at the newest end and follows it while one is there; scrolling up shows the history in
 // steps without moving one's place; scrolled up, new activity waits behind "↓ latest".
 
-import { Glyph, html, useLayoutEffect, useRef } from "../../view.js";
+import { Empty, Glyph, Notice, html, useLayoutEffect, useRef } from "../../view.js";
 import { Conversation, liveWork } from "../../components/Conversation.js";
 import { Markdown } from "../../components/Markdown.js";
 import { Fold, Pre } from "./bits.js";
@@ -82,7 +82,6 @@ function transcriptSteps(n, env, agent) {
   return fromTranscript.get(n.id);
 }
 const lostSaid = (n, kept, steps, lost) => running(n) ? `${lost} earlier step${lost === 1 ? "" : "s"}, shown when the turn ends`
-  : kept == null ? "Loading the earlier steps…"
   : kept === steps ? `${lost} earliest step${lost === 1 ? " was" : "s were"} not kept`
   : `${lost} earlier step${lost === 1 ? " is" : "s are"} not in the transcript`;
 
@@ -120,10 +119,11 @@ export function AgentChat({ n, env, mem }) {
   return html`<${Facts} list=${usage(f, [["model", f.agent || p.model]])} cls="alt-usage" />
     <div class="agent-view"><${ChatBox} n=${n} env=${env} mem=${mem} more=${above > 0}>
       ${above > 0 ? html`<button type="button" class="alt-chat-more link" title="Show earlier steps" onClick=${e => moreChat(n, env, e.currentTarget.closest(".alt-chat"))}>${`↑ ${above} earlier — scroll up or click`}</button>`
-        : [lost > 0 ? html`<div class="alt-chat-more">${lostSaid(n, kept, steps, lost)}</div>` : "",
+        : [lost > 0 ? (kept == null && !running(n) ? html`<${Notice} tone="run" cls="alt-chat-more" what="Reading the earlier steps…" />`
+          : html`<div class="alt-chat-more">${lostSaid(n, kept, steps, lost)}</div>`) : "",
           prompt ? html`<${Bubble} side="me" label=${`Prompt · ${prompt.length.toLocaleString()} characters`} k="input" mem=${mem}><${Pre} k="prompt" cls="val tall" text=${prompt} mem=${mem} follow=${false} /><//>` : ""]}
       ${all.length ? html`<${Conversation} steps=${shown} k=${`task${n.id}`} offset=${total - shown.length} live=${running(n)} quiet />`
-        : running(n) ? "" : html`<p class="muted">No conversation recorded.</p>`}
+        : running(n) ? "" : html`<${Empty} text="No conversation recorded." />`}
       ${running(n) && !liveWork(shown, true) ? html`<div class="alt-chat-now"><${Glyph} tone="run" />${String(f.status || "working") + "…"}</div>` : ""}
       ${stop ? html`<div class="alt-chat-stop" role="note">${stop}</div>` : ""}<//></div>
     <${Output} n=${n} f=${f} mem=${mem} />`;

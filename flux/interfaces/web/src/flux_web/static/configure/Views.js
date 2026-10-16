@@ -38,8 +38,7 @@ export function DirectEdit({ name }) {
   useEffect(() => {
     (async () => {
       const info = await loopApi(name).api(), doc = info.document;
-      const r = doc ? await fetch(loopApi(name).url(`/file?path=${enc(doc)}`), { credentials: "same-origin" }) : null;
-      before.current = r?.ok ? await r.text() : "";
+      before.current = doc ? await loopApi(name).text(doc).catch(() => "") : "";
       setGot({ doc, text: before.current });
       if (doc) loaderSays();
       setTimeout(store.draw, 200);
@@ -64,7 +63,7 @@ export function DirectEdit({ name }) {
 }
 
 /** D824: a loop's problem cloned into a new loop of one's own. */
-export async function cloneDialog(name, owner) {
+async function cloneDialog(name, owner) {
   const L = loopApi(name, owner);                     // its owner's: one may clone a loop shared with one
   const permissions = me.role === "admin" ? (await L.api("/env")).advanced : {};
   const keep = hasPermissions(permissions);

@@ -671,7 +671,7 @@ def general_flows(r, watch):
                 r.check("changing representation keeps pass and pinned task", b.js("return document.querySelector('[aria-label=\"Live pass\"]').value==='all' && document.querySelector('.alt-detail').dataset.task==='1'"))
                 b.click('.alt-chip[data-chain="2"]')
                 b.wait("document.querySelector('.alt-chip.sel')?.textContent==='2'", what="pass 2's flow")
-                r.check("a running pass shows the boxes still to come as waiting, an agent's box with its pill", b.js("return !!document.querySelector('.alt-flow-box[data-box=design] .alt-glow') && [...document.querySelectorAll('.alt-flow-box[data-box=design] .alt-ai-box-text')].some(t=>t.textContent==='ai') && !!document.querySelector('.alt-flow-box[data-box=check] .alt-box.wait') && !!document.querySelector('.alt-flow-box[data-box=measure] .alt-box.wait')"))
+                r.check("a running pass shows the boxes still to come as waiting, an agent's box with its pill", b.js("return !!document.querySelector('.alt-flow-box[data-box=design] .alt-glow') && [...document.querySelectorAll('.alt-flow-box[data-box=design] .alt-ai-box-text')].some(t=>t.textContent==='AI') && !!document.querySelector('.alt-flow-box[data-box=check] .alt-box.wait') && !!document.querySelector('.alt-flow-box[data-box=measure] .alt-box.wait')"))
                 b.wait("document.querySelector('.alt-flow-box[data-box=choose] .alt-box-note')", what="Choose objective note")
                 r.check("long objective notes sit below Choose, stay inside the box, and expose their full text on hover", b.js("""const box=document.querySelector('.alt-flow-box[data-box=choose]'), note=box.querySelector('.alt-box-note');
                   const n=note.getBoundingClientRect(), t=box.querySelector('.alt-box-title').getBoundingClientRect(), r=box.querySelector('.alt-box').getBoundingClientRect();
@@ -1789,9 +1789,9 @@ objectives: [{metric: timings.fast, goal: 15, direction: minimize},
             r.check("file markup and Unicode paths render literally", b.js(f"return document.querySelector('{EDITOR}').value") == text
                     and b.js("return document.querySelector('.viewer-head .path-crumbs').innerText").endswith(path))
             markdown = "| unfinished\ncontinued **bold**\n# Heading\n" + text + "\n```text\n<script>literal code</script>\n```"
-            # D1095: Markdown is a component, drawn into a node of its own
-            rendered = b.ajs("""const [text, done] = arguments; Promise.all([import('/static/components/Markdown.js'), import('/static/view.js')]).then(([{Markdown}, {html, node}]) => {
-                const el = node(html`<${Markdown} text=${text} />`); el.id = 'general-markdown'; document.querySelector('#main').append(el);
+            # D1095: Markdown is a component, drawn into a node of its own (D1130: rendered there)
+            rendered = b.ajs("""const [text, done] = arguments; Promise.all([import('/static/components/Markdown.js'), import('/static/view.js')]).then(([{Markdown}, {html, render}]) => {
+                const el = document.createElement('div'); render(html`<${Markdown} text=${text} />`, el); el.id = 'general-markdown'; document.querySelector('#main').append(el);
                 requestAnimationFrame(() => done({text: el.textContent, bold: !!el.querySelector('strong'),
                   code: !!el.querySelector('pre'), active: !!el.querySelector('img, script, iframe, [onerror]'),
                   injected: !!window.__uiInjected}));

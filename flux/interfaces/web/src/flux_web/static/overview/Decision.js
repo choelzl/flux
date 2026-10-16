@@ -3,9 +3,8 @@
 // Results table draws them (its columns and values shared); the last pass that decided.
 
 import { Ago, Card, Empty, html } from "../view.js";
-import { plural } from "../format.js";
+import { num, plural } from "../format.js";
 import { dictionaryClasses, designLabels, measurementLabels, measurementText } from "../results/preferences.js";
-import { num4 } from "../charts/marks.js";
 import { GroupRow, MeasurementHeader, VerdictBadge, useColumns, useValuesMode } from "../results/columns.js";
 import { MainNumbers } from "./parts.js";
 import { useLoop } from "../loop/context.js";
@@ -39,7 +38,7 @@ function BestTable({ r, n, comparison, unit }) {
         <td class="muted">${d.decision ? "★" : String(i + 1)}</td>
         <td class="mono" title=${`${d.name} · ${d.shown}${d.last ? " · " + d.last : ""}`}><span class=${`table-design-name${(d.base || d.name).includes("#") ? " design-id" : ""}`} title=${d.name}>${names.get(d)}</span></td>
         <td class="status-column"><${VerdictBadge} verdict=${d.verdict} reason=${d.why.join("; ")} /></td>
-        ${metrics.map(m => { const ok = d.meets[m], display = measurementText(d, m, comparison, num4, values.relative);
+        ${metrics.map(m => { const ok = d.meets[m], display = measurementText(d, m, comparison, num, values.relative);
           return html`<td class=${`num mono${hid(m)}${dict.get(m) || ""}${ok === true ? " meets" : ok === false ? " misses" : ""}`}
             title=${`${display.title}${unit[m] ? " · " + unit[m] : ""}${ok === true ? " · meets the limit" : ok === false ? " · misses the limit" : ""}`}>${display.text}</td>`; })}</tr>`)}<//></div>`;
 }

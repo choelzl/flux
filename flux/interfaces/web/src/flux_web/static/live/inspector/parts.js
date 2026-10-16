@@ -3,6 +3,7 @@
 
 import { AGENT_COLOR, WORK_COLORS as COLORS, phaseKind } from "../work_style.js";
 import { candidateOf, ranFor, taskLabel } from "../views.js";
+import { num } from "../../format.js";
 
 export const turnOf = n => String(n.params?.turn || n.name);          // D1050: a wrapper's taken-in turn
 export const isAgent = n => /^\s*agent\s*:/i.test(turnOf(n));
@@ -40,8 +41,7 @@ export function failingOf(text) {
   return m ? { failing: Number(m[1]), of: m[2] != null ? Number(m[2]) : null, index: m.index } : null;
 }
 export const meanOf = d => { const xs = Object.values(d || {}).filter(x => typeof x === "number"); return xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null; };
-export const fmt = v => Math.abs(v) >= 100 ? String(Math.round(v * 10) / 10) : Math.abs(v) >= 1 ? v.toFixed(2).replace(/\.?0+$/, "") : Number(v.toPrecision(2)).toString();
-export const cell = v => v == null ? "—" : typeof v === "object" ? Object.entries(v).map(([k, x]) => `${k} ${typeof x === "number" ? fmt(x) : x}`).join(" · ") : fmt(v);
+export const cell = v => v == null ? "—" : typeof v === "object" ? Object.entries(v).map(([k, x]) => `${k} ${typeof x === "number" ? num(x) : x}`).join(" · ") : num(v);
 
 /** D1065: the document's checks a check stopped at a failure never reached. */
 export const notReached = (n, tests = []) => n.failed && tests.length && (n.kids || []).some(k => k.failed)
@@ -62,7 +62,7 @@ export function summaryOf(x) {
     const out = stdoutOf(l), f = failingOf(out);
     if (f) return `${f.failing} failing${f.of != null ? ` of ${f.of}` : ""}`;
     const m = Object.entries(metricsOf(out)).slice(0, 2);
-    if (m.length) return m.map(([k, v]) => `${k} ${fmt(v)}`).join(", ");
+    if (m.length) return m.map(([k, v]) => `${k} ${num(v)}`).join(", ");
   }
   return running(x) ? "running" : "";
 }

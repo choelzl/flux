@@ -10,9 +10,10 @@ import { Act } from "../components/Act.js";
 import { Diff } from "../components/Diff.js";
 import { Conversation } from "../components/Conversation.js";
 import { Pill } from "../components/Tone.js";
+import { AUTHOR_FAILED } from "../configure/byagent/parts.js";
 
 /** `st` what /author said (null or never: nothing); `onStop` for whoever may stop it. */
-export function AuthoringCard({ name, st, onStop = null }) {
+function AuthoringCard({ name, st, onStop = null }) {
   if (!st || !st.ever) return null;
   const running = st.running, progress = st.progress, f = progress?.fields || {};
   const elapsed = st.elapsed_s ?? Math.max(0, (st.ended || Date.now() / 1000) - (st.started || Date.now() / 1000));
@@ -26,7 +27,7 @@ export function AuthoringCard({ name, st, onStop = null }) {
     ${st.connection_error ? html`<${Notice} tone="run" cls="author-connection" what="Reconnecting to the agent's status" why=${st.connection_error} />`
       : running ? html`<p class="muted small author-heartbeat">Agent process is alive · status checked <${Ago} t=${st.observed || Date.now() / 1000} /></p>` : ""}
     ${running ? html`<p class="muted small author-output-age">${f.output ? `Agent output: ${f.output}` : st.log_at ? html`Log last updated <${Ago} t=${st.log_at} />. Waiting for streamed agent output.` : "Waiting for the first agent output."}</p>` : ""}
-    ${f.status ? html`<p class="callout author-agent-status">${f.status}</p>` : ""}${f["rate limit"] ? html`<${Notice} tone="warn" what="Rate limit" why=${f["rate limit"]} />` : ""}
+    ${f.status ? html`<${Notice} tone=${running ? "run" : "none"} cls="author-agent-status" what=${f.status} />` : ""}${f["rate limit"] ? html`<${Notice} tone="warn" what="Rate limit" why=${f["rate limit"]} />` : ""}
     ${f.agent || f["tokens (reported)"] ? html`<p class="muted small">${[f.agent, f["tokens (reported)"]].filter(Boolean).join(" · ")}</p>` : ""}
     ${steps.length ? html`<${Conversation} steps=${steps} k=${`author-${name}-${st.started}`} offset=${Math.max(0, (f["steps total"] || steps.length) - steps.length)} live=${running} scroll />`
       : f["tool calls"] ? html`<pre class="val small">${f["tool calls"]}</pre>` : ""}
@@ -34,8 +35,8 @@ export function AuthoringCard({ name, st, onStop = null }) {
     ${st.prompt ? html`<details key="prompt" data-author-section="prompt"><summary class="muted">What it was asked</summary><pre class="val small">${st.prompt}</pre></details>` : ""}
     <details data-author-section="log" open=${!progress}><summary>Creation log</summary><pre class="log small author-log" data-k="author-log">${(st.log || []).join("\n") || "No log output received yet."}</pre></details>
     ${!running && st.revise && st.before && st.after && st.before !== st.after ? html`<details class="blk" open><summary>${`What it changed in ${st.revise}`}</summary><${Diff} ops=${lineDiff(st.before, st.after)} /></details>` : ""}
-    ${!running && !st.ok && !st.connection_error ? html`<${Notice} tone="bad" what="No document that passes its checks" why="read the agent's log above, then try again or write the document yourself" />` : ""}
-    ${running && onStop ? html`<div class="form-actions"><${Act} cls="danger" onClick=${onStop}>Stop the agent<//></div>` : ""}<//>`;
+    ${!running && !st.ok && !st.connection_error ? html`<${Notice} tone="bad" what=${AUTHOR_FAILED[0]} why=${AUTHOR_FAILED[1]} />` : ""}
+    ${running && onStop ? html`<div class="form-actions"><${Act} cls="danger" onClick=${onStop}>Stop<//></div>` : ""}<//>`;
 }
 
 /** D704: an agent writing (or revising) the problem, on the Overview -- followed every 3 s while it runs (or the

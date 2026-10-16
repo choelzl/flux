@@ -10,6 +10,7 @@ import { useAutosave } from "../components/Autosave.js";
 import { EnvEditor, EnvTable } from "../components/Env.js";
 import { recall, remember } from "../stored.js";
 import { Pill } from "../components/Tone.js";
+import { Tabs } from "../components/Tabs.js";
 
 const SETTING_LABELS = { FLUX_REMOTE_BASE_URL: "Endpoint URL", FLUX_REMOTE_MODEL: "Model", FLUX_LLM_TIMEOUT_S: "Seconds per request",
   FLUX_REMOTE_AT_ONCE: "Requests at once on its endpoint (every loop; 0: no limit)", FLUX_REMOTE_API_KEY: "Key", FLUX_DEFAULT_AGENT: "Agent" };
@@ -84,9 +85,8 @@ export function SettingsForm({ st, server = null, save, scope, agentEnv = null, 
         ${vars.server && vars.server.length ? html`<div><p class="muted small">Server's, under yours:</p>
           <${EnvTable} rows=${vars.server.map(x => ({ ...x, from: "the server" }))} shadowed=${new Set(vars.rows.map(x => x.name))} /></div>` : ""}`) : ""}</fieldset>` };
   });
-  return html`<div class="subtabs set-tabs" role="tablist">${tabs.map(t => { const set = groups.some(x => x.tab === t && x.own);
-      return html`<button type="button" role="tab" class=${t === cur ? "on" : ""} aria-selected=${t === cur ? "true" : "false"} title=${set ? "has settings of its own" : null}
-        onClick=${() => pick(t)}>${t}${set ? html`<span class="set-dot" aria-label="set"> •</span>` : ""}</button>`; })}</div>
+  return html`<${Tabs} cls="subtabs set-tabs" on=${cur} pick=${pick} items=${tabs.map(t => groups.some(x => x.tab === t && x.own)
+      ? [t, t, html`<span class="set-dot" aria-label="set"> •</span>`, "has settings of its own"] : [t, t])} />
     <div class="set-groups">${groups.map(x => x.el)}
       ${extraTabs.map(x => html`<div class="set-extra" key=${x.tab} hidden=${x.tab !== cur}>${x.el}</div>`)}</div>`;
 }

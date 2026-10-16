@@ -5,7 +5,7 @@
 import { Empty, html, useState } from "../view.js";
 import { enc } from "../ui.js";
 import { can, me, pageRefresh } from "../state.js";
-import { num4 } from "../charts/marks.js";
+import { num } from "../format.js";
 import { mainMeasurements, measurementText, relativeMeasurement } from "../results/preferences.js";
 import { startLoop, stopLoop, restartLoop } from "../loops.js";
 import { Act } from "../components/Act.js";
@@ -41,7 +41,7 @@ function Best({ l, name, owner }) {
   if (!s.best) return null;
   return mainMeasurements(at, s.metrics || Object.keys(s.best.measurements || { [s.best.metric]: s.best.value }), s.main_metrics || [s.best.metric]).map(metric => {
     const m = s.best.measurements?.[metric] || (metric === s.best.metric ? s.best : { value: null });
-    const display = measurementText({ shown: s.best.stage || "" }, metric, () => m, num4, relativeMeasurement(at, metric));
+    const display = measurementText({ shown: s.best.stage || "" }, metric, () => m, num, relativeMeasurement(at, metric));
     return html`<div class=${m.meets === false ? "misses" : m.meets === true ? "meets" : ""} data-summary-metric=${metric} title=${`the decision, ${s.best.design} · ${display.title}`}>
       <span class="muted">${metric + " "}</span>${display.text || "—"}</div>`;
   });

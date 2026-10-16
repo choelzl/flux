@@ -54,7 +54,7 @@ export function guessLang(text) {
   return "";
 }
 
-export const MAX_CHARS = 400000;
+const MAX_CHARS = 400000;
 
 /** D1095: the text as tokens -- [class, text] each, class "" for plain text -- drawn as spans by the components
     (components/Markdown.js Code and Prose, components/CodeEditor.js). */

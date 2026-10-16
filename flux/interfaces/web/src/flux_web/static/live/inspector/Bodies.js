@@ -5,7 +5,7 @@ import { html } from "../../view.js";
 import { bytes, dur } from "../../format.js";
 import { WORK_COLORS as COLORS, phaseKind } from "../work_style.js";
 import { Block, Fold, Pre, StepRow, Stream } from "./bits.js";
-import { bestOf, candidateOf, cell, colorOf, dictsOf, failingOf, fieldsOf, fmt, isTool, linesOf, meanOf, measured, metricsOf, notReached,
+import { bestOf, candidateOf, cell, colorOf, dictsOf, failingOf, fieldsOf, isTool, linesOf, meanOf, measured, metricsOf, notReached,
   running, stdoutOf, taskLabel, tidyCommand, usualOf } from "./parts.js";
 import { Fact, Facts, Pill, Tag } from "../../components/Tone.js";
 import { Table } from "../../components/Table.js";
@@ -127,7 +127,7 @@ export function CriticBody({ n }) {
   return html`<div class="task-inspector">
     ${verdict ? html`<div class="alt-verdict"><${Pill} tone=${agreed ? "ok" : /^rejected/i.test(verdict) ? "bad" : "warn"}>${agreed ? "No objection" : /^rejected/i.test(verdict) ? "Rejected" : "Objection"}<//>${agreed ? "" : html`<span>${verdict}</span>`}</div>` : ""}
     ${subject ? html`<div><div class="alt-label">Subject</div>${m ? html`<div class="alt-verdict"><${Tag} k=${COLORS.choose}>${m[1].trim()}<//>
-      <span class="mono muted small">${Object.entries(numbers).map(([k, v]) => `${k} ${fmt(v)}`).join(" · ")}</span></div>` : html`<div class="mono">${subject}</div>`}</div>` : ""}</div>`;
+      <span class="mono muted small">${Object.entries(numbers).map(([k, v]) => `${k} ${cell(v)}`).join(" · ")}</span></div>` : html`<div class="mono">${subject}</div>`}</div>` : ""}</div>`;
 }
 
 /** Any other task: its own box's steps (D1029) with what each gave, the checks it never reached (D1066); no

@@ -4,9 +4,9 @@
 // (`scope`, of `styles`); the others are drawn, hollow when they miss one. `rows`: designPoints().
 
 import { Empty, html } from "../view.js";
-import { plural } from "../format.js";
+import { num, plural } from "../format.js";
 import { baselinePoints, bestSeries, inScope } from "./data.js";
-import { Legend, Mark, Ring, niceTicks, num4, pointTitle, stylesOf, timeEnds } from "./marks.js";
+import { Legend, Mark, Ring, niceTicks, pointTitle, stylesOf, timeEnds } from "./marks.js";
 
 const W = 560, H = 190, L = 58, R = 12, T = 14, B = 26;
 
@@ -40,18 +40,18 @@ export function BestChart({ rows, obj, passes, styles, groups: given, scope: cho
   const agg = obj.aggregate && obj.aggregate !== "none" ? ` (${obj.aggregate})` : "";      // D1094: a dictionary's one number says what it is
   return html`<figure class=${`chart-box${cls ? " " + cls : ""}`}>
     <figcaption><strong>${obj.metric + agg}</strong><span class="muted">${` ${maxi ? "higher" : "lower"} is better${obj.stage && obj.stage !== "deepest" ? " · at " + obj.stage : ""} · `}</span>
-      ${said ? html`<span class="best-said">${said}</span>` : html`<span class="muted">${`best so far${sw} `}</span><strong class="best-said">${num4(best)}</strong>`}
+      ${said ? html`<span class="best-said">${said}</span>` : html`<span class="muted">${`best so far${sw} `}</span><strong class="best-said">${num(best)}</strong>`}
       ${legend ? html` <${Legend} S=${S} rejected=${pts.some(p => p.verdict === "rejected")} pending=${pts.some(p => p.pending)} baseline=${refs.length > 0} />` : ""}</figcaption>
-    <svg viewBox=${`0 0 ${W} ${H}`} class="chart best-chart" role="img" aria-label=${`${obj.metric}: ${said || `best feasible search design so far${sw} ${num4(best)}`}`}>
+    <svg viewBox=${`0 0 ${W} ${H}`} class="chart best-chart" role="img" aria-label=${`${obj.metric}: ${said || `best feasible search design so far${sw} ${num(best)}`}`}>
       <line x1=${L} x2=${W - R} y1=${H - B} y2=${H - B} class="axis" />
-      ${niceTicks(lo, hi).map(v => html`<line x1=${L} x2=${W - R} y1=${y(v)} y2=${y(v)} class="grid" /><text x=${L - 6} y=${y(v) + 4} class="tick" text-anchor="end">${num4(v)}</text>`)}
+      ${niceTicks(lo, hi).map(v => html`<line x1=${L} x2=${W - R} y1=${y(v)} y2=${y(v)} class="grid" /><text x=${L - 6} y=${y(v) + 4} class="tick" text-anchor="end">${num(v)}</text>`)}
       ${(passes || []).map(p => passX(p.when)).filter(v => v != null).map(v => html`<line x1=${v} x2=${v} y1=${T} y2=${H - B} class="pass" />`)}
       ${obj.goal != null ? html`<line x1=${L} x2=${W - R} y1=${y(obj.goal)} y2=${y(obj.goal)} class="limit" />
-        <text x=${W - R} y=${y(obj.goal) - 4} class="tick limit-t" text-anchor="end">${`${maxi ? "≥" : "≤"} ${num4(obj.goal)}`}</text>` : ""}
+        <text x=${W - R} y=${y(obj.goal) - 4} class="tick limit-t" text-anchor="end">${`${maxi ? "≥" : "≤"} ${num(obj.goal)}`}</text>` : ""}
       ${refs.map(p => html`<line x1=${L} x2=${W - R} y1=${y(p.v)} y2=${y(p.v)} class="baseline-ref" data-value=${p.v} data-group=${p.group}>
-        <title>${`${p.name} · Baseline (pass 0) · ${obj.metric} ${num4(p.v)} at ${p.stage}`}</title></line>`)}
+        <title>${`${p.name} · Baseline (pass 0) · ${obj.metric} ${num(p.v)} at ${p.stage}`}</title></line>`)}
       ${pts.map((p, i) => html`<${Mark} st=${S.of(p.group)} x=${xi(i)} y=${y(p.v)} r=${3} attrs=${{ class: `pt ${p.verdict}${p.decision ? " decided" : ""}${counts(p) ? "" : " out"}`, "data-name": p.name, "data-group": p.group }}>
-        <title>${pointTitle(p, [`${obj.metric} ${num4(p.v)} at ${p.stage}`, new Date(p.t * 1000).toLocaleString()])}</title><//>`)}
+        <title>${pointTitle(p, [`${obj.metric} ${num(p.v)} at ${p.stage}`, new Date(p.t * 1000).toLocaleString()])}</title><//>`)}
       ${pts.map((p, i) => p.decision ? html`<${Ring} x=${xi(i)} y=${y(p.v)} r=${3} />` : "")}
       ${path ? html`<path d=${path} class="best" />` : ""}
       <text x=${(W + L - R) / 2} y=${H - 8} class="tick" text-anchor="middle">${`${plural(n, "design")}, in order`}</text>
