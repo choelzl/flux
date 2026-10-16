@@ -380,8 +380,8 @@ says `type: dict` for has no number of its own: an objective names one of its te
 | `exploration_quota` | `0.0` | Least share (0..1) of search choices kept for exploring |
 | `explore_every` | `4` | Every Nth draft starts fresh rather than from the best |
 | `explore_after` | `2` | Stalled passes before exploring |
-| `agent_continues` | `3` | Times a design agent's session is continued past its time limit (the last one is told so); then a final short turn to hand in the design (`agent_grace_s`), and only if it writes nothing does the pass give up, without a design, its notes on the record |
-| `agent_grace_s` | a fifth of the agent's time limit, 60–300 s | After the continues are used up, one short final turn in the same session to hand in the design as it stands — no more experiments. What it writes is checked like any draft; `0` turns the final turn off. |
+| `agent_continues` | `3` | Times a design agent's session is continued past its time limit (the last one is told so). Then the design as it stands is handed in if the gate passes it; else a final short turn (`agent_grace_s`) whose only job is the gate; else the last file a `flux probe gate` passed in this design's turns. Only with none of these does the pass give up, without a design, its notes on the record |
+| `agent_grace_s` | a quarter of the agent's time limit, 300–600 s | The final turn after the continues: told the gate's failure on its file, one gate probe, no stages, no experiments; the last file the gate passed is offered to copy back. Its file is handed in when the gate passes it. `0` turns the final turn off (the passing file, if any, is still handed in) |
 | `explore` | `0` | Managed by the loop each pass; a value here has no effect |
 | `cooldown_after` | `3` | Build failures in a row before a part yields |
 | `patching` | `true` | Repair with edits rather than full rewrites |
