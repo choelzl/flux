@@ -156,3 +156,18 @@ def test_a_box_whose_result_a_critic_rejected_is_partial_not_failed():
       const cr = {id: 3, name: "critique: measurement", why: "d#3@esl", parent: null, t0: 1, t1: 2, failed: true, kids: []};
       return m.flowBoxes([st, st.kids[0], cr].map(node => ({node})), 2, false).find(b => b.key === "measure").state; }""")
     assert got == "part"
+
+
+def test_a_passs_own_setup_is_its_first_box():
+    """D1138: a pass's setup (the tools' gate, the parts, the library read) was in no box -- the graph left it out
+    while the tree drew its Setup line; it is the first box, and setup work inside another box's work stays there."""
+    got = run("""m => {
+      const mk = (id, name, parent, t0, t1 = t0 + 1) => ({id, name, parent, t0, t1, kids: []});
+      const gate = mk(1, "gate: tools", null, 0), parts = mk(2, "propose: decompose", null, 1), lib = mk(3, "knowledge: workbench", null, 2, null);
+      const gen = mk(4, "generation: x draft 1", null, 3), inner = mk(5, "knowledge: mentor", gen, 3.5);
+      gen.kids = [inner];
+      const b = m.flowBoxes([gate, parts, lib, gen, inner].map(node => ({node})), 2, true);
+      const s = m.flowBoxes([gate, parts].map(node => ({node})), null, false);
+      const setup = b.find(x => x.key === "setup");
+      return [b.map(x => x.key), setup.kind, setup.title, setup.state, setup.runs.map(n => n.id), s.map(x => x.key)]; }""")
+    assert got == [["setup", "search", "design", "check", "measure", "choose"], "setup", "Setup", "run", [1, 2, 3], ["Document", "Parts"]]

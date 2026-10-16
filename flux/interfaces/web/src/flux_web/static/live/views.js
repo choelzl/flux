@@ -95,7 +95,7 @@ export const passName = p => p == null ? "Setup" : Number(p) === 0 ? "Pass 0 · 
 export const passShort = p => p == null ? "S" : Number.isInteger(Number(p)) ? String(p) : "R";
 
 // the boxes of each flow, in order; a pass shows the boxes it is still to reach as waiting
-const SETUP_BOXES = [["Document", n => /^(validate|gate)\b/i.test(n.name)], ["Library", n => /^(knowledge|records)\b/i.test(n.name)],
+const SETUP_BOXES = [["Document", n => /^(validate|gate)\b/i.test(n.name)], ["Parts", n => /^(propose:\s*decompose|critique:\s*decomposition)/i.test(n.name)], ["Library", n => /^(knowledge|records)\b/i.test(n.name)],
   ["Papers", n => /digest|paper/i.test(n.name)], ["Plan", n => /^plan\b/i.test(n.name)]];
 const PASS_KINDS = ["plan", "search", "design", "check", "measure", "choose"];   // D1054: a pass that planned (its part) shows it      // D1034: a critique is in the box it judges
 
@@ -184,6 +184,11 @@ export function flowBoxes(rows, p, running, notes = []) {
     b.runs.inBox = inBox;
   }
   if (kind === "baseline" && boxes.length && boxes.every(b => ["ok", "part"].includes(boxState(b.runs)))) boxes.push({ key: "record", title: "Record", kind: "setup", runs: [], done: true });
+  // D1138: the pass's own setup (the tools' gate, the parts, the library read, the workbench) is its first box,
+  // as the tree's Setup line -- the setup work no other box's work holds
+  const ids = new Set(rows.map(r => r.node.id));
+  const setup = runsOf(rows, n => boxKind(n) === "setup" && !(n.parent && ids.has(n.parent.id) && boxKind(n.parent) !== "setup"));
+  if (setup.length) boxes.unshift({ key: "setup", title: workLabel("setup"), kind: "setup", runs: setup, notes: [] });
   const times = stretches(rows);
   // D1054: a design counts its tries, as its list and the tree do; another box, its stretches of work
   return boxes.map(b => ({ ...finish(b), ...(b.kind === "design" ? { count: triesOf(b.runs) } : times[b.key] ? { count: times[b.key] } : {}) }));

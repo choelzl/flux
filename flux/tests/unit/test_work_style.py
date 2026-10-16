@@ -67,3 +67,16 @@ def test_the_climb_through_the_stages_is_measure_work():
     from flux_web.timeline import kind_of
 
     assert kind_of("evaluation", "the measured designs taken through the stages") == "measure"
+
+
+def test_an_agents_turn_taken_into_its_draft_is_agent_activity_while_it_runs():
+    """D1138: a draft that took in its first agent or model turn (D1050: `params.turn`, no task of its own) had no
+    overlay on the timeline while the agent worked -- only its later turns, tasks named `agent:`, had one."""
+    got = run("""m => {
+      const draft = {name: "generation: x draft 1", why: "x#1", params: {turn: "agent: claude"}, t0: 0, t1: null, kids: []};
+      const plain = {name: "generation: x draft 2", why: "x#2", t0: 0, t1: null, kids: []};
+      const model = {name: "plan: the loop", params: {turn: "llm: plan"}, t0: 0, t1: 5, kids: []};
+      const tool = {name: "tool:check.py", why: "test x#1", t0: 1, t1: 2, kids: [], parent: draft};
+      const now = 10, end = n => n.t1 ?? now;
+      return [m.aiWorking(draft), m.aiWorking(plain), m.aiWorking(model), m.aiWorking(tool), m.ownSpans(draft, end)]; }""")
+    assert got == [True, False, True, True, [[0, 10]]], "the running turn's activity is drawn up to now"

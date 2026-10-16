@@ -52,6 +52,13 @@ export function phaseKind(node) {
   return agent ? "design" : "setup";
 }
 
+/** True when an agent or the model works in this task or one it is under (D978: the overlay). D1050: a wrapper
+    that took in its one turn (a draft, a critique) is that turn -- `params.turn` says so from the turn's start. */
+export function aiWorking(node) {
+  for (let p = node; p; p = p.parent) if (/^\s*(agent|llm|model)\b/i.test(String(p.params?.turn || p.name))) return true;
+  return false;
+}
+
 /** A task's own time, as Live draws it: from its start to its end less the time its children
     ran (side by side counted once); a task with no children is its whole span. `end(n)` is a
     task's end, or now while it runs. */

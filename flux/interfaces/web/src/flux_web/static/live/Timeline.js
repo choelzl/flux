@@ -5,11 +5,9 @@
 import { cx, html } from "../view.js";
 import { Close } from "../components/Head.js";
 import { dur } from "../format.js";
-import { WORK_COLORS as COLORS, AGENT_COLOR, ownSpans, phaseKind, workLabel } from "./work_style.js";
+import { WORK_COLORS as COLORS, AGENT_COLOR, aiWorking, ownSpans, phaseKind, workLabel } from "./work_style.js";
 import { taskState as state } from "./model.js";
 import { passShort, taskLabel } from "./views.js";
-
-const agentActive = n => { for (let p = n; p; p = p.parent) if (/^agent:/i.test(p.name)) return true; return false; };
 
 /** The tasks a click landed on, side by side; Escape or Close closes it (D981). */
 function Choice({ v, a }) {
@@ -34,7 +32,7 @@ export function Timeline({ v, a }) {
   const H = T + lanes.length * lane + B, X = t => L + (W - L - R) * (t - t0) / (t1 - t0);
   // the selected task painted last, so it stays visible where work ran side by side
   const order = segs.slice().sort((x, y) => (x.n.id === v.selected) - (y.n.id === v.selected) || (y.t1 - y.t0) - (x.t1 - x.t0));
-  const agents = segs.filter(x => agentActive(x.n));
+  const agents = segs.filter(x => aiWorking(x.n));
   const spans = new Map();
   for (const r of rows) { const p = v.membership.get(r.node.id) ?? null, sp = spans.get(p) || [Infinity, -Infinity]; spans.set(p, [Math.min(sp[0], r.node.t0), Math.max(sp[1], end(r.node))]); }
   const bands = [...spans.entries()].sort((x, y) => x[1][0] - y[1][0])

@@ -116,7 +116,13 @@ def starts(path: str) -> list[list[dict[str, Any]]]:
                         continue
                     if e.get("ev") == "hello" or not out:
                         out.append([])
-                    out[-1].append({k: (str(v)[:200] if k == "why" else v) for k, v in e.items() if k in _KEPT})
+                    kept = {k: (str(v)[:200] if k == "why" else v) for k, v in e.items() if k in _KEPT}
+                    turn = (e.get("params") or {}).get("turn") if isinstance(e.get("params"), dict) else None
+                    if turn:                               # D1138: a wrapper's taken-in turn (D1050), not its prompt
+                        kept["turn"] = str(turn)[:200]
+                    if e.get("ev") == "params" and not turn:
+                        continue
+                    out[-1].append(kept)
             # D1071: at most MAX_EVENTS kept, the oldest let go -- whole earlier starts first
             total = sum(len(x) for x in out)
             if total > MAX_EVENTS:
@@ -167,6 +173,9 @@ def _table(path: str, idx: int, events: list[dict[str, Any]]) -> dict[str, Any]:
                                "why": str(e.get("why") or "")[:200], "t0": float(e["t"]), "t1": None, "failed": False, "kids": 0}
                 if e.get("parent") in ph:
                     ph[e["parent"]]["kids"] += 1
+            elif e.get("ev") == "params" and e.get("id") in ph:
+                ph[e["id"]]["turn"] = e.get("turn") or ""
+                tb["agent"].clear()                        # D1138: its turn makes it, and what is under it, agent work
             elif e.get("ev") == "end" and e.get("id") in ph:
                 ph[e["id"]].update(t1=float(e["t"]), failed=bool(e.get("failed")))
         tb["n"] = len(events)
@@ -191,7 +200,7 @@ def _agent_in(tb: dict[str, Any], p: dict[str, Any]) -> bool:
     q = p
     while q is not None and q["id"] not in tb["agent"]:
         trail.append(q["id"])
-        if q["name"].lower().partition(":")[0].strip() == "agent":
+        if q["name"].lower().partition(":")[0].strip() == "agent" or q.get("turn", "").lower().partition(":")[0].strip() == "agent":
             active = True
             break
         q = tb["ph"].get(q["parent"])

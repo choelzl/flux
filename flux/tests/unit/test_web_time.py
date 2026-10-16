@@ -87,6 +87,20 @@ def test_agent_activity_overlaps_work_without_swallowing_builds_or_tests(tmp_pat
     assert not any(b["kind"] == "design" and b["t0"] < 12 and b["t1"] > 9 for b in t["bars"])
 
 
+
+def test_a_draft_that_took_in_its_agent_turn_is_agent_work_while_it_runs(tmp_path):
+    """D1138: a draft's first agent turn is the draft itself (D1050: a `params` event, its `turn`) -- agent work
+    from then, up to now while it runs, as the agent's own task is."""
+    p = tmp_path / "events.jsonl"
+    _journal(p, [{"t": 0, "ev": "hello", "pid": 1},
+                 {"t": 0, "ev": "start", "id": 1, "parent": None, "name": "generation: x draft 1", "why": "x#1"},
+                 {"t": 1, "ev": "params", "id": 1, "params": {"prompt": "long " * 100, "turn": "agent: claude"}},
+                 {"t": 2, "ev": "start", "id": 2, "parent": 1, "name": "tool:check.py", "why": "test x#1"}])
+    t = timeline(str(p), now=10, running=True)
+    bars = {b["phase"]: b for b in t["bars"]}
+    assert bars[1]["agent"] and bars[2]["agent"], "the draft and the check its agent runs are agent work"
+    assert t["running"] and max(b["t1"] for b in t["bars"]) == 10
+
 def test_existing_agent_journal_groups_builds_and_tests_without_an_agent_lane():
     from pathlib import Path
 
