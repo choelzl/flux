@@ -141,18 +141,19 @@ KEEPS = SLOW.replace(SLOW[SLOW.index("if mode == \"first\":"):], """if mode == "
     with open(here / "probes.txt", "a") as f:
         f.write(f"{code} {said}\\n")
     artifact.write_text("0\\n1\\n")
-time.sleep(30)                           # every turn past its limit, the final one too: it fixes nothing
+sys.exit(124)                            # every turn stopped at its time limit, as the loop reads one (rc 124), the
+                                         # final one too: it fixes nothing
 """)
 
 
-def _slow_task(tmp_path: Path, script: str, continues: int = 2, grace: float = 3):
+def _slow_task(tmp_path: Path, script: str, continues: int = 2, grace: float = 3, limit: float = 3):
     slow = tmp_path / "slow.py"
     slow.write_text(script)
     d = {"id": "digits", **json.loads(DIGITS.read_text())}
     d["flow"] = {**d.get("flow", {}), "generate": {"by": {
         "command": [sys.executable, str(slow), "first", "{prompt_file}", "{artifact}"],
         "resume": [sys.executable, str(slow), "resume", "{session}", "{answer}", "{artifact}"],
-        "output": "opencode", "timeout_s": 3}}}
+        "output": "opencode", "timeout_s": limit}}}
     d["budget"] = {"steps": 3, "repair_attempts": 2, "prototype": False, "agent_continues": continues, "agent_grace_s": grace}
     return TaskSpec.from_dict(d)
 
@@ -170,7 +171,9 @@ def test_out_of_time_with_a_design_that_passes_the_gate_hands_it_in_without_a_fi
 def test_out_of_time_after_breaking_a_design_hands_in_the_last_one_the_gate_passed(tmp_path):
     """D1104: a file that passed `flux probe gate` is kept; the final turn fixes nothing and times out again, so the
     kept one is handed in -- the pass has a design instead of a wasted turn."""
-    task = _slow_task(tmp_path, KEEPS)
+    # its turns end themselves as stopped (rc 124), so no limit is a clock on what they do: under load the gate probe
+    # in its first ran past a 3 s limit, and Python started past a 3 s final turn, killed before they wrote
+    task = _slow_task(tmp_path, KEEPS, grace=600, limit=600)
     said: list[str] = []
     out = run_loop(PromptProblem(task), request_for(task, db=str(tmp_path / "d.db")), proposer=None, log=said.append)
     assert (tmp_path / "probes.txt").read_text().startswith("0 GATE: passed"), (tmp_path / "probes.txt").read_text()
