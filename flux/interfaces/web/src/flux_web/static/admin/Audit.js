@@ -11,7 +11,7 @@ const GROUPS = [["Users and sign-in", ["login", "login refused", "add user", "ch
     "invite user", "password set from a link", "create group", "rename group", "group server access", "view as user", "return from view as"]],
   ["Runs", ["start", "stop", "restart", "restart requested", "restart failed", "note", "note removed", "stop all", "restart all",
     "restart all requested", "starts paused", "running limit", "kill container"]],
-  ["Loops and their files", ["loop by an agent", "configure", "write document", "problem revised by an agent",
+  ["Loops and their files", ["loop by an agent", "answered the author", "loop made from an agent's draft", "configure", "write document", "problem revised by an agent",
     "edit", "upload", "add files", "delete file", "move file", "delete app", "reset app", "asked about a loop", "invalidated a design", "restored a design", "rejected a result", "restored a rejected result", "queued an idea", "unqueued an idea", "clone loop", "empty loop",
     "document migrated", "rename loop", "transfer loop"]],
   ["Sharing and loop settings", ["share", "left a share", "variable", "settings", "advanced settings", "sandbox mounts"]],

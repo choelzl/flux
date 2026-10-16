@@ -95,6 +95,14 @@ class RunOptions(BaseModel):
     document: str | None = None          # D787: which of the loop's problems, when it has several
 
 
+class AnswerIn(BaseModel):                 # D1125: the answer to the author's question
+    text: str = Field(min_length=1, max_length=8000)
+
+
+class MakeIn(BaseModel):                   # D1122: a drafted loop made, with one cheap pass or none
+    first_pass: bool = False
+
+
 class Stop(BaseModel):
     now: bool = False
 

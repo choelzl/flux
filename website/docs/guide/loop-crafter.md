@@ -33,4 +33,5 @@ then run `flux task check FOLDER` and a bounded first pass.
 </div>
 
 <link rel="stylesheet" href="../../assets/crafter.css">
+<script src="../../assets/crafter-model.js"></script>
 <script src="../../assets/crafter.js"></script>

@@ -6,7 +6,12 @@ while the loop runs, followed through `runs/author.log` and `runs/author.json`, 
 the server like a run does.
 
 A revision keeps the loop's document name: the author is told to edit it in place, and a
-`problem.yaml` it writes instead is moved onto that name."""
+`problem.yaml` it writes instead is moved onto that name.
+
+D1125: the page follows the author's work as short lines (`activity`: what it read, wrote and ran, its check, a
+question and its answer), answers a question it asks (`answer`: a line in the inbox beside its journal), and
+reviews its decisions (`decisions`: its `decisions.json`, else read from the document). The author's skills are
+placed in its folder before it starts (D1123); they, its brief and its decisions never become the loop's files."""
 
 from __future__ import annotations
 
@@ -28,6 +33,9 @@ AUTHORS = {"opencode": "OpenCode", "claude": "Claude Code", "codex": "Codex", "m
 ATTACHED = ".attachments"
 WORK = ".author-work"                                   # the agent's copy of the loop's own files (D704)
 _NOT_THE_PROBLEMS = {"out", "runs", "workbench", ATTACHED, WORK, ".git", "__pycache__", ".flux-app.json"}
+#: The author's own, in its folder: its skills (flux_loop.skills.AGENT_DIRS), its brief, its decisions (D1123, D1124)
+_THE_AUTHORS = {".claude", ".opencode", ".agents", "AUTHOR-BRIEF.md", "decisions.json", ".flux-steps", ".flux-probes"}
+ACTIVITY_KEPT = 400                                     # the lines the page is sent
 
 
 def _work_directory(app_dir: Path, state: dict[str, Any]) -> Path:
@@ -88,6 +96,150 @@ def _progress(app_dir: Path, work: Path | None = None) -> dict[str, Any] | None:
             "fields": {k: v for k, v in fields.items() if k in allowed}}
 
 
+def _journal(app_dir: Path, st: dict[str, Any]) -> Path:
+    """Where the running author's activity and inbox are: its journal folder in its work copy."""
+    return _work_directory(app_dir, st) / "runs" / "author"
+
+
+def _tail_lines(path: Path, root: Path, limit: int = 256 * 1024) -> list[str]:
+    from .confine import open_read
+
+    try:
+        with open_read(path, root) as fh:
+            fh.seek(0, os.SEEK_END)
+            fh.seek(max(0, fh.tell() - limit))
+            return fh.read().decode("utf-8", "replace").splitlines()
+    except (OSError, ValueError):
+        return []
+
+
+def activity(app_dir: Path, st: dict[str, Any]) -> list[dict[str, Any]]:
+    """The author's work as lines (D1125): from its journal while it runs, from the copy kept once it ended."""
+    path = _journal(app_dir, st) / "activity.jsonl" if st.get("ended") is None else app_dir / "runs" / "author-activity.jsonl"
+    rows = []
+    for line in _tail_lines(path, app_dir):
+        try:
+            row = json.loads(line)
+        except ValueError:
+            continue
+        if isinstance(row, dict) and isinstance(row.get("k"), str) and isinstance(row.get("text"), str):
+            rows.append({k: row[k] for k in ("t", "k", "text", "tone", "by", "options", "wait_s") if k in row})
+    return rows[-ACTIVITY_KEPT:]
+
+
+def open_question(rows: list[dict[str, Any]], running: bool) -> dict[str, Any] | None:
+    """The author's question still waiting: its last `ask` with no answer after it, while it runs."""
+    if not running:
+        return None
+    for row in reversed(rows):
+        if row["k"] == "answer":
+            return None
+        if row["k"] == "ask":
+            if time.time() > float(row.get("t") or 0) + float(row.get("wait_s") or 0):
+                return None
+            return {"question": row["text"], "options": row.get("options") or [], "asked": row.get("t"), "wait_s": row.get("wait_s")}
+    return None
+
+
+def _now(progress: dict[str, Any] | None, question: dict[str, Any] | None) -> str:
+    """What the author is doing this moment, in a few words."""
+    if question:
+        return "waiting for your answer"
+    if not progress:
+        return "starting the agent"
+    phase = str(progress.get("phase") or "")
+    if phase.startswith("check"):
+        return "flux task check: the document, its files and tools"
+    steps = (progress.get("fields") or {}).get("steps") or []
+    last = steps[-1] if steps and isinstance(steps[-1], dict) else {}
+    if last.get("k") == "tool" and "out" not in last:
+        from flux_loop.author import _what
+
+        k, text = _what(last)
+        return {"read": "reading", "write": "writing", "run": "running", "list": "listing", "search": "searching"}.get(k, "using") + f" {text}"
+    return "thinking" if last.get("k") == "think" else "writing" if last.get("k") == "text" else "working"
+
+
+def _problem_files(root: Path) -> list[str]:
+    """The loop's own files under `root`, as the author leaves them: not its record, log, skills or brief."""
+    out = []
+    for p in sorted(root.rglob("*")):
+        rel = p.relative_to(root)
+        if (p.is_file() and not p.is_symlink() and rel.parts[0] not in _NOT_THE_PROBLEMS and rel.parts[0] not in _THE_AUTHORS
+                and "__pycache__" not in rel.parts and not p.name.endswith(".part-upload")):
+            out.append(rel.as_posix())
+        if len(out) >= 300:
+            break
+    return out
+
+
+def files_of(app_dir: Path, st: dict[str, Any]) -> list[dict[str, str]]:
+    """The new loop's files and who made them (D1125): `yours` the files given to read, `written` what the author
+    wrote or changed; a revision's untouched files are left out."""
+    yours = set(st.get("yours") or [])
+    if st.get("ended") is None:
+        work = _work_directory(app_dir, st)
+        rows = []
+        for rel in _problem_files(work) if work.is_dir() else []:
+            mine = app_dir / rel
+            if rel in yours:
+                rows.append({"path": rel, "by": "yours"})
+            elif not mine.is_file() or mine.read_bytes() != (work / rel).read_bytes():
+                rows.append({"path": rel, "by": "written"})
+        return rows
+    return ([{"path": p, "by": "written"} for p in st.get("written") or [] if p not in yours]
+            + [{"path": p, "by": "yours"} for p in sorted(yours) if (app_dir / p).is_file()])
+
+
+def decisions(app_dir: Path, document: str | None) -> dict[str, Any]:
+    """The draft's decisions (D1124): the author's `decisions.json` (kept as runs/author-decisions.json), else
+    read from the document -- `from` says which."""
+    import yaml
+
+    from flux_loop.author import decisions_of_document
+
+    got, why = read_decisions_at(app_dir / "runs" / "author-decisions.json")
+    if got:
+        return {"decisions": got, "from": "agent", "why": ""}
+    doc = None
+    if document and (app_dir / document).is_file():
+        try:
+            doc = yaml.safe_load((app_dir / document).read_text(errors="replace"))
+        except yaml.YAMLError:
+            doc = None
+    return {"decisions": decisions_of_document(doc), "from": "document", "why": why}
+
+
+def read_decisions_at(path: Path) -> tuple[list[dict[str, str]], str]:
+    """flux_loop.author.read_decisions on a file of any name."""
+    import tempfile
+
+    from flux_loop.author import DECISIONS, read_decisions
+
+    if not path.is_file() or path.is_symlink():
+        return [], f"no {DECISIONS}"
+    with tempfile.TemporaryDirectory() as d:
+        shutil.copyfile(path, Path(d) / DECISIONS)
+        return read_decisions(Path(d))
+
+
+def first_stage(app_dir: Path, document: str | None) -> str:
+    """The cheap pass's stage, in a word: `synth` when the first stage synthesises, else its name."""
+    import yaml
+
+    try:
+        doc = yaml.safe_load((app_dir / str(document)).read_text(errors="replace")) if document else None
+    except (OSError, yaml.YAMLError):
+        return ""
+    flow = doc.get("flow") if isinstance(doc, dict) and isinstance(doc.get("flow"), dict) else {}
+    measure = flow.get("measure")
+    if not isinstance(measure, dict) or not measure:
+        return ""
+    name, stage = next(iter(measure.items()))
+    command = stage.get("command") if isinstance(stage, dict) else stage
+    return "synth" if "synth" in str(command) else str(name)
+
+
 def available(env: dict[str, str], agents: dict[str, Any]) -> list[dict[str, Any]]:
     """Each author: the agents the server offers (D807: their program found), and Flux's own
     model, available when one is set."""
@@ -143,13 +295,17 @@ class Authoring:
         st["ever"] = True
         work = _work_directory(app_dir, st)
         st["progress"] = _progress(app_dir, work) or st.get("progress")
+        st["activity"] = activity(app_dir, st)
+        st["question"] = open_question(st["activity"], st["running"])
+        st["now"] = _now(st["progress"], st["question"]) if st["running"] else ""
+        st["files"] = files_of(app_dir, st)
         st["observed"] = time.time()
         st["elapsed_s"] = max(0, (st.get("ended") or st["observed"]) - st.get("started", st["observed"]))
         return st
 
     def start(self, *, app_dir: Path, workspace: Any, name: str, prompt: str, author: str, env: dict[str, str],
-              attachments: list[Path], revise: str | None, by: str) -> None:
-        """`revise`: the loop's document name, when it has one to revise."""
+              attachments: list[Path], revise: str | None, by: str, ask_me: bool = False) -> None:
+        """`revise`: the loop's document name, when it has one to revise; `ask_me`: the agent may ask (D1125)."""
         with self._lock:
             if not app_dir.is_dir():
                 raise ValueError("this loop has moved or been removed; reload it before starting an agent")
@@ -177,8 +333,18 @@ class Authoring:
                     shutil.copytree(p, work / p.name, symlinks=True, ignore=shutil.ignore_patterns("__pycache__", ".git"))
                 elif p.is_file():
                     shutil.copy2(p, work / p.name)
+            from flux_loop.author import DECISIONS, install_author_skills
+
+            kept = f["log"].parent / "author-decisions.json"
+            if revise and kept.is_file() and not kept.is_symlink():       # D1124: the decisions it keeps current
+                shutil.copyfile(kept, work / DECISIONS)
+            for old in ("author-activity.jsonl", "author-decisions.json"):
+                (f["log"].parent / old).unlink(missing_ok=True)
+            skills = install_author_skills(work)                          # D1123: placed here, seen in the sandbox
             flux = shutil.which("flux") or sys.argv[0]
             argv = [flux, "ask", ask, "--dir", str(work), "--no-run", "--author", author]
+            if ask_me:
+                argv += ["--questions", "operator"]
             for a in attachments:
                 argv += ["--file", str(a)]
             with open(f["log"], "a") as fh:
@@ -190,7 +356,8 @@ class Authoring:
             log.close()
             f["state"].write_text(json.dumps({"pid": proc.pid, "started": time.time(), "ended": None, "author": author,
                                               "prompt": prompt.strip()[:4000], "by": by, "revise": revise, "before": before,
-                                              "work_directory": work.name}))
+                                              "work_directory": work.name, "ask_me": bool(ask_me), "skills": skills,
+                                              "yours": sorted({f"library/{a.name}" for a in attachments})}))
         threading.Thread(target=self._wait, args=(proc, app_dir, workspace, name), daemon=True).start()
 
     def _wait(self, proc: subprocess.Popen, app_dir: Path, workspace: Any, name: str) -> None:
@@ -214,22 +381,26 @@ class Authoring:
             return st
         work = _work_directory(app_dir, st)
         st["progress"] = _progress(app_dir, work) or st.get("progress")  # keep the last evidence after work is removed
+        written: list[str] = []
         if work.is_dir():
             doc = document_path(work)
             revise = st.get("revise")
             if revise and doc.is_file() and doc.name != revise:
                 (work / revise).write_text(doc.read_text())          # the loop keeps its document's name
                 doc.unlink(missing_ok=True)
-            for p in sorted(work.rglob("*")):                        # the agent's files back into the loop
-                rel = p.relative_to(work)
-                if not p.is_file() or rel.parts[0] in _NOT_THE_PROBLEMS or p.name.endswith(".part-upload"):
-                    continue
-                target = app_dir / rel
+            from flux_loop.author import DECISIONS
+
+            for src, kept in ((work / DECISIONS, "author-decisions.json"), (work / "runs" / "author" / "activity.jsonl", "author-activity.jsonl")):
+                if src.is_file() and not src.is_symlink():          # D1124, D1125: the author's, kept in the log
+                    shutil.copyfile(src, f["log"].parent / kept)
+            for rel in _problem_files(work):                         # the agent's files back into the loop
+                p, target = work / rel, app_dir / rel
                 if target.is_file() and target.read_bytes() == p.read_bytes():
                     continue
                 target.parent.mkdir(parents=True, exist_ok=True)
                 target.unlink(missing_ok=True)                       # a linked file is replaced, not written through
                 shutil.copy2(p, target)
+                written.append(rel)
             shutil.rmtree(app_dir / WORK, ignore_errors=True)
         doc = document_path(app_dir)
         revise = st.get("revise")
@@ -239,11 +410,37 @@ class Authoring:
         if doc.is_file():
             workspace.set_meta(name, document=doc.name, id=name)      # D786: the loop's name is the id
         shutil.rmtree(app_dir / ATTACHED, ignore_errors=True)
-        st.update(ended=time.time(), rc=rc, ok=ok, document=doc.name if doc.is_file() else None,
+        st.update(ended=time.time(), rc=rc, ok=ok, document=doc.name if doc.is_file() else None, written=written or st.get("written") or [],
                   after=doc.read_text(errors="replace") if doc.is_file() else "")
         f["state"].write_text(json.dumps(st))
         st["running"] = False
         return st
+
+    def answer(self, app_dir: Path, by: str, text: str) -> str:
+        """The answer to the author's open question (D1125): a line in the inbox beside its journal, read as a run's
+        notes are (flux_feedback.InboxChannel)."""
+        import secrets
+
+        from .confine import append
+
+        st = self.state(app_dir)
+        if not st.get("running"):
+            raise ValueError("no agent is writing")
+        if not st.get("question"):
+            raise ValueError("the agent asks nothing now")
+        inbox = _journal(app_dir, st) / "inbox.jsonl"
+        append(inbox, json.dumps({"id": secrets.token_hex(6), "text": text.strip(), "by": by, "t": time.time()}) + "\n", app_dir)
+        return "answered: the agent carries on"
+
+    def made(self, app_dir: Path) -> None:
+        """D1122: the draft made a loop -- its authoring is history, no longer shown on the loop's Overview."""
+        f = self.files(app_dir)
+        try:
+            st = json.loads(f["state"].read_text())
+        except (OSError, ValueError):
+            return
+        st["made"] = time.time()
+        f["state"].write_text(json.dumps(st))
 
     def stop(self, app_dir: Path) -> str:
         st = self.state(app_dir)

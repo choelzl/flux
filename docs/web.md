@@ -63,14 +63,20 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
   Escape; **Cancel** stops it and discards a half-sent file. **Clear files** returns to empty
   creation. Errors are shown above the dialog.
 - **New loop › Configurator:** the form's **Loop name** is the loop's name and its problem's id.
-- **New loop › Agent:** name the loop, say what it should do, attach what it should read (spec,
-  reference model, tests, papers), pick the agent (OpenCode, Claude Code, Codex, Flux's model;
-  one not installed says so). It runs `flux ask --no-run` in the sandbox with your model
-  settings, writes the document and its files, and the document is checked; nothing runs. The
-  Overview follows it: elapsed time, phase (writing/repair/check), live thinking, replies, tool
-  calls, endpoint retries, creation log; process liveness and time since last output shown
-  separately (a quiet agent is not called failed). **Stop** ends the author. Review the
-  document before starting. Needs both Create and Run permissions.
+- **New loop › Agent** (D1122-D1125), four stages. **Ask:** the name, who drafts it (only the agents and models
+  offered for Ask), what the loop should do, the files it should read, **Ask me when the spec is unclear**; it
+  always starts from nothing, with what it can use listed: your files (the loop's `library/`), the shared library,
+  its skills (`flux-loop-creator`, `flux-loop-commands`) and the bundled loops, read only. **Drafting:** `flux ask
+  --no-run` in the sandbox with your model settings; its work as lines (what it read, wrote and ran, its check)
+  with the run glyph on what it does now; its question inline, its choices as buttons, a free answer, **You
+  decide**; the new loop's files tagged written or yours; **Stop**. **Review:** its decisions by the
+  configurator's steps (Prompt, Check & Measure, Objective, Who works, Extra), each with its one-line reason
+  (`decisions.json`; else read from the document); **Keep**, **Change** (the configurator at that step,
+  `?step=`), **Keep the rest**; a change asked of the agent revises the draft and shows as a diff on the
+  document. **Ready:** `flux task check` on the draft (passed, or what is missing), **Run one cheap pass when it
+  is made** (one pass, its first stage only), **Make the loop** or **Open in the configurator**. The loop
+  exists from Drafting on, a draft (`agent_draft`) until made; this browser remembers it, so the flow resumes;
+  **Discard the draft** deletes it. Needs both Create and Run permissions.
 - **New loop › Clone a loop** (or **Clone…** on a loop): a new loop of yours with its problem,
   none of its runs, its workbench when asked. Variables, sharing and admin overrides are not
   copied; it uses your account and server defaults. An admin cloning a loop with special
@@ -79,19 +85,30 @@ flux serve                           # http://127.0.0.1:8765/ ; --host 0.0.0.0 b
 
 ## The configurator
 
-The loop crafter inside the app (D826). Six steps, one at a time with **Back** / **Next**:
-**Prompt** (the problem), **Check & Measure**, **Objective**, **Graph** (who does each step),
-**Extra** (baseline, budget, settings to search, parts) and **Save** (review and save). **Save** is on every step when editing a loop. A checklist shows what is left.
+The loop crafter inside the app (D826, D1116), over the docs page's model (`crafter-model.js`).
+Six steps down the left, each with what it says in a line (ticked when visited and complete):
+**Prompt** (name, language, what to make, rules, the files), **Check & Measure**, **Objective**,
+**Graph** (the loop drawn as a cycle; a box opened shows who works it and its own settings, defaults
+greyed), **Extra** (settings to search, parts, baseline, parameters) and **Save** (where it stands,
+what is left, the changes, the document). The document stands beside the step with the step's lines
+lit; Graph and Save take the width. **Back** / **Next**; **Save** (or **Create loop**) on every step.
+An address opens a step: `#/configure?step=checks`, `#/app/NAME/settings/problem?step=graph`
+(`prompt`, `checks`, `objective`, `graph`, `extra`, `save`). On a phone the steps are a menu.
 
 - **Flux presets:** a check's Type and a measurement's Tool offer **Flux presets**, then a second
   **Preset** list (lint, the golden test, ORFS stages, program timing, ChampSim, ...): Flux's own
   prebuilt commands, nothing to add to the loop's folder.
-- **Files that go with it** (beside the form): the loop's own files; open, edit, write new, drop
-  files or folders, delete. A file named as `{home}/…` that the loop lacks is marked missing; a
-  click writes it.
-- What the form cannot express (own stages or settings, `params`, a failure pattern, objectives
-  with their own stage or tie) is kept as written and listed beside the file. Comments are not
-  kept.
+- **Files** (Prompt): the loop's own files, each said for what it is (named by a command, the
+  library, **the model reads it** -- a toggle for `knowledge.files`); open, edit, write new, drop
+  files or folders, delete. A file named as `{home}/…` that the loop lacks is marked missing (and
+  said on Prompt's line); a click writes it.
+- **Graph:** who does the work for the whole loop (No AI, A model, A coding agent and which one);
+  per box rules, a model, the agent (pink), off, or a script where Flux takes one (Design:
+  `generate: {command}` or a catalog of designs; Orchestrate: a search `command`); a critic per box
+  it judges (Orchestrate, Check, Choose); the loop's knobs beside the box they tune (designs per
+  pass, repairs, explore every/after, passes, time per pass, ...).
+- What the form cannot express (own stages or settings, a failure pattern, objectives with their
+  own stage or tie) is kept as written and listed on Save. Comments are not kept.
 - A save shows its line-by-line diff and writes only on confirm.
 - **Baseline / pass 0** (Extra step): **Provided metrics and values** adds metric/value rows and
   an optional stage (default: deepest), e.g. `baseline: {metrics: [{metric: time_ms, value: 12}]}`.
@@ -275,7 +292,8 @@ incomplete; no estimates.
   - **Maintenance:** run maintenance tasks on this loop.
 - **Problem:** **Configurator**, **Direct edit** (YAML as written, saved with its diff, files
   beside), or **Agent** (say what should change; it revises a copy of the loop's files, keeping
-  its name, and shows its diff; not while the loop runs, and the loop does not start meanwhile).
+  its name: its work as lines, its question answered there, then its diff; not while the loop runs, and the
+  loop does not start meanwhile).
 - **Advanced** (admins change, everyone sees): sandbox or host, memory, CPUs, processes, scratch
   size; **Allow parallel work** (D740: off, one tool and one part at a time, said in the log; on,
   `budget.workers` / `parallel_parts` decide); **Allow raw TCP/UDP** (off; next start; see

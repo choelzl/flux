@@ -426,6 +426,77 @@ def general_flows(r, watch):
 
     r.step("author progress", author_progress)
 
+    def new_loop_by_agent():
+        """D1122: New loop › Agent -- Ask (only Ask's agents, no "Start from", what it can use), Drafting (its work as
+        lines, its question answered from the page, the new loop's files), Review (decisions by the configurator's
+        steps, Keep, Change at that step, Keep the rest), Ready (the check said, one cheap pass, Make)."""
+        with loop(r, "ui-by-agent") as name:
+            r.page("#/configure/agent", "document.querySelector('#ag-name') && document.querySelector('.ba-uses li')", "New loop › Agent")
+            b.wait("document.querySelectorAll('.ba-uses li').length >= 3", what="what it can use")
+            uses = b.js("return [...document.querySelectorAll('.ba-uses li')].map(l => l.textContent)")
+            r.check("Ask says what the agent can use: your files, the shared library, its skills, the bundled loops",
+                    uses[0].startswith("Your files") and any("flux-loop-creator, flux-loop-commands" in u for u in uses)
+                    and uses[-1] == "The bundled loops, read only", str(uses))
+            r.check("Ask has no Start from: a draft starts from nothing", "Start from" not in r.text() and b.js("return document.querySelector('#ag-ask-me').checked"))
+            now = b.js("return Date.now()/1000")
+            state = {"ever": True, "running": True, "started": now - 12, "elapsed_s": 12, "author": "opencode", "by": "bob", "now": "waiting for your answer",
+                     "activity": [{"t": now - 10, "k": "read", "text": "spec.md"}, {"t": now - 8, "k": "list", "text": "applications/mul8"},
+                                  {"t": now - 5, "k": "ask", "text": "Which is right?\n- Signed (§2)\n- Unsigned (§4)", "options": ["Signed (§2)", "Unsigned (§4)"], "wait_s": 600}],
+                     "question": {"question": "Which is right?\n- Signed (§2)\n- Unsigned (§4)", "options": ["Signed (§2)", "Unsigned (§4)"], "asked": now - 5, "wait_s": 600},
+                     "files": [{"path": "library/spec.md", "by": "yours"}]}
+            decisions = {"from": "agent", "document": "problem.yaml", "first_stage": "synth", "decisions": [
+                {"step": "prompt", "what": "Statement from spec.md §2", "why": "the table in §2"},
+                {"step": "checks", "what": "Golden test with golden.py", "why": "the spec's equation"},
+                {"step": "objective", "what": "fmax ≥ 1600 MHz, then smallest area", "why": "your words"}]}
+            b.js("""window.__baFetch=window.fetch; window.__baState=arguments[1]; window.__baSent=[];
+              const base='/api/apps/'+arguments[0], reply=d=>new Response(JSON.stringify(d),{headers:{'Content-Type':'application/json'}}), dec=arguments[2];
+              window.fetch=async(u,o)=>{
+                const path=new URL(String(u),location.href).pathname, m=(o&&o.method)||'GET';
+                if(path===base+'/author' && m==='GET') return reply(window.__baState);
+                if(path===base+'/author/decisions') return reply(dec);
+                if(path===base+'/check') return reply({ok:false, output:'task x: x\\n  MISSING: golden.py beside the document'});
+                if(['/author/answer','/author/make'].some(p=>path===base+p)){ window.__baSent.push([path.slice(base.length), JSON.parse(o.body)]); return reply({ok:'sent'}); }
+                const response=await window.__baFetch(u,o);
+                if(path!==base || m!=='GET') return response;
+                const data=await response.json(); data.agent_draft=true; return reply(data);
+              };
+              localStorage.setItem('flux-byagent:bob', JSON.stringify({name: arguments[0], stage: 1, kept: {}, who: 'opencode', askMe: true})); return 1;""", name, state, decisions)
+            try:
+                r.page("#/configure/agent", "document.querySelector('.ba-question')", "Drafting with a question")
+                lines = b.js("return [...document.querySelectorAll('.ba-log .ba-line')].map(l => l.textContent.trim())")
+                r.check("Drafting shows its work as lines, the open question as the card, what it does now",
+                        lines[:2] == ["read spec.md", "listed applications/mul8"] and lines[-1] == "waiting for your answer…"
+                        and not any(x.startswith("asked") for x in lines), str(lines))
+                r.check("the new loop's files say who made them", "yours" in b.js("return document.querySelector('.ba-files').textContent"))
+                b.js("[...document.querySelectorAll('.ba-question button')].find(x => x.textContent === 'Signed (§2)').click(); return 1")
+                b.wait("window.__baSent.length === 1", what="the answer sent")
+                r.check("an answer is one of its choices, sent to the agent", b.js("return window.__baSent[0]") == ["/author/answer", {"text": "Signed (§2)"}])
+                b.js("Object.assign(window.__baState, {running: false, ok: true, ended: Date.now()/1000, document: 'problem.yaml', question: null, now: ''});"
+                     "window.__baState.files.unshift({path: 'problem.yaml', by: 'written'}); return 1")
+                b.wait("document.querySelector('.ba-nav button.primary:not([disabled])')", timeout=15, what="the draft done")
+                b.js("[...document.querySelectorAll('.ba-nav button')].find(x => x.textContent === 'Review the draft').click(); return 1")
+                b.wait("document.querySelectorAll('.ba-decision').length === 3", what="the decisions")
+                groups = b.js("return [...document.querySelectorAll('.ba-group h3')].map(h => h.textContent)")
+                r.check("Review groups the decisions by the configurator's steps", groups == ["Prompt", "Check & Measure", "Objective"], str(groups))
+                r.check("each decision says why, in the agent's words", "the table in §2" in b.js("return document.querySelector('.ba-decision .why').textContent"))
+                b.js("document.querySelector('.ba-decision button').click(); return 1")
+                b.wait("document.querySelector('.ba-decision.kept')", what="kept")
+                r.check("Check it waits until every decision is kept", b.js("return [...document.querySelectorAll('.ba-nav button')].find(x => x.textContent === 'Check it').disabled"))
+                b.js("[...document.querySelectorAll('.ba-nav button')].find(x => x.textContent === 'Keep the rest').click(); return 1")
+                b.wait("![...document.querySelectorAll('.ba-nav button')].find(x => x.textContent === 'Check it').disabled", what="all kept")
+                b.js("[...document.querySelectorAll('.ba-nav button')].find(x => x.textContent === 'Check it').click(); return 1")
+                said = b.wait("document.querySelector('.ba-check .g-bad') && document.querySelector('.ba-check').textContent", what="the check")
+                r.check("Ready says what the check found missing", "MISSING: golden.py" in said, said)
+                r.check("one cheap pass is offered, at its first stage", "Run one cheap pass when it is made (synth only)" in r.text())
+                r.clean("New loop › Agent")
+                b.js("[...document.querySelectorAll('.ba-nav button')].find(x => x.textContent === 'Make the loop').click(); return 1")
+                b.wait("window.__baSent.length === 2", what="made")
+                r.check("Make sends the cheap pass only on a check that passed", b.js("return window.__baSent[1]") == ["/author/make", {"first_pass": False}])
+            finally:
+                b.js("window.fetch=window.__baFetch; localStorage.removeItem('flux-byagent:bob'); return 1")
+
+    r.step("new loop by agent", new_loop_by_agent)
+
     def live_page():
         with loop(r, "ui-live-alt") as name:
             now = b.js("return Date.now()/1000")
@@ -1138,18 +1209,20 @@ objectives: [{metric: timings.fast, goal: 15, direction: minimize},
                 b.js(stub, name, payload)
                 page()
                 r.check("dictionary settings restore from the server with browser storage cleared", b.js("return !document.querySelector('.dictionary-select') && document.querySelector('.dictionary-expand').getAttribute('aria-pressed') === 'false' && document.querySelector('.show-hidden-columns').textContent === 'Hidden 1'"))
-                page("settings/problem", "document.querySelector('.flux-crafter .fc-stepbar')")
+                page("settings/problem", "document.querySelector('.cfg .cfg-rail')")
                 parsed = b.ajs("""const done = arguments[arguments.length - 1]; fetch('/api/apps/' + arguments[0] + '/document').then(r => r.json())
-                  .then(v => done({error: v.error, stages: window.FluxCrafter.fromDoc(v.raw, v.normal || v.raw).state.stages}));""", name)
-                r.check("dictionary definitions reach the crafter", bool(parsed["stages"] and parsed["stages"][0].get("dictMetrics")), parsed)
-                b.click('.fc-stepbar button[data-step="measure"]')
-                b.wait("[...document.querySelectorAll('.flux-crafter input')].some(i => i.value === 'timings')", what="dictionary crafter fields")
-                r.check("the crafter reads dictionary definitions as editable fields", b.js("return [...document.querySelectorAll('.flux-crafter input')].some(i => i.value === 'ms') && [...document.querySelectorAll('.flux-crafter button')].some(b => b.textContent === '+ Dictionary') && [...document.querySelectorAll('.flux-crafter select')].some(s => s.value === 'mean' && s.querySelector('option[value=median]'))"))
-                b.js("const s = [...document.querySelectorAll('.flux-crafter select')].find(s => s.value === 'mean' && s.querySelector('option[value=median]')); s.value = 'median'; s.dispatchEvent(new Event('change')); return 1")
-                b.click('.fc-stepbar button[data-step="objective"]')
-                b.wait("document.querySelector('.flux-crafter input[aria-label=Number]')", what="named-test objective editor")
-                b.js("const i = document.querySelector('.flux-crafter input[aria-label=Number]'); i.value = 'timings.slow'; i.dispatchEvent(new Event('input')); return 1")
-                r.check("named-test objectives and the chosen aggregate appear in the document preview", b.js("return document.querySelector('.flux-crafter').textContent.includes('aggregate: median') && document.querySelector('.flux-crafter').textContent.includes('timings.slow')"))
+                  .then(v => done({error: v.error, stages: window.FluxCrafterModel.fromDoc(v.raw, v.normal || v.raw).state.stages}));""", name)
+                r.check("dictionary definitions reach the configurator", bool(parsed["stages"] and parsed["stages"][0].get("dictMetrics")), parsed)
+                b.click('.cfg-rail button[data-step="checks"]')
+                b.wait("document.querySelector('.cfg[data-step=checks]')", what="Check & Measure")
+                b.js("[...document.querySelectorAll('.cfg-body .cfg-sec')][1].querySelector('.cfg-xhead').click(); return 1")      # the measurement opened
+                b.wait("[...document.querySelectorAll('.cfg-body input')].some(i => i.value === 'timings')", what="dictionary configurator fields")
+                r.check("the configurator reads dictionary definitions as editable fields", b.js("return [...document.querySelectorAll('.cfg-body input')].some(i => i.value === 'ms') && [...document.querySelectorAll('.cfg-body button')].some(b => b.textContent === '+ Dictionary') && [...document.querySelectorAll('.cfg-body select')].some(s => s.value === 'mean' && s.querySelector('option[value=median]'))"))
+                b.js("const s = [...document.querySelectorAll('.cfg-body select')].find(s => s.value === 'mean' && s.querySelector('option[value=median]')); s.value = 'median'; s.dispatchEvent(new Event('change')); return 1")
+                b.click('.cfg-rail button[data-step="objective"]')
+                b.wait("document.querySelector('.cfg-body input[aria-label=Number]')", what="named-test objective editor")
+                b.js("const i = document.querySelector('.cfg-body input[aria-label=Number]'); i.value = 'timings.slow'; i.dispatchEvent(new Event('input')); return 1")
+                r.check("named-test objectives and the chosen aggregate appear in the document beside the step", b.js("return document.querySelector('.cfg-docside pre.cfg-yaml').textContent.includes('aggregate: median') && document.querySelector('.cfg-docside pre.cfg-yaml').textContent.includes('timings.slow')"))
                 r.clean("dictionary metrics and preferences")
             finally:
                 b.js("window.fetch = window.__dictionaryFetch; localStorage.removeItem('flux-results:' + JSON.stringify(['bob', 'bob', arguments[0]])); localStorage.removeItem('flux-results-relative'); return 1", name)
@@ -1562,12 +1635,13 @@ objectives: [{metric: timings.fast, goal: 15, direction: minimize},
         name = "_Ui-loop-A09"
         r.login("bob")
         try:
-            r.page("#/configure", "document.querySelector('.flux-crafter .fc-stepbar')", "new loop configurator")
-            b.js("document.querySelector('.fc-stepbar button').click(); return 1")
+            r.page("#/configure?step=prompt", "document.querySelector('.cfg[data-step=prompt]')", "new loop configurator")
             b.wait("document.querySelector('[data-fc-field=id]')", what="loop name field")
             b.js("for (const [key, value] of [['id', arguments[0]], ['statement', 'Loop name regression']]) { const el = document.querySelector(`[data-fc-field=${key}]`); el.value = value; el.dispatchEvent(new Event('input')); el.dispatchEvent(new Event('change')); } return 1", name)
-            r.check("the configurator accepts digits, hyphens, underscores and mixed case", b.js("return ![...document.querySelectorAll('.fc-error')].some(el => /name.*(letter|character)/i.test(el.textContent))"))
-            b.click(".fc-stepnav .fc-save")
+            b.click(".cfg-rail button[data-step=save]")
+            b.wait("document.querySelector('.cfg[data-step=save] .cfg-ready')", what="the Save step")
+            r.check("the configurator accepts digits, hyphens, underscores and mixed case", b.js("return ![...document.querySelectorAll('.cfg-todo li')].some(el => /name.*(letter|character)/i.test(el.textContent))"))
+            b.click(".cfg-nav .cfg-save")
             b.wait(f"location.hash === '#/app/{name}' && document.querySelector('#main .tabs [role=tab].on')?.textContent === 'Overview'", what="loop with its full name created")
             r.check("configurator creation preserves the full loop name", r.api(f"/apps/{name}")["status"] == 200)
             r.page("#/configure/upload", "document.querySelector('#up-name')", "upload name field")

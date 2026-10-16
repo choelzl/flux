@@ -53,8 +53,8 @@ export function AuthorBox({ name, mine, first }) {
     if (got.ok) { const fresh = await loopApi(name).api().catch(() => null); if (live() && fresh?.document && (first.running || first.connection_error)) location.reload(); }
     return null;
   }, [], { first: first.running || first.connection_error ? 3000 : null });
-  // a document written long ago: no card
-  if (!st?.ever || (!st.running && st.ended && Date.now() / 1000 - st.ended > 3600 * 6)) return null;
+  // a document written long ago, or a draft made into the loop (D1122): no card
+  if (!st?.ever || (!st.running && st.made) || (!st.running && st.ended && Date.now() / 1000 - st.ended > 3600 * 6)) return null;
   const stop = mine ? async () => { toast((await loopApi(name).api("/author/stop", { method: "POST" })).ok, "ok"); } : null;
   return html`<${AuthoringCard} name=${name} st=${st} onStop=${stop} />`;
 }

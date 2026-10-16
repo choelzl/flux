@@ -1,0 +1,99 @@
+// Flux web, configure (D1118): a box of the loop opened -- who works it (rules, a model, the coding agent, a script
+// where Flux takes one, off), its critic when it has one, and that step's own settings, each default shown greyed.
+// Check, Measure and Choose say where their commands and goals are set.
+
+import { Notice, html } from "../view.js";
+import { Head } from "../components/Head.js";
+import { Pick, Text, Who } from "./fields.js";
+import { isAgent, whoOn, whoOptions } from "./who.js";
+
+/** A budget knob of the loop, empty for its default (greyed). */
+const Knob = ({ state, edit, label, k, dflt, hint }) => html`<${Text} label=${label} value=${state.budget[k]} placeholder=${dflt} hint=${hint}
+  set=${v => edit(() => { state.budget[k] = v; })} />`;
+
+const Goto = ({ go, step, what, children }) => html`<p class="cfg-says">${children} <button type="button" class="link" onClick=${() => go(step)}>${what}</button></p>`;
+
+export function BoxPanel({ M, state, box, agent, edit, go, kept }) {
+  const f = state.flow, b = M.BOXES[box] || { title: box };
+  const choose = (bx, opts) => k => edit(() => {
+    f[bx] = opts.find(o => o.k === k).value();
+    if (state.agentRaw) delete state.agentRaw[bx];               // another choice: its own settings go (D728)
+  });
+  const who = (bx = box) => {
+    const opts = whoOptions(M, bx, f[bx], agent);
+    return html`<${Who} label=${`Who works ${M.BOXES[bx].title}`} fixed=${kept} options=${opts} on=${whoOn(opts, f[bx])} pick=${choose(bx, opts)} />`;
+  };
+  const critic = bx => {
+    const cur = M.criticsOf(state)[bx], opts = whoOptions(M, "critique", cur, agent);
+    return html`<div class="cfg-bar"><span class="muted small">Critic</span><${Who} label=${`The critic on ${M.BOXES[bx].title}`} fixed=${kept} options=${opts}
+      on=${whoOn(opts, cur)} pick=${k => edit(() => { M.setCritic(state, bx, opts.find(o => o.k === k).value()); })} /></div>`;
+  };
+  const K = (label, k, dflt, hint) => html`<${Knob} state=${state} edit=${edit} label=${label} k=${k} dflt=${dflt} hint=${hint} />`;
+  const raw = state.agentRaw && state.agentRaw[box] && isAgent(f[box]);
+  let head = who(), body = "";
+  switch (box) {
+    case "dse": {
+      const group = M.dseGroup(f.dse), choices = M.dseChoices(group, f.dse).map(c => [c.value, c.label]);
+      const set = v => edit(() => { f.dse = v; if (state.agentRaw) delete state.agentRaw.dse; });
+      head = "";
+      body = html`<div class="cfg-grid2"><${Pick} label="Kind" k="dse-group" disabled=${kept} value=${group} options=${M.DSE_GROUPS}
+          set=${v => set(M.dseChoices(v)[0].value)} />
+        <${Pick} label="Policy" k="dse" disabled=${kept} value=${f.dse} options=${choices} set=${set} /></div>
+        <p class="cfg-says">${M.dseHint(state)}</p>
+        ${M.parameterSearch(state) ? html`<div class="cfg-grid2">${K("Designs a pass tries side by side", "batch", "1")}</div>` : ""}`;
+      break;
+    }
+    case "orchestrate":
+      if (M.parameterSearch(state)) { head = html`<span class="tag cfg-who-tag on-rules">the search</span>`; body = html`<${Goto} go=${go} step="extra" what="Extra › Settings to search">A search over settings picks the next job:<//>`; break; }
+      body = html`${f.orchestrate === "command" ? html`<div class="cfg-grid2"><${Text} label="Search command" mono wide value=${state.orchestrateCommand}
+            placeholder="{python} {home}/search.py {history} {state}" hint="it answers each round with the next candidates" set=${v => edit(() => { state.orchestrateCommand = v; })} />
+          <${Text} label="Time limit, s" value=${state.orchestrateTimeout} placeholder="600" set=${v => edit(() => { state.orchestrateTimeout = v; })} /></div>`
+        : ["default", "model", "tools"].includes(f.orchestrate) ? html`<${Pick} label="How the model picks" value=${f.orchestrate} disabled=${kept}
+            options=${M.BOXES.orchestrate.choices.filter(c => c.half === "model").map(c => [c.value, c.label])} set=${v => edit(() => { f.orchestrate = v; })} />` : ""}
+        ${critic("orchestrate")}
+        <div class="cfg-grid2">${K("Start fresh every", "explore_every", "4", "designs")}${K("Explore after", "explore_after", "2", "passes the decision stands")}
+          ${K("A part yields after", "cooldown_after", "3", "designs that do not build")}${K("Share kept for new ideas", "exploration_quota", "0", "0 to 1")}</div>`;
+      break;
+    case "generate":
+      body = html`${M.paramOnly(state) ? html`<${Notice} tone="warn" what="A search over settings is on:" why="only a script turns a point into a design; with a model or an agent here, the settings alone reach your commands." />` : ""}
+        ${f.generate === "command" ? html`<${Text} label="Command" mono wide value=${state.generateCommand} placeholder="{python} {home}/gen.py {artifact} {knob}"
+          hint="it writes {artifact}; each setting to search is {its name}" set=${v => edit(() => { state.generateCommand = v; })} />` : ""}
+        ${f.generate === "catalog" ? html`<${Text} label="Designs you already have" wide value=${state.generateCatalog} placeholder="designs/a.sv, designs/b.sv"
+          hint="files beside the document, tried in order" set=${v => edit(() => { state.generateCatalog = v; })} />` : ""}
+        <div class="cfg-grid2">${K("Designs per pass", "steps", "24")}${K("Repairs per design", "repair_attempts", "12")}
+          <${Pick} label="Prototype first" value=${state.budget.prototype} set=${v => edit(() => { state.budget.prototype = v; })}
+            options=${[["", "default (with a golden model)"], ["false", "off"], ["true", "on"], ["python", "in Python"], ["systemc", "in SystemC"]]} />
+          <${Pick} label="Repair by" value=${state.budget.patching} set=${v => edit(() => { state.budget.patching = v; })}
+            options=${[["", "edits (default)"], ["true", "edits"], ["false", "rewrites"]]} /></div>
+        ${isAgent(f.generate) ? html`<div class="cfg-sub"><h4>The agent's turns</h4><div class="cfg-grid2">${K("Continues past its time", "agent_continues", "3")}
+          ${K("Final turn, s", "agent_grace_s", "a quarter of its time")}</div></div>` : ""}`;
+      break;
+    case "test":
+      head = html`<span class="tag cfg-who-tag on-fixed">your checks</span>`;
+      body = html`<${Goto} go=${go} step="checks" what="Check & Measure">Its commands are set in<//>${critic("test")}`;
+      break;
+    case "measure":
+      head = html`<span class="tag cfg-who-tag on-fixed">your measurements</span>`;
+      body = html`<${Goto} go=${go} step="checks" what="Check & Measure">Its commands are set in<//>
+        <div class="cfg-grid2">${K("Tool runs at once", "workers", "auto", "1 for anything timed")}</div>${M.criticsOf(state).measure !== "off" ? critic("measure") : ""}`;
+      break;
+    case "select":
+      body = html`<${Goto} go=${go} step="objective" what="Objective">What it decides by is set in<//>${critic("select")}`;
+      break;
+    case "records":
+      head = html`<span class="tag cfg-who-tag on-fixed">always</span>`;
+      body = html`<div class="cfg-grid2">${K("Passes", "passes", "until stopped")}${K("Time per pass, s", "budget_s", "no limit")}
+        ${K("Worse edits tolerated", "regress_after", "2")}${K("Passes at once", "parallel", "1", "an admin allows it on a server")}</div>`;
+      break;
+    case "knowledge":
+      body = html`<${Goto} go=${go} step="prompt" what="Prompt › Files">The files the model reads are marked in<//>`;
+      break;
+    case "digest":
+      if (f.knowledge === "none") { head = html`<span class="tag cfg-who-tag on-off">off</span>`; body = html`<p class="cfg-says">The library is off: no paper is read.</p>`; }
+      break;
+    default:
+  }
+  return html`<${Head} title=${b.title} hint=${b.says} actions=${head || null} />
+    ${raw ? html`<p class="cfg-says">${`An agent with its own settings, kept as written: ${JSON.stringify(state.agentRaw[box].agent)}. Choosing another replaces them.`}</p>` : ""}
+    ${body}`;
+}

@@ -50,6 +50,6 @@ def test_the_page_and_its_scripts_are_asked_again_after_an_update(tmp_path, monk
     c = TestClient(create_app(tmp_path / "data", sandbox=False))
     modules = sorted(p.name for p in (Path(flux_web.__file__).parent / "static").glob("*.js"))
     assert {"app.js", "ui.js", "state.js", "loops.js"} <= set(modules), modules
-    for path in ("/", *(f"/static/{m}" for m in modules), "/crafter-assets/crafter.js"):
+    for path in ("/", *(f"/static/{m}" for m in modules), "/crafter-assets/crafter.js", "/crafter-assets/crafter-model.js"):
         r = c.get(path)
         assert r.status_code == 200 and r.headers.get("cache-control") == "no-cache", (path, r.headers.get("cache-control"))

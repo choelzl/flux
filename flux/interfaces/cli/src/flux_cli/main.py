@@ -168,6 +168,10 @@ def build_parser() -> argparse.ArgumentParser:
     ask_p.add_argument("--passes", type=int, default=0, help="Stop after N passes (default: run until stopped -- `flux stop`, Ctrl-C, the TUI).")
     ask_p.add_argument("--checks", type=int, default=3, help="Repairs of a refused document per pass (default 3).")
     ask_p.add_argument("--no-run", action="store_true", help="Write and check the document; run nothing.")
+    ask_p.add_argument("--questions", choices=("decide", "operator"), default="decide",
+                       help="operator: an agent author may ask a question, answered in runs/author/inbox.jsonl (the web's page) "
+                            "within --wait-s; decide (default): it decides.")
+    ask_p.add_argument("--wait-s", type=float, default=600.0, help="How long a question waits for its answer (default 600).")
     ask_p.add_argument("--steps", type=int, default=None, help="The loop's steps per pass (default: the document's).")
     ask_p.add_argument("--screen-only", action="store_true", help="Stop every pass at the first stage.")
     ask_p.add_argument("--model", default=None, help="The model (the author when --author model, and the loop's).")

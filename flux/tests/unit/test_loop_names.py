@@ -52,7 +52,7 @@ def test_web_names_still_reject_other_characters_traversal_and_overlength(name):
 
 @pytest.mark.skipif(shutil.which("node") is None, reason="node is not on PATH")
 def test_shared_crafter_accepts_the_same_name_characters():
-    crafter = Path(__file__).resolve().parents[3] / "website/docs/assets/crafter.js"
+    crafter = Path(__file__).resolve().parents[3] / "website/docs/assets/crafter-model.js"
     script = """const c = require(process.argv[1]), cases = JSON.parse(process.argv[2]);
       console.log(JSON.stringify({valid: cases.map(id => {const s = c.base(); s.id = id;
         return !c.check(s).some(m => m.field === 'id' && m.level === 'error');}),

@@ -18,8 +18,8 @@
   /* Live's kinds of work and the agent over them (D978 palette A4): the tree, the graph, the timeline, a tag */
   --work-setup: #8f9aa6; --work-plan: #c98a56; --work-search: #d9b440; --work-design: #5b6ee8;
   --work-check: #3faa78; --work-measure: #2fb0c6; --work-choose: #e8804f; --work-critic: #97b84a; --agent: #d45eae;
-  /* the configurator's halves of a box (website/docs/assets/crafter.css --fc-*) */
-  --half-rules: #2b7a86; --half-model: #6a4bd8; --half-agent: #c46a12; --half-fixed: #5f6670; --half-off: #9aa0a8;
+  /* the configurator's halves of a box (configure/, and website/docs/assets/crafter.css --fc-*); the agent's is its pink (D1120) */
+  --half-rules: #2b7a86; --half-model: #6a4bd8; --half-agent: #d45eae; --half-fixed: #5f6670; --half-off: #9aa0a8;
   /* the charts' series: a group of designs, a line of a time chart (D915) */
   --g0: #2563eb; --g1: #d97706; --g2: #059669; --g3: #9333ea; --g4: #db2777; --g5: #0891b2; --g6: #65a30d; --g7: #78716c;
 }
@@ -32,7 +32,7 @@
   --logo-ink: #b7c4d4;
   --work-setup: #9da8b4; --work-plan: #d99c6a; --work-search: #e2c257; --work-design: #7d8df2;
   --work-check: #4fc08c; --work-measure: #43c2d6; --work-choose: #f09264; --work-critic: #a9ca5e; --agent: #e27cc0;
-  --half-rules: #6cc4cf; --half-model: #a996ff; --half-agent: #f0a254; --half-fixed: #aab1bb; --half-off: #7d838c;
+  --half-rules: #6cc4cf; --half-model: #a996ff; --half-agent: #e27cc0; --half-fixed: #aab1bb; --half-off: #7d838c;
   --g0: #60a5fa; --g1: #fbbf24; --g2: #34d399; --g3: #c084fc; --g4: #f472b6; --g5: #22d3ee; --g6: #a3e635; --g7: #a8a29e; }
 * { box-sizing: border-box; }
 /* scrollbars in the theme's colours: inherited by every scrolling panel (D691) */
@@ -296,13 +296,132 @@ dialog.dlg > h2 { font-size: 16px; margin-bottom: 8px; }
 .bell-item.ok { border-left-color: var(--ok); } .bell-item.bad { border-left-color: var(--bad); } .bell-item.warn { border-left-color: var(--warn); }
 .bell-item small { color: var(--muted); }
 
-/* ---- the configurator (website/docs/assets/crafter.css): a card; D941: its fields, buttons and step bar are
-   this file's own (label.stack, button.small/.primary, .subtabs), its colours these tokens */
-.flux-crafter { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; box-shadow: var(--shadow); }
+/* ---- the configurator (D1116, configure/): the steps down the left, the step's form, the document beside it with the
+   step's lines lit; Graph and Save take the width. Fields are label.stack, buttons the app's, choices Choice, tags Tag;
+   a box of the loop is tinted by who works it (--half-*: rules, a model, the agent's pink, fixed, off) */
+.cfg { display: grid; grid-template-columns: 212px minmax(0, 1fr) minmax(0, 390px); gap: 14px; align-items: start; }
+.cfg.wide { grid-template-columns: 212px minmax(0, 1fr); }
+.cfg > * { min-width: 0; }
+.cfg .card { margin-bottom: 0; }
+.cfg-side, .cfg-docside { position: sticky; top: 8px; }
+.cfg-rail { display: grid; gap: 2px; padding: 6px; }
+.cfg-rail button { display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 1px 8px; align-items: center; text-align: left; border: 0; background: transparent; padding: 7px 8px; border-radius: 7px; }
+.cfg-rail button:hover { background: var(--soft); }
+.cfg-rail button.on { background: var(--soft); box-shadow: inset 3px 0 0 var(--accent); }
+.cfg-rail .num { width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--line); display: grid; place-items: center; font: 600 11px var(--mono); color: var(--muted); background: var(--panel); }
+.cfg-rail button.on .num { border-color: var(--accent); color: var(--accent); }
+.cfg-rail button.done .num { background: var(--ok); border-color: var(--ok); color: var(--on-tone); }
+.cfg-rail button.bad .num { border-color: var(--bad); color: var(--bad); }
+.cfg-rail .t { font-weight: 600; }
+.cfg-rail .sum { grid-column: 2; font-size: 12px; color: var(--muted); font-weight: 400; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cfg-stephead { display: none; }
+.cfg-body { display: grid; gap: 16px; min-width: 0; }
+.cfg-body > *, .cfg-sec > *, .cfg-body details { min-width: 0; max-width: 100%; }
+.cfg select { max-width: 100%; min-width: 0; text-overflow: ellipsis; }
+.cfg-grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px 14px; }
+.cfg label.stack { margin: 0; min-width: 0; }
+.cfg label.stack.wide { grid-column: 1 / -1; }
+.cfg label.stack > small { font-size: 11.5px; }
+.cfg label.stack > select { align-self: flex-start; max-width: 100%; }
+.cfg input.mono { font-family: var(--mono); font-size: 12.5px; }
+.cfg input.narrow { width: 88px; }
+.cfg .grow { flex: 1; }
+.cfg-sec { display: grid; gap: 8px; min-width: 0; }
+.cfg-sec > h3 { margin: 0; display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.cfg-sec > h3 .muted { text-transform: none; letter-spacing: 0; font-weight: 400; font-size: 12px; }
+.cfg-sub { display: grid; gap: 6px; border-top: 1px solid var(--line); padding-top: 8px; }
+.cfg-sub h4 { margin: 0; font-size: 12.5px; } .cfg-sub h4 .muted { font-weight: 400; }
+.cfg-rows { display: grid; gap: 6px; }
+.cfg-bar { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; }
+.cfg-inline { display: inline-flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; min-width: 0; max-width: 100%; }
+.cfg-says { margin: 0; color: var(--muted); font-size: 13px; }
+.cfg-xrow { border: 1px solid var(--line); border-radius: 8px; background: var(--panel); min-width: 0; }
+.cfg-xrow.open { border-color: color-mix(in srgb, var(--accent) 40%, var(--line)); }
+.cfg-xhead { width: 100%; border: 0; background: transparent; display: grid; grid-template-columns: 18px minmax(0, 1fr) auto 12px; gap: 10px; align-items: center; text-align: left; padding: 8px 10px; border-radius: 8px; }
+.cfg-xhead .what { min-width: 0; display: grid; }
+.cfg-xhead .what .mono { color: var(--muted); font-weight: 400; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cfg-xhead .xr { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.cfg .ix { font: 12px var(--mono); color: var(--muted); text-align: center; min-width: 14px; }
+.cfg-xhead .caret { color: var(--muted); font-size: 11px; transition: transform .15s; } .cfg-xrow.open .caret { transform: rotate(90deg); }
+.cfg-xbody { padding: 10px 12px 12px; border-top: 1px solid var(--line); display: grid; gap: 10px; }
+.cfg-xacts { display: flex; gap: 8px; align-items: center; }
+.cfg-orow { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); min-width: 0; }
+.cfg-orow > input:not(.narrow) { flex: 1 1 140px; min-width: 0; }
+.cfg-metric { font-weight: 600; }
+.cfg-table input { width: 100%; min-width: 90px; }
+.cfg-nav { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; border-top: 1px solid var(--line); padding-top: 12px; margin-top: 16px; }
+.cfg-body .cfg-nav { margin-top: 0; }
+.cfg-status { font-size: 12.5px; color: var(--t, var(--muted)); }
+.cfg-next-short { display: none; }
+/* who works a step: the choice tinted by the kind chosen */
+.cfg-who.on-rules { --k: var(--half-rules); } .cfg-who.on-model { --k: var(--half-model); } .cfg-who.on-agent { --k: var(--half-agent); }
+.cfg-who.on-script, .cfg-who.on-fixed { --k: var(--ink); } .cfg-who.on-off { --k: var(--muted); }
+.subtabs.cfg-who button.on { color: var(--k); background: color-mix(in srgb, var(--k) 14%, var(--panel)); }
+.tag.cfg-who-tag { color: var(--muted); }
+.tag.cfg-who-tag.on-rules { color: var(--half-rules); } .tag.cfg-who-tag.on-model { color: var(--half-model); } .tag.cfg-who-tag.on-agent { color: var(--half-agent); }
+button.tag.cfg-reads { border-style: dashed; color: var(--muted); }
+button.tag.cfg-reads.on { border-style: solid; color: var(--ink); background: var(--soft); }
+.cfg-file-tags { display: inline-flex; gap: 6px; flex-wrap: wrap; }
+/* the document: its lines, the step's lit */
+pre.cfg-yaml { position: relative; margin: 0; padding: 8px 0; background: var(--soft); border: 1px solid var(--line); border-radius: 8px; font-size: 12px; line-height: 1.55; overflow: auto; max-height: calc(100vh - 150px); }
+pre.cfg-yaml > div { padding: 0 12px; white-space: pre; border-left: 3px solid transparent; }
+pre.cfg-yaml > div.lit { background: color-mix(in srgb, var(--accent) 10%, transparent); border-left-color: var(--accent); }
+.cfg-doc .head h2 { font-size: 13px; }
+.cfg-doc-acts { display: flex; gap: 8px; justify-content: flex-end; margin-bottom: 6px; }
+/* Save: where it stands, what is left, the folds */
+ul.cfg-check { list-style: none; margin: 0; padding: 0; display: grid; gap: 5px; }
+ul.cfg-check li { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+ul.cfg-check li > .g { align-self: center; color: var(--t); }
+ul.cfg-check li b { font-weight: 600; }
+details.cfg-fold > summary { padding: 8px 0; font-weight: 600; }
+.cfg-diff { padding-bottom: 8px; }
+/* Graph: the loop drawn beside the box opened */
+.cfg-split { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+.cfg-draw { background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 6px; min-width: 0; }
+.cfg-panel { display: grid; gap: 10px; align-content: start; border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; min-width: 0; position: sticky; top: 8px; }
+.cfg-panel .head { margin-bottom: 0; }
+.cfg-panel .cfg-grid2 { grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); }
+svg.cfg-cycle { display: block; width: 100%; height: auto; }
+.cfg-cycle .ring { fill: none; stroke: var(--line); stroke-width: 12; }
+.cfg-cycle .bx { stroke-width: 1.4; }
+.cfg-cycle .bx.rules { fill: color-mix(in srgb, var(--half-rules) 12%, var(--panel)); stroke: var(--half-rules); }
+.cfg-cycle .bx.model { fill: color-mix(in srgb, var(--half-model) 12%, var(--panel)); stroke: var(--half-model); }
+.cfg-cycle .bx.agent { fill: color-mix(in srgb, var(--half-agent) 12%, var(--panel)); stroke: var(--half-agent); }
+.cfg-cycle .bx.script { fill: color-mix(in srgb, var(--half-fixed) 14%, var(--panel)); stroke: var(--ink); }
+.cfg-cycle .bx.fixed { fill: var(--soft); stroke: var(--half-fixed); }
+.cfg-cycle .bx.off { fill: var(--panel); stroke: var(--muted); stroke-dasharray: 4 3; }
+.cfg-cycle .t { font: 600 12px var(--sans); fill: var(--ink); }
+.cfg-cycle .w { font: 11px var(--sans); fill: var(--muted); }
+.cfg-cycle .w.rules { fill: var(--half-rules); } .cfg-cycle .w.model { fill: var(--half-model); } .cfg-cycle .w.agent { fill: var(--half-agent); } .cfg-cycle .w.script { fill: var(--ink); }
+.cfg-cycle .w.crit { font-size: 10px; }
+.cfg-cycle .e { fill: none; stroke: var(--muted); stroke-width: 1.3; }
+.cfg-cycle .e.soft { stroke-dasharray: 4 3; }
+.cfg-cycle .e.back { stroke: var(--bad); stroke-dasharray: 3 3; }
+.cfg-cycle .ah { fill: var(--muted); } .cfg-cycle .ah.back { fill: var(--bad); }
+.cfg-cycle .el { font: 10.5px var(--sans); fill: var(--muted); } .cfg-cycle .el.back { fill: var(--bad); }
+.cfg-cycle .hit { cursor: pointer; outline: none; }
+.cfg-cycle .hit:hover .bx { stroke-width: 2.4; }
+.cfg-cycle .hit.sel > .bx:first-of-type { stroke-width: 3; }
+.cfg-cycle .hit:focus-visible > .bx:first-of-type { stroke: var(--accent); stroke-width: 3; }
 /* D912, D913: the creation draft's line; the ways to make a problem, a menu on a phone */
 .draft-line:empty { display: none; }
 .draft-line { margin: -6px 0 10px; }
 select.mode-menu { display: none; }
+@media (max-width: 1180px) { .cfg { grid-template-columns: 200px minmax(0, 1fr); } .cfg > .cfg-docside { grid-column: 2; position: static; } }
+@media (max-width: 980px) { .cfg-split { grid-template-columns: minmax(0, 1fr); } .cfg-panel { position: static; } }
+@media (max-width: 760px) {
+  .cfg, .cfg.wide { grid-template-columns: minmax(0, 1fr); gap: 10px; }
+  .cfg > .cfg-docside { grid-column: auto; }
+  .cfg-side { position: static; }
+  .cfg-rail { display: none; }
+  .cfg-stephead { display: flex; gap: 8px; align-items: center; }
+  .cfg-stephead select { flex: 1; min-width: 0; font-weight: 600; }
+  .cfg-stepof { color: var(--muted); font-size: 12.5px; white-space: nowrap; }
+  .cfg-main { padding: 12px; }
+  .cfg-main > .head { display: none; }            /* the menu of steps says it */
+  .cfg-next-what { display: none; } .cfg-next-short { display: inline; }
+  pre.cfg-yaml { max-height: 50vh; }
+}
 @media (max-width: 640px) {
   .tabs.config-modes, .subtabs.config-modes { display: none; }
   select.mode-menu { display: block; width: 100%; margin: 0 0 10px; font-weight: 600; }
@@ -311,7 +430,6 @@ select.mode-menu { display: none; }
   .subrow .subtabs button { padding: 4px 8px; }
   .subrow .subtabs { margin-bottom: 10px; }
   .configure-head .sub { display: none; }        /* the menu of ways says them */
-  .flux-crafter { padding: 10px; }
   .doc-line { margin: 0 0 6px; }
 }
 details.files-fold[open] > summary { margin-bottom: 10px; }

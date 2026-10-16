@@ -24,7 +24,7 @@
 
 /* ---- the drawing's halves: a colour each, its fill mixed into the panel (so both themes) */
 .flux-crafter {
-  --fc-rules: #2b7a86; --fc-model: #6a4bd8; --fc-agent: #c46a12; --fc-fixed: #5f6670; --fc-off: #9aa0a8;
+  --fc-rules: #2b7a86; --fc-model: #6a4bd8; --fc-agent: #d45eae; --fc-fixed: #5f6670; --fc-off: #9aa0a8;
   --fc-rules-bg: color-mix(in srgb, var(--fc-rules) 13%, var(--panel));
   --fc-model-bg: color-mix(in srgb, var(--fc-model) 13%, var(--panel));
   --fc-agent-bg: color-mix(in srgb, var(--fc-agent) 13%, var(--panel));
@@ -33,11 +33,11 @@
 }
 [data-md-color-scheme="slate"] .flux-crafter,
 :root[data-theme="dark"] body:not([data-md-color-scheme]) .flux-crafter {
-  --fc-rules: #6cc4cf; --fc-model: #a996ff; --fc-agent: #f0a254; --fc-fixed: #aab1bb; --fc-off: #7d838c;
+  --fc-rules: #6cc4cf; --fc-model: #a996ff; --fc-agent: #e27cc0; --fc-fixed: #aab1bb; --fc-off: #7d838c;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) body:not([data-md-color-scheme]) .flux-crafter {
-    --fc-rules: #6cc4cf; --fc-model: #a996ff; --fc-agent: #f0a254; --fc-fixed: #aab1bb; --fc-off: #7d838c;
+    --fc-rules: #6cc4cf; --fc-model: #a996ff; --fc-agent: #e27cc0; --fc-fixed: #aab1bb; --fc-off: #7d838c;
   }
 }
 

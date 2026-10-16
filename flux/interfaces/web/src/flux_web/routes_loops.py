@@ -21,7 +21,7 @@ from fastapi.responses import StreamingResponse
 
 from .models import (
     DocText, FileText, RunOptions, Stop, NoteIn, DocSave, AskIn, ShareIn, EnvVar, Advanced, EmptyIn, CloneIn, MoveIn,
-    LoopRename, LoopTransfer, ResetIn,
+    LoopRename, LoopTransfer, ResetIn, AnswerIn, MakeIn,
 )
 from .runs import ADVANCED, advanced, home_ready, sandbox_config, machine_env, run_env, sandbox_env, loop_permissions
 from .result_preferences import ResultPreferences, merge_preferences, preferences
@@ -359,10 +359,24 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
             raise HTTPException(400, "at most 256 MB of files for the agent to read")
         return out
 
+    @app.get("/api/new-by-agent/uses")
+    def author_uses(user: User = Depends(user_of)) -> dict[str, Any]:
+        """What an author can use besides the files given (D1122): the shared library's papers, its skills, the
+        bundled loops it reads."""
+        from flux_knowledge.convert import PAPER_SUFFIXES
+        from flux_knowledge.retrieval import shared_library
+        from flux_loop.author import BUNDLED, DOCUMENT, author_skills
+
+        lib = shared_library()
+        papers = sum(1 for p in lib.rglob("*") if p.is_file() and p.suffix.lower() in PAPER_SUFFIXES and not p.name.startswith(".")) if lib.is_dir() else 0
+        loops = sorted(p.name for p in BUNDLED.iterdir() if (p / DOCUMENT).is_file()) if BUNDLED.is_dir() else []
+        return {"papers": papers, "skills": [s.name for s in author_skills()], "bundled": loops}
+
     @app.post("/api/apps/new-by-agent")
-    async def new_by_agent(name: str = Form(...), prompt: str = Form(...), author: str = Form("opencode"),
+    async def new_by_agent(name: str = Form(...), prompt: str = Form(...), author: str = Form("opencode"), ask_me: bool = Form(False),
                            files: list[UploadFile] | None = File(None), user: User = Depends(user_of)) -> dict[str, Any]:
-        """A new loop whose problem an agent writes from a description and files (D704)."""
+        """A new loop whose problem an agent writes from a description and files (D704); a draft until it is made
+        (D1122: `agent_draft` in its meta), the agent asking when `ask_me`."""
         creator(user)
         if not user.can("run_loops"):
             raise HTTPException(403, "you may not run agents")
@@ -377,7 +391,8 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
         try:
             got = await _attach(d, files)
             authoring.start(app_dir=d, workspace=w, name=name, prompt=prompt, author=author, env=_author_env(user, name, None, author),
-                            attachments=got, revise=None, by=user.name)
+                            attachments=got, revise=None, by=user.name, ask_me=ask_me)
+            w.set_meta(name, agent_draft=True)
         except (ValueError, HTTPException) as exc:
             shutil.rmtree(d, ignore_errors=True)
             raise exc if isinstance(exc, HTTPException) else fail(exc) from exc
@@ -385,7 +400,7 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
         return {"name": name, "ok": f"{name}: the agent is writing its problem"}
 
     @app.post("/api/apps/{name}/author")
-    async def revise_by_agent(name: str, prompt: str = Form(...), author: str = Form("opencode"),
+    async def revise_by_agent(name: str, prompt: str = Form(...), author: str = Form("opencode"), ask_me: bool = Form(False),
                               files: list[UploadFile] | None = File(None), owner: str | None = None,
                               user: User = Depends(user_of)) -> dict[str, Any]:
         """An agent revises the loop's problem as told (D704); not while the loop runs."""
@@ -398,7 +413,7 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
         try:
             got = await _attach(d, files)
             authoring.start(app_dir=d, workspace=w, name=name, prompt=prompt, author=author, env=_author_env(whose, name, user, author),
-                            attachments=got, revise=w.meta(name).get("document"), by=user.name)
+                            attachments=got, revise=w.meta(name).get("document"), by=user.name, ask_me=ask_me)
         except ValueError as exc:
             raise HTTPException(409, str(exc)) from exc
         store.audit(user.name, "problem revised by an agent", f"{whose.name}/{name}: {author}")
@@ -413,6 +428,47 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
     def author_stop(name: str, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, str]:
         _w, _whose, d, _run = loop_of(name, user, owner, edit=True)
         return {"ok": authoring.stop(d)}
+
+    @app.post("/api/apps/{name}/author/answer")
+    def author_answer(name: str, body: AnswerIn, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, str]:
+        """D1125: the author's open question answered by whoever may change the loop."""
+        _w, whose, d, _run = loop_of(name, user, owner, edit=True)
+        from .confine import Escape
+
+        try:
+            said = authoring.answer(d, user.name, body.text)
+        except ValueError as exc:
+            raise HTTPException(409, str(exc)) from exc
+        except (Escape, OSError) as exc:
+            raise HTTPException(400, "the agent's inbox is not a file of this loop") from exc
+        store.audit(user.name, "answered the author", f"{whose.name}/{name}")
+        return {"ok": said}
+
+    @app.get("/api/apps/{name}/author/decisions")
+    def author_decisions(name: str, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, Any]:
+        """D1124: the draft's decisions, each with its step and the author's one-line reason (else read from the
+        document), and the stage a cheap first pass stops at."""
+        from . import authoring as au
+
+        w, _whose, d, _run = loop_of(name, user, owner)
+        doc = w.meta(name).get("document")
+        return {**au.decisions(d, doc), "document": doc, "first_stage": au.first_stage(d, doc)}
+
+    @app.post("/api/apps/{name}/author/make")
+    def author_make(name: str, body: MakeIn, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, str]:
+        """D1122: the drafted loop made -- a draft no more -- and, asked, one cheap pass started (its first stage only)."""
+        w, whose, d, _run = loop_of(name, user, owner, edit=True)
+        if authoring.state(d).get("running"):
+            raise HTTPException(409, "the agent is still writing: wait for it, or stop it")
+        if not w.meta(name).get("document"):
+            raise HTTPException(409, "the draft has no problem document")
+        w.set_meta(name, agent_draft=False)
+        authoring.made(d)
+        store.audit(user.name, "loop made from an agent's draft", f"{whose.name}/{name}")
+        if not body.first_pass:
+            return {"ok": f"{name} is made"}
+        said = ctx.start_loop(name, RunOptions(passes=1, screen_only=True), owner, user)
+        return {"ok": f"{name} is made; one cheap pass runs", "started": said["ok"]}
 
     # ---- questions about a loop, answered by an agent (D705)
     def _ask_id(ident: str) -> str:

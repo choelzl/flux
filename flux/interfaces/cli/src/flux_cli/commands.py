@@ -573,7 +573,9 @@ def cmd_ask(args: argparse.Namespace) -> int:
                         feedback=channel.get("fb"))
 
     ask = Ask(prompt=args.prompt, workdir=workdir, inputs=inputs, author=author, checks=args.checks, passes=args.passes,
-              skills=skills, no_run=bool(args.no_run))
+              skills=skills, no_run=bool(args.no_run), questions=getattr(args, "questions", "decide") or "decide",
+              wait_s=float(getattr(args, "wait_s", 600.0) or 600.0),
+              journal=workdir / "runs" / "author" if args.no_run else None)     # D1125: the page's activity and answers
     if tui:
         return _ask_tui(ask, run_pass=run_pass, proposer=author_model, review=review, channel=channel)
     try:

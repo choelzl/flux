@@ -12,7 +12,7 @@ explain configuration choices in the guide and put field defaults and less commo
 |---|---|
 | `mkdocs.yml` | the site configuration and the navigation |
 | `docs/index.md`, `docs/guide/` | the home page, runnable first-loop tutorial, configuration/search guides, crafter, and parameter/run references |
-| `docs/assets/` | the loop crafter (`crafter.js`, `crafter.css`) and the tool catalog it reads (`tools.json` = `flux tools --json`) |
+| `docs/assets/` | the loop crafter: its model (`crafter-model.js`, shared with the web app's configurator), its page (`crafter.js`, `crafter.css`) and the tool catalog it reads (`tools.json` = `flux tools --json`) |
 | `overrides/` | theme overrides (the footer) |
 | `site/` | the build output (git-ignored) |
 

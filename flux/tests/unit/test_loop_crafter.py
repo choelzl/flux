@@ -1,4 +1,4 @@
-"""The website's loop crafter (website/docs/assets/crafter.js) writes documents the loader takes.
+"""The website's loop crafter (its model, website/docs/assets/crafter-model.js) writes documents the loader takes.
 
 `buildYaml(state, catalog)` runs under node with the tool catalog the page fetches
 (website/docs/assets/tools.json). Every state is built from scratch, as the page starts: typed
@@ -200,7 +200,7 @@ process.stdout.write(JSON.stringify(out));
 
 
 def _run():
-    r = subprocess.run(["node", "-e", SCRIPT, str(ASSETS / "crafter.js"), str(ASSETS / "tools.json")],
+    r = subprocess.run(["node", "-e", SCRIPT, str(ASSETS / "crafter-model.js"), str(ASSETS / "tools.json")],
                        capture_output=True, text=True, timeout=60)
     assert r.returncode == 0, r.stderr
     return json.loads(r.stdout)
@@ -219,7 +219,7 @@ s.objectives.push(c.newObjective('timings', 'min'));      // D1028: the dictiona
 s.baseline = {mode: 'before', source: 'metrics', metrics: [{metric: 'timings.fast', value: '20', stage: ''}]};
 console.log(JSON.stringify({yaml: c.buildYaml(s), errors: c.check(s).filter(m => m.level === 'error')}));
 """
-    made = subprocess.run(["node", "-e", script, str(ASSETS / "crafter.js"), str(ASSETS / "tools.json")], capture_output=True, text=True, check=True)
+    made = subprocess.run(["node", "-e", script, str(ASSETS / "crafter-model.js"), str(ASSETS / "tools.json")], capture_output=True, text=True, check=True)
     got = json.loads(made.stdout)
     assert not got["errors"], got["errors"]
     path = tmp_path / "problem.yaml"
@@ -233,7 +233,7 @@ const data = JSON.parse(require('fs').readFileSync(0, 'utf8'));
 const s = c.fromDoc(data.raw, data.normal).state;
 console.log(JSON.stringify({yaml: c.buildYaml(s), state: s, errors: c.check(s).filter(m => m.level === 'error')}));
 """
-    read = subprocess.run(["node", "-e", read_script, str(ASSETS / "crafter.js"), str(ASSETS / "tools.json")],
+    read = subprocess.run(["node", "-e", read_script, str(ASSETS / "crafter-model.js"), str(ASSETS / "tools.json")],
                           input=json.dumps({"raw": yaml.safe_load(got["yaml"]), "normal": task.to_dict()}),
                           capture_output=True, text=True, check=True)
     again = json.loads(read.stdout)
@@ -263,7 +263,7 @@ const imported = c.fromDoc(doc, null);
 console.log(JSON.stringify({yaml: c.buildYaml(imported.state), kept: imported.kept,
   policy: imported.state.flow.dse, issues: c.check(imported.state)}));
 """
-    result = subprocess.run(["node", "-e", script, str(ASSETS / "crafter.js"), policy], capture_output=True, text=True, check=True)
+    result = subprocess.run(["node", "-e", script, str(ASSETS / "crafter-model.js"), policy], capture_output=True, text=True, check=True)
     out = json.loads(result.stdout)
     assert out["kept"] == [] and out["policy"] == policy
     doc = tmp_path / "problem.yaml"
@@ -304,7 +304,7 @@ const groups = Object.fromEntries(c.DSE_GROUPS.map(([g]) => [g, c.dseChoices(g).
 const custom = c.dseChoices('delegated', 'agent:*').map(x => x.value);
 console.log(JSON.stringify({groups, custom, all: c.BOXES.dse.choices.map(x => x.value)}));
 """
-    result = subprocess.run(["node", "-e", script, str(ASSETS / "crafter.js")], capture_output=True, text=True, check=True)
+    result = subprocess.run(["node", "-e", script, str(ASSETS / "crafter-model.js")], capture_output=True, text=True, check=True)
     out = json.loads(result.stdout)
     groups = out["groups"]
     assert groups["preferences"] == ["none", "adaptive", "explore", "improve", "tune", "finetune", "variations"]
@@ -332,7 +332,7 @@ if (process.argv[3] === 'space') {
 }
 process.stdout.write(JSON.stringify({yaml: c.buildYaml(s), hint: c.dseHint(s)}));
 """
-    result = subprocess.run(["node", "-e", script, str(ASSETS / "crafter.js"), policy, "space" if space else "code", str(ASSETS / "tools.json")],
+    result = subprocess.run(["node", "-e", script, str(ASSETS / "crafter-model.js"), policy, "space" if space else "code", str(ASSETS / "tools.json")],
                             input=json.dumps(BUILT["python"]["state"]), capture_output=True, text=True, check=True)
     out = json.loads(result.stdout)
     assert len(re.findall(r"^  orchestrate:", out["yaml"], re.M)) == 1
@@ -549,7 +549,7 @@ def test_the_crafter_page_mounts_the_builder_and_links_its_guides():
     guide = REPO / "website/docs/guide"
     page = (guide / "loop-crafter.md").read_text()
     assert 'id="flux-crafter"' in page
-    for asset in ("crafter.js", "crafter.css"):
+    for asset in ("crafter-model.js", "crafter.js", "crafter.css"):
         assert f'"../../assets/{asset}"' in page
         assert (ASSETS / asset).is_file()
     links = set(re.findall(r"\]\(([^)]+)\)", page))

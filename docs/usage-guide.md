@@ -48,7 +48,10 @@ flux ask --tui                                           # the same, from a setu
 - `flux ask` has an author (the model by default, or `--author opencode|claude|codex`) write
   the document and its files into `./out/ask_<slug>/`. It checks the document, runs it, and
   gives the author the report to revise for the next pass. Options: `--no-run` (write and
-  check only), `--passes N`, `--screen-only`, `--dir DIR`, `--skill DIR`. The setup screen
+  check only), `--passes N`, `--screen-only`, `--dir DIR`, `--skill DIR`, `--questions operator` (an agent
+  author may ask one question, answered as a line in `runs/author/inbox.jsonl` within `--wait-s`). An agent
+  author gets the skills `flux-loop-creator` and `flux-loop-commands`, reads the bundled loops, and writes
+  `decisions.json` (each decision's step and one-line reason) beside the document. The setup screen
   (`--tui`, or no prompt) takes the prompt, the files, the author and the passes; with
   "review first" on, you read the checked problem and type `run`, `stop`, or a note.
 

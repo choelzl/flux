@@ -495,7 +495,7 @@ def flows(r: Run) -> None:
         tabs = b.js("return [...document.querySelectorAll('#main .tabs [role=tab]')].map(t => t.textContent)")
         r.check("New loop combines empty creation and upload", tabs == ["Create or upload", "Configurator", "Agent", "Clone a loop"], str(tabs))
         r.check("New loop has no folder panel (D827)", not b.js("return !!document.querySelector('details.folder-roles')"))
-        b.wait("document.querySelector('.flux-crafter .fc-form')", what="the configurator")
+        b.wait("document.querySelector('.cfg .cfg-rail')", what="the configurator")
         r.clean("New loop › Configurator")
         r.button("Agent", "#main .tabs")
         b.wait("document.querySelector('#ag-who')", what="the agent form")
@@ -506,28 +506,34 @@ def flows(r: Run) -> None:
         r.check("the Agent tab has its address", b.js("return location.hash") == "#/configure/agent")
         r.clean("New loop › Agent")
         # D719: one name, a calm checklist, and a loop started from an example
-        r.page("#/configure", "document.querySelector('.flux-crafter .fc-form')", "the configurator")
+        r.page("#/configure?step=prompt", "document.querySelector('.cfg[data-step=prompt]')", "the configurator")
         r.check("the configurator has one name field, no separate application name",
                 not b.js("return [...document.querySelectorAll('#main label')].some(l => l.textContent.trim().startsWith('Application name'))"))
-        r.check("an untouched checklist is to-do, not errors", b.js("return !document.querySelector('.fc-checks .fc-error') && !!document.querySelector('.fc-checks .fc-todo')"))
         r.check("no command-line next steps", "Next steps" not in r.text())
-        steps = b.js("return [...document.querySelectorAll('.fc-stepbar button')].map(x => x.textContent.replace(/^\\d+/, ''))")
+        steps = b.js("return [...document.querySelectorAll('.cfg-rail button .t')].map(x => x.textContent)")
         r.check("the configurator is six steps (D826, D941)", steps == ["Prompt", "Check & Measure", "Objective", "Graph", "Extra", "Save"], str(steps))
-        r.check("its step bar is the app's subtabs, its fields label.stack (D941)",
-                b.js("return !!document.querySelector('.fc-stepbar.subtabs button.on') && !!document.querySelector('.fc-step label.stack.fc-field')"))
-        r.check("one step at a time: the document is the last step's", b.js("return document.querySelector('.fc-output').hidden") is True)
-        b.js("[...document.querySelectorAll('.fc-stepnav button')].find(x => x.textContent.startsWith('Next')).click(); return 1")
-        b.wait("document.querySelector('.fc-stepbar button.on') && document.querySelector('.fc-stepbar button.on').textContent.endsWith('Check & Measure')", timeout=10, what="the Check & Measure step")
+        r.check("the steps down the left, each with its line; its fields label.stack (D1116)",
+                b.js("return [...document.querySelectorAll('.cfg-rail button .sum')].every(x => x.textContent.trim()) && !!document.querySelector('.cfg-rail button.on[data-step=prompt]')"
+                     " && !!document.querySelector('.cfg-body label.stack')"))
+        r.check("the document beside the step, its lines lit (D1116)", b.js("return [...document.querySelectorAll('.cfg-docside pre.cfg-yaml div.lit')].some(d => d.textContent.startsWith('statement'))"))
+        r.check("an untouched draft marks no step as wrong", not b.js("return !!document.querySelector('.cfg-rail button.bad')"))
+        b.js("document.querySelector('.cfg-nav .cfg-next').click(); return 1")
+        b.wait("document.querySelector('.cfg-rail button.on[data-step=checks]')", timeout=10, what="the Check & Measure step")
+        r.check("the address follows the step (D1116)", b.js("return location.hash") == "#/configure?step=checks")
         r.check("Check & Measure: the checks, then the measurements (D941)",
-                b.js("return [...document.querySelectorAll('.fc-step h3')].map(x => x.textContent.trim().split(' ')[0])") == ["Checks", "Measurements"])
-        b.js("[...document.querySelectorAll('.fc-stepbar button')].find(x => x.textContent.endsWith('Save')).click(); return 1")
-        r.check("the last step shows the document and what is left to do", b.js("return !document.querySelector('.fc-output').hidden && !!document.querySelector('.fc-yaml code').textContent"))
-        order = b.js("""const at = (css) => { const e = document.querySelector('.fc-step ' + css); return e ? [...document.querySelectorAll('.fc-step *')].indexOf(e) : -1; };
-            return [at('.fc-summary'), at('.fc-ready'), at('.fc-stepnav'), at('.fc-yaml-fold'), document.querySelector('.fc-yaml-fold').open]""")
-        r.check("Save: the summary, where it stands, the actions, then the document folded (D941)",
-                0 <= order[0] < order[1] < order[2] < order[3] and order[4] is False, str(order))
-        b.js("[...document.querySelectorAll('.fc-stepbar button')].find(x => x.textContent.endsWith('Graph')).click(); return 1")
-        r.check("the drawing is its step's", b.wait("document.querySelector('.fc-step svg .fc-box')", timeout=10, what="the drawing") is not None)
+                b.js("return [...document.querySelectorAll('.cfg-body h3')].map(x => x.textContent.trim().split(' ')[0])") == ["Checks", "Measurements"])
+        b.click(".cfg-rail button[data-step=save]")
+        b.wait("document.querySelector('.cfg[data-step=save] .cfg-ready')", timeout=10, what="the Save step")
+        r.check("an untouched checklist is to-do, not errors", b.js("return !document.querySelector('.cfg-todo li.t-bad') && !!document.querySelector('.cfg-todo li.t-none')"))
+        r.check("the last step shows the document and what is left to do", b.js("return !!document.querySelector('.cfg-yaml-fold pre.cfg-yaml').textContent && !document.querySelector('.cfg-docside')"))
+        order = b.js("""const at = (css) => { const e = document.querySelector('.cfg-body ' + css); return e ? [...document.querySelectorAll('.cfg-body *')].indexOf(e) : -1; };
+            return [at('.cfg-ready'), at('.cfg-todo'), at('.cfg-nav'), at('.cfg-yaml-fold'), document.querySelector('.cfg-yaml-fold').open]""")
+        r.check("Save: where it stands, what is left, the actions, then the document (D941, D1116)",
+                0 <= order[0] < order[1] < order[2] < order[3] and order[4] is True, str(order))
+        b.click(".cfg-rail button[data-step=graph]")
+        r.check("the drawing is its step's", b.wait("document.querySelector('.cfg-body svg.cfg-cycle [data-node=generate]')", timeout=10, what="the drawing") is not None)
+        b.js("document.querySelector('.cfg-cycle [data-node=dse]').dispatchEvent(new MouseEvent('click', {bubbles: true})); return 1")
+        b.wait("document.querySelector('.cfg-panel [data-fc-field=dse]')", timeout=10, what="the Search policy box")
         policy = b.js("const p = document.querySelector('[data-fc-field=dse]'); return [p.value, p.disabled, [...p.options].map(o => o.value), p.getBoundingClientRect().height]")
         r.check("Graph exposes DSE with the adaptive default and only its category's preferences", policy[0] == "none" and not policy[1]
                 and policy[3] > 0 and policy[2] == ["none", "adaptive", "explore", "improve", "tune", "finetune", "variations"], str(policy))
@@ -547,25 +553,30 @@ def flows(r: Run) -> None:
         raw["flow"] = {"orchestrate": {"by": "claude", "timeout_s": 321, "dse": "improve"}, "test": {"check": "true"}}
         doc.write_text(yaml.safe_dump(raw, sort_keys=False))
 
+        def box(node):
+            b.js("document.querySelector('.cfg-cycle [data-node=' + arguments[0] + ']').dispatchEvent(new MouseEvent('click', {bubbles: true})); return 1", node)
+            b.wait(f"document.querySelector('.cfg-cycle [data-node={node}].sel')", timeout=10, what=f"the {node} box opened")
+
         def graph():
-            r.page("#/app/dse_setting/settings/problem", "document.querySelector('.fc-stepbar')", "the saved loop's configurator")
-            b.click(".fc-stepbar button[data-step=graph]")
+            r.page("#/app/dse_setting/settings/problem?step=graph", "document.querySelector('.cfg[data-step=graph] .cfg-cycle')", "the saved loop's Graph")
+            box("dse")
             b.wait("document.querySelector('[data-fc-field=dse]')", what="the DSE dropdown")
 
+        def saved_ok(what):
+            r.button("Save to problem.yaml", ".cfg-nav")
+            r.dialog_button("Save")
+            b.wait("document.querySelector('.cfg-status.t-ok') && !document.querySelector('.cfg-status.t-run')", timeout=20, what=what)
+
         graph()
+        r.check("a step's address opens it: ?step=graph (D1116)", b.js("return !!document.querySelector('.cfg-rail button.on[data-step=graph]')"))
         r.check("the DSE dropdown loads the saved preference", b.js("return document.querySelector('[data-fc-field=dse]').value") == "improve")
         r.check("a saved preference selects its category", b.js("return document.querySelector('[data-fc-field=dse-group]').value") == "preferences")
+        r.check("the drawing says the search policy", b.js("return document.querySelector('.cfg-cycle [data-node=dse]').textContent").endswith("improve"))
         b.js("const p = document.querySelector('[data-fc-field=dse]'); p.value = 'explore'; p.dispatchEvent(new Event('change')); return 1")
-        b.js("document.querySelector('.fc-box[data-node=dse]').dispatchEvent(new MouseEvent('click', {bubbles: true})); return 1")
-        r.check("the DSE graph popover follows the dropdown", b.js("return document.querySelector('.fc-pop input:checked').value") == "explore")
-        b.click("#fc-dse-tune")
-        r.check("the dropdown follows changes in the graph popover", b.js("return document.querySelector('[data-fc-field=dse]').value") == "tune")
-        b.keys(b.ESCAPE)
+        r.check("the drawing follows the dropdown", b.js("return document.querySelector('.cfg-cycle [data-node=dse]').textContent").endswith("explore"))
         for value in ("explore", "none"):
             b.js("const p = document.querySelector('[data-fc-field=dse]'); p.value = arguments[0]; p.dispatchEvent(new Event('change')); return 1", value)
-            r.button("Save to problem.yaml", ".fc-stepnav")
-            r.dialog_button("Save")
-            b.wait("!document.querySelector('.fc-status.fc-pending') && document.querySelector('.fc-status.fc-ok')", timeout=20, what="the DSE setting saved")
+            saved_ok("the DSE setting saved")
             saved = json.loads(r.api("/apps/dse_setting/document")["body"])
             expected = {"by": "claude", "timeout_s": 321}
             if value != "none":
@@ -583,37 +594,30 @@ def flows(r: Run) -> None:
         r.check("the algorithm category filters the policy dropdown", choices == ["sweep", "montecarlo", "anneal", "gradient", "genetic", "pareto"], str(choices))
         r.check("algorithms explain guidance without a parameter space", "does not run a finite-space search" in r.text())
         b.js("const p = document.querySelector('[data-fc-field=dse]'); p.value = 'gradient'; p.dispatchEvent(new Event('change')); return 1")
-        r.button("Save to problem.yaml", ".fc-stepnav")
-        r.dialog_button("Save")
-        b.wait("document.querySelector('.fc-status.fc-ok') && !document.querySelector('.fc-status.fc-pending')", what="algorithm emphasis saved")
+        saved_ok("algorithm emphasis saved")
         saved = json.loads(r.api("/apps/dse_setting/document")["body"])
         r.check("algorithm emphasis preserves who orchestrates", saved["raw"]["flow"]["orchestrate"] == {"by": "claude", "timeout_s": 321, "dse": "gradient"}
                 and saved["normal"] is not None, str(saved))
         graph()
         r.check("a saved algorithm selects its category and policy", b.js("return ['dse-group', 'dse'].map(k => document.querySelector('[data-fc-field=' + k + ']').value)") == ["algorithms", "gradient"])
-        b.js("document.querySelector('.fc-box[data-node=dse]').dispatchEvent(new MouseEvent('click', {bubbles: true})); return 1")
-        r.check("the popover filters to the same algorithm category", b.js("return [...document.querySelectorAll('.fc-pop input[type=radio]')].map(o => o.value)") == choices)
-        category("delegated", "dse-group-popover")
-        r.check("changing category in the popover updates both selectors", b.js("return ['dse-group', 'dse'].map(k => document.querySelector('[data-fc-field=' + k + ']').value)") == ["delegated", "model"])
+        category("delegated")
+        r.check("changing the category picks its first policy", b.js("return ['dse-group', 'dse'].map(k => document.querySelector('[data-fc-field=' + k + ']').value)") == ["delegated", "model"])
         r.check("model and agent choices have their own category", b.js("return [...document.querySelector('[data-fc-field=dse]').options].every(o => o.value === 'model' || o.value.startsWith('agent:'))"))
-        b.keys(b.ESCAPE)
         b.js("const p = document.querySelector('[data-fc-field=dse]'); p.value = 'agent:codex'; p.dispatchEvent(new Event('change')); return 1")
         r.check("agent selection explains its setup and separate generation", "Requires the selected agent" in r.text() and "separately chooses who writes" in r.text())
-        r.button("Save to problem.yaml", ".fc-stepnav")
-        r.dialog_button("Save")
-        b.wait("document.querySelector('.fc-status.fc-ok') && !document.querySelector('.fc-status.fc-pending')", what="agent orchestrator saved")
+        saved_ok("agent orchestrator saved")
         saved = json.loads(r.api("/apps/dse_setting/document")["body"])
         r.check("without a space the selected agent becomes the orchestrator", saved["raw"]["flow"]["orchestrate"] == {"by": "codex"}
                 and saved["normal"] is not None, str(saved))
         graph()
-        b.js("document.querySelector('.fc-box[data-node=orchestrate]').dispatchEvent(new MouseEvent('click', {bubbles: true})); return 1")
-        r.check("the saved agent is restored in Pick the next job", b.js("return document.querySelector('.fc-pop input:checked').value") == "agent:codex")
-        b.keys(b.ESCAPE)
-        b.click(".fc-stepbar button[data-step=extra]")
-        b.js("[...document.querySelectorAll('.fc-step button')].find(x => x.textContent === '+ Add a setting').click(); return 1")
+        box("orchestrate")
+        r.check("the saved agent is restored in Orchestrate", b.js("return document.querySelector('.cfg-panel .cfg-who button.on').textContent") == "codex")
+        b.click(".cfg-rail button[data-step=extra]")
+        r.button("+ Setting", ".cfg-body")
         b.type("[aria-label='Setting']", "block")
-        b.type("[aria-label='Its choices, in order']", "16, 32")
-        b.click(".fc-stepbar button[data-step=graph]")
+        b.type("[aria-label='Its values']", "16, 32")
+        b.click(".cfg-rail button[data-step=graph]")
+        box("dse")
         category("algorithms")
         r.check("adding settings changes the algorithm explanation to a real search", "Runs over the settings in Extra" in r.text())
         r.check("category and policy fields fit the page", b.js("return document.documentElement.scrollWidth <= innerWidth + 1"))
@@ -634,8 +638,7 @@ def flows(r: Run) -> None:
         path.write_text(yaml.safe_dump(raw, sort_keys=False))
 
         def extra():
-            r.page("#/app/baseline_setting/settings/problem", "document.querySelector('.fc-stepbar')", "the baseline configurator")
-            b.click(".fc-stepbar button[data-step=extra]")
+            r.page("#/app/baseline_setting/settings/problem?step=extra", "document.querySelector('.cfg[data-step=extra]')", "the baseline configurator")
             b.wait("document.querySelector('[data-fc-field=baseline-mode]')", what="the baseline setting")
 
         def setv(key, value):
@@ -653,17 +656,17 @@ def flows(r: Run) -> None:
             if source == "command":
                 setv("baseline-command", expected["command"])
             if source == "metrics":
-                r.button("+ Add baseline metric", ".fc-sub")
+                r.button("+ Add baseline metric", ".cfg-body")
                 setv("baseline-metric-0", "cost")
                 setv("baseline-value-0", "0")
-                r.button("+ Add baseline metric", ".fc-sub")
+                r.button("+ Add baseline metric", ".cfg-body")
                 setv("baseline-metric-1", "time_ms")
                 setv("baseline-value-1", "2.5")
                 setv("baseline-stage-1", "measure")
                 expected = {"metrics": [{"metric": "cost", "value": 0}, {"metric": "time_ms", "value": 2.5, "stage": "measure"}]}
-            r.button("Save to problem.yaml", ".fc-stepnav")
+            r.button("Save to problem.yaml", ".cfg-nav")
             r.dialog_button("Save")
-            b.wait("!document.querySelector('.fc-status.fc-pending') && document.querySelector('.fc-status.fc-ok')", timeout=20, what="baseline saved")
+            b.wait("!document.querySelector('.cfg-status.t-run') && document.querySelector('.cfg-status.t-ok')", timeout=20, what="baseline saved")
             saved = json.loads(r.api("/apps/baseline_setting/document")["body"])
             r.check(f"baseline {source} is saved as a valid setting", saved["raw"]["baseline"] == expected and saved["normal"] is not None, str(saved))
             extra()
@@ -682,40 +685,43 @@ def flows(r: Run) -> None:
         setv = ("const [css, v] = arguments; const el = document.querySelector(css); el.value = v;"
                 " el.dispatchEvent(new Event(el.tagName === 'SELECT' ? 'change' : 'input', {bubbles: true})); return 1")
         click = "const [css, t] = arguments; [...document.querySelectorAll(css)].find(x => x.textContent.trim().startsWith(t)).click(); return 1"
-        r.page("#/configure", "document.querySelector('.flux-crafter .fc-stepbar')", "the configurator")
-        b.js(click, ".fc-stepbar button", "1")             # the draft keeps its step: the last test left it on 5
-        b.js(setv, ".flux-crafter [data-fc-field=id]", "drafty")
-        b.js(setv, ".flux-crafter [data-fc-field=statement]", "an adder that is small")
-        b.js(setv, ".flux-crafter select[aria-label=Language]", "python")
+        r.page("#/configure?step=prompt", "document.querySelector('.cfg[data-step=prompt]')", "the configurator")
+        b.js(setv, ".cfg [data-fc-field=id]", "drafty")
+        b.js(setv, ".cfg [data-fc-field=statement]", "an adder that is small")
+        b.js(setv, ".cfg select[aria-label=Language]", "python")
         b.js(click, ".files-panel button", "New file")
         b.wait("document.querySelector('dialog.dlg[open] .file-edit textarea')", what="the new file's editor")
         b.js(setv, "dialog.dlg[open] .file-edit input", "check.py")
         b.js(setv, "dialog.dlg[open] .file-edit textarea", "print('0 failing')")
         r.dialog_button("Save")
         b.wait("[...document.querySelectorAll('.files-panel li')].some(l => l.textContent.includes('check.py'))", timeout=10, what="the staged file")
-        b.js(click, ".fc-stepbar button", "2")             # D941: Check & Measure
-        b.js(click, ".fc-step button", "+ Add a measurement")
+        b.click(".cfg-rail button[data-step=checks]")             # D941: Check & Measure
+        b.js(click, ".cfg-body button", "+ Measurement")
+        b.wait("document.querySelector('.cfg-rail button[data-step=prompt] .sum').textContent.includes('missing')", timeout=10, what="a file missing, said by Prompt")
+        b.click(".cfg-rail button[data-step=prompt]")
         named = b.wait("(document.querySelector('.files-panel .notice.t-bad') || {}).textContent", timeout=10, what="the measurement's script named")
         r.check("a measurement added names its script in the files at once (D912)", "bench.py" in named, named)
-        b.js(click, ".fc-stepbar button", "6")
-        ready =b.wait("(document.querySelector('.fc-ready') || {}).innerText", timeout=10, what="where it stands")
-        r.check("Review says a missing file apart, no 'complete' over it (D912)", "missing bench.py" in ready and "Looks complete" not in r.text(), ready)
+        b.click(".cfg-rail button[data-step=save]")
+        ready = b.wait("(document.querySelector('.cfg-ready') || {}).innerText", timeout=10, what="where it stands")
+        r.check("Save says a missing file apart, no 'complete' over it (D912)", "missing bench.py" in ready and "Looks complete" not in r.text(), ready)
         r.button("Agent", "#main .tabs")
         b.wait("document.querySelector('#ag-name')", what="the agent form")
         got = b.js("return [document.querySelector('#ag-name').value, document.querySelector('#ag-ask').value, document.querySelector('#main .attach').innerText]")
         r.check("the agent is told the draft's name, statement and files (D912)", got[0] == "drafty" and got[1] == "an adder that is small" and "check.py" in got[2], str(got))
         r.button("Configurator", "#main .tabs")
-        b.wait("document.querySelector('.flux-crafter [data-fc-field=id]') || document.querySelector('.flux-crafter .fc-step')", what="the configurator again")
-        b.wait("[...document.querySelectorAll('.files-panel li')].some(l => l.textContent.includes('check.py'))", timeout=10, what="the staged file, still")
+        b.wait("document.querySelector('.cfg[data-step=save]')", what="the configurator again, on the draft's step")
         r.check("back in the configurator: the draft and its staged file are kept (D912)",
-                b.js("return document.querySelector('.fc-yaml code').textContent.includes('an adder that is small')") and "drafty" in b.js("return document.querySelector('.draft-line').textContent"))
-        b.js(click, ".fc-stepbar button", "1")
-        b.js(setv, ".flux-crafter [data-fc-field=id]", "")
-        b.js(click, ".fc-stepnav button", "Create loop")
-        said = b.wait("(document.querySelector('.fc-stepnav .fc-status.fc-err') || {}).textContent", timeout=10, what="the refusal beside the button")
-        r.check("a create refused on step 1 says why beside its button, the name focused (D912)",
+                b.js("return document.querySelector('.cfg-yaml-fold pre.cfg-yaml').textContent.includes('an adder that is small')")
+                and "drafty" in b.js("return document.querySelector('.draft-line').textContent") and "1 file staged" in b.js("return document.querySelector('.draft-line').textContent"))
+        b.click(".cfg-rail button[data-step=prompt]")
+        b.wait("[...document.querySelectorAll('.files-panel li')].some(l => l.textContent.includes('check.py'))", timeout=10, what="the staged file, still")
+        b.js(setv, ".cfg [data-fc-field=id]", "")
+        b.click(".cfg-rail button[data-step=objective]")
+        b.js(click, ".cfg-nav button", "Create loop")
+        said = b.wait("(document.querySelector('.cfg-nav .cfg-status.t-bad') || {}).textContent", timeout=10, what="the refusal beside the button")
+        r.check("a create refused says why beside its button, on Prompt, the name focused (D912)",
                 "name" in said and b.js("return document.activeElement && document.activeElement.dataset.fcField === 'id'")
-                and b.js("return !!document.querySelector('.fc-stepnav .fc-status.fc-err').offsetParent"), said)
+                and b.js("return !!document.querySelector('.cfg[data-step=prompt]') && !!document.querySelector('.cfg-nav .cfg-status.t-bad').offsetParent"), said)
         b.js(click, ".draft-line button", "Discard the draft")
         r.dialog_button("Discard")
         b.wait("!document.querySelector('.draft-line button')", timeout=10, what="the draft discarded")
@@ -773,7 +779,7 @@ def flows(r: Run) -> None:
                 and "Without files:" in r.text())
         b.type("#up-name", "blank")
         r.button("Create loop")
-        b.wait("location.hash === '#/app/blank/settings/problem' && document.querySelector('.flux-crafter')", timeout=20, what="the empty loop's configurator")
+        b.wait("location.hash.startsWith('#/app/blank/settings/problem') && document.querySelector('.cfg')", timeout=20, what="the empty loop's configurator")
         files = [f["path"] for f in json.loads(r.api("/apps/blank/files")["body"])]
         r.check("an empty loop is the baseline, opened in its configurator", sorted(files) == ["README.md", "library", "problem.yaml"], str(files))
         r.clean("empty loop")
@@ -2334,8 +2340,8 @@ def flows(r: Run) -> None:
                 and [x["name"] for x in mine["server"]] == ["CORP_REGION"], str(mine))
         r.clean("agent tabs and variables")
         # D934: the configurator's agent choices offer the added agent by name, with its label
-        r.page("#/configure", "document.querySelector('.flux-crafter .fc-form')", "the configurator")
-        got = b.wait("(window.FluxCrafter.BOXES.generate.choices.find(c => c.value === 'agent:corp') || {}).label",
+        r.page("#/configure", "document.querySelector('.cfg .cfg-rail')", "the configurator")
+        got = b.wait("(window.FluxCrafterModel.BOXES.generate.choices.find(c => c.value === 'agent:corp') || {}).label",
                      timeout=20, what="corp among generate's choices")
         r.check("the configurator offers an added agent by name, with its label (D934)", "Corp Codex" in str(got) and "corp" in str(got), str(got))
         r.clean("the configurator's agents")
@@ -2860,73 +2866,68 @@ def flows(r: Run) -> None:
 
     def phone_wizard():
         """D913: on a phone the wizard's step and its first field are on the first screen -- a step menu
-        in place of the step bar, the ways a menu -- at 390 and 320 pixels, every step, nothing wider
-        than the screen, one action bar (D941: six steps; Save's first is its summary). FLUX_E2E_SHOTS: each
+        in place of the steps down the left, the ways a menu -- at 390 and 320 pixels, every step, nothing wider
+        than the screen, one action bar (D941: six steps; D1116: Save's first is where it stands). FLUX_E2E_SHOTS: each
         step at 390 to that folder, and on a desktop, light and dark."""
         r.login("bob")
         shots = Path(os.environ["FLUX_E2E_SHOTS"]) if os.environ.get("FLUX_E2E_SHOTS") else None
         if shots:
             shots.mkdir(parents=True, exist_ok=True)
-        pre = json.loads(r.api("/apps/sw/preflight")["body"])            # D913b: Review says the loop's own check
-        expect = ("Checked: passed" if pre["ok"] else "Checked: failed") if pre["checked"] else "Checked: not "
+        pre = json.loads(r.api("/apps/sw/preflight")["body"])            # D913b: Save says the loop's own check
+        expect = ("passed" if pre["ok"] else "failed") if pre["checked"] else "not "
+        ids = ["prompt", "checks", "objective", "graph", "extra", "save"]
         for h in ("#/configure", "#/app/sw/settings/problem"):
             for width in (390, 320):
                 b.js("document.body.innerHTML = ''; const f = document.createElement('iframe'); f.id = 'phone';"
                      "f.style.cssText = `width:${arguments[0]}px;height:800px;border:0`; f.src = '/' + arguments[1]; document.body.append(f); return 1", width, h)
-                b.wait("(() => { const d = document.getElementById('phone').contentDocument; return d && d.querySelector('.fc-stephead select'); })()",
+                b.wait("(() => { const d = document.getElementById('phone').contentDocument; return d && d.querySelector('.cfg-stephead select'); })()",
                        timeout=20, what=f"the wizard of {h} at {width}")
-                for step in range(6):
-                    first = ("[...document.getElementById('phone').contentDocument.querySelectorAll('.fc-step input, .fc-step select, .fc-step textarea,"
-                             " .fc-step button, .fc-step summary, .fc-step svg .fc-box, .fc-step .fc-summary > div')].find(e => e.getBoundingClientRect().height > 0)")
+                for step, sid in enumerate(ids):
+                    first = ("[...document.getElementById('phone').contentDocument.querySelectorAll('.cfg-body input, .cfg-body select, .cfg-body textarea,"
+                             " .cfg-body button, .cfg-body summary, .cfg-body svg .hit, .cfg-body .cfg-ready li')].find(e => e.getBoundingClientRect().height > 0)")
                     b.js("""const [step] = arguments, w = document.getElementById('phone').contentWindow, d = w.document;
-                        const m = d.querySelector('.fc-stephead select'); m.value = String(step); m.dispatchEvent(new Event('change'));
-                        w.scrollTo(0, 0); return 1""", step)
-                    b.wait(f"document.getElementById('phone').contentDocument.querySelector('.fc-stepof').textContent === 'Step {step + 1} of 6' && {first}",
+                        const m = d.querySelector('.cfg-stephead select'); m.value = step; m.dispatchEvent(new Event('change'));
+                        w.scrollTo(0, 0); return 1""", sid)
+                    b.wait(f"document.getElementById('phone').contentDocument.querySelector('.cfg-stepof').textContent === 'Step {step + 1} of 6' && {first}",
                            timeout=10, what=f"step {step + 1}")
                     got = b.js(f"""const w = document.getElementById('phone').contentWindow, d = w.document;
-                        const head = d.querySelector('.fc-stephead').getBoundingClientRect();
+                        const head = d.querySelector('.cfg-stephead').getBoundingClientRect();
                         const first = {first};""" + """
                         const f = first ? first.getBoundingClientRect() : null;
-                        return [d.querySelector('.fc-stepof').textContent, Math.round(head.bottom), f ? Math.round(f.bottom) : -1,
-                                d.documentElement.scrollWidth, w.innerWidth, !!d.querySelector('.fc-stepbar') && d.querySelector('.fc-stepbar').offsetParent === null];""", step)
+                        return [d.querySelector('.cfg-stepof').textContent, Math.round(head.bottom), f ? Math.round(f.bottom) : -1,
+                                d.documentElement.scrollWidth, w.innerWidth, d.querySelector('.cfg-rail').offsetParent === null];""", step)
                     ok = got[0] == f"Step {step + 1} of 6" and 0 < got[1] < 800 and 0 < got[2] <= 800 and got[3] <= got[4] + 1 and got[5]
                     r.check(f"phone wizard {h} at {width}px, step {step + 1}: the step and its first field on the first screen", ok, str(got))
                     if not ok and shots:                          # the phone's own screen, to see what pushed the field down
                         (shots / f"phone-wizard-{width}-step{step + 1}-{h.strip('#/').replace('/', '-')}.png").write_bytes(
                             base64.b64decode(b.cmd("WebDriver:TakeScreenshot", {"id": b.find("#phone"), "full": False})["value"]))
                     cut = b.js("""const d = document.getElementById('phone').contentDocument;
-                        return [...d.querySelectorAll('.fc-step .fc-label')].filter(l => l.offsetParent && l.scrollWidth > l.clientWidth + 1).map(l => l.textContent)""")
+                        return [...d.querySelectorAll('.cfg-body label.stack > span')].filter(l => l.offsetParent && l.scrollWidth > l.clientWidth + 1).map(l => l.textContent)""")
                     r.check(f"phone wizard {h} at {width}px, step {step + 1}: no label cut short (D913b)", not cut, str(cut))
-                    bars = b.js("return [...document.getElementById('phone').contentDocument.querySelectorAll('.fc-stepnav')].filter(e => e.offsetParent).length")
+                    bars = b.js("return [...document.getElementById('phone').contentDocument.querySelectorAll('.cfg-nav')].filter(e => e.offsetParent).length")
                     r.check(f"phone wizard {h} at {width}px, step {step + 1}: one action bar (D913, D941)", bars == 1, str(bars))
-                    if step == 5 and h != "#/configure":
-                        said = b.wait("(() => { const t = (document.getElementById('phone').contentDocument.querySelector('.fc-ready') || {}).innerText || '';"
-                                      " return !t.includes('reading the loop') && t; })()", timeout=10, what="the loop's check on Review")
-                        r.check(f"Review's Checked line is the loop's own check at {width}px (D913b)", expect in said, f"{pre} {said}")
-                        b.js("const f = document.getElementById('phone').contentDocument.querySelector('.fc-diff-fold'); f.open = true; return 1")
-                        diff = b.wait("(document.getElementById('phone').contentDocument.querySelector('.fc-diff') || {}).innerText", timeout=10, what="the changes")
+                    if sid == "save" and h != "#/configure":
+                        said = b.wait("(() => { const t = (document.getElementById('phone').contentDocument.querySelector('.cfg-ready') || {}).innerText || '';"
+                                      " return !t.includes('reading the loop') && t; })()", timeout=10, what="the loop's check on Save")
+                        line = " ".join(said.split("Checked", 1)[-1].split())
+                        r.check(f"Save's Checked line is the loop's own check at {width}px (D913b)", line.startswith(expect), f"{pre} {said}")
+                        b.js("const d = document.getElementById('phone').contentDocument, f = d.querySelector('.cfg-diff-fold'); f.open = true; return 1")
+                        diff = b.wait("(() => { const t = (document.getElementById('phone').contentDocument.querySelector('.cfg-diff') || {}).innerText || '';"
+                                      " return !t.includes('Reading') && t; })()", timeout=10, what="the changes")
                         r.check(f"Save's folded Changes read the save's preview at {width}px (D941)", "No change" in diff or " added" in diff, diff)
                     if shots and width == 390:
                         el = b.find("#phone")
                         png = b.cmd("WebDriver:TakeScreenshot", {"id": el, "full": False})["value"]
                         (shots / f"wizard-{'new' if h == '#/configure' else 'loop'}-step{step + 1}-390px.png").write_bytes(base64.b64decode(png))
-        if shots:                                       # and Review on a desktop, its new order (D913)
-            b.js("document.body.innerHTML = ''; const f = document.createElement('iframe'); f.id = 'phone';"
-                 "f.style.cssText = 'width:1240px;height:880px;border:0'; f.src = '/#/app/sw/settings/problem'; document.body.append(f); return 1")
-            b.wait("(() => { const d = document.getElementById('phone').contentDocument; return d && d.querySelector('.fc-stepbar button'); })()", timeout=20)
-            b.js("[...document.getElementById('phone').contentDocument.querySelectorAll('.fc-stepbar button')].pop().click(); return 1")
-            time.sleep(0.5)
-            png = b.cmd("WebDriver:TakeScreenshot", {"id": b.find("#phone"), "full": False})["value"]
-            (shots / "wizard-loop-review-desktop.png").write_bytes(base64.b64decode(png))
-            # D941: every step on a desktop, light and dark, a new loop's and a loop's own
+        if shots:                                       # D941, D1116: every step on a desktop, light and dark, a new loop's and a loop's own
             for theme in ("light", "dark"):
                 b.js("localStorage.setItem('flux-theme', arguments[0]); return 1", theme)
                 for h in ("#/configure", "#/app/sw/settings/problem"):
                     b.js("document.body.innerHTML = ''; const f = document.createElement('iframe'); f.id = 'phone';"
                          "f.style.cssText = 'width:1280px;height:1000px;border:0'; f.src = '/?shots=' + Date.now() + arguments[0]; document.body.append(f); return 1", h)
-                    b.wait("(() => { const d = document.getElementById('phone').contentDocument; return d && d.querySelector('.fc-stepbar button'); })()", timeout=20)
-                    for step in range(6):
-                        b.js("document.getElementById('phone').contentDocument.querySelectorAll('.fc-stepbar button')[arguments[0]].click(); return 1", step)
+                    b.wait("(() => { const d = document.getElementById('phone').contentDocument; return d && d.querySelector('.cfg-rail button'); })()", timeout=20)
+                    for step, sid in enumerate(ids):
+                        b.js("document.getElementById('phone').contentDocument.querySelector('.cfg-rail button[data-step=' + arguments[0] + ']').click(); return 1", sid)
                         time.sleep(0.6)
                         png = b.cmd("WebDriver:TakeScreenshot", {"id": b.find("#phone"), "full": False})["value"]
                         (shots / f"wizard-{'new' if h == '#/configure' else 'loop'}-step{step + 1}-desktop-{theme}.png").write_bytes(base64.b64decode(png))

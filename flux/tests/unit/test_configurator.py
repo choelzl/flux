@@ -41,7 +41,7 @@ def _round(path: Path, tmp: Path) -> tuple[dict, dict, list[str]]:
     src = home / path.name
     v = views(src)
     assert v["normal"] is not None, v["error"]
-    r = subprocess.run(["node", "-e", JS, str(ASSETS / "crafter.js"), str(ASSETS / "tools.json")],
+    r = subprocess.run(["node", "-e", JS, str(ASSETS / "crafter-model.js"), str(ASSETS / "tools.json")],
                        input=json.dumps({"raw": v["raw"], "normal": v["normal"]}, default=str),
                        capture_output=True, text=True, timeout=60)
     assert r.returncode == 0, r.stderr
@@ -102,7 +102,7 @@ def test_an_agent_with_its_own_settings_is_an_agent_kept_as_written(tmp_path):
     v = views(doc)
     assert v["normal"] is not None, v["error"]
     js = JS.replace("process.stdout.write(JSON.stringify({yaml:", "process.stdout.write(JSON.stringify({flow: got.state.flow, half: ['generate', 'critique'].map(b => c.halfOf ? c.halfOf(got.state, b) : null), yaml:")
-    r = subprocess.run(["node", "-e", js, str(ASSETS / "crafter.js"), str(ASSETS / "tools.json")],
+    r = subprocess.run(["node", "-e", js, str(ASSETS / "crafter-model.js"), str(ASSETS / "tools.json")],
                        input=json.dumps({"raw": v["raw"], "normal": v["normal"]}, default=str), capture_output=True, text=True, timeout=60)
     assert r.returncode == 0, r.stderr
     out = json.loads(r.stdout)
@@ -179,7 +179,7 @@ process.stdout.write(JSON.stringify(out));
 def test_a_search_draws_and_checks_only_the_generator_that_runs():
     """D911: Flux makes a search's point into a design through `flow.generate: {command}` alone, so
     the configurator neither draws a model or an agent there nor lets the search go unsaid."""
-    r = subprocess.run(["node", "-e", SEARCH_JS, str(ASSETS / "crafter.js"), str(ASSETS / "tools.json")],
+    r = subprocess.run(["node", "-e", SEARCH_JS, str(ASSETS / "crafter-model.js"), str(ASSETS / "tools.json")],
                        capture_output=True, text=True, timeout=60)
     assert r.returncode == 0, r.stderr
     out = json.loads(r.stdout)
@@ -197,7 +197,7 @@ def test_the_checklist_knows_the_loops_own_placeholders():
     from flux_loop.document import BUILTIN_SUBS
 
     r = subprocess.run(["node", "-e", "process.stdout.write(JSON.stringify(require(process.argv[1]).BUILTIN_SUBS))",
-                        str(ASSETS / "crafter.js")], capture_output=True, text=True, timeout=60)
+                        str(ASSETS / "crafter-model.js")], capture_output=True, text=True, timeout=60)
     assert r.returncode == 0, r.stderr
     assert json.loads(r.stdout) == list(BUILTIN_SUBS)
 
@@ -207,7 +207,7 @@ def test_the_wizard_has_six_steps_and_old_steps_land_on_theirs():
     and the seven steps' names and numbers (D826) land on the step that holds their fields now."""
     js = ("const c = require(process.argv[1]); process.stdout.write(JSON.stringify({ids: c.STEP_IDS, of: c.STEP_OF,"
           " old: [0, 1, 2, 3, 4, 5, 6].map(i => c.stepIndex(i, true)), steps: c.check(c.base()).map(m => m.step)}))")
-    r = subprocess.run(["node", "-e", js, str(ASSETS / "crafter.js")], capture_output=True, text=True, timeout=60)
+    r = subprocess.run(["node", "-e", js, str(ASSETS / "crafter-model.js")], capture_output=True, text=True, timeout=60)
     assert r.returncode == 0, r.stderr
     out = json.loads(r.stdout)
     assert out["ids"] == ["prompt", "measure", "objective", "graph", "extra", "save"]
@@ -233,6 +233,11 @@ def test_the_crafters_docs_tokens_are_the_apps():
     assert {"--ink", "--muted", "--line", "--panel", "--bg", "--soft", "--accent", "--accent-ink", "--ok", "--bad", "--warn"} <= set(docs_light) & set(docs_dark)
     for app, docs in ((app_light, docs_light), (app_dark, docs_dark)):
         assert {k: v for k, v in docs.items() if k in app} == {k: app[k] for k in docs if k in app}
+    # D1120: the agent is pink everywhere -- the drawing's agent half is the app's agent colour, light and dark
+    halves_light = tokens(re.search(r"^\.flux-crafter \{(.*?)\}", crafter, re.S | re.M).group(1))
+    halves_dark = tokens(re.search(r'\[data-md-color-scheme="slate"\] \.flux-crafter,\s*:root\[data-theme="dark"\][^{]*\{(.*?)\}', crafter, re.S).group(1))
+    assert halves_light["--fc-agent"] == app_light["--agent"] == app_light["--half-agent"]
+    assert halves_dark["--fc-agent"] == app_dark["--agent"] == app_dark["--half-agent"]
 
 
 def test_an_added_agent_called_custom_is_one_choice_however_often_the_agents_are_set():
@@ -244,7 +249,62 @@ for (let i = 0; i < 5; i++) c.setAgents([{name: "custom", label: "Custom"}, {nam
 process.stdout.write(JSON.stringify(Object.fromEntries(Object.entries(c.BOXES).map(([b, x]) =>
   [b, (x.choices || []).filter(o => String(o.value).startsWith("agent:")).map(o => o.value)]))));
 """
-    r = subprocess.run(["node", "-e", js, str(ASSETS / "crafter.js")], capture_output=True, text=True, timeout=60)
+    r = subprocess.run(["node", "-e", js, str(ASSETS / "crafter-model.js")], capture_output=True, text=True, timeout=60)
     assert r.returncode == 0, r.stderr
     agents = {b: v for b, v in json.loads(r.stdout).items() if v}
     assert agents and all(v == ["agent:opencode", "agent:claude", "agent:codex", "agent:custom", "agent:nga"] for v in agents.values()), agents
+
+
+GRAPH_JS = r"""
+const c = require(process.argv[1]);
+c.setCatalog(JSON.parse(require("fs").readFileSync(process.argv[2], "utf8")));
+const s = c.base(); s.id = "graphed"; s.statement = "Anything."; s.language = "python";
+s.checks.push(c.newCheck(s, "custom")); s.checks[0].params.command = "{python} {home}/check.py {artifact}";
+s.stages.push(c.newStage(s, "custom-stage")); s.stages[0].params.command = "{python} {home}/check.py {artifact}"; s.stages[0].metrics = "score";
+s.objectives = [c.newObjective("score", "max")];
+const which = process.argv[3];
+if (which === "search") { s.flow.orchestrate = "command"; s.orchestrateCommand = "{python} {home}/check.py {history} {state}"; s.orchestrateTimeout = "60"; }
+if (which === "catalog") { s.flow.generate = "catalog"; s.generateCatalog = "check.py"; }
+c.setCritic(s, "test", "model"); c.setCritic(s, "select", "agent:claude");
+s.params = [{key: "width", value: "8"}, {key: "mode", value: "fast"}];
+Object.assign(s.budget, {explore_every: "5", explore_after: "1", cooldown_after: "2", regress_after: "3", agent_continues: "2", patching: "false", budget_s: "900"});
+process.stdout.write(JSON.stringify({yaml: c.buildYaml(s), check: c.check(s), state: s}));
+"""
+
+READ_JS = r"""
+const c = require(process.argv[1]);
+c.setCatalog(JSON.parse(require("fs").readFileSync(process.argv[2], "utf8")));
+const v = JSON.parse(require("fs").readFileSync(0, "utf8"));
+const got = c.fromDoc(v.raw, v.normal);
+process.stdout.write(JSON.stringify({yaml: c.buildYaml(got.state), kept: got.kept, state: got.state}));
+"""
+
+
+@pytest.mark.parametrize("which", ["search", "catalog"])
+def test_the_graphs_settings_load_and_read_back(tmp_path, which):
+    """D1118: what the configurator's Graph sets beside each box -- a search command (D799) or the designs one has
+    (a catalog), a critic per box it judges (D1040), the loop's knobs, the document's parameters -- is a document
+    the loader takes, and reads back into the same form."""
+    r = subprocess.run(["node", "-e", GRAPH_JS, str(ASSETS / "crafter-model.js"), str(ASSETS / "tools.json"), which],
+                       capture_output=True, text=True, timeout=60)
+    assert r.returncode == 0, r.stderr
+    out = json.loads(r.stdout)
+    assert not [m for m in out["check"] if m["level"] == "error"], out["check"]
+    home = tmp_path / "graphed"
+    home.mkdir()
+    (home / "check.py").write_text("print('score=1')\n")
+    (home / "problem.yaml").write_text(out["yaml"])
+    task = load_task(str(home / "problem.yaml"))
+    assert task.critics.get("test") == {"model": True} or "test" in task.critics, task.critics
+    assert "select" in task.critics and "orchestrate" not in task.critics
+    assert task.budget["explore_every"] == 5 and task.budget["patching"] is False and task.params == {"width": 8, "mode": "fast"}
+    if which == "catalog":
+        assert task.generator == {"catalog": ["check.py"]}
+    v = views(home / "problem.yaml")
+    back = subprocess.run(["node", "-e", READ_JS, str(ASSETS / "crafter-model.js"), str(ASSETS / "tools.json")],
+                          input=json.dumps({"raw": v["raw"], "normal": v["normal"]}, default=str), capture_output=True, text=True, timeout=60)
+    assert back.returncode == 0, back.stderr
+    got = json.loads(back.stdout)
+    assert not got["kept"], got["kept"]
+    assert got["yaml"] == out["yaml"]
+    assert got["state"]["critics"] == {"orchestrate": "off", "test": "model", "measure": "off", "select": "agent:claude"}

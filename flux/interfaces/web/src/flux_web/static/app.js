@@ -54,9 +54,11 @@ function App() {
     <${Offline} /><${Toasts} /><${Dialogs} />`;
 }
 
-/** Where an address leads (logged in): its page. */
+/** Where an address leads (logged in): its page. D1116: what follows a `?` is the page's own (the configurator's
+    `?step=checks`), not where it leads. */
 function pageOf(hash) {
   let m;
+  hash = hash.replace(/\?.*$/, "");
   setPageOwner(null);
   // D713: a loop's address is its tab and what is under it: /live/log, /files/workbench, /settings/problem/edit
   if ((m = hash.match(/^#\/app\/([^/]+)((?:\/[a-z0-9-]+)*)$/))) return html`<${LoopRoute} name=${decodeURIComponent(m[1])} owner=${null} path=${m[2].slice(1)} />`;

@@ -22,7 +22,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
-__all__ = ["DOCUMENT_KEYS", "Ask", "check_document", "drive", "parse_files", "reference", "workspace", "workspace_skills"]
+__all__ = ["AUTHOR_SKILLS", "DECISIONS", "DECISION_STEPS", "DOCUMENT_KEYS", "Activity", "Ask", "author_skills", "check_document",
+           "decisions_of_document", "drive", "install_author_skills", "parse_files", "question_options", "read_decisions",
+           "reference", "workspace", "workspace_skills"]
 
 HERE = Path(__file__).resolve().parent
 #: flux/, from core/loop/src/flux_loop/author.py
@@ -37,6 +39,14 @@ EXAMPLES = (("mul8", ("problem.yaml", "golden.py")),
 
 DOCUMENT = "problem.yaml"
 DONE = "done.txt"
+#: The author's own skills (D1123): how a loop is written, what a loop's workers can query -- installed where an
+#: agent author looks for project skills, never named by the document (they are the author's, not the designers').
+AUTHOR_SKILLS = ("flux-loop-creator", "flux-loop-commands")
+#: The author's decisions beside the document (D1124): `[{step, what, why}]`, a step of the configurator's.
+DECISIONS = "decisions.json"
+DECISION_STEPS = ("prompt", "checks", "objective", "graph", "extra")
+#: The loops Flux ships, which an author reads as references and never writes.
+BUNDLED = FLUX_ROOT / "applications"
 
 
 def document_path(workdir: Path) -> Path:
@@ -101,6 +111,9 @@ class Ask:
     passes: int = 0                                         # D593: a cap on the loop's passes; 0 = until stopped
     excerpt_chars: int = 40000                              # what of the inputs a MODEL author reads inline
     no_run: bool = False                                    # write and check the document only
+    questions: str = "decide"                               # D1125: "operator" -- the agent may ask; the answer from `journal`'s inbox
+    wait_s: float = 600.0                                   # how long a question waits for its answer
+    journal: Path | None = None                             # D1125: where the author's activity and inbox are (`runs/author`)
 
 
 def _inputs_block(ask: Ask, *, inline: bool) -> str:
@@ -144,6 +157,14 @@ def brief(ask: Ask, *, inline: bool, error: str = "", report: str = "", current:
         parts.append(f"SKILLS given with the ask ({names}), in `skills/`: the loop hands them to whoever writes the "
                      "design; name the folder in the document (`skills: [skills]`) and use them yourself where they "
                      "apply to writing the problem.\n" + skill_index(ask.skills, tools=not inline))
+    if not inline:
+        parts += _agent_aids(ask)
+    parts.append(
+        f"YOUR DECISIONS: beside `{DOCUMENT}`, write `{DECISIONS}` -- a JSON list, one entry per decision you made, each "
+        f'{{"step": one of {", ".join(DECISION_STEPS)}, "what": "<the decision, a few words>", "why": "<one line: the ask, '
+        f'a file, or your judgement>"}}. prompt: the statement, contract, language; checks: the checks and the measurement '
+        "stages; objective: the objectives; graph: who works each box (a model, an agent, a script); extra: the budget and "
+        "the rest. Keep it current when you revise the document.")
     if current:
         parts.append(f"THE CURRENT `{DOCUMENT}`:\n```yaml\n{current}\n```")
     if note:
@@ -159,6 +180,129 @@ def brief(ask: Ask, *, inline: bool, error: str = "", report: str = "", current:
             f"Otherwise revise `{DOCUMENT}` (and its files) so the next pass comes closer: a gate that let a wrong design "
             "through, a goal that was not the ask's, a stage that measured the wrong thing, a search that stopped too early.")
     return "\n\n".join(parts) + "\n"
+
+
+def author_skills() -> list[Any]:
+    """The author's skills (D1123) from the repository's `skills/` (`FLUX_AUTHOR_SKILLS` names another folder);
+    none where Flux runs without its repository."""
+    import os
+
+    from .skills import SkillError, load_skills
+
+    root = Path(os.environ.get("FLUX_AUTHOR_SKILLS") or FLUX_ROOT.parent / "skills")
+    folders = [root / n for n in AUTHOR_SKILLS if (root / n / "SKILL.md").is_file()]
+    try:
+        return load_skills(folders) if folders else []
+    except SkillError:
+        return []
+
+
+def install_author_skills(workdir: Path) -> list[str]:
+    """The author's skills placed where every coding agent looks in `workdir` (flux_loop.skills.install): their
+    names, those already there included (the web places them before a sandboxed author, which cannot see the
+    repository's `skills/`)."""
+    from .skills import AGENT_DIRS, install
+
+    found = author_skills()
+    if found:
+        install(found, workdir)
+    return [n for n in AUTHOR_SKILLS if any((Path(workdir) / d / n / "SKILL.md").is_file() for d in AGENT_DIRS)]
+
+
+def _agent_aids(ask: Ask) -> list[str]:
+    """What an agent author has besides the ask (D1123): its skills, the bundled loops to read, and whether it may
+    ask (D1125)."""
+    from .agent import _ASKING
+
+    out = []
+    from .skills import AGENT_DIRS
+
+    names = [n for n in AUTHOR_SKILLS if any((ask.workdir / d / n / "SKILL.md").is_file() for d in AGENT_DIRS)] or \
+        [s.name for s in author_skills()]
+    if names:
+        out.append(f"YOUR SKILLS, in `{AGENT_DIRS[0]}/` (and `{AGENT_DIRS[2]}/`): {', '.join(names)}. Read "
+                   f"`{AGENT_DIRS[0]}/{names[0]}/SKILL.md` before you write: it is how a loop is written.")
+    if BUNDLED.is_dir():
+        loops = sorted(p.name for p in BUNDLED.iterdir() if (p / DOCUMENT).is_file())
+        out.append(f"THE BUNDLED LOOPS, read only, at {BUNDLED}: {', '.join(loops)}. Read them for how a document, its "
+                   "golden model and its scripts are written; never write there, and take nothing from them that this ask "
+                   "does not need.")
+    out.append("QUESTIONS: " + _ASKING["operator" if ask.questions == "operator" else "decide"].replace("write the file", f"write `{DOCUMENT}`")
+               + (" Ask with the choices as a short list (one per line, `- `) and the question last." if ask.questions == "operator" else ""))
+    return out
+
+
+def question_options(question: str) -> list[str]:
+    """The choices a question lists (`- a`, `1. a`, `a) a`), for the page's buttons; at most five."""
+    out = []
+    for line in (question or "").splitlines():
+        m = re.match(r"^\s*(?:[-*\u2022]|\d+[.)]|\(?[a-zA-Z][.)])\s+(.+?)\s*$", line)
+        if m and len(out) < 5:
+            out.append(m.group(1).strip("*` ")[:120])
+    return out
+
+
+def read_decisions(workdir: Path) -> tuple[list[dict[str, str]], str]:
+    """The author's `decisions.json` (D1124): ([{step, what, why}], "") when it is one, else ([], why not)."""
+    path = Path(workdir) / DECISIONS
+    if not path.is_file():
+        return [], f"no {DECISIONS}"
+    try:
+        rows = json.loads(path.read_text())
+    except (OSError, ValueError) as exc:
+        return [], f"{DECISIONS} is not JSON: {exc}"
+    if not isinstance(rows, list) or not rows:
+        return [], f"{DECISIONS} is not a list of decisions"
+    out = []
+    for i, r in enumerate(rows[:40]):
+        if not isinstance(r, dict) or r.get("step") not in DECISION_STEPS or not str(r.get("what") or "").strip():
+            return [], (f"{DECISIONS} entry {i + 1} is not {{step: {'|'.join(DECISION_STEPS)}, what, why}}")
+        out.append({"step": r["step"], "what": " ".join(str(r["what"]).split())[:240],
+                    "why": " ".join(str(r.get("why") or "").split())[:400]})
+    return out, ""
+
+
+def decisions_of_document(doc: Any) -> list[dict[str, str]]:
+    """What a document decided, read from it when its author gave no reasons (D1124): a line per step."""
+    if not isinstance(doc, dict):
+        return []
+    out: list[dict[str, str]] = []
+
+    def add(step: str, what: str) -> None:
+        out.append({"step": step, "what": " ".join(what.split())[:240], "why": ""})
+
+    st = str(doc.get("statement") or "").strip()
+    if st:
+        add("prompt", (st.split(". ")[0][:160] + ("…" if len(st) > 160 else "")) + (f" ({doc['language']})" if doc.get("language") else ""))
+    if doc.get("contract"):
+        add("prompt", "A contract every design follows")
+    flow = doc.get("flow") if isinstance(doc.get("flow"), dict) else {}
+    test = flow.get("test")
+    if isinstance(test, dict):
+        add("checks", f"Checks: {', '.join(map(str, test))}")
+    elif test:
+        add("checks", f"Check: {' '.join(test) if isinstance(test, list) else str(test)}"[:200])
+    measure = flow.get("measure")
+    if isinstance(measure, dict) and measure:
+        add("checks", f"Measured in {plural(len(measure), 'stage')}: {', '.join(map(str, measure))}")
+    for o in doc.get("objectives") or []:
+        if isinstance(o, dict) and o.get("metric"):
+            goal = o.get("goal")
+            sign = "≥" if o.get("direction") == "maximize" else "≤"
+            add("objective", f"{o['metric']} {sign} {goal}" if goal is not None else f"{o.get('direction', 'minimize')} {o['metric']}")
+    who = []
+    for box in ("generate", "validate", "orchestrate", "plan", "critique"):
+        v = flow.get(box)
+        if isinstance(v, dict) and v.get("agent"):
+            a = v["agent"]
+            who.append(f"{box}: agent {a if isinstance(a, str) else a.get('preset') or a.get('name') or 'custom'}")
+        elif isinstance(v, str) and v not in ("rules", "none", "off"):
+            who.append(f"{box}: {v}")
+    add("graph", "; ".join(who) if who else "A model designs; rules elsewhere")
+    budget = doc.get("budget") if isinstance(doc.get("budget"), dict) else {}
+    if budget:
+        add("extra", ", ".join(f"{k.replace('_', ' ')} {v}" for k, v in budget.items() if not isinstance(v, (dict, list)))[:200] or "A budget")
+    return out
 
 
 #: How a model author replies: each file as a `FILE <name>` line and a fenced block. Not a JSON
@@ -202,16 +346,130 @@ def _write_files(workdir: Path, files: dict[str, str]) -> list[str]:
     return written
 
 
-def _model_turn(ask: Ask, proposer: Any, text: str) -> tuple[bool, str]:
+def _model_turn(ask: Ask, proposer: Any, text: str, activity: "Activity | None" = None) -> tuple[bool, str]:
     """(done, what happened): the model writes the files as `FILE` blocks."""
     reply = proposer.propose(text + "\n" + REPLY_SHAPE)
     files, done, why = parse_files(getattr(reply, "text", str(reply)))
     written = _write_files(ask.workdir, files)
+    if activity is not None:
+        for name in written:
+            activity.add("write", name)
     return done and not written, f"wrote {', '.join(written) or 'nothing'}" + (f" -- {why[:200]}" if why else "")
 
 
-def _agent_turn(ask: Ask, text: str, say: Callable[[str], None]) -> tuple[bool, str]:
-    from .agent import DECIDE, agent_spec, converse
+_READS = {"read", "view", "glob", "grep", "ls", "list", "webfetch", "websearch", "web_search", "notebookread", "skill"}
+_WRITES = {"write", "edit", "multiedit", "apply_patch", "patch", "notebookedit", "str_replace_editor", "create"}
+#: A shell command that only looks: what it is said as (read, listed, searched)
+_LOOKS = {"cat": "read", "head": "read", "tail": "read", "less": "read", "more": "read", "pdftotext": "read", "wc": "read",
+          "file": "read", "ls": "list", "find": "list", "tree": "list", "grep": "search", "rg": "search"}
+
+
+def _what(step: dict[str, Any]) -> tuple[str, str]:
+    """(kind, words) of an agent's tool call: read, wrote or ran, and its file or command."""
+    name = str(step.get("name") or "tool")
+    call = str(step.get("call") or name)
+    said = call.split(": ", 1)[1] if ": " in call else ""
+    low = name.lower()
+    if low in _WRITES:
+        files = str((step.get("input") or {}).get("files") or "").strip()
+        return "write", said or " ".join(f.split(" ", 1)[-1] for f in files.splitlines()) or name
+    if low in _READS:
+        return "read", said or name
+    if low in ("bash", "shell", "exec", "run", "command"):
+        first, _, rest = said.partition(" ")
+        looks = _LOOKS.get(first.rsplit("/", 1)[-1]) if "|" not in said and ";" not in said and "&&" not in said else None
+        return (looks, rest.strip() or said) if looks else ("run", said or name)
+    return "use", f"{name}" + (f" {said}" if said else "")
+
+
+class Activity:
+    """The author's work as short lines (D1125): each tool call an agent author finished -- what it read, wrote or
+    ran -- read off its streamed steps (a flux_profile listener, beside the journal), and the author's own events
+    (the check, a question and its answer, the decisions). One JSON line each in `activity.jsonl`."""
+
+    def __init__(self, folder: Path) -> None:
+        self.path = Path(folder) / "activity.jsonl"
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+
+    def add(self, k: str, text: str, **extra: Any) -> None:
+        import time
+
+        lines = (" ".join(ln.split()) for ln in str(text).splitlines())
+        row = {"t": round(time.time(), 2), "k": k, "text": "\n".join(ln for ln in lines if ln)[:1500], **extra}
+        try:
+            with self.path.open("a") as fh:
+                fh.write(json.dumps(row) + "\n")
+        except OSError:
+            pass                                       # the record of work never stops the work
+
+    # ---- flux_profile's listener: an agent turn's steps, as they finish
+    def phase_start(self, name: str, why: str, params: Any) -> Any:
+        return {"seen": 0} if str(name).startswith("agent:") else None
+
+    def phase_update(self, token: Any, name: str, output: Any) -> None:
+        if token is not None and isinstance(output, dict):
+            self._steps(token, output, final=False)
+
+    def phase_end(self, token: Any, name: str, seconds: float, failed: bool, output: Any) -> None:
+        if token is not None and isinstance(output, dict):
+            self._steps(token, output, final=True)
+
+    def _steps(self, token: dict[str, int], out: dict[str, Any], final: bool) -> None:
+        steps = out.get("steps")
+        if not isinstance(steps, list):
+            return
+        base = int(out.get("steps total") or len(steps)) - len(steps)
+        token["seen"] = max(token["seen"], base)       # steps gone from the window before they were seen stay unsaid
+        for i in range(token["seen"] - base, len(steps)):
+            st = steps[i] if isinstance(steps[i], dict) else {}
+            if st.get("k") == "tool":
+                if "out" not in st and not final:
+                    break                              # not finished: said once it is
+                k, text = _what(st)
+                self.add(k, text, **({"tone": "bad"} if st.get("error") else {}))
+            token["seen"] = base + i + 1
+
+
+def _answerer(ask: Ask, activity: "Activity | None", say: Callable[[str], None]) -> Callable[[str], tuple[str, str]]:
+    """Who answers an agent author's question (D1125): with `questions: operator`, the person who asked -- the
+    question marked on the journal as a loop's agent's is (D684) and said in the activity, its answer the next line
+    of the inbox beside it (flux_feedback.InboxChannel, as a run's notes are), within `wait_s`; else, or unanswered,
+    the agent decides."""
+    from .agent import DECIDE
+
+    def answer(question: str) -> tuple[str, str]:
+        if ask.questions != "operator" or ask.journal is None:
+            return DECIDE, "decide"
+        import time
+
+        from flux_feedback import InboxChannel
+        from flux_profile import mark
+
+        inbox = InboxChannel(str(Path(ask.journal) / "inbox.jsonl"), say=lambda _m: None)
+        asked = time.time()
+        mark("question", json.dumps({"question": question, "wait_s": ask.wait_s, "asked": asked}))
+        if activity is not None:
+            activity.add("ask", question, options=question_options(question), wait_s=ask.wait_s)
+        say(f"author asks (answer within {ask.wait_s:.0f}s): {question.splitlines()[-1][:200]}")
+        with _phase("author: waiting for your answer", why=question.splitlines()[-1][:120]):
+            until = time.monotonic() + ask.wait_s
+            while time.monotonic() < until:
+                got = [n.text for n in inbox.drain() if str(n.text).strip()]
+                if got:
+                    text = "\n".join(got).strip()
+                    if activity is not None:
+                        activity.add("answer", text, by="you")
+                    return text, "operator"
+                time.sleep(0.5)
+        if activity is not None:
+            activity.add("answer", f"no answer in {ask.wait_s:.0f} s: the agent decides", by="decide", tone="warn")
+        return DECIDE, "decide"
+
+    return answer
+
+
+def _agent_turn(ask: Ask, text: str, say: Callable[[str], None], activity: "Activity | None" = None) -> tuple[bool, str]:
+    from .agent import agent_spec, converse
 
     spec = agent_spec(ask.author)
     prompt_file = ask.workdir / "AUTHOR-BRIEF.md"
@@ -227,8 +485,9 @@ def _agent_turn(ask: Ask, text: str, say: Callable[[str], None]) -> tuple[bool, 
         from .skills import install
 
         install(ask.skills, ask.workdir)
+    install_author_skills(ask.workdir)                 # D1123: the author's own, where it looks
     turn, _asked = converse(spec, subs, workdir=ask.workdir, artifact=target, prompt_file=prompt_file,
-                            answer=lambda _q: (DECIDE, "decide"), say=say)
+                            answer=_answerer(ask, activity, say), say=say)
     if not turn.ok:
         return False, f"the author {spec.tool} exited {turn.rc}: {(turn.stderr or turn.text)[-300:]}"
     found = document_path(ask.workdir)
@@ -377,26 +636,56 @@ def drive(ask: Ask, *, run_pass: Callable[..., Any], proposer: Any = None,
     `run_pass(task, problem, explore)` runs one pass; `explore` counts consecutive passes that
     ended at rest. The author's DONE settles the document (it is asked again only once the loop
     is at rest) but never ends the run. `review(path, task, problem)` (D587), when given, sees
-    every checked document before it runs: None runs it; a note sends it back to the author."""
+    every checked document before it runs: None runs it; a note sends it back to the author. With `ask.journal`,
+    the author's work is said as lines in its `activity.jsonl` (D1125)."""
+    ask.workdir.mkdir(parents=True, exist_ok=True)
+    inline = ask.author in (None, "model")
+    if inline and proposer is None:
+        raise ValueError("the model authors the document, and there is no model: give one, or an agent author")
+    activity = Activity(ask.journal) if ask.journal is not None else None
+    if activity is not None:
+        from flux_profile import add_listener
+
+        add_listener(activity)                     # D1125: the agent's tool calls, as lines
+
+    def turn(text: str) -> tuple[bool, str]:
+        with _phase("author: " + ("the model" if inline else str(getattr(ask.author, "get", lambda *_: None)("preset") or ask.author)),
+                    "writes the problem document and its files"):
+            return _model_turn(ask, proposer, text, activity) if inline else _agent_turn(ask, text, say, activity)
+
+    def checked(error: str) -> None:
+        if activity is None:
+            return
+        if error:
+            activity.add("check", f"the check refused it: {error.splitlines()[0]}", tone="bad")
+            return
+        activity.add("check", "the check passed: the document loads, its files and tools are here", tone="ok")
+        rows, why = read_decisions(ask.workdir)
+        activity.add("note", f"wrote {DECISIONS}: {plural(len(rows), 'decision')}" if rows else f"{why}: the decisions are read from the document",
+                     tone="ok" if rows else "warn")
+
+    try:
+        return _drive(ask, run_pass=run_pass, proposer=proposer, say=say, review=review, loop_proposer=loop_proposer,
+                      inline=inline, turn=turn, checked=checked)
+    finally:
+        if activity is not None:
+            from flux_profile import remove_listener
+
+            remove_listener(activity)
+
+
+def _drive(ask: Ask, *, run_pass: Callable[..., Any], proposer: Any, say: Callable[[str], None],
+           review: Callable[[Path, Any, Any], str | None] | None, loop_proposer: Any, inline: bool,
+           turn: Callable[[str], tuple[bool, str]], checked: Callable[[str], None]) -> dict[str, Any]:
     import inspect
 
     from .passes import between_passes, carrying, mark
     from .task import task_report_lines
 
     takes_explore = len(inspect.signature(run_pass).parameters) >= 3
-
-    ask.workdir.mkdir(parents=True, exist_ok=True)
-    inline = ask.author in (None, "model")
-    if inline and proposer is None:
-        raise ValueError("the model authors the document, and there is no model: give one, or an agent author")
     history: list[dict[str, Any]] = []
     task = problem = out = None
     report: list[str] = []
-
-    def turn(text: str) -> tuple[bool, str]:
-        with _phase("author: " + ("the model" if inline else str(getattr(ask.author, "get", lambda *_: None)("preset") or ask.author)),
-                    "writes the problem document and its files"):
-            return _model_turn(ask, proposer, text) if inline else _agent_turn(ask, text, say)
 
     n = rests = 0
     settled = False
@@ -428,6 +717,7 @@ def drive(ask: Ask, *, run_pass: Callable[..., Any], proposer: Any = None,
             say("author: checking the document, required files and tools…")
             with _phase("check: problem document", "validate the authored document, files and tools"):
                 task, problem, error = check_document(ask.workdir, ask.inputs, skills=bool(ask.skills))
+            checked(error)
             if not error:
                 break
             say(f"document refused: {error}")
