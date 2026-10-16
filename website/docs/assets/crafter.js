@@ -239,7 +239,7 @@
           if (dictionaries.length) kids.push(h("small", {text: 'Print timings={"test": 12, "skipped": null} or a JSON object of metrics. Objectives use timings.test. Missing tests stay unmeasured.'}));
         }
         st.gates.forEach(function (g, j) {
-          kids.push(h("div", { class: "fc-line fc-gate" }, [h("span", { class: "fc-gate-word", text: j ? "and" : WORDS.measure.cutoff.toLowerCase() }),
+          kids.push(h("div", { class: "fc-line fc-gate" }, [h("span", { class: "fc-gate-word", text: j ? WORDS.measure.cutoffOr : WORDS.measure.cutoff.toLowerCase() }),
             field("Number", function () { return g.metric; }, function (v) { g.metric = v; },
                   { compact: true, options: (st.dictMetrics || []).length ? null : (rep.indexOf(g.metric) < 0 && g.metric ? [g.metric] : []).concat(rep),
                     hint: "metric name, parent aggregate or parent.test" }),

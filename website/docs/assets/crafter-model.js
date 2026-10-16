@@ -336,7 +336,7 @@
       needs: "Tools it needs", needsPlaceholder: "yosys, openroad",
       addDictionary: "+ Dictionary", directions: [["minimize", "lower is better"], ["maximize", "higher is better"]],
       aggregates: [["mean", "mean"], ["median", "median"], ["min", "min"], ["max", "max"], ["sum", "sum"], ["none", "none"]],
-      cutoff: "Stop climbing when", addCutoff: "+ Cutoff", cutoffRules: [["at", "is below"], ["below", "is above"], ["within", "trails the best by, %"]],
+      cutoff: "Stop climbing when", cutoffOr: "or", addCutoff: "+ Cutoff", cutoffRules: [["at", "is below"], ["below", "is above"], ["within", "trails the best by, %"]],
       estimate: "Estimate first", estimates: [["off", "no"], ["surrogate", "fitted"], ["command", "script"], ["model", "model"]],
       fitted: "fitted from past runs", margin: "Skip when it misses by, %",
       estimateCommand: "Estimate command", estimatePlaceholder: "{python} {home}/estimate.py {artifact}" },

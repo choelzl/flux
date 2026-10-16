@@ -79,7 +79,7 @@ function StageFields({ M, state, st, lang, edit }) {
         <${Tool} icon="close" label="Remove the dictionary" onClick=${() => edit(() => { dicts.splice(j, 1); })} /></div>`)}
       <button type="button" class="small" onClick=${() => edit(() => { dicts.push({ name: "", direction: "minimize", unit: "" }); })}>${W.addDictionary}</button></div>` : ""}
     <div class="cfg-sub"><h4>${W.cutoff}</h4>
-      ${st.gates.map((g, j) => html`<div class="cfg-orow" key=${j}><span class="ix">${j ? "and" : ""}</span>
+      ${st.gates.map((g, j) => html`<div class="cfg-orow" key=${j}><span class="ix">${j ? W.cutoffOr : ""}</span>
         ${dicts.length ? html`<input aria-label="Number" value=${g.metric} placeholder="timings.test" onInput=${e => edit(() => { g.metric = e.currentTarget.value; })} />`
           : html`<${Select} aria-label="Number" value=${g.metric} options=${(rep.includes(g.metric) || !g.metric ? [] : [g.metric]).concat(rep)} onChange=${v => edit(() => { g.metric = v; })} />`}
         <${Select} aria-label="Rule" value=${g.rule} options=${W.cutoffRules} onChange=${v => edit(() => { g.rule = v; })} />
