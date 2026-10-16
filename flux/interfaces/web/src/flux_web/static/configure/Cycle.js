@@ -18,7 +18,7 @@ const KIND = { validate: "setup", plan: "plan", dse: "search", orchestrate: "sea
 const f1 = x => x.toFixed(1);
 
 function head(x1, y1, x2, y2, back) {
-  const a = Math.atan2(y2 - y1, x2 - x1), l = 7, s = 0.45;
+  const a = Math.atan2(y2 - y1, x2 - x1), l = 8, s = 0.42;
   return html`<path class=${cx("ah", back && "back")} d=${`M${f1(x2)} ${f1(y2)}L${f1(x2 - l * Math.cos(a - s))} ${f1(y2 - l * Math.sin(a - s))}L${f1(x2 - l * Math.cos(a + s))} ${f1(y2 - l * Math.sin(a + s))}Z`} />`;
 }
 const line = (x1, y1, x2, y2, soft) => html`<path class=${cx("e", soft && "soft")} d=${`M${f1(x1)} ${f1(y1)}L${f1(x2)} ${f1(y2)}`} />${head(x1, y1, x2, y2)}`;
@@ -55,18 +55,18 @@ export function Cycle({ M, state, agent, sel, pick }) {
       ${pills.map(([t, cls]) => { const pw = t.length * 6 + 10; px -= pw; const at = px; px -= 3;
         return html`<g class=${cx("pill", cls)}><rect x=${at} y=${y + 5} width=${pw} height="14" rx="7" /><text x=${at + pw / 2} y=${y + 15.5} text-anchor="middle">${t}</text></g>`; })}</g>`;
   };
-  // the ring: one arc from each step to the next, its head where it arrives
+  // the ring: one arc from each step to the next, clear of both boxes, its head where it arrives (D1133)
+  const gap = deg => (Math.abs(Math.sin(deg * Math.PI / 180)) > 0.8 ? 18 : 26);       // a box is wider than it is tall
   const arcs = RING.map(([, deg], i) => {
-    const a0 = (deg + 17) * Math.PI / 180, a1 = (RING[(i + 1) % RING.length][1] + (i === RING.length - 1 ? 360 : 0) - 17) * Math.PI / 180;
+    const next = RING[(i + 1) % RING.length][1] + (i === RING.length - 1 ? 360 : 0);
+    const a0 = (deg + gap(deg)) * Math.PI / 180, a1 = (next - gap(next)) * Math.PI / 180;
     const x0 = CX + R * Math.cos(a0), y0 = CY + R * Math.sin(a0), x1 = CX + R * Math.cos(a1), y1 = CY + R * Math.sin(a1);
-    return html`<path class="e" d=${`M${f1(x0)} ${f1(y0)} A${R} ${R} 0 0 1 ${f1(x1)} ${f1(y1)}`} />${head(x1 + 6 * Math.sin(a1), y1 - 6 * Math.cos(a1), x1, y1)}`;
+    return html`<path class="e ring-e" d=${`M${f1(x0)} ${f1(y0)} A${R} ${R} 0 0 1 ${f1(x1)} ${f1(y1)}`} />${head(x1 + 8 * Math.sin(a1), y1 - 8 * Math.cos(a1), x1, y1)}`;
   });
   const G = P.generate, T = P.test, O = P.orchestrate, Me = P.measure, Ch = P.select, off = b => ["off", "none"].includes((state.flow || {})[b]);
   return html`<svg class="cfg-cycle" viewBox="0 0 790 520" role="group" aria-label="The loop: each box is one step">
-    <circle class="ring" cx=${CX} cy=${CY} r=${R} />
     ${arcs}
-    <path class="e back" d=${`M${f1(T[0] - 40)} ${f1(T[1] + 16)} Q${f1(CX + 20)} ${f1(CY - 40)} ${f1(G[0] + 10)} ${f1(G[1] + 20)}`} />${head(G[0] + 13, G[1] + 30, G[0] + 10, G[1] + 20, true)}
-    <text class="el back" x=${CX + 30} y=${CY - 52}>repair</text>
+    <path class="e back" d=${`M${f1(T[0] - 30)} ${f1(T[1] + 20)} Q${f1(CX + 30)} ${f1(CY - 60)} ${f1(G[0] + 12)} ${f1(G[1] + 20)}`} />${head(G[0] + 16, G[1] + 31, G[0] + 12, G[1] + 20, true)}
     ${[["validate", 50], ["plan", 112], ["dse", 174], ["feedback", 236]].map(([k, y]) => html`${line(148, y, O[0] - 62, O[1] + (y - 143) * 0.12, off(k))}${node(k, 86, y)}`)}
     ${line(498, 50, G[0] + 50, G[1] - 20, true)}${node("knowledge", 560, 40)}
     ${line(644, 40, 622, 40, true)}${node("digest", 706, 40)}

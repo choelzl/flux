@@ -16,7 +16,8 @@ export function whoOptions(M, box, cur, agent) {
     case "validate": return [opt("rules", "rules", "rules"), opt("model", "model", "model"), a];
     case "plan": return [opt("off", "off", "off"), opt("model", "model", "model"), a];
     case "feedback": return [opt("human", "notes", "rules"), opt("off", "off", "off")];
-    case "orchestrate": return [opt("rules", "rules", "rules"), modelOf(["default", "model", "tools"]), a, opt("command", "script", "script")];
+    // D1133: no `orchestrate:` line is Flux's default -- rules pick the kind of work (a model picks the part when there are parts)
+    case "orchestrate": return [opt("default", "default", "rules"), opt("rules", "rules", "rules"), modelOf(["model", "tools"]), a, opt("command", "script", "script")];
     case "generate": return [opt("model", "model", "model"), a, opt("command", "script", "script"), opt("catalog", "files", "script")];
     case "critique": return [opt("off", "off", "off"), opt("model", "model", "model"), a];
     case "calibrate": return [opt("on", "on", "rules"), opt("off", "off", "off")];
