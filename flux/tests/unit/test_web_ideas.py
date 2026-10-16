@@ -149,3 +149,25 @@ def test_reset_preserves_or_clears_the_notebook_with_history(saved_ideas, monkey
         assert data.json()["ideas"][0]["evaluations"][0]["metrics"] == {"cycles": 8}
     else:
         assert data.json() == {"campaign": None, "ideas": []}
+
+
+def test_an_idea_is_queued_for_testing_and_taken_off_again(server):  # noqa: F811
+    """D1112: Results › Ideas queues an idea (the owner), the list says its place, pressing again takes it off."""
+    app, _ = server
+    bob, d, _ids, campaigns, _ = _history(app)
+    cid = campaigns[-1]
+    rec = Records(str(d / "out/history.db"), {"study": cid}, name=cid)
+    rec.store.append_event(cid, "idea", {"id": "idea-a", "part": "", "title": "A table", "hypothesis": "fewer levels"})
+    rec.store.append_event(cid, "idea", {"id": "idea-b", "part": "", "title": "A tree", "hypothesis": "less area"})
+    rec.close("paused")
+    on = bob.post("/api/apps/past/ideas/idea-b/queue", json={"on": True}, headers=H)
+    assert on.status_code == 200 and on.json()["queue"] == ["idea-b"] and "next pass" in on.json()["ok"], on.text
+    assert bob.post("/api/apps/past/ideas/idea-a/queue", json={"on": True}, headers=H).json()["queue"] == ["idea-b", "idea-a"]
+    listed = {i["id"]: i["queued"] for i in bob.get("/api/apps/past/ideas", params={"campaign": cid}).json()["ideas"]}
+    assert listed == {"idea-a": 2, "idea-b": 1}
+    off = bob.post("/api/apps/past/ideas/idea-b/queue", json={"on": False}, headers=H)
+    assert off.json()["queue"] == ["idea-a"] and off.json()["ok"] == "Taken off the queue"
+    assert bob.post("/api/apps/past/ideas/idea-z/queue", json={"on": True}, headers=H).status_code == 404
+    app.state.store.add_user("cy", "cy has a long secret")
+    cy = _client(app, "cy", "cy has a long secret")
+    assert cy.post("/api/apps/past/ideas/idea-a/queue?owner=bob", json={"on": False}, headers=H).status_code in (403, 404)

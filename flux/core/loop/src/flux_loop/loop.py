@@ -603,11 +603,40 @@ def _explore_items(problem: Problem, state: LoopState) -> list[Improve]:
     return items
 
 
+def _queued_idea(problem: Problem, state: LoopState) -> Improve | None:
+    """D1112: an idea queued for testing (Results › Ideas) is this pass's direction: a new design that follows it, from
+    the standing design of its part, every draft tied to it -- so it gets a measurement, or a refusal that says why."""
+    from .ideas import next_queued
+
+    idea = next_queued(state)
+    if idea is None:
+        return None
+    part = idea.get("part") or None
+    cand = state.admitted.get(part or "*")
+    if cand is None or not _can_draft(problem, part, state):
+        state.say(f"  queued idea {idea['id']} waits: no standing design" + (f" of {part}" if part else "") + " to build it from yet")
+        return None
+    said, stage = _standing_said(problem, state, cand) if part is None else ("", "")
+    state.drain()
+    state.__dict__["_idea_forced"], state.__dict__["_idea_forced_from"] = {part or "*": [idea["id"]]}, cand.name
+    state.say(f"  direction: the queued idea {idea['id']} -- {idea['title']}")
+    state.lessons.append(f"[direction] queued idea {idea['id']}: {idea['title']}")
+    test = f" Its test: {idea['test']}." if idea.get("test") else ""
+    return Improve(cand, (f"THIS PASS TESTS A QUEUED IDEA ({idea['id']}): {idea['title']}. The hypothesis: {idea['hypothesis']}{test} "
+                          "Build a design that follows this idea, even if you doubt it beats the standing design: the point is "
+                          "a measurement of the idea. It must still pass the gate. " + said).strip(),
+                   stage=stage, subgoal=part, explore=True, dse="explore")
+
+
 def _direction(problem: Problem, state: LoopState) -> Improve | None:
     """This pass's design when nothing is left to draft (D845): the standing design refined or a
     new one explored, as the orchestrator or the rules choose (`flux_loop.direction`)."""
     from .direction import decide
 
+    state.__dict__["_idea_forced"] = {}      # D1112: a queued idea ties only the pass that tests it
+    queued = _queued_idea(problem, state)
+    if queued is not None:
+        return queued
     cand = state.admitted.get("*")
     if cand is None or not _can_draft(problem, None, state):
         return None

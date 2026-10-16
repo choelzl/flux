@@ -2,6 +2,10 @@
 
 import { Empty, html } from "../view.js";
 import { plural } from "../format.js";
+import { enc, loopApi, toast } from "../ui.js";
+import { useLoop } from "../loop/context.js";
+import { Act } from "../components/Act.js";
+import { Tag } from "../components/Tone.js";
 import { RefreshCard } from "../components/RefreshCard.js";
 import { Table } from "../components/Table.js";
 
@@ -22,9 +26,24 @@ const Evaluations = ({ rows }) => html`<details><summary>${plural(rows.length, "
     <td>${r.pass ?? "—"}</td><td>${r.design}</td><td>${r.stage || "—"}</td><td>${r.status}</td>
     <td><${Metrics} m=${r.metrics} />${r.error ? html`<${Failure} text=${r.error} />` : ""}<small class="muted">${r.at || ""}</small></td></tr>`)}<//></details>`;
 
+/** D1112: queue an idea for testing -- the next passes each build a design that follows the oldest queued idea, until it
+    has an evaluation -- or take it off the queue. */
+function Queue({ idea, refresh }) {
+  const ctx = useLoop();
+  const turn = async () => {
+    const got = await loopApi(ctx.name).api(`/ideas/${enc(idea.id)}/queue`, { method: "POST", body: { on: !idea.queued } });
+    toast(got.ok, "ok");
+    refresh();
+  };
+  return idea.queued
+    ? html`<div class="idea-queue"><${Tag} k="var(--accent)" title="The passes test the queued ideas in this order">${idea.queued === 1 ? "next pass" : `queued · ${idea.queued}`}<//>
+        <${Act} cls="small" onClick=${turn} title="Take it off the queue">Unqueue<//></div>`
+    : html`<div class="idea-queue"><${Act} cls="small" onClick=${turn} title="The next free pass builds a design that follows this idea, so it gets a measurement">Queue a test<//></div>`;
+}
+
 export const Ideas = ({ data, refresh }) => html`<${RefreshCard} title="Ideas" rawTitle="Ideas notebook" said="Measured means evidence is available; it does not mean the idea improved the objectives." refresh=${refresh} raw=${data} cls="ideas-view">
   ${data.ideas.length ? html`<${Table} heads=${["Idea", "Hypothesis", "State", "Evidence"]} cls="ideas-table">${data.ideas.map(idea => html`<tr key=${idea.id}>
       <td><strong>${idea.title}</strong><small class="muted">${idea.id}</small>${idea.part ? html`<small class="muted">${`Part: ${idea.part}`}</small>` : ""}</td>
       <td><p>${idea.hypothesis}</p>${idea.test ? html`<p class="muted">${`Test: ${idea.test}`}</p>` : ""}</td>
-      <td>${idea.status}</td><td>${idea.evaluations.length ? html`<${Evaluations} rows=${idea.evaluations} />` : "Not tested yet"}</td></tr>`)}<//>`
+      <td>${idea.status}</td><td>${idea.evaluations.length ? html`<${Evaluations} rows=${idea.evaluations} />` : "Not tested yet"}<${Queue} idea=${idea} refresh=${refresh} /></td></tr>`)}<//>`
     : html`<${Empty} text="No ideas recorded yet. Agents can save hypotheses and alternatives with their drafts." />`}<//>`;

@@ -69,6 +69,11 @@ class RestoreIn(BaseModel):
     id: int
 
 
+class IdeaQueueIn(BaseModel):
+    """D1112: an idea queued for testing in the next passes (on), or taken off the queue."""
+    on: bool
+
+
 class RejectIn(BaseModel):
     """D1043: a result rejected by hand -- why; each measurement to clear ({stage, metric}) or the
     stages to measure again; and whether to hide the design too (an invalidation, at rest)."""

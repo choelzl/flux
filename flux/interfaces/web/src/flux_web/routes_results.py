@@ -15,7 +15,7 @@ from typing import Any
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, StreamingResponse
 
-from .models import InvalidateIn, RejectIn, RestoreIn
+from .models import IdeaQueueIn, InvalidateIn, RejectIn, RestoreIn
 from .runs import loop_files
 from .store import User
 from .workspace import Workspace, WorkspaceError
@@ -597,6 +597,24 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
             return notebook(record, cid, until=datetime.fromtimestamp(until, timezone.utc).isoformat() if until is not None else None)
         finally:
             record.close()
+
+    @app.post("/api/apps/{name}/ideas/{ident}/queue")
+    def queue_idea(name: str, ident: str, body: IdeaQueueIn, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, Any]:
+        """D1112: queue an idea for testing -- each of the next passes builds a design that follows the oldest queued idea,
+        until it has an evaluation -- or take it off the queue. A running loop reads the queue at its next pass."""
+        from flux_loop.ideas import set_queued
+
+        record, cid = _record_of(name, user, owner, running=True)
+        try:
+            queue = set_queued(record, cid, ident, body.on)
+        except ValueError as exc:
+            raise HTTPException(404, str(exc)) from exc
+        finally:
+            record.close()
+        store.audit(user.name, "queued an idea" if body.on else "unqueued an idea", f"{owner or user.name}/{name}: {ident}")
+        where = queue.index(ident) + 1 if ident in queue else None
+        said = "Taken off the queue" if not where else "Queued: the next pass tests it" if where == 1 else f"Queued: {where} in line"
+        return {"ok": said, "queue": queue}
 
     # ---- D1001: a design invalidated by hand, with why; undone by Restore
     def _record_of(name: str, user: User, owner: str | None, running: bool = False):

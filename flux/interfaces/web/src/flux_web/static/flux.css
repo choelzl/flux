@@ -1290,3 +1290,6 @@ td.cleared s { color: var(--muted); }
 .wrap-any { overflow-wrap: anywhere !important; }
 .wrap-normal { white-space: normal !important; }
 .check-saved { margin-bottom: 12px !important; }
+
+/* D1112: an idea queued for testing, under its evidence */
+.idea-queue { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-top: 6px; }

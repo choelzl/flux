@@ -14,6 +14,9 @@ from pathlib import Path
 from typing import Any
 
 EVENT = "idea"
+#: D1112: an idea queued for testing (`{"id", "on"}`), from Results › Ideas: each of the next passes builds a design that
+#: follows the oldest queued idea, until one has an evaluation after it was queued.
+QUEUE = "idea-queue"
 FIELDS = {
     "idea": {"type": "object", "properties": {
         "id": {"type": "string", "description": "An existing notebook idea ID, or omit for a new idea."},
@@ -90,10 +93,10 @@ def propose(state: Any, part: str | None, value: Any) -> str:
     return ident
 
 
-def capture(state: Any, part: str | None, payload: Any, *, inherited: list[str] = ()) -> list[str]:
-    """Keep future proposals and link only the selected idea to this experiment."""
+def capture(state: Any, part: str | None, payload: Any, *, inherited: list[str] = (), name: str | None = None) -> list[str]:
+    """Keep future proposals and link only the selected idea to this experiment (`name`: the design's, when known)."""
     if not isinstance(payload, dict):
-        return list(inherited)
+        return _forced(state, part, list(inherited), name)
     for idea in (payload.get("ideas") or [])[:12] if isinstance(payload.get("ideas"), list) else []:
         try:
             propose(state, part, idea)
@@ -101,10 +104,19 @@ def capture(state: Any, part: str | None, payload: Any, *, inherited: list[str] 
             continue
     if payload.get("idea") is not None:
         try:
-            return [propose(state, part, payload["idea"])]
+            return _forced(state, part, [propose(state, part, payload["idea"])], name)
         except ValueError as exc:
             state.say(f"  ideas: {exc}; the design is still evaluated")
-    return list(inherited or state.__dict__.get("_idea_selected", {}).get(part or "*", []))
+    return _forced(state, part, list(inherited or state.__dict__.get("_idea_selected", {}).get(part or "*", [])), name)
+
+
+def _forced(state: Any, part: str | None, ids: list[str], name: str | None = None) -> list[str]:
+    """D1112: a pass testing a queued idea ties every draft to it, whatever else the draft names -- not the standing
+    design it starts from (`_idea_forced_from`), which the pass handles too."""
+    if name is not None and name == state.__dict__.get("_idea_forced_from"):
+        return ids
+    forced = state.__dict__.get("_idea_forced", {}).get(part or "*", [])
+    return list(dict.fromkeys([*forced, *ids]))
 
 
 def bind(state: Any, cand: Any, payload: Any = None) -> list[str]:
@@ -115,7 +127,7 @@ def bind(state: Any, cand: Any, payload: Any = None) -> list[str]:
         # Patches retain the old candidate's metadata; an explicitly new hypothesis replaces it.
         cand.meta.update({k: payload[k] for k in ("idea", "ideas") if k in payload})
     ids = capture(state, cand.subgoal, payload if payload is not None else cand.meta,
-                  inherited=cand.meta.get("idea_ids") or [])
+                  inherited=cand.meta.get("idea_ids") or [], name=cand.name)
     if not ids and not cand.meta.get("baseline"):
         from .novelty import _intent
 
@@ -182,6 +194,51 @@ def sidecar(artifact: Path) -> dict:
         return {}
 
 
+def queued(store: Any, campaign: str) -> list[str]:
+    """D1112: the ideas queued for testing, oldest first: each one's last queue event turned it on, and no trial carrying
+    it was recorded since (an evaluation of any outcome clears it; queue it again to test it again)."""
+    since: dict[str, str] = {}
+    order: list[str] = []
+    for e in store.events(campaign):
+        doc = e.get("detail") or {}
+        if e.get("kind") != QUEUE or not isinstance(doc.get("id"), str):
+            continue
+        order = [x for x in order if x != doc["id"]]
+        if doc.get("on"):
+            since[doc["id"]] = e["created_at"]
+            order.append(doc["id"])
+    if not order:
+        return []
+    last: dict[str, str] = {}
+    for trial in store.trials(campaign, artifacts=False):
+        if trial.status in ("running",):
+            continue
+        for ident in ((trial.candidate or {}).get("meta") or {}).get("idea_ids") or []:
+            if ident in since and trial.created_at > last.get(ident, ""):
+                last[ident] = trial.created_at
+    return [i for i in order if last.get(i, "") <= since[i]]
+
+
+def set_queued(store: Any, campaign: str, ident: str, on: bool) -> list[str]:
+    """Queue an idea for testing, or take it off the queue (D1112); the queue after."""
+    if on and ident not in _proposals(store, campaign):
+        raise ValueError(f"no idea {ident} in this campaign")
+    store.append_event(campaign, QUEUE, {"id": ident, "on": bool(on)})
+    return queued(store, campaign)
+
+
+def next_queued(state: Any) -> dict | None:
+    """The oldest idea queued for testing, its proposal (id, part, title, hypothesis, test); None when none is."""
+    rec = _record(state)
+    if rec is None:
+        return None
+    try:
+        ids = queued(rec.store, rec.campaign_id)
+        return _proposals(rec.store, rec.campaign_id).get(ids[0]) if ids else None
+    except Exception:  # noqa: BLE001 -- a queue that cannot be read is no queue
+        return None
+
+
 def notebook(store: Any, campaign: str, *, until: str | None = None) -> dict:
     """Read proposals and their real evaluation rows. An ok check is not a measured win."""
     ideas = _proposals(store, campaign, until)
@@ -209,7 +266,10 @@ def notebook(store: Any, campaign: str, *, until: str | None = None) -> dict:
             idea["status"] = "checked"
         elif rows:
             idea["status"] = "interrupted" if rows[-1]["status"] in ("running", "interrupted") else "failed"
-    return {"campaign": campaign, "ideas": list(ideas.values())}
+    queue = queued(store, campaign) if until is None else []
+    for idea in ideas.values():
+        idea["queued"] = queue.index(idea["id"]) + 1 if idea["id"] in queue else None
+    return {"campaign": campaign, "ideas": list(ideas.values()), "queue": queue}
 
 
 def context(state: Any, part: str | None, limit: int = 8) -> str:

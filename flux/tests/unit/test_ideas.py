@@ -251,3 +251,52 @@ def test_cost_pass_keeps_the_seed_prototypes_idea_without_requiring_another_note
     assert sum(r["stage"] == "prototype" for r in idea["evaluations"]) >= 2
     assert any(r["stage"] == "screen" for r in idea["evaluations"])
     rec.close()
+
+
+# ---- D1112: ideas queued for testing
+def test_the_queue_keeps_order_toggles_and_clears_on_an_evaluation(tmp_path):
+    from flux_loop.ideas import queued, set_queued
+
+    st = state(tmp_path)
+    cand = Candidate("a", "x")
+    bind(st, cand, {"idea": IDEA, "ideas": [FUTURE]})
+    store, cid = st.records.store, st.records.campaign_id
+    tested, future = cand.meta["idea_ids"][0], next(i["id"] for i in notebook(store, cid)["ideas"] if i["title"] == FUTURE["title"])
+    assert set_queued(store, cid, future, True) == [future]
+    assert set_queued(store, cid, tested, True) == [future, tested]
+    assert set_queued(store, cid, future, False) == [tested], "pressed again: off the queue"
+    assert set_queued(store, cid, future, True) == [tested, future], "queued again: at the end"
+    assert [i["queued"] for i in sorted(notebook(store, cid)["ideas"], key=lambda i: i["title"])] == [1, 2]
+    trial(st, cand, "gate", {"score": 1}, "refused: a corner case")       # an evaluation of any outcome clears it
+    assert queued(store, cid) == [future]
+    assert set_queued(store, cid, tested, True) == [future, tested], "to test it again, queue it again"
+    try:
+        set_queued(store, cid, "idea-none", True)
+        raise AssertionError("an unknown idea is refused")
+    except ValueError:
+        pass
+
+
+def test_a_queued_idea_is_the_next_pass_and_its_design_carries_it(tmp_path, monkeypatch):
+    from flux_loop.ideas import queued, set_queued
+
+    monkeypatch.setenv("FLUX_TRACE_ROOT", str(tmp_path / "traces"))
+    task = TaskSpec.from_dict({"id": "ideas", "statement": "Make a shorter artifact.", "flow": {
+        "knowledge": "off", "orchestrate": {"by": "rules", "dse": "variations"}, "test": {"check": "true"},
+        "measure": {"bench": {"command": ["{python}", "-c", "print('length=3')"], "metrics": ["length"]}}},
+        "budget": {"steps": 1, "prototype": False}, "objectives": [{"metric": "length", "direction": "minimize"}]})
+    problem = PromptProblem(task)
+    req = request_for(task, db=str(tmp_path / "loop.db"))
+    run_loop(problem, req, proposer=ScriptedProposer([json.dumps({"artifact": "first", "idea": IDEA, "ideas": [FUTURE]})]), log=lambda _: None)
+    rec = CampaignStore(req.db)
+    future = next(i["id"] for i in notebook(rec, task.id)["ideas"] if i["title"] == FUTURE["title"])
+    set_queued(rec, task.id, future, True)
+    said: list[str] = []
+    second = ScriptedProposer([json.dumps({"artifact": "second", "idea": IDEA})])     # it names another idea: tied to the queued one too
+    run_loop(problem, req, proposer=second, log=said.append)
+    assert any(f"the queued idea {future}" in m for m in said), said
+    assert "THIS PASS TESTS A QUEUED IDEA" in second.prompts[0] and FUTURE["hypothesis"] in second.prompts[0]
+    idea = next(i for i in notebook(rec, task.id)["ideas"] if i["id"] == future)
+    assert idea["status"] == "measured" and {r["design"] for r in idea["evaluations"]} == {"ideas#2"}
+    assert queued(rec, task.id) == [], "its evaluation took it off the queue"
+    rec.close()
