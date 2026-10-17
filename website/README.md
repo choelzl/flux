@@ -13,7 +13,10 @@ explain configuration choices in the guide and put field defaults and less commo
 | `mkdocs.yml` | the site configuration and the navigation |
 | `docs/index.md`, `docs/guide/` | the home page, runnable first-loop tutorial, configuration/search guides, crafter, and parameter/run references |
 | `docs/assets/` | the loop crafter: its model (`crafter-model.js`, shared with the web app's configurator), its page's script (`crafter-app.js`, which mounts the web app's configurator with no server), `crafter.css` and the tool catalog it reads (`tools.json` = `flux tools --json`) |
-| `hooks.py` | publishes the web app's modules the crafter imports (`flux/interfaces/web/src/flux_web/static`) at `assets/app/`, straight from the app's folder |
+| `hooks.py` | publishes the web app's files the crafter and the Preview app import (`flux/interfaces/web/src/flux_web/static`, imports followed from `assets/crafter-app.js`, the app's `app.js` and `assets/preview/mock.js`) at `assets/app/`, straight from the app's folder |
+| `docs/preview.md`, `docs/preview/app.html` | the Preview app tab: the whole web app in a frame, in the browser, over a mock; `/preview/#/app/adder8/live` deep-links into it |
+| `docs/assets/preview/` | the mock (`mock.js`: `/api` answered from the fixtures, a recorded run replayed as the live stream, writes kept in memory), the tab's frame script and styles, a vendored js-yaml |
+| `docs/preview/data/` | the Preview app's fixtures: recorded from a server over sample data and scrubbed by `tools/preview_record.py` (its docstring says how to record them again) |
 | `overrides/` | theme overrides (the footer) |
 | `site/` | the build output (git-ignored) |
 

@@ -67,6 +67,7 @@ nav:
       - Configure: guide/build-your-own.md
       - Search and agents: guide/loop-shape.md
       - Loop crafter: guide/loop-crafter.md
+  - Preview app: preview.md
   - Reference:
       - Document reference: guide/parameters.md
       - Run and results: guide/run.md

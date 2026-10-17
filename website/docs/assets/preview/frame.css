@@ -1,0 +1,8 @@
+/* The Preview app's tab (preview.md): the app (preview/app.html, in a frame) fills the page below the docs' header and
+   tabs -- its title, margins and the docs' footer gone. */
+.md-content__inner:has(#flux-preview) { margin: 0; padding: 0; max-width: none; }
+.md-content__inner:has(#flux-preview) > h1, .md-content__inner:has(#flux-preview)::before { display: none; }
+.md-main__inner:has(#flux-preview) { margin: 0; max-width: none; }
+.md-grid:has(#flux-preview) { max-width: none; }
+.flux-preview-frame { margin: 0; }
+#flux-preview { display: block; width: 100%; height: calc(100vh - 96px); border: 0; background: var(--md-default-bg-color); }

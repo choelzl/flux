@@ -24,7 +24,7 @@ def _hooks():
 
 def test_the_site_publishes_the_configurator_the_page_imports():
     hooks = _hooks()
-    files = hooks.app_files()
+    files = hooks.app_files(whole=False, mock=None)       # the crafter's own (the Preview app's whole app: test_docs_preview.py)
     assert hooks.STATIC == STATIC and hooks.PREFIX == "assets/app/"
     assert {"configure/Configurator.js", "configure/host.js", "configure/GraphStep.js", "configure/LibraryPanel.js", "configure/DocView.js",
             "view.js", "vendor/preact.module.js", "vendor/htm-preact.module.js", "flux.css", "vendor/LICENSE.preact", "vendor/LICENSE.htm"} <= set(files)
@@ -46,7 +46,7 @@ def test_the_pages_script_imports_only_the_apps_published_modules():
 def test_the_configurator_asks_where_it_runs_through_its_host():
     """No server call of the configurator's own but through host.js (the docs' page sets a host with none); files.js
     calls the server only for a loop that exists (a name), the docs' page has none."""
-    files = _hooks().app_files()
+    files = _hooks().app_files(whole=False, mock=None)
     for rel in files:
         if not rel.startswith("configure/") or rel in ("configure/host.js", "configure/files.js"):
             continue

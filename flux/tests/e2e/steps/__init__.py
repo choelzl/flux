@@ -98,5 +98,6 @@ ORDER = (
     "hidden in a new loop",
     "hidden to the author",
     "docs crafter",
+    "docs preview",
     "screens",
 )

@@ -1,8 +1,10 @@
-"""MkDocs hook (D1166): the loop crafter page runs the web app's own configurator. Its script
-(docs/assets/crafter-app.js) imports the app's modules from `assets/app/`; this hook publishes there the
-files of flux/interfaces/web/src/flux_web/static it needs -- its imports followed, module by module, the
-app's stylesheet and the vendored libraries' licences -- straight from the app's folder, so the site
-carries no copy to keep in step. `mkdocs serve` watches that folder too."""
+"""MkDocs hook (D1166): the docs' pages that run the web app's own code. The loop crafter page's script
+(docs/assets/crafter-app.js) imports the app's configurator from `assets/app/`; the Preview app (docs/preview/app.html,
+over docs/assets/preview/mock.js) runs the whole app from there. This hook publishes there the files of
+flux/interfaces/web/src/flux_web/static they need -- the imports followed, module by module, from each entry (the
+crafter's script, the app's app.js, the preview's mock), the app's stylesheet and logo, the vendored libraries'
+licences -- straight from the app's folder, so the site carries no copy to keep in step. `mkdocs serve` watches that
+folder too."""
 
 from __future__ import annotations
 
@@ -12,16 +14,25 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 STATIC = HERE.parent / "flux/interfaces/web/src/flux_web/static"
 ENTRY = HERE / "docs/assets/crafter-app.js"
-#: where the app's files are published, beside the page's script
+#: the Preview app's mock (beside it at assets/preview/: the app's modules are `../app/`)
+MOCK = HERE / "docs/assets/preview/mock.js"
+#: the whole app, as its index.html loads it
+APP = ("app.js",)
+#: where the app's files are published, beside the pages' scripts
 PREFIX = "assets/app/"
-#: besides the modules: the stylesheet the page reads into its shadow root, and the vendored code's licences
-ALSO = ("flux.css", "vendor/LICENSE.preact", "vendor/LICENSE.htm")
+#: besides the modules: the stylesheet, the logo, and the vendored code's licences
+ALSO = ("flux.css", "logo.svg", "vendor/LICENSE.preact", "vendor/LICENSE.htm")
 _IMPORT = re.compile(r"""(?:\bfrom|\bimport)\s*\(?\s*["'](\.{1,2}/[^"']+)["']""")
 
 
-def app_files(entry: Path = ENTRY, static: Path = STATIC) -> list[str]:
-    """The app's files the page needs, as paths under static/: what `entry` imports from `./app/`, followed."""
+def app_files(entry: Path = ENTRY, static: Path = STATIC, *, whole: bool = True, mock: Path | None = MOCK) -> list[str]:
+    """The app's files the pages need, as paths under static/: what `entry` imports from `./app/`, what `mock` imports
+    from `../app/` and, `whole`, the app's app.js -- each followed. `whole=False, mock=None`: the crafter's alone."""
     todo = [m[len("./app/"):] for m in _IMPORT.findall(entry.read_text()) if m.startswith("./app/")]
+    if mock is not None and mock.is_file():
+        todo += [m[len("../app/"):] for m in _IMPORT.findall(mock.read_text()) if m.startswith("../app/")]
+    if whole:
+        todo += list(APP)
     seen: set[str] = set()
     while todo:
         rel = todo.pop()
@@ -29,7 +40,7 @@ def app_files(entry: Path = ENTRY, static: Path = STATIC) -> list[str]:
             continue
         path = static / rel
         if not path.is_file():
-            raise FileNotFoundError(f"{entry.name} needs {rel}, which static/ does not have")
+            raise FileNotFoundError(f"the docs need {rel}, which static/ does not have")
         seen.add(rel)
         for m in _IMPORT.findall(path.read_text()):
             todo.append(_join(rel, m))

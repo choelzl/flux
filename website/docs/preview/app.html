@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Flux preview</title>
+<meta name="description" content="The Flux web app running in your browser on sample data: nothing is saved.">
+<link rel="icon" type="image/svg+xml" href="../assets/app/logo.svg">
+<script>/* the app's theme (as its index.html sets it): the one chosen, or the system's; inside the docs' Preview tab, the docs' */
+(function () { var m = matchMedia("(prefers-color-scheme: dark)"), set = function () { var t = null; try { t = localStorage.getItem("flux-theme"); } catch (e) {}
+  document.documentElement.dataset.theme = t === "light" || t === "dark" ? t : m.matches ? "dark" : "light"; };
+  set(); m.addEventListener("change", set); })();</script>
+<link rel="stylesheet" href="../assets/app/flux.css">
+<link rel="stylesheet" href="../assets/preview/preview.css">
+<script type="module">
+  // the mock first (fetch, EventSource and XMLHttpRequest to /api answered in the page), then the app as the server serves it
+  import { ready } from "../assets/preview/mock.js";
+  await ready;
+  await import("../assets/app/app.js");
+</script>
+</head>
+<body>
+<div id="app" style="display:contents"></div>
+<div class="preview-banner" role="note" aria-label="About this preview">
+  <b>Preview:</b><span class="preview-says">sample data, nothing is saved</span>
+  <span aria-hidden="true">·</span><button type="button" id="preview-reset" title="Start the preview again: what you changed goes">Reset</button>
+  <span aria-hidden="true">·</span><button type="button" id="preview-user" title="See the app as another demo user"></button>
+</div>
+<script type="module">
+  import { preview } from "../assets/preview/mock.js";
+  const who = document.getElementById("preview-user");
+  const say = () => { who.textContent = preview.user === "ada" ? "as ada (admin) · view as bob" : "as bob · view as admin"; };
+  addEventListener("preview-user", say);
+  setInterval(say, 1000); say();
+  document.getElementById("preview-reset").onclick = () => location.reload();
+  who.onclick = () => {
+    const u = new URL(location.href);
+    u.searchParams.set("as", preview.user === "ada" ? "bob" : "ada");
+    u.hash = preview.user === "ada" ? "#/" : "#/admin";
+    location.href = u.href;
+  };
+</script>
+</body>
+</html>
