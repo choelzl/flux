@@ -219,12 +219,13 @@ def test_the_workbench_digest_is_one_setup_row_its_agent_its_pill(tmp_path, old)
       const lib = V.flowBoxes(rows, null, false).find(b => b.key === "Library");
       return { tree: lines(sc.rows, v).tree().map(said).filter(l => l[0] !== "Pass 1" && !/^Design/.test(l[0])),
         runs: lib.runs.map(n => n.id), who: lib.who, list: lines(rows.filter(r => lib.ids.has(r.node.id)), v).boxList(lib.runs, "k", "setup").map(said) }; }""")
-    assert start == {"tree": [["Setup", "", None], ["Setup workbench", "AI", 2], ["validate", "", 1], ["workbench", "AI", 3]],
-                     "runs": [2], "who": "AI", "list": [["workbench", "AI", 3]]}
+    # (D1247) the turn is the step's own -- the row opens the step, which holds its conversation
+    assert start == {"tree": [["Setup", "", None], ["Setup workbench", "AI", 2], ["validate", "", 1], ["workbench", "AI", 2]],
+                     "runs": [2], "who": "AI", "list": [["workbench", "AI", 2]]}
     passed = views(tmp_path / "p", _digest(old, marked=True), """({ lines, sc, v, said, V }) => {
       const rows = sc.rows.filter(r => sc.membership.get(r.node.id) === 1), setup = V.flowBoxes(rows, 1, false).find(b => b.key === "setup");
       return { tree: lines(sc.rows, v).tree().map(said).filter(l => /^Setup ·/.test(l[0])), runs: setup.runs.map(n => n.id) }; }""")
-    assert passed == {"tree": [["Setup · workbench", "AI", 3]], "runs": [2]}
+    assert passed == {"tree": [["Setup · workbench", "AI", 2]], "runs": [2]}
 
 
 def _unbuilt_journal(failed_flag):
@@ -313,14 +314,16 @@ def _agent_runs(error=None):
 @pytest.mark.parametrize("error", [None, "the agent wrote no file"])
 def test_a_try_of_a_run_that_failed_is_a_failed_try_counted_as_the_graph_counts(tmp_path, error):
     """The Design line was ✗ (×6) over six ticked tries -- each agent turn a try -- while the graph said ×3 and
-    named the document's agent. A draft is a try, its turns its steps; a run that failed with no step of its
-    try failing failed that try (its reason, else "no design"); the graph names the agent its turns name."""
+    named the document's agent. A draft is a try; a run that failed with no step of its try failing failed that
+    try (its reason, else "no design"); the graph names the agent its turns name. (D1247) The agent's turns are
+    the try's own: Design › try 3, try 2, try 1, nothing deeper."""
     got = views(tmp_path, _agent_runs(error), f"""({{ lines, sc, v, V }}) => {{
       const rows = sc.rows.filter(r => sc.membership.get(r.node.id) === 1), d = V.flowBoxes(rows, 1, false).find(b => b.key === "design");
       return [lines(sc.rows, v).tree().filter(l => l.type === "row" && l.depth <= 4).map(l => [{_TEXT}(l), typeof l.mark === "string" ? l.mark : l.mark.tone]).slice(1, 5),
               d.count, V.agentsOf(d.runs)]; }}""")
     said = error or "no design"
-    assert got[0] == [["Design #1.3", "bad"], [f"try 3 #1.3 · {said}", "bad"], ["codex", "ok"], ["turn 2 x#1.3", "ok"]], got   # D1236: the design each draft was asked for
+    assert got[0] == [["Design #1.3", "bad"], [f"try 3 #1.3 · {said}", "bad"], [f"try 2 #1.2 · {said}", "bad"],
+                      [f"try 1 #1 · {said}", "bad"]], got   # D1236: the design each draft was asked for
     assert got[1] == 3 and got[2] == ["codex"]
 
 

@@ -1239,7 +1239,8 @@ def _climb(problem: Problem, state: LoopState, goals: list[str]) -> None:
     say = state.say
     state.fresh = False
     stages = problem.stages()
-    with _phase("template-fill: compose", why=f"{plural(len(state.admitted), 'part')}", quiet=True):
+    # (D1246) a work step names its own box: composing the parts is Design's, not the climb's it runs before
+    with _phase("template-fill: compose", why=f"{plural(len(state.admitted), 'part')}", quiet=True, box="design"):
         composed = problem.compose(dict(state.admitted), state) if state.admitted else None
     if composed is not None and stages:
         many = list(composed) if isinstance(composed, (list, tuple)) else [composed]

@@ -325,7 +325,7 @@ def test_a_phase_says_its_facts_as_tags_its_inner_phases_and_workers_too(tmp_pat
 
         J._ATTACHED.clear()
     events, _ = read_events(str(tmp_path / "run" / "events.jsonl"))
-    assert events[0]["ev"] == "hello" and events[0]["format"] == 2
+    assert events[0]["ev"] == "hello" and events[0]["format"] == 3
     starts = {e["name"]: e for e in events if e["ev"] == "start"}
     build, tools = starts["test: build x"], [e for e in events if e["ev"] == "start" and e["name"] == "tool:check.py"]
     assert build["tags"] == {"box": "check", "design": "x#1", "step": "build"} and build["params"] == {"command": "make"}
@@ -358,7 +358,7 @@ def test_every_task_of_a_run_says_its_box_and_its_pass(tmp_path, monkeypatch):
         J._ATTACHED.clear()
     path = next((tmp_path / "traces").rglob("events.jsonl"))
     events, _ = read_events(str(path))
-    assert events[0].get("format") == 2
+    assert events[0].get("format") == 3
     tasks = [e for e in events if e["ev"] in ("start", "note")]
     assert tasks and all(e.get("tags", {}).get("box") in ("setup", "plan", "search", "design", "check", "measure", "choose")
                          for e in tasks), [e["name"] for e in tasks if not e.get("tags", {}).get("box")]
@@ -418,3 +418,111 @@ def test_a_models_round_is_a_note_of_its_turn_however_long(tmp_path):
     events, _ = read_events(str(tmp_path / "events.jsonl"))
     assert [e["why"] for e in events if e["ev"] == "note"] == ["hop 1"]
     assert [e["why"] for e in events if e["ev"] == "start" and e["name"] == "llm: round"] == ["hop 2"]
+
+
+def _run_fixture(tmp_path, monkeypatch, fixture: str, *args: str) -> list[dict]:
+    """A fixture loop (tests/fixtures/loops/<fixture>) run for real; its journal's events."""
+    import shutil
+
+    from flux_cli.main import main
+
+    home = tmp_path / fixture
+    shutil.copytree(Path(__file__).resolve().parents[1] / "fixtures" / "loops" / fixture, home)
+    for f in home.iterdir():
+        if f.is_file():
+            f.write_text(f.read_text().replace("__NAME__", fixture).replace("__MODULE__", fixture))
+    monkeypatch.setenv("FLUX_TRACE_ROOT", str(tmp_path / "traces"))
+    try:
+        assert main(["task", "run", str(home), "--no-sandbox", "--db", str(tmp_path / "r.db"), *args]) == 0
+    finally:
+        from flux_loop import journal as J
+
+        for lis in list(J._ATTACHED.values()):
+            flux_profile.remove_listener(lis)
+        J._ATTACHED.clear()
+    events, _ = read_events(str(next((tmp_path / "traces").rglob("events.jsonl"))))
+    return events
+
+
+def test_a_sweep_pass_has_a_measure_task_per_point_it_measured(tmp_path, monkeypatch):
+    """(D1246) A sweep's pass: the search's batch holds the point's design, its check and its measurement, each
+    naming its own box and the pass it is in -- Live's Graph reads Search, Design, Check, Measure, Choose for every
+    pass from them. Composing the parts is Design's, not the climb's it runs before."""
+    events = _run_fixture(tmp_path, monkeypatch, "sweep", "--passes", "3")
+    starts = [e for e in events if e["ev"] == "start"]
+    for n in (1, 2, 3):
+        mine = [e for e in starts if e["tags"].get("pass") == n]
+        batch = [e for e in mine if e["tags"]["box"] == "search"]
+        assert len(batch) == 1, mine
+        under = [e for e in mine if e["parent"] == batch[0]["id"]]
+        boxes = {e["tags"]["box"] for e in under}
+        assert boxes == {"design", "check", "measure"}, (n, [(e["name"], e["tags"]) for e in under])
+        designs = {e["tags"].get("design") for e in under if e["tags"]["box"] == "design"}
+        measured = [e for e in under if e["tags"]["box"] == "measure"]
+        assert {e["tags"].get("design") for e in measured} == designs and len(measured) == len(designs), "one measurement a point"
+        assert any(e["tags"]["box"] == "choose" for e in mine)
+    composes = [e for e in events if e["ev"] == "note" and e["name"].startswith("template-fill: compose")]
+    assert composes and all(e["tags"]["box"] == "design" for e in composes)
+
+
+AGENT = r'''import json, sys
+from pathlib import Path
+here = Path(sys.argv[0]).parent
+mode = sys.argv[1]
+n = len(list(here.glob("turn-*"))) + 1
+(here / f"turn-{n}").write_text(mode)
+if mode == "first":
+    text, artifact, sid = Path(sys.argv[2]).read_text(), Path(sys.argv[3]), "ses_1"
+else:
+    sid, text, artifact = sys.argv[2], sys.argv[3], Path(sys.argv[4])
+def say(**e): print(json.dumps({"sessionID": sid, **e}), flush=True)
+say(type="tool_use", part={"tool": "bash", "state": {"input": {"command": "ls"}, "output": "x", "status": "completed"}})
+if mode == "first":
+    say(type="text", part={"text": "I will write it next."})        # ends without the file: nudged
+else:
+    artifact.write_text("\n".join(str(i) for i in range(10)) + "\n")
+    say(type="text", part={"text": "The file is written."})
+say(type="step_finish", part={"reason": "stop", "tokens": {"input": 100, "output": 10}})
+'''
+
+
+def test_an_agents_turns_are_its_try(tmp_path, monkeypatch):
+    """(D1247) An agent that ends its first turn without the file is nudged, and its session resumed: both turns
+    are the try's one task -- no turn task under it -- its time theirs, its output saying `turns` and each turn's
+    time, its conversation one steps file in order, what Flux told it between them a `said` step."""
+    import sys
+
+    from flux_cli.main import main
+
+    fake = tmp_path / "agent" / "fake.py"
+    fake.parent.mkdir()
+    fake.write_text(AGENT)
+    digits = json.loads((Path(__file__).resolve().parents[2] / "core/loop/examples/digits/problem.json").read_text())
+    digits["flow"] = {**digits.get("flow", {}), "generate": {"by": {
+        "command": [sys.executable, str(fake), "first", "{prompt_file}", "{artifact}"],
+        "resume": [sys.executable, str(fake), "resume", "{session}", "{answer}", "{artifact}"],
+        "output": "opencode", "timeout_s": 60}}}
+    doc = tmp_path / "digits" / "problem.json"
+    doc.parent.mkdir()
+    doc.write_text(json.dumps({k: v for k, v in digits.items() if k != "id"}))
+    monkeypatch.setenv("FLUX_TRACE_ROOT", str(tmp_path / "traces"))
+    try:
+        assert main(["task", "run", str(doc), "--no-sandbox", "--db", str(tmp_path / "d.db"), "--passes", "1"]) == 0
+    finally:
+        from flux_loop import journal as J
+
+        for lis in list(J._ATTACHED.values()):
+            flux_profile.remove_listener(lis)
+        J._ATTACHED.clear()
+    assert len(list(fake.parent.glob("turn-*"))) == 2, "a first turn and its nudge"
+    events, _ = read_events(str(next((tmp_path / "traces").rglob("events.jsonl"))))
+    starts = {e["id"]: e for e in events if e["ev"] == "start"}
+    assert not [e for e in starts.values() if e["name"].startswith("agent:")], "no turn is a task of its own"
+    draft = next(e for e in starts.values() if e["name"].startswith("generation: agent:"))
+    end = next(e for e in events if e["ev"] == "end" and e["id"] == draft["id"])
+    out = end["output"]
+    assert out["turns"] == 2 and [t["turn"] for t in out["turn times"]] == [1, 2]
+    assert out["tokens (reported)"] == "200 in, 20 out", "the try's tokens, its turns' summed"
+    steps = [json.loads(x) for x in Path(out["steps file"]).read_text().splitlines()]
+    assert [s["k"] for s in steps] == ["tool", "text", "said", "tool", "text"] and out["steps total"] == 5
+    assert steps[2]["text"].startswith("You have not written")

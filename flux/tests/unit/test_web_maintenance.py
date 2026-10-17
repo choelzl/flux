@@ -493,7 +493,7 @@ def test_an_old_task_journal_is_brought_up_to_date_once_its_original_kept(tmp_pa
     got = m.run("formats", by="ada")
     assert got["said"].startswith("1 journal brought up to date"), got
     events = [json.loads(x) for x in (run / "events.jsonl").read_text().splitlines()]
-    assert events[0]["ev"] == "hello" and events[0]["format"] == 2
+    assert events[0]["ev"] == "hello" and events[0]["format"] == 3
     assert all(e.get("tags", {}).get("box") for e in events if e["ev"] == "start")
     assert gzip.open(run / "events.jsonl.orig.gz").read() == old.read_bytes()
     body = (run / "events.jsonl").read_bytes()

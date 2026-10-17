@@ -26,7 +26,8 @@ __all__ = ["Journal", "TAIL", "attach", "compact", "read_events", "window_start"
 TAIL = 4000
 #: (D1233) the journal's format: 2 -- every task says its facts (`tags`: box, pass, design, step, try, worker,
 #: part; at its end outcome, not reached, failed at). A journal without it is older: `journal_migrate` brings it up.
-FORMAT = 2
+#: 3 (D1246, D1247): composing the parts says Design; an agent's or a model's turns are the try they work in
+FORMAT = 3
 _ATTACHED: dict[str, "Journal"] = {}
 _ATTACHING = threading.Lock()
 

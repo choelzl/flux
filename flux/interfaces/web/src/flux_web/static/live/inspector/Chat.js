@@ -56,7 +56,7 @@ export function turnFacts({ model = null, status = null, exit = null, tin = null
 /** The facts as tiles, an exit other than 0 in its tone (124, a time limit: warn). */
 export const TurnFacts = ({ list, cls = "" }) => list.length ? html`<div class=${`facts ${cls}`}>${list.map(([k, v]) => html`<${Fact} key=${k} label=${k} value=${String(v)}
   cls=${k === "folder" ? "small" : ""} tone=${k === "exit" && String(v) !== "0" ? (Number(v) === 124 ? "warn" : "bad") : null} />`)}</div>` : null;
-const usage = (f, extra) => [...extra.map(([k, v]) => [k, k === "model" ? modelSaid(v) : v]), ["status", f.status], ["exit", f.exit],
+const usage = (f, extra) => [...extra.map(([k, v]) => [k, k === "model" ? modelSaid(v) : v]), ["status", f.status], ["exit", f.exit], ["turns", f.turns],
   ...Object.entries(f).filter(([k]) => /token|cost|usd|first/i.test(k)).map(([k, v]) => [k, /token/i.test(k) ? tokensSaid(v) : v])].filter(([, v]) => v != null && v !== "");
 
 /** D1036: an agent turn's earlier steps, from the file it wrote -- one block per task, joined to its live

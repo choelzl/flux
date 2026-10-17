@@ -24,7 +24,7 @@ from typing import Any, Callable
 
 __all__ = ["FORMAT", "STEPS", "migrate_events", "migrate_journal"]
 
-FORMAT = 2
+FORMAT = 3
 Event = dict[str, Any]
 
 
@@ -120,8 +120,9 @@ _SETUP_ROOT = re.compile(r"^\s*(knowledge|records|feedback|extract|setup|gate:\s
 class _Start:
     """One start's events and its tasks: id -> {"s": start event, "e": end event or None, "kids": [ids]}."""
 
-    def __init__(self, events: list[Event]) -> None:
+    def __init__(self, events: list[Event], files: bool = False) -> None:
         self.events = events
+        self.files = files
         self.index()
 
     def index(self) -> None:
@@ -528,19 +529,159 @@ def _unchecked(st: _Start, run: Any, lead: Any, drafts: list, is_draft: Callable
 
 
 #: Each change the journal went through, in order: (decision, what it does, step(start, said, tests)).
-STEPS: list[tuple[str, str, Callable[..., None]]] = [
-    ("D1075", "a critic's rejection, an agent out of time, a check that did not build: fields", lambda st, said, tests: _verdicts(st, said)),
-    ("D1148", "a quiet setup step written after its tasks takes them in", lambda st, said, tests: _d1148(st, said)),
-    ("D1233", "every task says its box, pass, design, step and worker", lambda st, said, tests: _d1233(st, said)),
+def _compose_designs(st: _Start, said: Callable[[str], None]) -> None:
+    """(D1246) Composing the parts into the whole is Design's work: the step said no box of its own and took the
+    climb's (Measure) -- a Measure note in a pass that measured nothing."""
+    n = 0
+    for e in st.events:
+        if e.get("ev") in ("start", "note") and re.match(r"^\s*template-fill\s*:\s*compose", str(e.get("name") or ""), re.I):
+            tags = e.setdefault("tags", {})
+            if tags.get("box") != "design":
+                tags["box"], n = "design", n + 1
+    if n:
+        said(f"{n} compose step{'' if n == 1 else 's'} said as Design")
+
+
+_TOKENS = re.compile(r"^\s*([\d,.]+|—)\s*in,\s*([\d,.]+|—)\s*out")
+
+
+def _tokens(v: Any) -> tuple[float | None, float | None]:
+    m = _TOKENS.match(str(v or ""))
+    if not m:
+        return None, None
+    num = lambda x: None if x == "—" else float(x.replace(",", ""))  # noqa: E731
+    return num(m.group(1)), num(m.group(2))
+
+
+def _steps_of(o: dict) -> tuple[list[dict], int, str]:
+    steps = [x for x in (o.get("steps") or []) if isinstance(x, dict)]
+    return steps, int(o.get("steps total") or len(steps)), str(o.get("steps file") or "")
+
+
+def _read_steps(path: str) -> list[dict] | None:
+    try:
+        return [json.loads(x) for x in Path(path).read_text().splitlines() if x.strip()]
+    except (OSError, ValueError):
+        return None
+
+
+def _turns_of_try(st: _Start, said: Callable[[str], None], files: bool = False) -> None:
+    """(D1247) An agent's or a model's turns are the try they work in, not tasks under it: the next turns of the
+    same worker in a step that took in its first (a nudge, an answer, a resumed session) -- or every turn, when the
+    step took in none -- go into the step. Their outputs are its (the last turn's words, the tokens summed, `turns`,
+    each turn's time in `turn times`); their conversations one, what Flux told the agent between them a step of it
+    (`said`). `files`: the turns' steps files joined into one beside the first, when they are all there; else the
+    conversation is the steps the journal kept."""
+    def worker(nid: Any) -> str:
+        n = st.nodes[nid]
+        w = (n["s"].get("tags") or {}).get("worker") or ""
+        for e in n["p"]:
+            w = w or (e.get("tags") or {}).get("worker") or (e.get("params") or {}).get("worker") or ""
+        return str(w)
+
+    def is_turn(nid: Any) -> bool:
+        return bool(_AI.match(st.name(nid))) and not re.search(r"endpoint recovery", st.name(nid), re.I) and bool(worker(nid))
+
+    folded = 0
+    for wid in list(st.nodes):
+        if wid not in st.nodes or is_turn(wid):
+            continue
+        w = worker(wid)
+        node = st.nodes[wid]
+        try_of = lambda nid: (st.nodes[nid]["s"].get("tags") or {}).get("try")  # noqa: E731
+        turns = sorted((k for k in node["kids"] if is_turn(k) and (worker(k) == w if w else try_of(k) == try_of(wid))),
+                       key=lambda k: st.nodes[k]["s"]["_seq"])
+        took = any("turn" in (e.get("params") or {}) for e in node["p"])
+        if not w and len({worker(k) for k in turns}) != 1:      # a step that took in none: its one agent's turns
+            continue
+        if not turns or node["e"] is None or any(st.nodes[k]["e"] is None for k in turns):
+            continue
+        out = node["e"]["output"] if isinstance(node["e"].get("output"), dict) else {}
+        own_secs = float(node["e"].get("seconds") or 0)
+        parts: list[tuple[dict, str, float, Any]] = []            # (output, the words that began it, seconds, exit)
+        if took:
+            kids_secs = sum(float(st.nodes[k]["e"].get("seconds") or 0) for k in turns)
+            parts.append((dict(out), "", max(0.0, own_secs - kids_secs), out.get("exit")))
+        for k in turns:
+            o = st.nodes[k]["e"].get("output") or {}
+            parts.append((o, str(st.params(k).get("prompt") or ""), float(st.nodes[k]["e"].get("seconds") or 0), o.get("exit")))
+        # the one conversation: each turn's steps, what began a later turn between them
+        joined: list[dict] = []
+        whole = True
+        for i, (o, began, _s, _x) in enumerate(parts):
+            steps, total, f = _steps_of(o)
+            if i and began:
+                joined.append({"k": "said", "text": began[-4000:]})
+            if total > len(steps):
+                kept = _read_steps(f) if (files and f) else None
+                if kept is not None and len(kept) >= total:
+                    steps = kept[:total]
+                else:
+                    whole = False
+            joined.extend(steps)
+        first = parts[0][0]
+        merged = dict(out)
+        for o, _b, _s, _x in parts:
+            merged.update({k: v for k, v in o.items() if k not in ("steps", "steps total", "steps file")})
+        tin = tout = None
+        for o, *_ in parts:
+            a, b = _tokens(o.get("tokens (reported)"))
+            tin = tin if a is None else (tin or 0) + a
+            tout = tout if b is None else (tout or 0) + b
+        if tin is not None or tout is not None:
+            merged["tokens (reported)"] = (f"{tin:,.0f}" if tin is not None else "—") + " in, " + (f"{tout:,.0f}" if tout is not None else "—") + " out"
+        for key in ("steps", "steps total", "steps file"):
+            merged.pop(key, None)
+        if joined:
+            files_at = _steps_of(first)[2]
+            if whole and files and files_at and any(_steps_of(o)[1] > len(_steps_of(o)[0]) for o, *_ in parts):
+                target = Path(files_at).with_name(Path(files_at).stem + "-try.jsonl")
+                try:
+                    target.write_text("".join(json.dumps(x) + "\n" for x in joined))
+                    merged["steps file"] = str(target)
+                except OSError:
+                    pass
+            merged["steps"] = joined[-40:] if "steps file" in merged else joined
+            merged["steps total"] = len(joined) if whole else len(joined) + sum(_steps_of(o)[1] - len(_steps_of(o)[0]) for o, *_ in parts)
+        if len(parts) > 1:                             # as the engine says it: a try of one turn says none
+            merged["turns"] = len(parts)
+            merged["turn times"] = [{"turn": i + 1, "seconds": round(secs, 3), **({"exit": x} if x is not None else {})}
+                                    for i, (_o, _b, secs, x) in enumerate(parts)]
+        node["e"]["output"] = merged
+        if not took:                                   # the step took in no turn: the first one's inputs are its
+            k0 = turns[0]
+            p0 = st.params(k0)
+            pe = {"ev": "params", "id": wid, "t": st.nodes[k0]["s"].get("t"), "params": {**p0, "turn": st.name(k0),
+                  **({"turn why": st.why(k0)} if st.why(k0) else {})}, "tags": {"worker": worker(k0)}}
+            st.events.insert(_at(st.events, st.nodes[k0]["s"]), pe)
+            st.index()
+        for k in turns:
+            st.drop(k)
+        folded += len(turns)
+    if folded:
+        said(f"{folded} agent or model turn{'' if folded == 1 else 's'} taken into the {'try it' if folded == 1 else 'tries they'} worked in")
+
+
+#: each step: (its decision, what it does, the format it brings a journal to, the step)
+STEPS: list[tuple[str, str, int, Callable[..., None]]] = [
+    ("D1075", "a critic's rejection, an agent out of time, a check that did not build: fields", 2, lambda st, said, tests: _verdicts(st, said)),
+    ("D1148", "a quiet setup step written after its tasks takes them in", 2, lambda st, said, tests: _d1148(st, said)),
+    ("D1233", "every task says its box, pass, design, step and worker", 2, lambda st, said, tests: _d1233(st, said)),
     ("D1235", "the right tasks: no evaluation, one decide, a check's one command its own, tries and how they came out",
-     lambda st, said, tests: _right_tasks(st, said, tests)),
+     2, lambda st, said, tests: _right_tasks(st, said, tests)),
+    ("D1246", "composing the parts is Design's", 3, lambda st, said, tests: _compose_designs(st, said)),
+    ("D1247", "an agent's turns are its try's", 3, lambda st, said, tests: _turns_of_try(st, said, st.files)),
 ]
 
 
-def migrate_events(events: list[Event], tests: list[str] | None = None, say: Callable[[str], None] | None = None
-                   ) -> tuple[list[Event], list[str]]:
+def migrate_events(events: list[Event], tests: list[str] | None = None, say: Callable[[str], None] | None = None,
+                   files: bool = False) -> tuple[list[Event], list[str]]:
     """A journal's events (several starts) brought to the current format: (the events, what was done). A start
-    whose hello says the current format is left as it is."""
+    whose hello says the current format is left as it is; one of an earlier format goes through the steps after
+    its own. (D1246) Events with no hello before them are a part of a start read elsewhere (a stream's message, a
+    window): one whose tasks say their facts (format 2 on) is left as it is -- a part is no start, and the rules
+    for a start without tags would read it wrong (each part's tasks said to be pass 1). `files`: the steps may read
+    and write the turns' steps files (`migrate_journal`)."""
     out: list[Event] = []
     said: list[str] = []
     starts: list[list[Event]] = []
@@ -550,11 +691,17 @@ def migrate_events(events: list[Event], tests: list[str] | None = None, say: Cal
         starts[-1].append(dict(e))
     for evs in starts:
         hello = evs[0] if evs and evs[0].get("ev") == "hello" else None
-        if hello is not None and int(hello.get("format") or 1) >= FORMAT:
+        if hello is None and any("tags" in e for e in evs if e.get("ev") in ("start", "note")):
             out += evs
             continue
-        st = _Start(evs)
-        for decision, what, step in STEPS:
+        was = int(hello.get("format") or 1) if hello is not None else 1
+        if was >= FORMAT:
+            out += evs
+            continue
+        st = _Start(evs, files)
+        for decision, what, to, step in STEPS:
+            if to <= was:
+                continue
             step(st, lambda m, d=decision: (said.append(f"{d}: {m}"), say and say(f"{d}: {m}")), tests)
         if hello is not None:
             hello["format"] = FORMAT
@@ -582,7 +729,7 @@ def migrate_journal(path: str | Path, tests: list[str] | None = None, say: Calla
     if not events or all(int(e.get("format") or 1) >= FORMAT for e in events if e.get("ev") == "hello") and \
             any(e.get("ev") == "hello" for e in events):
         return False
-    new, _said = migrate_events(events, tests, say)
+    new, _said = migrate_events(events, tests, say, files=True)
     tmp, mtmp = path.with_name(path.name + ".converting"), path.with_name("marks.jsonl.converting")
     marks = []
     with open(tmp, "w") as fh:

@@ -42,8 +42,15 @@ export function Conversation({ steps, k = "", offset = 0, live = false, quiet = 
       i += 1;
       continue;
     }
+    if (st.k === "said") {             // (D1247) what Flux told the agent to go on -- a nudge, an answer -- on the right, as the prompt
+      const t = String(st.text || ""), id = `${k}:${offset + i}`;
+      items.push(html`<details key=${`s${offset + i}`} class="alt-bubble me cv-said" open=${convOpen.has(id)} onToggle=${remember(id)}>
+        <summary><small>${`Flux · ${preview(t, 90)}`}</small></summary><pre class="cv-body">${t}</pre></details>`);
+      i += 1;
+      continue;
+    }
     let j = i;
-    while (j < steps.length && steps[j].k !== "text") j += 1;
+    while (j < steps.length && steps[j].k !== "text" && steps[j].k !== "said") j += 1;
     const work = steps.slice(i, j), now = live && j === steps.length, first = i;     // the stretch it is working on
     const cmds = work.filter(x => x.k !== "think").length, failed = work.filter(x => x.error).length;
     const end = now ? Date.now() / 1000 : (steps[j]?.at ?? work[work.length - 1].at);

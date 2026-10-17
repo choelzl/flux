@@ -115,10 +115,11 @@ def _digest_journal(old: bool, mark_between: bool = False) -> list[dict]:
 def test_a_quiet_steps_turn_written_before_it_is_under_it(old):
     """D1148: a journal written before D1143 has the workbench's agent turn as a top task and the quiet step after
     it -- Setup listed both ("workbench", and "claude" with its AI pill). The turn that began in the step's time and
-    ended before the step was written is the step's, as the engine now writes it: one task, the turn under it."""
+    ended before the step was written is the step's, as the engine now writes it: one task, (D1247) the turn its
+    own -- no task under it, the agent its worker."""
     got = replay(lines(_digest_journal(old)), "const n = id => m.nodes.get(id); process.stdout.write(JSON.stringify("
-                 "{roots: m.roots.map(x => x.id), kids: n(2).kids.map(x => x.id), parent: n(3).parent && n(3).parent.id}));")
-    assert got == {"roots": [1, 2, 4], "kids": [3], "parent": 2}
+                 "{roots: m.roots.map(x => x.id), kids: n(2).kids.map(x => x.id), turn: !!n(3), worker: n(2).tags.worker}));")
+    assert got == {"roots": [1, 2, 4], "kids": [], "turn": False, "worker": "agent:claude"}
 
 
 def test_a_turn_of_another_pass_is_not_taken_in():

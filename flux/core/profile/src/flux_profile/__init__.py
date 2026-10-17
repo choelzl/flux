@@ -349,14 +349,18 @@ def phase(name: str, why: str = "", quiet: bool = False, absorb: bool = False, i
     D1050: `absorb` -- a wrapper whose job is one agent or model turn (a draft, a critique, the plan);
     `inline` -- that turn. The wrapper's first inline turn opens no task of its own: its inputs join
     the wrapper's (`phase_params`), its live updates and its output are the wrapper's -- one task,
-    named as the wrapper, showing the agent. A second turn in the same wrapper is a task as ever."""
+    named as the wrapper, showing the agent. A command after it is a task as ever. (D1247) The same agent's or
+    model's next turns in the wrapper (a nudge, an answer, a resumed session) are the wrapper's too: the try is one
+    task, its time the turns' total; each turn's time and words are data of its output (`turns`, `turn times`)."""
     if silent:
         yield from _silent(name, params)
         return
     frames = _absorbing()
     with _LOCK:
         top = _stack()[-1] if _stack() else None
-    host = frames[-1] if inline and frames and not frames[-1]["used"] and top is not None and top[2] is frames[-1]["token"] else None
+    host = frames[-1] if inline and frames and top is not None and top[2] is frames[-1]["token"] else None
+    if host is not None and host["used"] and not (params.get("worker") and params.get("worker") == host.get("worker")):
+        host = None                            # a command after the turn: a task of its own
     if host is not None:
         yield from _inline(host, name, why, params)
         return
@@ -454,13 +458,15 @@ def _inline(host: dict, name: str, why: str, params: dict):
     """D1050: the one turn a wrapper holds, as the wrapper itself: no task of its own -- its inputs
     (the prompt, the command, which agent) added to the wrapper's, its live updates under the
     wrapper's token, its output into the wrapper's output."""
+    later = host["used"]
     host["used"] = True
+    host.setdefault("worker", params.get("worker") or "")
     lis, token = host["lis"], host["token"]
     own = {k: params[k] for k in TAG_KEYS if k in params and params[k] not in (None, "")}
     before = getattr(_TAGS, "tags", None)
     if own:                                    # (D1233) the turn's worker is the wrapper's, and its inner phases'
         _TAGS.tags = {**(before or {}), **own}
-    if lis is not None:
+    if lis is not None and not later:          # a later turn's inputs are words in its conversation, not the try's
         _call(lis, "phase_params", token, {**params, "turn": name, **({"turn why": why} if why else {})})
     t0 = time.perf_counter()
     with _LOCK:
@@ -481,10 +487,33 @@ def _inline(host: dict, name: str, why: str, params: dict):
             stack = _stack()
             if stack and stack[-1][0] == name:
                 stack.pop()
-        record(name, time.perf_counter() - t0, path)
+        secs = time.perf_counter() - t0
+        record(name, secs, path)
         if output.pop("failed", None) and name.startswith("tool:"):   # (D1235) a command it took in failed: so did it
             host["output"]["failed"] = True
+        if host.get("worker"):                   # (D1247) each turn's time, kept for its conversation
+            times = host.setdefault("times", [])
+            times.append({"turn": len(times) + 1, "seconds": round(secs, 3), **({"why": why} if why else {}),
+                          **{k: output[k] for k in ("exit", "timed out") if k in output}})
         host["output"].update(output)            # the wrapper's end carries the turn's output
+        if len(host.get("times") or ()) > 1:
+            host["output"]["turns"] = len(host["times"])
+            host["output"]["turn times"] = list(host["times"])
+
+
+def turn_carry(worker: str) -> dict | None:
+    """(D1247) What the turns of `worker` in the wrapper open here share -- the agent's conversation carried from
+    one turn to the next (its steps file, its count, its tokens) -- or None when a turn of it now would be no
+    wrapper's (a task of its own)."""
+    frames = _absorbing()
+    with _LOCK:
+        top = _stack()[-1] if _stack() else None
+    if not frames or top is None or top[2] is not frames[-1]["token"]:
+        return None
+    host = frames[-1]
+    if host["used"] and host.get("worker") != worker:
+        return None
+    return host.setdefault("carry", {})
 
 
 def snapshot() -> dict[str, tuple[int, float]]:

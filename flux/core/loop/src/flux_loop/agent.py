@@ -868,6 +868,13 @@ class _Live:
             at = ", resets " + _t.strftime("%a %H:%M", _t.localtime(when))
         self.limit = f"{st} ({info.get('rateLimitType') or 'limit'}{at})"
 
+    def said(self, text: str) -> None:
+        """(D1247) What the loop told the agent to go on (a nudge, an answer, the message resuming its session): a
+        step of the try's one conversation."""
+        if text:
+            self.steps.append({"k": "said", "text": text[-self.STEP_CHARS:], "at": round(__import__("time").time(), 1)})
+            self._added()
+
     def _step(self, kind: str, text: str) -> None:
         """Words or thinking: one step while the same kind goes on, a new one after anything else."""
         if not text:
@@ -1154,7 +1161,7 @@ def _run_turn(spec: AgentSpec, argv: tuple[str, ...], subs: dict[str, str], *, w
     import threading
     import time
 
-    from flux_profile import progress
+    from flux_profile import progress, turn_carry
 
     from .observe import _phase
 
@@ -1213,7 +1220,17 @@ def _run_turn(spec: AgentSpec, argv: tuple[str, ...], subs: dict[str, str], *, w
 
     # D1036: its steps on file beside its session folder (not in it: the agent lists its folder)
     spill = Path(workdir).parent / ".flux-steps" / f"{Path(workdir).name}-{time.time_ns()}.jsonl"
+    resumed = spec.resume is not None and argv == spec.resume
+    prompt = subs.get("answer", "") if resumed else subs.get("prompt", "")
+    # (D1247) a later turn of the try (a nudge, an answer, a resumed session) goes on with its conversation: the
+    # same steps file, counted on, what the loop told it a step of its own
+    carry = turn_carry(f"agent:{spec.tool}")
+    if carry and carry.get("spill"):
+        spill = carry["spill"]
     live, out = _Live(spec.output, spill), []
+    if carry and carry.get("spill"):
+        live.total = live.spilled = int(carry.get("total") or 0)
+        live.said(prompt)
     live.agent = _about(cmd[0], env)                  # D702: the model and version from the start (Claude Code says its own)
 
     def errors() -> None:
@@ -1234,8 +1251,6 @@ def _run_turn(spec: AgentSpec, argv: tuple[str, ...], subs: dict[str, str], *, w
     t0 = time.monotonic()
     timed_out = False
     shown = 0.0
-    resumed = spec.resume is not None and argv == spec.resume
-    prompt = subs.get("answer", "") if resumed else subs.get("prompt", "")
     shown_command = shlex.join(cmd)
     with _phase(f"agent: {spec.tool}", why=subs.get("name") or subs.get("part") or "", inline=True, prompt=prompt, worker=f"agent:{spec.tool}",
                 command=shown_command[:2000] + (" … command truncated" if len(shown_command) > 2000 else ""), folder=str(workdir),
@@ -1281,6 +1296,17 @@ def _run_turn(spec: AgentSpec, argv: tuple[str, ...], subs: dict[str, str], *, w
             t.join(timeout=5)
         live.close()                                  # D1036: its last steps on file
         row.update(live.fields())
+        if carry is not None:                         # (D1247) the try's conversation and tokens, summed over its turns
+            used = live.usage.values()
+            carry["spill"], carry["total"] = live.spill, live.total
+            tin, tout = carry.get("tin"), carry.get("tout")
+            if "tokens_in" in used:
+                tin = (tin or 0) + used["tokens_in"]
+            if "tokens_out" in used:
+                tout = (tout or 0) + used["tokens_out"]
+            carry["tin"], carry["tout"] = tin, tout
+            if tin is not None or tout is not None:
+                row["tokens (reported)"] = (f"{tin:,.0f}" if tin is not None else "—") + " in, " + (f"{tout:,.0f}" if tout is not None else "—") + " out"
         row["exit"] = proc.returncode
         if timed_out:                                 # D1053: said as such -- a stopped turn is not one that ended
             row["timed out"] = f"stopped after {spec.timeout_s:.0f}s"
