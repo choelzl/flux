@@ -574,7 +574,7 @@ def test_the_guides_document_the_crafters_flow_and_search_settings():
         if box["flow"] or key == "measure":
             written = "orchestrate.dse" if key == "dse" else key
             assert f"flow.{written}" in fields, key
-    knowledge = reference.split("### Knowledge settings", 1)[1].split("## Search settings", 1)[0]
+    knowledge = reference.split("### Knowledge settings", 1)[1].split("\n#", 1)[0]
     for key in ("digest", "lessons"):
         assert f"| `{key}` |" in knowledge, key
 

@@ -155,7 +155,7 @@ AREAS: dict[str, dict[str, list[str]]] = {
     },
     "docs": {
         "sources": ["../website/**", "../docs/**", "../*.md", "*.md", "**/README.md", "**/IDEAS.md", "applications/TOOLS.md"],
-        "unit": ["test_doc_links.py", "test_docs_crafter.py", "test_docs_preview.py", "test_document_reference.py", "test_loop_crafter.py"],
+        "unit": ["test_cli_reference.py", "test_doc_links.py", "test_docs_crafter.py", "test_docs_preview.py", "test_document_reference.py", "test_loop_crafter.py"],
         "e2e": ["docs preview"],
     },
     "shell": {

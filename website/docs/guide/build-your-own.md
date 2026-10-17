@@ -11,8 +11,7 @@ function signature or module ports, supported inputs, numerical accuracy, and an
 restrictions. Put executable checks in `flow.test`: prose alone does not establish correctness.
 
 Choose the artifact `language`, such as `python`, `systemverilog`, or `cpp`. Flux uses it for
-the generated file extension. Say it: only the built-in Verilator lint command implies one, and
-without it the design is a `.txt` file.
+the generated file extension. Say it: without it the design is a `.txt` file.
 
 ```yaml
 statement: Find a fast implementation of count_primes(n).
@@ -87,12 +86,14 @@ For RTL, define the ports and reference function in `golden.py`, then use:
 ```yaml
 flow:
   test:
-    lint: "verilator --lint-only -Wno-lint -Wno-style -Wwarn-LATCH -Wwarn-MULTIDRIVEN -Wwarn-UNOPTFLAT -Wwarn-COMBDLY -Wwarn-BLKANDNBLK -Wwarn-IMPLICIT {artifact}"
+    lint: "fluxpreset rtl lint {artifact}"
     golden: "fluxpreset golden {artifact} --golden {home}/golden.py"
 ```
 
-The [RTL reference](parameters.md#rtl-golden-model) describes vectors, clocked designs, and
-floating-point tolerances. `flux tools` lists the built-in checks and their commands.
+The [golden model](../reference/presets.md#golden-model) describes vectors, clocked designs,
+and floating-point tolerances. `flux tools` lists the built-in checks and their commands, and
+the configurator offers them as a check's **Type** or a measurement's **Tool** under **Flux
+presets**.
 
 ## Measure surviving designs
 
@@ -119,7 +120,7 @@ measurement command exit rejects its numbers. Use `metrics_re` for a different o
 
 Every stage must declare the metrics required by its objectives. The command belongs to the
 application, or is one of Flux's presets (`fluxpreset rtl measure ...`; see
-[built-in tools](parameters.md#built-in-tools)). Declare the tools it requires too:
+[Presets](../reference/presets.md)). Declare the tools it requires too:
 
 ```yaml
 flow:
@@ -204,7 +205,7 @@ work. The [budget reference](parameters.md#budget) includes those settings.
 
 Omit `passes`, or use `0`, to run until manually stopped. Finding a feasible design or a
 stalled search does not end an unlimited run. Individual attempts still have their budgets
-and timeouts; [Run and results](run.md) explains stopping and resuming.
+and timeouts; [Run, stop, resume](run.md) explains stopping and resuming.
 
 ## Add context and reusable settings
 
@@ -213,15 +214,12 @@ params: {input_size: 1000000, repetitions: 9}
 flow:
   knowledge:
     files: [spec.md, reference.py]
-    text: Prefer implementations that are easy to maintain.
-    digest: claude
-    lessons: mined
+    hidden: [check.py]
 ```
 
-`params` reaches scripts through the `{params}` JSON file. Knowledge files and notes reach
-model prompts; the loop's `library/` and the operator's shared library supply papers.
-`digest` chooses who summarizes them; `lessons` reuses lessons from the loop's record.
-`knowledge: off` disables this reading.
+`params` reaches scripts through the `{params}` JSON file. `knowledge.files` reach every model
+prompt and agent brief; `knowledge.hidden` keeps the gate's files from the agents.
+[Knowledge, skills, hidden paths](knowledge.md) covers what agents read and what they may not.
 
 Check each edited document with `flux task check FOLDER`, then do a bounded run with
 `flux task run FOLDER --passes 1`. Continue with [Search and agents](loop-shape.md) or look up

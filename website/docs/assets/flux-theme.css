@@ -62,3 +62,15 @@
 /* the mark: its ink as the app's --logo-ink */
 .md-header__button.md-logo { color: var(--flux-logo-ink); }
 .md-header__button.md-logo svg.flux-logo { height: 1.4rem; width: 1.4rem; fill: none; }
+/* tables: code never breaks inside an identifier (a wide table scrolls instead); on a phone, smaller type */
+.md-typeset table:not([class]) code { word-break: normal; overflow-wrap: normal; white-space: nowrap; }
+.md-typeset table:not([class]) td:last-child code { white-space: normal; }
+@media (max-width: 600px) {
+  .md-typeset table:not([class]) { font-size: .68rem; }
+  .md-typeset table:not([class]) th, .md-typeset table:not([class]) td { padding: .5em .7em; }
+  .md-typeset pre > code { font-size: .72rem; }
+}
+/* the home page's entry cards and the figures: the app's panel and hairline */
+.md-typeset .grid.cards > ul > li { border-color: var(--flux-line); background: var(--md-default-bg-color); }
+.md-typeset .grid.cards > ul > li:hover { border-color: var(--flux-accent); box-shadow: none; }
+.md-typeset img { border: 1px solid var(--flux-line); border-radius: 6px; }

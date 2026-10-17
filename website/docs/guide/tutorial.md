@@ -19,7 +19,7 @@ source .venv/bin/activate
 ```
 
 If Flux is already installed, use your existing environment. Keep that environment active for
-the commands below. Hardware setup is covered in [Run and results](run.md#hardware-tools).
+the commands below. Hardware tools and the web app are covered in [Install](../start/install.md).
 
 `flux task check` and `flux task run` run inside a container, the
 [sandbox](run.md#sandbox), with rootless Podman (preferred) or Docker. Without either, they stop
@@ -162,6 +162,8 @@ flux report sums/out/sums.db
 tests or benchmark. The run executes them and stops after the two passes in `budget`.
 The formula should win this workload; the actual times come from your machine.
 
+The run writes, among other bookkeeping files:
+
 | File | Contents |
 |---|---|
 | `sums/out/sums.py` | The chosen passing design |
@@ -178,6 +180,7 @@ Add another implementation to `render.py` and `space.implementation`, then raise
 or override it with `--passes 3`. You can replace the generator with an agent, change the
 benchmark, add a second measurement stage, or introduce a limit alongside the speed objective.
 
-Continue with [Configure](build-your-own.md), then [Search and agents](loop-shape.md).
+Continue with [Configure](build-your-own.md), then [Search and agents](loop-shape.md), or open
+the loop in the [web app](../web/index.md).
 For another starting point, copy a folder from `flux/applications/`, including its scripts,
 or use `flux new NAME` for a blank loop.

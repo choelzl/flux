@@ -1,7 +1,9 @@
-"""The document reference (website/docs/guide/parameters.md) names everything a document may say:
-every top-level key, every flow box, every budget knob, every agent option, every search policy and
-its options, and every placeholder a command receives. A key the code accepts and the page does not
-name fails here, so the reference cannot fall behind the loader."""
+"""The site's reference (website/docs/guide/parameters.md, the document, and the pages of
+website/docs/reference/: search policies, agent options, commands and placeholders, presets) names
+everything a document may say: every top-level key, every flow box, every budget knob, every agent
+option, every search policy and its options, every placeholder a command receives, and every check
+and stage of the tool catalog. A key the code accepts and the pages do not name fails here, so the
+reference cannot fall behind the loader."""
 
 from __future__ import annotations
 
@@ -11,8 +13,9 @@ from pathlib import Path
 
 import pytest
 
-PAGE = Path(__file__).resolve().parents[3] / "website" / "docs" / "guide" / "parameters.md"
-NAMED = set(re.findall(r"`\{?([A-Za-z_][A-Za-z0-9_.]*)\}?", PAGE.read_text()))
+DOCS = Path(__file__).resolve().parents[3] / "website" / "docs"
+PAGES = [DOCS / "guide" / "parameters.md", *(DOCS / "reference" / f"{n}.md" for n in ("search", "agents", "commands", "presets"))]
+NAMED = set(re.findall(r"`\{?([A-Za-z_][A-Za-z0-9_.]*)\}?", "\n".join(p.read_text() for p in PAGES)))
 
 
 def _missing(names) -> list[str]:
@@ -52,3 +55,17 @@ def test_every_search_policy_and_its_options_are_described(policy):
     internal = {"start", "label", "run"}            # label is written name; run is command
     options = {f.name for f in dataclasses.fields(_POLICIES[policy])} - internal
     assert not _missing({policy} | options)
+
+
+def test_every_catalog_check_and_stage_has_its_preset_entry():
+    import json
+
+    page = (DOCS / "reference" / "presets.md").read_text()
+    for tool in json.loads((DOCS / "assets" / "tools.json").read_text()):
+        assert f"(`{tool['id']}`, a {tool['role']})" in page, tool["id"]
+
+
+def test_the_nested_box_settings_are_described():
+    from flux_loop.document.surface import CRITIC_BOXES
+
+    assert not _missing(["flow.orchestrate.scope", "flow.orchestrate.dse", "critic", "rounds", *CRITIC_BOXES])

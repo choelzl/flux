@@ -1,6 +1,7 @@
-# Run and results
+# Run, stop, resume
 
-Use this page after [creating](tutorial.md) and [configuring](build-your-own.md) a loop.
+Use this page after [creating](tutorial.md) and [configuring](build-your-own.md) a loop. In
+the web app, the same actions are a loop's **Start** and **Stop** ([Tour](../web/index.md#a-loops-page)).
 Replace `sums` with your loop's folder. Commands use the active Flux environment.
 
 ## Check before running
@@ -112,32 +113,11 @@ or a shallower screening result should not be read as a confirmed measurement.
 | `1` | No design was measured, or the run could not start |
 | `130` | Interrupted |
 
-In the web app, a loop's **Live** tab shows passes, tools, agent activity, and their output as
-a tree, a graph, a timeline, and a log. Its **Start** picker opens an older start; its tasks and
+In the web app, a loop's [Live](../web/live.md) tab shows passes, tools, agent activity, and
+their output as a tree, a graph, a timeline, and a log. Its **Start** picker opens an older start; its tasks and
 conversations belong to that start.
 Files, logs, and results provide raw or fullscreen views. History is available while its files
 and records are retained; resetting a loop clears the generated history.
-
-## Browser setup
-
-Install the web extra and create your account using the same user that should own the files:
-
-```bash
-pip install -e "./flux[web]"
-flux user add me --admin
-flux serve
-```
-
-These install commands assume the repository root. The server reports its address; open it
-and sign in. Create a loop from an example, an empty baseline, an uploaded folder, a clone,
-an agent, or the configurator. The configurator edits the same document as the CLI.
-A loop's **Settings › Problem** edits its document; **Settings › Preferences** holds its
-measurements' visibility, sharing, maintenance and Reset. Your own agents' settings are under
-**Account › Agents**; an admin sets the server's under **Admin › Agents**. Under a loop's
-**Settings › Preferences › Advanced (admins)**, an admin controls the sandbox, its limits, parallel
-work, and extra Nixpkgs or Nixchip packages, such as `jq` or `verilator`. Packages use Flux's
-locked versions, are cached, and become available on the next sandbox start.
-The [Loop crafter](loop-crafter.md) is also available on this site.
 
 ## Sandbox
 
@@ -160,45 +140,8 @@ Without either, these commands stop with `the sandbox needs Podman or Docker`.
 - **Off:** `--no-sandbox` or `FLUX_SANDBOX=0` runs on this machine as you. Use it only for code
   you trust, such as the [first loop](tutorial.md).
 
-## Hardware tools
+## Setup elsewhere
 
-Install [Nix](https://nixos.org/download/) and enable
-`experimental-features = nix-command flakes` in `~/.config/nix/nix.conf`. From the repository:
-
-```bash
-cd flux
-nix develop --accept-flake-config
-flux selftest --no-model
-```
-
-Use this shell for loops requiring Verilator, Yosys, OpenROAD, ChampSim, or the other packaged
-tools. The first shell entry may build or download tools. Keep your loop folder in a convenient
-location and pass its path to Flux.
-
-## Models and agent environments
-
-Script-generated searches do not require an AI model. Flux's own model is a local Ollama by
-default (its model name in `FLUX_LLM_MODEL`); `flux selftest` says which model and endpoint a run
-would use. A remote OpenAI-compatible endpoint uses:
-
-```bash
-export FLUX_REMOTE_BASE_URL=https://your-model-server.example/v1
-export FLUX_REMOTE_MODEL=your-model-name
-export FLUX_REMOTE_API_KEY=your-key
-flux selftest
-```
-
-Supply a key only if the endpoint needs it. Store persistent machine settings in
-`~/.config/flux/flux.env`; shell variables take precedence. `FLUX_CONFIG` selects another
-config file. `FLUX_REMOTE_API_KEY_FILE` keeps the key in a separate file.
-
-Coding agents must be installed and authenticated where Flux runs. Their executable overrides
-are `FLUX_CLAUDE_BIN`, `FLUX_CODEX_BIN`, and `FLUX_OPENCODE_BIN`. Flux's per-agent aliases are
-`FLUX_<NAME>_BASE_URL`, `FLUX_<NAME>_API_KEY`, `FLUX_<NAME>_MODEL`, and, for agents supporting it,
-`FLUX_<NAME>_OAUTH_TOKEN`. An agent never uses Flux's own model settings (`FLUX_REMOTE_*`):
-without its own, it runs on its own configuration file and login. The web settings can configure
-agents without changing the document.
-Keep credentials in your environment or account settings, not the loop's YAML.
-
-For detailed environment recipes, use the repository's
-[model and agent setup](https://github.com/choelzl/flux/blob/main/docs/models.md).
+- Installing Flux, the web app and the hardware tools: [Install](../start/install.md).
+- Flux's model and the coding agents: [Models and agents](models.md).
+- Following runs in the browser: [Web app](../web/index.md).

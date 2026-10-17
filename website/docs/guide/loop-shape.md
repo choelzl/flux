@@ -4,14 +4,13 @@ A loop separates **what to try next** (`flow.orchestrate`) from **how to make th
 (`flow.generate`). The gate and measurement stages establish the results. You can change the
 search or generator while keeping those checks, measurements, and objectives.
 
-```mermaid
-flowchart LR
-    O[Choose an experiment] --> G[Generate a design]
-    G --> T[Check correctness]
-    T --> M[Measure survivors]
-    M --> S[Choose from objectives]
-    S --> O
-```
+![The loop as the configurator's Graph draws it: Search, Design, Check, Measure and Choose on a ring, with the setup boxes beside it](../assets/web/graph-light.webp#only-light)
+![The loop as the configurator's Graph draws it: Search, Design, Check, Measure and Choose on a ring, with the setup boxes beside it](../assets/web/graph-dark.webp#only-dark)
+
+The configurator's Graph draws the loop as a ring: **Search** (`orchestrate`) chooses what to
+try, **Design** (`generate`) makes it, **Check** (`test`) and **Measure** (`measure`) establish
+the facts, and **Choose** (`select`) decides. A failed check goes back to Design. The setup
+boxes beside the ring run before the passes or feed every prompt.
 
 ## Search a space of settings
 
@@ -44,7 +43,7 @@ home point. Order numeric choices meaningfully because local search uses that or
 | `model` | Ask a model to propose legal points from the space and measured history |
 | `control` | Compare the home point with only some of the incumbent's knobs kept (`keep: [...]`) |
 | `phases` | Run several of these in order, each with its own options |
-| `command` | Your own search script: `orchestrate: {command: "...", timeout_s: 600}` ([contract](parameters.md#search-command)) |
+| `command` | Your own search script: `orchestrate: {command: "...", timeout_s: 600}` ([contract](../reference/commands.md#search-command)) |
 
 One pass normally carries one point. `budget.batch` lets it carry several; `budget.parallel`
 runs several passes simultaneously. A policy finishing its finite walk does not, by itself,
@@ -62,7 +61,7 @@ flow:
       order: [ijk, ikj, jki]
 ```
 
-The [search reference](parameters.md#search-settings) lists policy options and defaults.
+The [search reference](../reference/search.md) lists policy options and defaults.
 For a multi-phase search, keep the space and put a `phases` policy around its ordered phases:
 
 ```yaml
@@ -105,28 +104,8 @@ these as nested JSON to a generator. A choice can also use `from: "out/invented/
 
 A model or agent can invent algorithms and architectures without a predefined knob space.
 The default guidance is adaptive: reasoned risks are welcome, and exploration can happen
-before the incumbent stalls. Select the emphasis using the existing `dse` setting:
-
-In the loop configurator (the web app's, or the [loop crafter](loop-crafter.md) page, the same one),
-open **Graph** and click the **Search** box on the circle: pick a **Kind**, then a **Policy**.
-The kind filters the second dropdown; it is only a UI filter and adds no document setting.
-Changing kind selects that kind's first policy, and a saved policy opens in its own kind.
-
-| Category | Without settings in Extra | With a declared space of settings |
-|---|---|---|
-| Guidance | Guide the orchestrator's direction and design, repair and prototype prompts | A configured model proposes legal points with the selected emphasis |
-| Algorithms | Use the algorithm's emphasis as prompt and direction guidance | Run the selected finite-space algorithm; no model is needed for the walk |
-| AI | Choose who decides the next job and search direction | That model or agent proposes legal points from the space and measured history |
-
-The default is adaptive. Without a knob space, a preference is saved as
-`flow.orchestrate.dse`; with settings defined in **Extra**, it selects the search policy.
-The model choice requires a configured model connection. Agents require their command and
-credentials to be configured. Selecting an agent here does not change who writes code:
-**Design** controls generation separately. With a parameter space, a generation
-command can turn each proposed point into a design; otherwise the settings reach the check
-and measurement commands directly.
-Without a parameter space, a model or agent choice is saved as the orchestrator itself and
-appears in **Orchestrate** when the document is reopened.
+before the incumbent stalls. Say who decides what to try next, and with which emphasis, in
+`flow.orchestrate`; who writes the code is `flow.generate`, set apart:
 
 ```yaml
 flow:
@@ -154,6 +133,8 @@ discrete choices, rather than derivatives; `pareto` uses a tree guided by trade-
 the first two objectives. Without a space, these names guide the reasoning instead of
 running those walks. Preferences influence choices but do not force every experiment to
 follow them, and a script that writes a design does not read model prompts.
+
+In the configurator, these are the **Search** box on the Graph: a **Kind**, then a **Policy**.
 
 `exploration_quota` reserves a minimum share of recorded search choices for exploration,
 including across parallel passes. It counts attempts, not elapsed seconds, successful designs,
@@ -205,26 +186,12 @@ steps such as `plan` and a critic accept `session: turn` (default) or `session: 
 
 Agents can use `flux probe` to check their current file during a turn. `probe` budgets those
 checks per turn. Direct use of certain raw tools is restricted by default; `allow` can give
-specific tools back when that suits the task. See [agent options](parameters.md#agent-options).
+specific tools back when that suits the task. See [agent options](../reference/agents.md).
 
 For the direct model, use `orchestrate: {by: model, dse: adaptive}` and `generate: model`.
-[Run and results](run.md#models-and-agent-environments) explains endpoint and agent setup.
+[Models and agents](models.md) explains endpoint and agent setup.
 
 ## Split a larger design
 
-`parts` names pieces of one artifact, either as a list, a map of descriptions, or `decompose`
-to ask the orchestrator to divide it. `subtasks` names child loop folders instead. A child
-inherits the parent's settings and overrides its own `flow`, `budget`, and `params` key by key.
-The parent's generator can compose child answers:
-
-```yaml
-subtasks: [ops/recip, ops/exp]
-flow:
-  generate: {command: "{python} {home}/compose.py {parts} {artifact}"}
-```
-
-`{parts}` gives the composition script a JSON file of the child answers. Write and test the
-composition as carefully as a generator. A parent using a model or agent instead can draft
-for its children. The [document reference](parameters.md#document-fields) covers the nesting
-limits, and the [NLU example](https://github.com/choelzl/flux/tree/main/flux/applications/nlu)
-shows a larger loop split into child folders.
+A design too large for one piece can be split into parts, or into sub-loops whose decided
+designs a parent composes: see [Split a larger design](parts.md).

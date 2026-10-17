@@ -1,10 +1,11 @@
 site_name: Flux
 site_description: >-
-  Learn to create and configure a Flux loop: generate designs, check correctness,
-  measure results, and choose search policies, agents, objectives, and budgets.
+  Flux searches for better designs: it makes them with a script, a model or a coding agent,
+  checks and measures them with real tools, and decides from your objectives.
 site_url: https://choelzl.github.io/flux/
 repo_url: https://github.com/choelzl/flux
 repo_name: choelzl/flux
+edit_uri: edit/main/website/docs/
 
 copyright: "© 2026 Flux"
 
@@ -17,6 +18,8 @@ theme:
     - navigation.top
     - navigation.footer
     - content.code.copy
+    - content.code.annotate
+    - content.action.edit
     - toc.follow
     - search.suggest
   # the web app's palette and mark: assets/flux-theme.css maps its tokens; overrides/partials/logo.html
@@ -54,20 +57,41 @@ markdown_extensions:
   - pymdownx.details
   - pymdownx.tabbed:
       alternate_style: true
-  - pymdownx.superfences:
-      custom_fences:
-        - name: mermaid
-          class: mermaid
-          format: !!python/name:pymdownx.superfences.fence_code_format
+  - md_in_html
+  - pymdownx.superfences
+
+# a link to a heading that is not there fails the strict build, as a missing page does
+validation:
+  anchors: warn
 
 nav:
   - Home: index.md
-  - Build a loop:
+  - Get started:
+      - Install: start/install.md
       - First loop: guide/tutorial.md
+      - Loop crafter: guide/loop-crafter.md
+      - Write a loop with an agent: start/ask.md
+  - Guides:
       - Configure: guide/build-your-own.md
       - Search and agents: guide/loop-shape.md
-      - Loop crafter: guide/loop-crafter.md
+      - Knowledge, skills, hidden paths: guide/knowledge.md
+      - Split a larger design: guide/parts.md
+      - Recipes: guide/cookbook.md
+      - Run, stop, resume: guide/run.md
+      - Models and agents: guide/models.md
+  - Web app:
+      - Tour: web/index.md
+      - Live: web/live.md
+      - Results: web/results.md
+      - Files and settings: web/files.md
+      - Server and admin: web/admin.md
   - Preview app: preview.md
   - Reference:
-      - Document reference: guide/parameters.md
-      - Run and results: guide/run.md
+      - Document: guide/parameters.md
+      - Search policies: reference/search.md
+      - Agent options: reference/agents.md
+      - Commands and placeholders: reference/commands.md
+      - Presets: reference/presets.md
+      - CLI: reference/cli.md
+      - Common refusals: reference/refusals.md
+      - Glossary: reference/glossary.md

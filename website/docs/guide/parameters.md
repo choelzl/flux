@@ -1,4 +1,4 @@
-# Document reference
+# Document
 
 Everything a loop's document, `problem.yaml`, can say, and the contract every command it names
 must follow: arguments, placeholders, what to print, exit codes. It is written from the code
@@ -8,49 +8,58 @@ Use [Configure](build-your-own.md) for why you would choose each setting,
 `flux task check FOLDER` to validate a document, and `flux task migrate FOLDER --write` to
 upgrade an older one.
 
-**On this page:** [the document at a glance](#the-document-at-a-glance) ·
-[files and loading](#files-and-loading) · [document fields](#document-fields) ·
-[flow settings](#flow-settings) · [search settings](#search-settings) ·
-[agent options](#agent-options) · [objectives](#objective-settings) · [budget](#budget) ·
-[baseline](#baseline-pass-0) · [parts and sub-loops](#parts-and-sub-loops) ·
-[how commands run](#how-commands-run) · [command placeholders](#command-placeholders) ·
-[command contracts](#command-contracts) · [built-in tools](#built-in-tools) ·
-[RTL golden model](#rtl-golden-model) · [improvement ladder](#improvement-ladder) ·
-[common refusals](#common-refusals)
-
 ## The document at a glance
 
-Only `statement` is required. A complete document, with every section and where it is
+Only `statement` is required. A complete document; the numbered marks say where each part is
 described:
 
 ```yaml
-statement: Count the primes below n, as fast as possible.   # what to make (required)
-contract: >-                                                # rules every design must follow
-  A Python module defining count_primes(n) that returns exactly how many primes are below n.
-language: python                                            # the design's file type
+statement: Count the primes below n, as fast as possible.  # (1)!
+contract: >-  # (2)!
+  A Python module defining count_primes(n) that returns
+  exactly how many primes are below n.
+language: python
 
-flow:                                                       # who does each step
-  orchestrate:                                              # what to try next: a search
+flow:  # (3)!
+  orchestrate:
     policy: sweep
     space: {method: [trial_division, sieve, slice_sieve]}
-  generate: {command: "{python} {home}/render.py {artifact} {method}"}   # writes each design
-  test:                                                     # checks, in order
+  generate:
+    command: "{python} {home}/render.py {artifact} {method}"
+  test:  # (4)!
     build: "{python} -m py_compile {artifact}"
-    correctness: {run: "{python} {home}/check.py {artifact}", timeout_s: 60}
-  measure:                                                  # measurements, cheapest first
+    correctness:
+      run: "{python} {home}/check.py {artifact}"
+      timeout_s: 60
+  measure:  # (5)!
     quick:
       command: "{python} {home}/bench.py {artifact} 50000"
       metrics: [time_ms]
-      cutoff: {metric: time_ms, below: 20}                  # a gate before the next stage
-    full: {command: "{python} {home}/bench.py {artifact} 1000000", metrics: [time_ms]}
-  select: {finalists: 2}                                    # how many climb to the costly stage
+      cutoff: {metric: time_ms, below: 20}
+    full:
+      command: "{python} {home}/bench.py {artifact} 1000000"
+      metrics: [time_ms]
+  select: {finalists: 2}
 
-objectives:                                                 # what decides
-  - {metric: time_ms, direction: minimize, goal: 20}        # at most 20 ms: a limit
+objectives:  # (6)!
+  - {metric: time_ms, direction: minimize, goal: 20}
 
-budget: {passes: 5, workers: 1}                             # how much to spend
-params: {n_max: 1000000}                                    # your own settings, as {params}
+budget: {passes: 5, workers: 1}  # (7)!
+params: {n_max: 1000000}  # (8)!
 ```
+
+1. What to make. The only required field.
+2. Rules every design must follow: names, ports, what is forbidden.
+3. Who does each box of the loop: here a search over three methods, and a script that
+   writes each design ([flow settings](#flow-settings)).
+4. The checks, in order; the first that fails refuses the design
+   ([check settings](#check-settings)).
+5. The measurements, cheapest first. `cutoff` decides which designs go on to the next stage;
+   `select.finalists` how many climb ([measurement settings](#measurement-settings)).
+6. What decides. A `goal` makes an objective a limit: here at most 20 ms
+   ([objectives](#objective-settings)).
+7. How much to spend ([budget](#budget)).
+8. Your own settings, handed to every command as the `{params}` file.
 
 ## Files and loading
 
@@ -67,7 +76,6 @@ params: {n_max: 1000000}                                    # your own settings,
   changes and `--write` saves it.
 - **Normal form:** equivalent spellings (`plan: model` and `plan: {by: model}`) load to the same
   document and share one record.
-- **`off` as a key** must be quoted (`"off": true`): unquoted, YAML reads it as `false`.
 
 ## Document fields
 
@@ -120,20 +128,23 @@ flow:
 `claude`, `codex` and `opencode` are built in; a server can add agents of its own (named by
 `FLUX_AGENTS`). The old form `{agent: X}` is refused: write `{by: X}`.
 
-| Box | Values (first is the default) | Agent? | Purpose |
-|---|---|---|---|
-| `flow.validate` | `rules`, `model`, agent | yes | Review the document before the first pass (advisory) |
-| `flow.orchestrate` | `rules`, `given`, `model`, `tools`, agent, or a search ([search settings](#search-settings)) | yes | What to try next |
-| `flow.orchestrate.dse` | `adaptive`, `explore`, `improve`, `tune`, `finetune`, `variations`, or a policy name | | The emphasis that guides a model or agent ([search settings](#search-settings)) |
-| `flow.orchestrate.scope` | `{list: ..., brief: ..., check: ..., timeout_s: 120}` | | The scopes of one whole design a pass may work on ([scope](#scope)) |
-| `flow.plan` | `off`, `model`, agent | yes | Write the pass's plan, checked before use |
-| `flow.generate` | `model`, agent, `{command: ...}`, `{catalog: [paths]}` | yes | Write each design |
-| `flow.test` | A command, or an ordered map of named checks | never | Decide correctness ([checks](#check-settings)) |
-| `flow.measure` | An ordered map of named stages | never | Put numbers on passing designs ([measurements](#measurement-settings)) |
-| `flow.select` | `objectives`, agent, `{finalists: N}` | yes | Choose the decision; an agent only breaks ties |
-| `flow.calibrate` | `on`, `off` | no | Compare a costly stage's numbers with the cheap stage's |
-| `flow.feedback` | `human`, `off` | no | Take your notes from Talk into the next prompt |
-| `flow.knowledge` | A map ([knowledge](#knowledge-settings)), or `off` | digest, lessons | What the model and agents read |
+| Box | Values (first is the default) | Purpose |
+|---|---|---|
+| `flow.validate` | `rules`, `model`, agent | Review the document before the first pass (advisory) |
+| `flow.orchestrate` | `rules`, `given`, `model`, `tools`, agent, or a search ([search settings](../reference/search.md)) | What to try next |
+| `flow.orchestrate.dse` | `adaptive`, `explore`, `improve`, `tune`, `finetune`, `variations`, or a policy name | The emphasis that guides a model or agent ([search settings](../reference/search.md)) |
+| `flow.orchestrate.scope` | `{list: ..., brief: ..., check: ..., timeout_s: 120}` | The scopes of one whole design a pass may work on ([scope](#scope)) |
+| `flow.plan` | `off`, `model`, agent | Write the pass's plan, checked before use |
+| `flow.generate` | `model`, agent, `{command: ...}`, `{catalog: [paths]}` | Write each design |
+| `flow.test` | A command, or an ordered map of named checks; never an agent | Decide correctness ([checks](#check-settings)) |
+| `flow.measure` | An ordered map of named stages; never an agent | Put numbers on passing designs ([measurements](#measurement-settings)) |
+| `flow.select` | `objectives`, agent, `{finalists: N}` | Choose the decision; an agent only breaks ties |
+| `flow.calibrate` | `on`, `off` | Compare a costly stage's numbers with the cheap stage's |
+| `flow.feedback` | `human`, `off` | Take your notes from Talk into the next prompt |
+| `flow.knowledge` | A map ([knowledge](#knowledge-settings)), or `off` (an agent may digest and draw lessons) | What the model and agents read |
+
+The configurator's Graph names the boxes by what they do: `orchestrate` is **Search**,
+`generate` **Design**, `test` **Check**, `measure` **Measure**, `select` **Choose**.
 
 - **Words for `orchestrate` without a search:** `rules` (rules pick the work), `given`
   (a fixed order: `{given: [part_a, part_b]}`), `model` (the model picks), `tools` (the model
@@ -154,7 +165,7 @@ flow:
   depend on it), and `fluxpreset ndf scope {scope} --spec {home}/spec` lists the unit and its
   dependents for a check of your own.
 - **`generate`** takes exactly one form. `{command: ...}` is your script
-  ([generator contract](#generator-command)); `{catalog: [a.py, b.py]}` reads the listed files
+  ([generator contract](../reference/commands.md#generator-command)); `{catalog: [a.py, b.py]}` reads the listed files
   (relative to the folder) in turn; `model` and agents write the design from the brief. A
   generate agent keeps one session per part through its repairs; `session` is refused here.
   A generator command has no `timeout_s` of its own: it uses the largest check timeout.
@@ -215,7 +226,7 @@ test:
 Check names are a letter, then letters, digits, `_` and `-`. A check named `build` uses no
 default pattern: any non-zero exit means the design did not build. `count_re` or `fail_re`
 at the level of `flow.test` (not inside a check) is refused. How a check's output becomes a
-verdict is in the [check contract](#check-command).
+verdict is in the [check contract](../reference/commands.md#check-command).
 
 ### Measurement settings
 
@@ -244,7 +255,7 @@ direction: minimize, unit: us}` -- `name` then holds the `aggregate` of its test
 (`0 < F <= 1`) of this run's best on that stage. Exactly one rule per condition.
 
 **Estimates:** `{kind: surrogate|command|model, margin: 0.05}`; `command` only with
-`kind: command` ([estimate contract](#estimate-command)). The surrogate needs three measured
+`kind: command` ([estimate contract](../reference/commands.md#estimate-command)). The surrogate needs three measured
 designs first. A design whose estimate misses a cutoff or a limit by more than the margin is
 skipped and never measured; designs that run keep their estimate in the record.
 
@@ -266,7 +277,7 @@ stage.
 | `lessons` | `off` | Lessons drawn from the record: `off`, `mined`, or an agent |
 | `workbench` | who digests | Who sums up the agents' `workbench/` when it changed: `off`, `model`, or an agent (`{by: claude, timeout_s: 600}` with its options); unsaid, whoever digests the papers |
 | `hidden` | Empty | Files, folders or globs (relative to the folder) the AI agents may not read: tests, checks, a gate's files and their parameters; see [Hidden from AI](#hidden-from-ai) |
-| `off` | `false` | `"off": true` turns reading off (`lessons`, `workbench` and `hidden` may stand beside it); `knowledge: off` is the same |
+| `off` | `false` | `off: true` turns reading off (`lessons`, `workbench` and `hidden` may stand beside it); `knowledge: off` is the same |
 
 `knowledge: claude` is short for `{digest: claude}`. `by:` on the knowledge box is refused:
 say `digest:`. While knowledge is on, the loop's `library/` and the server's shared library
@@ -313,97 +324,9 @@ box's, a critic, the lessons' and the digests') finds them in its work directory
 ```yaml
 skills: off                                  # none, not the built-in one either
 skills: [skills, ../shared-skills]           # these folders instead of skills/
-skills: {"off": [flux-loop-commands, rtl-style]}   # skills/ and the built-in one, these two off
-skills: {from: [../shared-skills], "off": [old-style]}
+skills: {off: [flux-loop-commands, rtl-style]}   # skills/ and the built-in one, these two off
+skills: {from: [../shared-skills], off: [old-style]}
 ```
-
-## Search settings
-
-A search tries points of a space of settings ("knobs"). `flow.orchestrate` is a search when
-it is a policy name, a list of phases, or a map with `policy`, `space` or `seeds`:
-
-```yaml
-orchestrate:
-  policy: {gradient: {steps: 16, patience: 2}}     # or: policy: gradient
-  space:
-    algorithm: [list_sieve, slice_sieve, odd_sieve]
-    wheel: {values: [0, 1], when: {algorithm: [list_sieve]}}   # only moves for list_sieve
-    prefetch:                                       # a component: prefetch.on, .distance, .degree
-      optional: true
-      distance: [1, 2, 4]
-      degree: [1, 2]
-    variant: {values: [baseline], from: "variants/*.py"}       # plus file stems found at load
-  seeds:
-    - {algorithm: list_sieve, wheel: 0}            # measured first; the first seed is home
-```
-
-- **`space`:** knob to an ordered, non-empty list of scalar choices. A map with `values` takes
-  `when: {knob: choice or [choices]}` (the knob only moves when the condition holds; otherwise
-  it sits at its first choice) and `from: glob` (adds the stems of matching files, relative to
-  the folder, read at every load). A map with neither is a **component**: its knobs are named
-  `component.knob`; `optional: true` adds `component.on`. Order numeric choices: local
-  policies step to neighbours.
-- **`seeds`:** points measured first; a missing knob takes its first choice.
-- **A space must reach a command:** some command names a `{knob}` or `{point}`, or the
-  generator is a command or a catalog. A model or agent generator with a space searches
-  settings only and does not write designs.
-- **Component knobs** reach commands through `{point}` only; `{component.knob}` is not
-  substituted.
-
-| Policy | Options and defaults |
-|---|---|
-| `sweep` | `batch_size: 0` (the whole walk at once) |
-| `montecarlo` | `samples: 24`, `batch_size: 8`, `seed: 0` |
-| `gradient` | `steps: 16`, `wave: 0` (all moves), `patience: 1`, `budget: 0` (no cap), `reach: adjacent` (or `any`) |
-| `anneal` | `steps: 32`, `seed: 0`, `temperature: 1.0`, `cooling: 0.9` |
-| `genetic` | `population: 8`, `generations: 6`, `seed: 0`, `mutation: 0.3` |
-| `pareto` | `budget: 24`, `wave: 6`, `reference: []`, `scale: []`, `reach: adjacent`; needs two objectives |
-| `model` | `batch_size: 4`, `rounds: 8`, `shown: 40`; written `{by: model, ...}` or `{by: claude, ...}` for an agent |
-| `control` | `keep: []`: compare home with only these incumbent knobs kept |
-| `phases` | `phases: [...]`: phases in order, each `{policy: ..., ...its options}` (default `gradient`); phases do not nest |
-| `adaptive`, `explore`, `improve`, `tune`, `finetune`, `variations` | A model proposing points with that emphasis (`model`'s options) |
-| `command` | Your own search: `orchestrate: {command: ..., timeout_s: 600}` ([contract](#search-command)) |
-
-Every policy and phase also takes `name` (a label), `knobs` (move only these), `hold` (keep
-these fixed; both accept globs such as `prefetch.*`), `metric` and `direction` (its own
-target; default the first objective), `floor` (`{metric, at}` or `{metric, keep, above}`:
-designs below it are refused), `margin` (minimum improvement, default `0`) and `dse` (an
-emphasis, as above). `batch` is another name for `batch_size`. An unknown option is refused,
-naming the policy's fields.
-
-A policy's `batch_size` only groups its proposals. `budget.batch` is how many search designs
-one pass carries; `budget.parallel` is how many passes run at once. Finishing a finite walk
-does not stop an open-ended run: cap it with `budget.passes`.
-
-## Agent options
-
-Beside `by: <agent>` on any box an agent may work:
-
-| Option | Default | Purpose |
-|---|---|---|
-| `timeout_s` | `1800` (or `FLUX_<NAME>_TIMEOUT_S`) | Most seconds for one turn |
-| `session` | `turn` | `turn` or `pass`: a fresh session each turn, or one per pass; refused on `generate` |
-| `questions` | `decide` | Who answers a question the agent asks: `decide` (nobody), `model`, `operator` |
-| `max_questions` | `2` | Question exchanges per draft |
-| `wait_s` | `300` | Seconds to wait for the operator's answer |
-| `probe` | `{gate: 20, stages: 3}` | Checks per turn the agent may run with `flux probe`; per stage `{bench: 2}`; `false` turns them off |
-| `allow` | `[]` | Give back denied raw tools, e.g. `[yosys]`, or `all` |
-| `hidden` | `[]` | More paths this agent may not read, beside `knowledge.hidden` ([Hidden from AI](#hidden-from-ai)) |
-| `bin` | The agent on PATH (or `FLUX_<NAME>_BIN`) | The program to run |
-| `args` | None (or `FLUX_<NAME>_ARGS`) | Extra arguments, added before the prompt |
-| `output` | `text` | Your own agent: how its output is read (`text`, `opencode`, `claude`, `codex`) |
-| `resume` | The preset's | Your own agent: the command that resumes a session (`{session}`, `{answer}`) |
-| `name` | The program's | Your own agent: its name in the record |
-
-An agent never compiles, simulates or tests by itself: those programs are denied (verilator,
-yosys, openroad, sta, klayout, champsim, gcc, g++, cc, c++, clang, clang++, make, cmake,
-ninja, pytest, bash, sh, `flux rtl`, `flux task`, `flux run`) unless `allow` gives them back.
-It checks its file through the loop's own gate and stages with `flux probe`; `probe: false` keeps it
-from running any of them itself (the loop alone checks and measures), and `budget.tools_at_once`
-makes its probes wait for a free slot like the loop's own runs. The agent's
-model is set on the machine (`FLUX_<NAME>_MODEL` or the web's Agents settings), not in the
-document. Your own agent is `by: {command: [my-agent, "{prompt_file}", "{artifact}"]}`
-([agent contract](#agent-command)).
 
 ## Objective settings
 
@@ -524,7 +447,7 @@ baseline: true                                   # the project as it is: your sc
 |---|---|
 | `true` | Your scripts as written; `{artifact}` is an empty file, so use `{home}/...` paths |
 | `{file: F}` | F (relative to the folder) copied to `{artifact}`; the original is untouched |
-| `{command: C, timeout_s: 600}` | Whatever C writes to `{artifact}` ([contract](#baseline-command)); if it writes nothing, the project as it is |
+| `{command: C, timeout_s: 600}` | Whatever C writes to `{artifact}` ([contract](../reference/commands.md#baseline-command)); if it writes nothing, the project as it is |
 | `{metrics: [...]}` | Nothing runs: the values are recorded as the reference |
 
 - **`metrics` entries** are `{metric, value, stage}`: a finite number; `stage` defaults to
@@ -558,430 +481,9 @@ Do not combine `parts` and `subtasks`.
   `max_subtasks`, `baseline`, and a parent's `generate: {command}`.
 - **Composition:** a parent's `generate: {command: "... {parts} {artifact}"}` composes the
   children's decided designs into the whole once every child has decided
-  ([composition contract](#composition-command)). Without it the parent composes nothing.
+  ([composition contract](../reference/commands.md#composition-command)). Without it the parent composes nothing.
 - Give inherited `skills` as paths that resolve from the child too (or absolute ones), and
   write inline children in the long form (`{by: model}`).
-
-## How commands run
-
-Every command a document names (checks, stages, estimates, the generator, the search, the
-baseline, the composition) runs the same way. Your own agent's command differs; see
-[agent command](#agent-command).
-
-- **Written as** a list of arguments or one string. A string is split like a shell would
-  split it, but **no shell runs**: for a pipe or redirection, call one yourself:
-  `["sh", "-c", "cat {artifact} | wc -l"]`.
-- **`flux` first** runs Flux's own CLI with the same interpreter (`flux tools ...`).
-- **`fluxpreset` first** runs one of [Flux's presets](#flux-presets) the same way
-  (`fluxpreset rtl measure ...`).
-- **Working directory** is `{workdir}`, the pass's trace folder, shared by every design in
-  the pass. Name your files with `{home}/...`; relative paths do not reach the loop's folder.
-- **Environment:** Flux's own, unchanged. Nothing is added.
-- **Standard input:** inherited from Flux, not data. A command must not read stdin.
-- **Output:** stdout and stderr are captured separately; checks and stages read both,
-  joined. Line endings are normalised. Live shows the command, its folder, the ends of its
-  output as it runs, and its exit.
-- **Timeouts** stop the whole process group. A missing program is reported as "not found on
-  PATH" before the run; `flux task check` lists them.
-- **Placeholders** are replaced inside every argument, without quoting. At load, a
-  `{name}` that is neither the loop's nor a knob is refused (an argument containing spaces,
-  such as an `sh -c` script, is not checked). A placeholder with no value for that command is
-  passed through as written.
-
-## Command placeholders
-
-| Placeholder | Value | Generator | Check, stage, estimate | Search | Baseline | Composition |
-|---|---|---|---|---|---|---|
-| `{artifact}` | Path of the design file (`<workdir>/<name><ext>`) | writes it | reads it | `""` | writes it | writes the whole |
-| `{home}` | The document's folder (absolute) | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `{workdir}` | The pass's working folder | ✓ | ✓ | ✓ | ✓ | the compose folder |
-| `{python}` | The interpreter running Flux | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `{name}` | The design's name (`mul8#3`, `slice_sieve`) | ✓ | ✓ | `search` | ✓ | the loop's id |
-| `{part}` | The part being drafted, else `""` | ✓ | `""` | `""` | `""` | `""` |
-| `{params}` | Path of a JSON file of `params` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `{knob}` | One knob's value (`True`/`False` for booleans) | search mode | ✓ | | first choices | |
-| `{point}` | Path of a JSON file of every knob | search mode | ✓ | `""` | ✓ | `""` |
-| `{failure}` | Why the last attempt was refused (text) | drafting | | | `""` | |
-| `{attempt}` | `1`, `2`, ... | drafting | | | `1` | |
-| `{history}`, `{state}` | Search history and the search's own state file | | | ✓ | | |
-| `{parts}` | Path of a JSON map of the children's designs | | | | | ✓ |
-| `{scope}` | The scope a pass works on, in `orchestrate.scope`'s `brief` and `check` | | | | | |
-| `{prompt}`, `{prompt_file}`, `{session}`, `{answer}` | Brief and session, for [your own agent](#agent-command) | | | | | |
-
-**File formats:**
-
-- **`{params}`** is `params.json` in `{workdir}`: the document's `params` as a JSON object
-  (a sub-loop's merged over its parent's), rewritten for every command.
-- **`{point}`** is `<artifact>.point.json`: the knobs as a JSON object, components nested
-  (`{"algorithm": "list_sieve", "prefetch": {"distance": 2}}`); an optional component that is
-  off is left out.
-- **`{failure}`** is the text itself, not a file: the last 4000 characters of the failing
-  check's output (prefixed `failed at <check>:` with several checks), or a send-back reason.
-  It is empty on the first attempt.
-- **`{parts}`** is `parts.json` in the compose folder: `{"<child name>": "<absolute path of
-  its decided design>"}`, in declared order.
-
-## Command contracts
-
-### Generator command
-
-`generate: {command: ...}` writes one design to `{artifact}`. Its stdout is not the design.
-
-**Drafting** (no space): each draft is checked; if the checks refuse it, the command runs
-again with `{failure}` and `{attempt}` set, up to `budget.repair_attempts` times. A failing
-command (non-zero exit, or exit 0 without the file) ends the repairs at once; so does
-writing the same design twice.
-
-**Search** (with a space): the command runs once per proposed point, with that point's
-`{knob}`s and `{point}`. A failing command drops the point; there is no repair. The design is
-named after its knob values.
-
-```python
-# document: generate: {command: "{python} {home}/gen.py {artifact} {attempt} {failure}"}
-import sys
-out, attempt, failure = sys.argv[1], int(sys.argv[2]), sys.argv[3]   # failure is "" at first
-design = "def count_primes(n):\n    ...\n" if not failure else "...a design that fixes it..."
-open(out, "w").write(design)                                         # exit 0
-```
-
-### Check command
-
-A check reads `{artifact}` and reports failures. Flux reads stdout and stderr together:
-
-1. **Exit 3** means the design did not build, whatever was printed. For a check named
-   `build`, any non-zero exit means that.
-2. Otherwise, with `count_re` (default `(\d+) failing`): the **first** match's number is the
-   failure count. With `fail_re` only: each match is one failure.
-3. With no match: exit 0 passes, any other exit is one failure.
-
-A printed count wins over the exit code: `2 failing` with exit 0 fails, and `0 failing` with
-exit 1 passes. The first check with failures refuses the design; its output (last 4000
-characters) is what Live shows and what a model or agent gets back to repair. A check's
-debug output on stderr never fails it unless a pattern matches there.
-
-```python
-# document: test: {correctness: "{python} {home}/check.py {artifact}"}
-import importlib.util, sys
-try:
-    spec = importlib.util.spec_from_file_location("design", sys.argv[1])
-    design = importlib.util.module_from_spec(spec); spec.loader.exec_module(design)
-except Exception as exc:
-    print(f"did not load: {exc}"); sys.exit(3)                 # 3: did not build
-cases = {10: 4, 100: 25, 1000: 168}
-bad = [n for n, want in cases.items() if design.count_primes(n) != want]
-for n in bad:
-    print(f"FAIL n={n}: got {design.count_primes(n)}, expected {cases[n]}")
-print(f"{len(bad)} failing of {len(cases)}")
-sys.exit(1 if bad else 0)
-```
-
-### Measurement command
-
-A stage reads `{artifact}` and prints its numbers. It **must exit 0**; on any other exit its
-numbers are discarded and the design is refused at that stage. Flux reads stdout and stderr:
-
-- **`name=value`**, at the start of a line or after a space: the **first** occurrence of each
-  metric counts. `value` is a number (`1.5`, `-2e3`); `nan` and `inf` are unmeasured.
-- **A JSON object** on a line of its own (it may span lines): its keys that are declared
-  metrics are read. A `name=value` line overrides it.
-- **A dictionary metric** is `name={"test": 12, "other": null}` (the last occurrence counts).
-- **`metrics_re`**, if given, replaces the `name=value` patterns: one capture group each.
-
-Exit 0 with no metric found refuses the design ("no metric matched in the output"). A stage
-that reports only some of its metrics is still recorded with those it did. For timings, set
-`budget.workers: 1`: runs at the same time disturb each other.
-
-```python
-# document: measure: {bench: {command: "{python} {home}/bench.py {artifact}", metrics: [time_ms]}}
-import importlib.util, statistics, sys, time
-spec = importlib.util.spec_from_file_location("design", sys.argv[1])
-design = importlib.util.module_from_spec(spec); spec.loader.exec_module(design)
-runs = []
-for _ in range(5):
-    t = time.perf_counter(); design.count_primes(1_000_000); runs.append((time.perf_counter() - t) * 1e3)
-print(f"time_ms={statistics.median(runs):.3f} time_spread_ms={max(runs) - min(runs):.3f}")
-```
-
-**The measurement cache:** a design measured once by a stage is not measured again while
-nothing that stage depends on changes: the design's text (or knobs), the stage's command,
-metrics and patterns, `params`, the knobs the command names, the files in the folder (except
-`out/`, `runs/`, `workbench/`, `library/` and the documents), the `{home}/...` files the
-command names, and the builds of its programs and `needs`. Change any of them and it is
-measured again. Only successful measurements are cached.
-
-### Estimate command
-
-`estimate: {kind: command, command: ..., margin: 0.1}` runs before the stage, once for each
-design the cache does not hold, with the stage's placeholders and timeout. It prints the
-stage's metrics in the same format. A non-zero exit or no numbers means no estimate: the
-tool runs. A design whose estimate misses a cutoff or a limit by more than `margin` (a
-fraction of the limit) is skipped and recorded as refused by the estimate.
-
-```python
-# document: estimate: {kind: command, command: "{python} {home}/estimate.py {artifact}"}
-import sys
-print(f"time_ms={len(open(sys.argv[1]).read()) * 0.01:.3f}")
-```
-
-### Search command
-
-`orchestrate: {command: ..., timeout_s: 600}` is your own search. Each round, Flux writes
-`{history}` and runs the command; the command answers with JSON on stdout.
-
-**`{history}`** (`search-history.json` in `{workdir}`):
-
-```json
-{"measured": [{"name": "w4", "knobs": {"w": 4}, "stage": "bench", "metrics": {"time_ms": 3.1}, "by": "mine"}],
- "refused":  [{"name": "w9", "why": "failed at correctness: 2 failing"}],
- "guidance": "operator notes, if any",
- "round": 3}
-```
-
-**`{state}`** (`out/<record>.search-state.json`) is yours: read it if it exists, write it
-every round; it survives restarts.
-
-**The answer** is the last line of stdout that is a JSON object (or the whole stdout):
-
-| Key | Meaning |
-|---|---|
-| `candidates` | `[{name, artifact, knobs, why, by}]`: `name` required; `artifact` is the design's **text** (not a path); `knobs` reach the checks and stages as `{knob}`/`{point}` |
-| `lessons` | Lines added to the run's lessons |
-| `not_established` | Lines added to the report |
-| `conclusion` | What the search concluded, recorded when nothing is decided |
-| `say` | A line printed with the round |
-| `done` | `true`: this is the last batch |
-
-No candidates also ends the search. Candidates go straight to the checks and stages; the
-generator does not run for them. A non-zero exit or no JSON ends the search with a note.
-
-```python
-# document: orchestrate: {command: "{python} {home}/search.py {history} {state}", timeout_s: 300}
-import json, os, sys
-history, state_path = json.load(open(sys.argv[1])), sys.argv[2]
-state = json.load(open(state_path)) if os.path.exists(state_path) else {"next": 1}
-tried = {m["name"] for m in history["measured"]} | {r["name"] for r in history["refused"]}
-cands = [{"name": f"w{w}", "artifact": f"WIDTH = {w}\n", "knobs": {"w": w}, "why": "next width"}
-         for w in (state["next"], state["next"] + 1) if f"w{w}" not in tried]
-state["next"] += 2
-os.makedirs(os.path.dirname(state_path), exist_ok=True)
-json.dump(state, open(state_path, "w"))
-print(json.dumps({"candidates": cands, "done": state["next"] > 8}))
-```
-
-### Baseline command
-
-`baseline: {command: ...}` runs once, before pass 1, with the first point (every knob's first
-choice, overlaid with the first seed). It either writes the reference design to `{artifact}`,
-or prepares the project and writes nothing (then the checks and stages run on the project,
-through `{home}/...` paths). A non-zero exit records "baseline failed" and the loop goes on.
-
-### Composition command
-
-A parent with `subtasks` and `generate: {command: "{python} {home}/compose.py {parts} {artifact}"}`
-runs it once every child has decided. `{parts}` maps each child to its decided design's
-path; the command writes the whole to `{artifact}`. The whole goes to the measurements
-directly (it is not checked again). A failure leaves no whole, with a note in the report.
-
-```python
-import json, sys
-parts = json.load(open(sys.argv[1]))                       # {"recip": "/.../recip.sv", ...}
-open(sys.argv[2], "w").write("\n".join(open(p).read() for p in parts.values()))
-```
-
-### Agent command
-
-Your own coding agent: `by: {command: [my-agent, "--prompt", "{prompt_file}"], output: text,
-resume: [...]}`. Write `command` as a **list**.
-
-- Placeholders use Python formatting: `{prompt}` (the brief; very long briefs become an
-  instruction to read the file), `{prompt_file}`, `{artifact}`, `{workdir}` (the session
-  folder), `{part}`, `{name}`, `{python}`, `{home}`, `{workbench}`, `{probe}`; a resume
-  command also gets `{session}` and `{answer}`. Write a literal brace as `{{` or `}}`; an
-  unknown name refuses the draft.
-- The brief goes to stdin unless the command names `{prompt}`, `{prompt_file}` or `{answer}`.
-- It runs in its session folder with Flux's environment, plus `FLUX_<NAME>_ENV` and
-  `FLUX_PROBE`. Default timeout 1800 s.
-- It writes `{artifact}`. If it does not, its reply is read: a JSON `artifact` field, else the
-  largest fenced code block.
-
-## Built-in tools
-
-`flux tools` prints the catalog; the configurator offers these as check types and
-measurement tools. `{x}` other than the loop's placeholders are the tool's parameters. Most are
-Flux's presets, `fluxpreset NAME ...`: nothing to copy into the loop's folder.
-
-| Tool | Role | Command | Parameters (default) | Reports / passes |
-|---|---|---|---|---|
-| `rtl-lint` | check | `fluxpreset rtl lint {artifact}` | | each defect, `N failing`; exit 3 = did not parse |
-| `rtl-golden` | check | `fluxpreset golden {artifact} --golden {golden}` | `golden` (`{home}/golden.py`) | `N failing` |
-| `python-test-script` | check | `{python} {script} {artifact}` | `script` (`{home}/check.py`) | `N failing` |
-| `custom-check` | check | `{command}` | `command` | `N failing`, else exit code |
-| `python-cases` | check | `fluxpreset cases {artifact} --call {call} --reference {reference} --random {random}` | `call` (`main`), `reference` (`{home}/reference.py`), `random` (`100`) | `N failing of M` |
-| `python-pytest` | check | `fluxpreset pytest {artifact} --tests {tests}` | `tests` (`{home}/test_design.py`) | `N failing of M` |
-| `champsim-build` | check | `fluxpreset champsim build {artifact}` | | exit 3 = did not build |
-| `champsim-check` | check | `fluxpreset champsim check {artifact} --traces {traces}` | `traces` (`{home}/traces`) | `N failing` |
-| `rtl-stat` | stage | `fluxpreset rtl measure {artifact} --stage stat --clock-ps {clock_ps}` | `clock_ps` (`1000`) | `area_um2`, `cell_count` |
-| `rtl-synth`, `rtl-place`, `rtl-route` | stage | `... --stage synth` / `place` / `route` | `clock_ps` (`1000`) | `fmax_mhz`, `area_um2`, `power_w`, `cell_count`, `path_ps`; route adds `drc_errors`, `wirelength_um` |
-| `rtl-cycles` | stage | `fluxpreset rtl cycles {artifact} --golden {golden}` | `golden` (`{home}/golden.py`) | `latency_cycles`, `latency_min_cycles`, `cycles_per_result` |
-| `prog-memory` | stage | `fluxpreset prog memory --build "{build}" --run "{run}" --runs {runs}` | `runs` (`3`) | `peak_rss_kb` |
-| `bench-script` | stage | `{python} {script} {artifact}` | `script` (`{home}/bench.py`) | `time_ms` |
-| `python-bench` | stage | `fluxpreset bench {artifact} --call {call} --args {args} --runs {runs}` | `call` (`main`), `args` (`()`), `runs` (`5`) | `time_ms`, `time_min_ms`, `time_spread_ms` |
-| `prog-size` | stage | `fluxpreset prog size --build "{build}"` | `build` (`c++ -O2 -o {out} {artifact}`) | `text_bytes`, `data_bytes`, `bss_bytes` |
-| `prog-time` | stage | `fluxpreset prog time --build "{build}" --run "{run}" --runs {runs} --warmup {warmup}` | `runs` (`10`), `warmup` (`1`) | `time_ms`, `time_ms_stddev`, `time_ms_min` |
-| `prog-count` | stage | `fluxpreset prog count --build "{build}" --run "{run}"` | | `instructions`, `d1_misses`, `ll_misses`, `branch_mispredicts` |
-| `champsim-run` | stage | `fluxpreset champsim run {artifact} --traces {traces} --warmup {warmup} --sim {sim}` | | `geomean_speedup` |
-| `custom-stage` | stage | `{command}` | `command` | your `name=value` lines |
-
-The golden test is Flux's own: `fluxpreset golden DESIGN --golden G` prints
-failing vectors and `N failing of M` (exit 0 pass, 1 fail, 3 did not compile; `--extra F.sv` for a
-module the design instantiates). `fluxpreset rtl lint DESIGN` prints each hardware
-defect and `N failing` (exit 3 when it does not parse); `fluxpreset rtl measure DESIGN --stage stat|synth|place|route --clock-ps N`
-runs OpenROAD-flow-scripts on ASAP7 to that stage and prints one line, `fmax_mhz=... area_um2=...
-power_w=... cell_count=... path_ps=... worst_slack_ps=...` (`stat`: `area_um2`, `cell_count`;
-`route` adds `drc_errors`, `wirelength_um`). `synth` times the netlist unplaced, `place` after
-placement, `route` after routing (timing from global routing). `fluxpreset prog` builds with `--build`
-(`{out}` is the program it builds), prints `name=value` lines, and exits 3 when the build fails
-(older documents said `flux prog`; `flux task migrate` rewrites it). `fluxpreset bench DESIGN.py --call f --args "(1000,)"`
-loads the design, times `f(1000)` over `--runs` (after `--warmup`) and prints `time_ms` (the median),
-`time_min_ms` and `time_spread_ms`; exit 3 when the design does not load, 1 when it raises.
-`fluxpreset cases` calls the design's function on cases -- a JSON table (`[args]` or `{"args", "kwargs",
-"expected"}`), the reference module's `CASES`, and `--random N` draws of its `inputs(rng)` -- and
-compares each result with the expected value or the reference function's (floats within `--tol`).
-`fluxpreset pytest` copies the design as `design.py` beside your tests and counts the failing ones.
-`fluxpreset rtl cycles` runs a clocked design (`CLOCK`) on the golden vectors, each started when the
-last is done, and prints its latency: the most and fewest cycles, and the mean per result (not
-overlapped throughput). `fluxpreset prog memory` prints the program's peak resident memory as the
-kernel counts it, the most over `--runs`.
-`fluxpreset ccases` is `cases` for a C or C++ function: built as a shared library and called through
-ctypes with a scalar `--sig`. `fluxpreset sanitize` builds a program with AddressSanitizer and
-UndefinedBehaviorSanitizer and counts the distinct errors a run hits. `fluxpreset accuracy` reports how
-far a function is from its reference: `max_abs_error`, `mean_abs_error`, `max_rel_error`,
-`mean_rel_error`, `max_ulp` (float64 steps). `fluxpreset rtl equiv` proves a design equal to a reference
-module (a Yosys miter, SAT; a clocked pair by induction from zero) or prints a counterexample.
-`fluxpreset rtl breakdown` groups the synthesised cells' area: `area_seq_um2`, `area_arith_um2`,
-`area_xor_um2`, `area_buf_um2`, `area_logic_um2`, `flop_count`. `fluxpreset rtl fmax` runs ORFS a few
-times, each at the period the last one's slack points to, and prints the fastest clock that closed:
-`fmax_closed_mhz`. `fluxpreset rtl power` records the golden vectors' switching in Verilator and has
-OpenROAD report power with it: `power_w`, `power_internal_w`, `power_switching_w`, `power_leakage_w`.
-`fluxpreset champsim stats` runs the prefetcher and the run without it on every trace: `l2_mpki`,
-`l2_mpki_baseline`, `pf_coverage` (the share of misses removed), `pf_accuracy`, `pf_late`, `pf_useless`,
-`pf_issued_pki`, `geomean_speedup`.
-`fluxpreset timebound` fails a Python function slower than `--max-ms` (the fastest of `--runs`; one
-stuck past the budget is stopped). `fluxpreset rtl energy` turns `rtl power` into per-result numbers:
-`energy_pj_per_result`, `edp_pj_ns`, `cycles_per_result`, `time_per_result_ns`. `fluxpreset rtl path`
-prints the critical path: `path_ps`, `path_levels`, `path_cell_ps`, `path_wire_ps`, `slack_ps` (its
-cells on stderr). `fluxpreset systemc` translates a SystemC module to SystemVerilog through ICSC; alone
-it checks that it translates, and `--then "golden --golden g.py"` or `--then "rtl measure --stage
-stat"` runs that preset on the translation. `fluxpreset regress -- CMD` compares a command's
-`name=value` with a baseline file (`--record` writes it; `--tol` percent, `--higher` for metrics where
-more is better). `fluxpreset extract -- CMD` turns a tool's JSON, CSV or text into `name=value`
-(`--pick PATH=name`, a dotted path, a column or a regex group).
-`fluxpreset complexity` reads a design's source in any common language (lizard) and prints `loc`,
-`functions`, `cyclomatic_max`, `cyclomatic_mean`, `tokens`, `max_function_loc`; with
-`--max-cyclomatic N` it fails each function over N. `fluxpreset scaling -- CMD {n}` times a command at
-doubling sizes (`{n}`; `--input "gen {n}"` feeds its stdin, `--build` makes `{out}` first), takes the
-start-up time off and fits time ~ n^k: `scaling_exponent` (about 1 linear, 2 quadratic),
-`scaling_r2`, `time_at_max_ms`, `max_n`; with `--max-exponent K` it is a check. `fluxpreset repeat
---n 5 -- CMD` prints each metric's median and `NAME_spread_pct`. `fluxpreset derive --expr
-"adp=area_um2*path_ps" -- CMD` adds formula metrics (arithmetic, min, max, abs, sqrt, log, exp) to a
-command's own.
-`fluxpreset asl tests UNIT --spec {home}/spec` lists a PTO-style spec unit's AVS tests (the unit by id or
-mnemonic, the spec a checkout kept in the application's folder); `fluxpreset asl run UNIT --spec
-{home}/spec` runs them with ASLRef (several units at once: `run TADD TSUB`) the way the spec's release suite
-does -- the model assembled once, the tests on `--jobs` threads (the cores; `--jobs 1`, or a spec without
-the page runner: its `scripts/run-asl-test`, test by test), each failing test a line then `N failing of M`
-(`--out FILE` writes each result as JSON; needs `aslref` on PATH or `--aslref`).
-`fluxpreset ndf list --spec {home}/spec` lists each unit with its NDF clauses by modality and its test count
-(`--classification` to narrow); `fluxpreset ndf clauses UNIT` prints the unit's clauses whole; `fluxpreset ndf
-check UNIT --results FILE` reads `asl run --out`'s results: each MUST clause failed or uncovered (no test names it
-or its unit) a line, then `N failing of M` (`--uncovered warn` lists without counting). It uses the NDF tool
-(`ndf`, in the dev shell from nixchip), building the spec's index in a temporary folder each time;
-`fluxpreset ndf scope UNIT` lists the unit and every unit depending on it.
-`fluxpreset pto check DESIGN --units TADD --spec {home}/spec` checks a pyCircuit design against the spec's
-ASL model: the design is one combinational datapath for the spec's elementwise units with ports `op` (8,
-the unit's code from `fluxpreset pto ops`), `dtype` (5, the TileDataType's position), `a`, `b` (64) and
-`y` (64), `fault` (1); each unit's reference vectors (special and seeded random values for each type of
-8 bits or more) are the spec's answers from ASLRef, one run a unit, kept under `--cache`
-(~/.cache/flux/pto-ref) by the spec's content -- a vector the spec's model asserts on is listed by
-`fluxpreset pto ref UNIT` and not compared. Each wrong vector is a line, then `N failing of M`;
-`--dependents` adds the units depending on them, `--build-only` only builds (the gate), `--measure`
-prints `vectors_failing`, `units_passing`, `units`. Needs `pycircuit` and `aslref` (both in the dev shell).
-
-## Flux presets
-
-Flux's prebuilt checks and measurements (`flux/presets/`): `fluxpreset NAME ...` in a
-document, or in a shell inside the dev shell. `fluxpreset` alone lists them; `fluxpreset describe
-[NAME]` prints their catalog entries; `fluxpreset NAME --help` describes one.
-
-| Preset | Commands |
-|---|---|
-| `golden` | `fluxpreset golden DESIGN --golden golden.py [--extra F.sv] [--module M]` |
-| `rtl` | `fluxpreset rtl lint DESIGN`; `fluxpreset rtl measure DESIGN --stage stat\|synth\|place\|route --clock-ps N`; `fluxpreset rtl cycles DESIGN --golden golden.py`; `fluxpreset rtl equiv DESIGN --reference ref.sv`; `fluxpreset rtl breakdown DESIGN`; `fluxpreset rtl fmax DESIGN --stage synth [--steps 6]`; `fluxpreset rtl power DESIGN --golden golden.py --stage place`; `fluxpreset rtl energy DESIGN --golden golden.py --stage place`; `fluxpreset rtl path DESIGN --stage place` |
-| `systemc` | `fluxpreset systemc DESIGN.h --top M --golden golden.py [--then "golden --golden golden.py"]` |
-| `timebound` | `fluxpreset timebound DESIGN.py --call F --args "(1000,)" --max-ms 50` |
-| `regress` | `fluxpreset regress --baseline base.json [--tol 5] [--record] -- CMD` |
-| `extract` | `fluxpreset extract [--format json\|csv\|regex] --pick PATH=name -- CMD` |
-| `complexity` | `fluxpreset complexity DESIGN [--ext .c] [--max-cyclomatic 15]` |
-| `scaling` | `fluxpreset scaling [--start 1000\|--sizes A,B,C] [--input "gen {n}"] [--build "cc -o {out} {artifact}"] [--max-exponent K] -- CMD {n}` |
-| `repeat` | `fluxpreset repeat --n 5 [--warmup 1] -- CMD` |
-| `derive` | `fluxpreset derive --expr NAME=EXPR [--expr ...] -- CMD` |
-| `asl` | `fluxpreset asl tests\|run UNIT... --spec {home}/spec [--jobs N] [--out FILE]` |
-| `ndf` | `fluxpreset ndf list\|clauses\|scope\|check UNIT --spec {home}/spec` |
-| `pto` | `fluxpreset pto ops [--names]`; `fluxpreset pto ref UNIT...`; `fluxpreset pto check DESIGN --units UNIT... [--dependents] [--build-only\|--measure]` (`--spec {home}/spec`) |
-| `cases` | `fluxpreset cases DESIGN.py --call F [--reference ref.py[:F]] [--cases cases.json] [--random N] [--tol R]` |
-| `pytest` | `fluxpreset pytest DESIGN.py --tests test_design.py` (the design imported as `design`) |
-| `ccases` | `fluxpreset ccases DESIGN.c --call F --sig "long(long,long)" --reference ref.py:F --random N` |
-| `sanitize` | `fluxpreset sanitize --build "cc -O1 -o {out} {artifact}" [--run CMD]` |
-| `accuracy` | `fluxpreset accuracy DESIGN.py --call F --reference ref.py:F --random N` |
-| `prog` | `fluxpreset prog time\|count\|memory\|size --build "c++ -O2 -o {out} {artifact}" [--run CMD]` |
-| `bench` | `fluxpreset bench DESIGN.py --call F --args "(1000,)" [--runs 5] [--warmup 1]` |
-| `champsim` | `fluxpreset champsim build\|check\|run\|stats ARTIFACT --traces DIR [--warmup N --sim N]` |
-
-**Every preset keeps one interface:**
-
-| | |
-|---|---|
-| Arguments | `fluxpreset NAME [SUBCOMMAND] ARTIFACT [--option VALUE ...]`: the design file first, every other input an option with a default |
-| stdin | Never read |
-| stdout | A check: each failure on a line of its own, then `N failing` (or `N failing of M`) last. A measurement: `name=value` for each metric it reports |
-| stderr | Diagnostics for a person; never the count or the numbers |
-| Exit code | `0` passed or measured; `1` failed, or the measurement could not be taken; `2` wrong arguments; `3` the design did not build, parse or load |
-| Files | Only in a temporary folder of its own; never in the loop's folder |
-
-**Writing a preset** is adding a module `flux_presets/NAME.py` (or a package) with `main(argv) ->
-int` (its command line) and `catalog() -> [entry]`: one [catalog entry](#built-in-tools) per check
-or stage it offers, its `run` starting `fluxpreset NAME`. `flux tools`, the configurator's **Flux
-presets** list and the loader's language and `needs` inference read those entries; nothing else
-in Flux names a preset.
-
-## RTL golden model
-
-Define `PORTS` and `golden(**inputs)` in the file given to `--golden`:
-
-```python
-PORTS = [
-    {"name": "x", "dir": "in", "bits": 16, "unsigned": True},
-    {"name": "y", "dir": "out", "bits": 16, "unsigned": True},
-]
-
-def golden(x):
-    return {"y": x}
-```
-
-| Setting | Purpose |
-|---|---|
-| `COUNT` | Random vectors (default `32`), besides generated corner cases |
-| `SEED` | Random seed |
-| `VECTORS` | Extra input dictionaries; expected outputs still come from `golden()` |
-| `EXHAUSTIVE` | Every input combination (at most 20 input bits) |
-| `CLOCK` | The clock port of a clocked design, e.g. `"clk"` |
-| `LATENCY` | Cycles from `start` to `done` for a clocked design |
-| `TOLERANCE_ULP` | Map of floating-point output port to allowed ULP error; absent means exact |
-
-Match the ports and clocking in the contract and the design. Floating-point bit-pattern ports
-are unsigned; reinterpret their bits in `golden()` rather than converting the integer to a
-float. A Python prototype is checked against the same file with
-`python -m flux_loop.golden_proto PROTOTYPE.py --golden golden.py` (prints `N failing of M`).
 
 ## Improvement ladder
 
@@ -1001,30 +503,14 @@ float. A Python prototype is checked against the same file with
 The ladder applies when the problem supports prototypes and parts. Its limits bound those
 actions; they do not stop an open-ended run. Most loops omit it.
 
-## Common refusals
+## Moved to their own pages
 
-`flux task check` prints `not a task:` and the reason, and exits 2. The usual ones:
+Older links to this page land here.
 
-| Message (start) | Fix |
-|---|---|
-| `keys a document does not have: X; the keys are ...` | A misspelled or removed key; `flux task migrate` handles old ones. `id` is one: rename the folder instead |
-| `` `statement` must be a non-empty string `` | Say what is to be made |
-| `` `problem.yaml` names 1 path the loop folder does not have `` | Add the listed file to the folder, or fix the key that names it |
-| `flow: X is not a box of the drawing` | Use one of the boxes in [flow settings](#flow-settings) |
-| `flow.critique is a critic on each box it judges` | Write `critic:` under `orchestrate`, `test`, `measure` or `select` ([critics](#critics)) |
-| `flow.test is never delegated to an agent: it establishes facts` | `test` and `measure` are commands only |
-| `flow.X: K is not a setting of this box or an agent's` | An option on the wrong box ([agent options](#agent-options)) |
-| `flow.X: timeout_s is an agent's option, not model's` | Agent options need `by: <agent>` |
-| `flow.generate is "model", {command: [...]}, {catalog: [...]} ...` | One form only; no `timeout_s` on generate |
-| `flow.generate.agent.session: generate keeps one session per part` | Remove `session` from `generate` |
-| `flow.dse is orchestrate` / `flow.extract is knowledge: {lessons: mined}` | Old names: `orchestrate` and `knowledge.lessons` |
-| `flow.knowledge: who digests the papers is digest:` | Write `knowledge: {digest: claude}`, not `by:` |
-| `... says {x}, which is neither a knob ... nor the loop's` | A misspelled placeholder, or a knob not in the space |
-| `flow.dse.space knobs (...) are said by no command` | Name a `{knob}` or `{point}` in a command, or generate with a command |
-| `flow.measure.X: a command stage needs metrics ... or metrics_re` | Say what the stage prints |
-| `roles.orchestrator: P: K is not one of its fields` | An option the policy does not have; the message lists its fields ([search settings](#search-settings)) |
-| `a task divides into parts of ONE artifact or into subtasks ..., not both` | Choose one |
-| `budget keys [...] are not loop knobs` | See [budget](#budget); `finalists` and `calibrate` belong in `flow` |
-| `flow.dse: pareto needs two objectives` | Add a second objective or choose another policy |
-| `baseline takes file OR command OR metrics` | One source per baseline |
-| `` `problem.yaml` is not a mapping of keys `` | The file is a list or a single value; start from `flux new NAME` |
+- <a id="search-settings"></a>Search settings and policies: [Search policies](../reference/search.md)
+- <a id="agent-options"></a>Agent options: [Agent options](../reference/agents.md)
+- <a id="how-commands-run"></a><a id="command-placeholders"></a><a id="command-contracts"></a>How commands run, placeholders and contracts: [Commands and placeholders](../reference/commands.md)
+- <a id="generator-command"></a><a id="check-command"></a><a id="measurement-command"></a><a id="estimate-command"></a><a id="search-command"></a><a id="baseline-command"></a><a id="composition-command"></a><a id="agent-command"></a>Each command's contract: [Command contracts](../reference/commands.md#command-contracts)
+- <a id="built-in-tools"></a><a id="flux-presets"></a>Built-in tools and Flux presets: [Presets](../reference/presets.md)
+- <a id="rtl-golden-model"></a>The RTL golden model: [Golden model](../reference/presets.md#golden-model)
+- <a id="common-refusals"></a>Common refusals: [Common refusals](../reference/refusals.md)
