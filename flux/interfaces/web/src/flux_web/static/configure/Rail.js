@@ -20,9 +20,9 @@ export function sums(M, state, { files = 0, missing = 0, save = "" }) {
     prompt: [missing ? `${plural(missing, "file")} missing` : "", String(state.id || "").trim() || "unnamed", lang || "any language", missing ? "" : plural(files, "file")].filter(Boolean).join(" · "),
     checks: `${kept("flow.test") ? "checks kept" : plural(r.checks.length, "check")} · ${kept("flow.measure") ? "measurements kept" : plural(r.stages.length, "measurement")}`,
     objective: kept("objectives") ? "kept as written" : words[0] || "no objective yet",
-    graph: design,
-    extra: [M.parameterSearch(state) ? `searches ${plural(knobs.length, "setting")}` : "no search",
-      state.partsMode === "decompose" ? "parts as it decides" : M.hasParts(state) ? plural(M.list(state.parts).length, "part") : "one design",
+    // D1245: the search is the Graph's (Search's panel); Extra says it in the same words, linked
+    graph: [design, knobs.length || (f.dse || "none") !== "none" ? M.searchSays(state) : ""].filter(Boolean).join(" · "),
+    extra: [state.partsMode === "decompose" ? "parts as it decides" : M.hasParts(state) ? plural(M.list(state.parts).length, "part") : "one design",
       bp.mode && bp.mode !== "off" ? "baseline first" : ""].filter(Boolean).join(" · "),
     save,                                       // the model's standing: Save's checklist said in one line
   };

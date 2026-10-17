@@ -119,7 +119,7 @@ export function ChecksStep({ M, state, edit, agent, direct, go }) {
           acts=${html`<${Acts} list=${state.checks} i=${i} edit=${edit} what=${r.checks[i].name} />`}><${CheckFields} M=${M} state=${state} c=${c} lang=${lang} edit=${edit} /><//>`;
       })}</div>`}
       <div class="cfg-bar">${keptChecks ? "" : html`<${Add} onClick=${addCheck}>${M.WORDS.checks.add}<//>`}<span class="grow" />
-        <span class="muted small cfg-critic-said">${`Critic: ${critWho.name || critWho.label} · `}<button type="button" class="link" onClick=${() => go?.("graph", null, "test")}>set in Graph</button></span></div></section>
+        <span class="muted small cfg-critic-said">${`Critic: ${critWho.name || critWho.label} · `}<button type="button" class="link" onClick=${() => go?.("graph", null, "test")}>${M.WORDS.graph.setIn}</button></span></div></section>
     <section class="cfg-sec"><h3>Measurements <span class="muted">${M.WORDS.measure.say}</span></h3>
       ${keptStages ? html`<${Kept} M=${M} state=${state} at="flow.measure" direct=${direct} />` : html`<div class="cfg-rows">${state.stages.map((st, i) => {
         const rs = r.stages[i], est = st.estimate && st.estimate.kind && st.estimate.kind !== "off";

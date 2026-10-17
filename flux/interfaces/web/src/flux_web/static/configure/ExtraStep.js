@@ -1,4 +1,4 @@
-// Flux web, configure (D1116): the Extra step -- settings to search and how to walk them, one design or its parts,
+// Flux web, configure (D1116): the Extra step -- what the search is (set in the Graph's Search panel, D1245), one design or its parts,
 // a baseline measured first (pass 0), the document's own parameters, (a new loop, an admin) its resources, and under More
 // the loop's rarer knobs no box holds (D1237: tools at once, the agent's halves, a plan file, ...).
 
@@ -34,23 +34,15 @@ function Baseline({ M, state, edit }) {
       <div><${Add} onClick=${() => edit(() => { metrics.push({ metric: rep[0] || "", value: "", stage: "" }); })}>${W.addMetric}<//></div></div>` : ""}`;
 }
 
-export function ExtraStep({ M, state, edit, extra, direct }) {
-  const searchable = [...M.dseChoices("algorithms"), ...M.dseChoices("delegated", M.dseGroup(state.flow.dse) === "delegated" ? state.flow.dse : null)];
-  const walking = searchable.some(c => c.value === state.flow.dse) ? state.flow.dse : "";
-  const knobs = state.space.filter(x => String(x.knob || "").trim() && M.choicesOf(x.choices).length);
-  const points = knobs.reduce((n, x) => n * M.choicesOf(x.choices).length, 1);
-  const keptBoxes = isKept(state, "flow.boxes"), keptSpace = isKept(state, "flow.dse.space");
-  const W = M.WORDS.extra;
+export function ExtraStep({ M, state, edit, extra, direct, go }) {
+  const W = M.WORDS.extra, G = M.WORDS.graph;
   const kept = at => html`<${Kept} M=${M} state=${state} at=${at} direct=${direct} />`;     // D1136: said, not edited
   const row = (list, a, b, i, pa, pb) => html`<tr key=${i}><td><input aria-label=${pa} value=${list[i][a]} onInput=${e => edit(() => { list[i][a] = e.currentTarget.value; })} /></td>
     <td><input aria-label=${pb} class="full" value=${list[i][b]} onInput=${e => edit(() => { list[i][b] = e.currentTarget.value; })} /></td>
     <td><${Tool} icon="close" label="Remove" onClick=${() => edit(() => { list.splice(i, 1); })} /></td></tr>`;
-  return html`<section class="cfg-sec"><h3>${W.settings} <span class="muted">${W.settingsSay}</span></h3>
-      ${keptSpace ? kept("flow.dse.space") : state.space.length ? html`<${Table} heads=${[W.setting, W.values, ""]} cls="list compact cfg-table">${state.space.map((x, i) => row(state.space, "knob", "choices", i, "Setting", "Its values"))}<//>` : ""}
-      <div class="cfg-bar">${keptSpace ? "" : html`<${Add} onClick=${() => edit(() => { state.space.push({ knob: "", choices: "" }); })}>${W.addSetting}<//>`}<span class="grow" />
-        <label class="cfg-inline"><span class="muted small">Search by</span><${Select} aria-label="Search by" disabled=${keptBoxes} value=${walking}
-          none="not searched" options=${searchable.map(c => [c.value, c.label])} onChange=${v => edit(() => { state.flow.dse = v || "none"; if (state.agentRaw) delete state.agentRaw.dse; })} /></label></div>
-      ${knobs.length && walking ? html`<p class="muted small">${`${points} point${points === 1 ? "" : "s"}; the commands get ${knobs.map(x => `{${x.knob.trim()}}`).join(" and ")}.`}</p>` : ""}</section>
+  // D1245: the search -- its policy, its settings, its seeds -- is the Graph's Search panel's: said here, linked
+  return html`<p class="cfg-says cfg-search-said">${`${M.BOXES.orchestrate.title}: ${M.searchSays(state)} · `}<button type="button" class="link"
+      onClick=${() => go?.("graph", null, "orchestrate")}>${G.setIn}</button></p>
     <section class="cfg-sec"><h3>Parts</h3>
       ${isKept(state, "parts") ? kept("parts")
         : html`<div class="cfg-bar"><${Choice} small label="Parts" value=${state.partsMode} onChange=${v => edit(() => { state.partsMode = v; })}

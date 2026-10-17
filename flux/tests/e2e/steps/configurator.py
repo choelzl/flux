@@ -143,15 +143,29 @@ def flows(r):
         box("orchestrate")
         r.check("the saved agent is restored in Orchestrate: the choice agent, its menu codex", b.js("return [document.querySelector('.cfg-panel .cfg-who button.on').textContent,"
                 " document.querySelector('.cfg-panel .cfg-who-bar select').value]") == ["agent", "codex"])
-        b.click(".cfg-rail button[data-step=extra]")
-        r.button("+ Setting", ".cfg-body")
-        b.type("[aria-label='Setting']", "block")
-        b.type("[aria-label='Its values']", "16, 32")
-        b.click(".cfg-rail button[data-step=graph]")
-        box("orchestrate")
+        # D1245: the settings a search walks are Search's own, beside its policy -- Extra only names the search, linked
+        r.button("+ Setting", ".cfg-panel")
+        b.type(".cfg-panel [aria-label='Setting']", "block")
+        b.type(".cfg-panel [aria-label='Values, in order']", "16, 32")
         category("algorithms")
-        r.check("adding settings changes the algorithm explanation to a real search", "Runs over the settings in Extra" in r.text())
+        r.check("adding settings changes the algorithm explanation to a real search", "Runs over the settings below" in r.text())
+        r.check("the points the settings make are said under them", "2 points; the commands get {block}." in r.text())
         r.check("category and policy fields fit the page", b.js("return document.documentElement.scrollWidth <= innerWidth + 1"))
+        r.check("the rail's Graph line says the search", "Sweep over 1 setting" in b.js("return document.querySelector('.cfg-rail button[data-step=graph] .sum').textContent"))
+        b.click(".cfg-rail button[data-step=extra]")
+        b.wait("document.querySelector('.cfg[data-step=extra] .cfg-search-said')", timeout=10, what="Extra's search line")
+        r.check("Extra has no search controls", not b.js("return !!document.querySelector(\".cfg-body [aria-label='Setting'], .cfg-body [aria-label='Search by'],"
+                " .cfg-body [data-fc-field=dse], .cfg-body [data-fc-field=dse-group], .cfg-body [data-fc-field=space]\")"))
+        said = b.js("return document.querySelector('.cfg-search-said').textContent")
+        r.check("Extra names the search in one line, as the rail does", said == "Search: Sweep over 1 setting · set in Graph", said)
+        b.js("[...document.querySelectorAll('.cfg-search-said button.link')].find(x => x.textContent === 'set in Graph').click(); return 1")
+        b.wait("document.querySelector('.cfg[data-step=graph] .cfg-cycle [data-node=orchestrate].sel')", timeout=10, what="the Graph's Search opened from Extra")
+        r.check("its link opens the Graph's Search panel, the settings in it",
+                b.js("return document.querySelector(\".cfg-panel [aria-label='Setting']\").value") == "block")
+        b.click(".cfg-rail button[data-step=save]")
+        b.wait("document.querySelector('.cfg[data-step=save] .cfg-yaml-fold pre.cfg-yaml')", timeout=10, what="the Save step's document")
+        r.check("settings set in the Graph are the search's space in the document",
+                "space: | block: [16, 32]" in b.js("return [...document.querySelectorAll('.cfg-yaml-fold pre.cfg-yaml > div')].map(x => x.textContent.trim()).join(' | ')"))
         r.clean("DSE settings")
     r.step("dse setting", dse_setting, setup=True)
 
@@ -571,6 +585,9 @@ def flows(r):
 
         extra()
         r.check("baseline is off by default in Extra", b.js("return document.querySelector('[data-fc-field=baseline-mode]').value") == "off")
+        r.check("Extra names the search set in the Graph, with no controls of its own (D1245)",
+                b.js("return document.querySelector('.cfg-search-said').textContent") == "Search: Default (adaptive), no settings · set in Graph"
+                and not b.js("return !!document.querySelector(\".cfg-body [aria-label='Setting'], .cfg-body [aria-label='Search by']\")"))
         for source, mode in (("project", "before"), ("file", "only"), ("command", "before"), ("metrics", "before")):
             setv("baseline-mode", mode)
             setv("baseline-source", source)

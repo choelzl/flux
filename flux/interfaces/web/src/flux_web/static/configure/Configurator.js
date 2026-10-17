@@ -29,7 +29,7 @@ export function Configurator({ M, state, step, onStep, touched = false, isNew = 
   const seen = useRef(new Set([stepId(M, step)])), dirty = useRef(touched), top = useRef(null);
   useChanges(store || NO_STORE);
   const edit = fn => { fn(); dirty.current = true; setInvalid(""); redraw(n => n + 1); onChange?.(state); };
-  const [box, setBox] = useState("generate");          // the Graph's box opened (another step may open one: Check's critic)
+  const [box, setBox] = useState("generate");          // the Graph's box opened (another step may open one: Check's critic, Extra's search)
   const go = (id, field, opens) => {
     if (opens) setBox(opens);
     seen.current.add(at); seen.current.add(id);
@@ -81,7 +81,7 @@ export function Configurator({ M, state, step, onStep, touched = false, isNew = 
     checks: () => html`<${ChecksStep} ...${p} go=${go} />`,
     objective: () => html`<${ObjectiveStep} ...${p} />`,
     graph: () => html`<${GraphStep} ...${p} setAgent=${setAgent} go=${go} store=${store} open=${box} />`,
-    extra: () => html`<${ExtraStep} ...${p} extra=${extra} />`,
+    extra: () => html`<${ExtraStep} ...${p} extra=${extra} go=${go} />`,
     save: () => html`<${SaveStep} M=${M} msgs=${msgs} ready=${ready} calm=${quiet} go=${go} nav=${nav} changes=${changes} notes=${notes} yaml=${yaml} file=${file} direct=${direct} />`,
   }[at];
   const wide = at === "graph" || at === "save";

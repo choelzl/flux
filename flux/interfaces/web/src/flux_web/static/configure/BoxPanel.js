@@ -1,6 +1,7 @@
 // Flux web, configure (D1118): a box of the loop opened -- who works it (rules, a model, the coding agent, a script
 // where Flux takes one, off), its critic when it has one, and that step's own settings, each default shown greyed.
-// Search holds the search policy, Measure the cheap-with-costly comparison (calibrate) (D1139).
+// Search holds the search policy, Measure the cheap-with-costly comparison (calibrate) (D1139); D1245: Search also holds
+// the settings it walks (Space.js) and, under its More, when a design explores and the starting points kept as written.
 // Check, Measure and Choose say where their commands and goals are set; Knowledge is LibraryPanel.js (D1152). An agent's own
 // settings (time limit, session, questions) fold under More, Design's probe below its knobs (D1142). `kept`: the
 // flow is kept as written (who works each box said, not chosen), `keptBudget` the budget (its knobs read-only). D1237: the
@@ -9,7 +10,8 @@
 
 import { Notice, html } from "../view.js";
 import { Head } from "../components/Head.js";
-import { Knob, MoreFold, Pick, Text, Who, WhoTag, saidOf } from "./fields.js";
+import { Kept, Knob, MoreFold, Pick, Text, Who, WhoTag, isKept, saidOf } from "./fields.js";
+import { Space } from "./Space.js";
 import { Knowledge } from "./LibraryPanel.js";
 import { AgentOpts, ProbeFields } from "./AgentOpts.js";
 import { Select } from "../components/Select.js";
@@ -68,23 +70,33 @@ export function BoxPanel({ M, state, box, agent, setAgent = () => {}, edit, go, 
   };
   let head = who(), body = "";
   switch (box) {
-    case "orchestrate": {                       // D1139: the search policy is Search's
+    case "orchestrate": {                       // D1139: the search policy is Search's; D1245: its settings and seeds too
       const group = M.dseGroup(f.dse), choices = M.dseChoices(group, f.dse).map(c => [c.value, c.label]);
       const set = v => edit(() => { f.dse = v; if (state.agentRaw) delete state.agentRaw.dse; });
       const policy = html`<div class="cfg-grid2"><${Pick} label=${W.dseKind} k="dse-group" disabled=${kept} value=${group} options=${M.DSE_GROUPS}
           set=${v => set(M.dseChoices(v)[0].value)} />
         <${Pick} label=${W.dsePolicy} k="dse" disabled=${kept} value=${f.dse} options=${choices} set=${set} /></div>
         <p class="cfg-says">${M.dseHint(state)}</p>
-        ${M.parameterSearch(state) ? html`<div class="cfg-grid2">${B("batch")}</div>` : ""}`;
-      if (M.parameterSearch(state)) { head = html`<${WhoTag} kind="rules">settings<//>`; body = html`${policy}<${Goto} go=${go} step="extra" what=${`Extra › ${M.WORDS.extra.settings}`}>${W.searchPicks}:<//>`; break; }
-      body = html`${policy}${f.orchestrate === "command" ? html`<div class="cfg-grid2"><${Text} label=${W.searchCommand} mono wide value=${state.orchestrateCommand}
+        <${Space} M=${M} state=${state} edit=${edit} direct=${direct} />`;
+      // the rarer: when a design explores, when a part yields; the starting points, kept as written
+      const seeds = isKept(state, "flow.dse.seeds"), explore = ["explore_every", "explore_after", "cooldown_after", "exploration_quota"];
+      const rare = (keys, said) => keys.length || seeds ? html`<${MoreFold} M=${M} data="orchestrate" said=${saidOf(state, keys) + (seeds ? 1 : 0)}>
+        ${keys.length ? html`<div class="cfg-grid2">${keys.map(k => k === "exploration_quota" ? B(k) : K(said[k][0], k, said[k][1], said[k][2]))}</div>` : ""}
+        ${seeds ? html`<div class="cfg-sub"><h4>${W.seeds} <span class="muted">${W.seedsSay}</span></h4><${Kept} M=${M} state=${state} at="flow.dse.seeds" direct=${direct} /></div>` : ""}<//>` : "";
+      if (M.parameterSearch(state)) {
+        head = html`<${WhoTag} kind="rules">settings<//>`;
+        body = html`${policy}<div class="cfg-grid2">${B("batch")}</div>${rare([])}`;
+        break;
+      }
+      const said = { explore_every: ["Start fresh every", "4", "designs"], explore_after: ["Explore after", "2", "passes the decision stands"],
+        cooldown_after: ["A part yields after", "3", "designs that do not build"] };
+      // who picks (a script's command, the model's way) beside who works it, then the policy and its settings
+      body = html`${f.orchestrate === "command" ? html`<div class="cfg-grid2"><${Text} label=${W.searchCommand} mono wide value=${state.orchestrateCommand}
             placeholder=${W.searchPlaceholder} hint=${W.searchHint} set=${v => edit(() => { state.orchestrateCommand = v; })} />
           <${Text} label=${M.WORDS.checks.timeLimit} value=${state.orchestrateTimeout} placeholder="600" set=${v => edit(() => { state.orchestrateTimeout = v; })} /></div>`
         : ["default", "model", "tools"].includes(f.orchestrate) ? html`<${Pick} label="How the model picks" value=${f.orchestrate} disabled=${kept}
             options=${M.BOXES.orchestrate.choices.filter(c => c.half === "model").map(c => [c.value, c.label])} set=${v => edit(() => { f.orchestrate = v; })} />` : ""}
-        ${critic("orchestrate")}
-        <div class="cfg-grid2">${K("Start fresh every", "explore_every", "4", "designs")}${K("Explore after", "explore_after", "2", "passes the decision stands")}
-          ${K("A part yields after", "cooldown_after", "3", "designs that do not build")}${B("exploration_quota")}</div>`;
+        ${policy}${critic("orchestrate")}${rare(explore, said)}`;
       break;
     }
     case "generate": {

@@ -134,7 +134,8 @@ the first two objectives. Without a space, these names guide the reasoning inste
 running those walks. Preferences influence choices but do not force every experiment to
 follow them, and a script that writes a design does not read model prompts.
 
-In the configurator, these are the **Search** box on the Graph: a **Kind**, then a **Policy**.
+In the configurator, the whole search is the **Search** box on the Graph: a **Kind**, then a
+**Policy**, then the **Settings to search** (each a name and its values); Extra only names it.
 
 `exploration_quota` reserves a minimum share of recorded search choices for exploration,
 including across parallel passes. It counts attempts, not elapsed seconds, successful designs,

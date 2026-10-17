@@ -33,19 +33,19 @@
   }
   function dseHint(state) {
     var value = state.flow.dse, group = dseGroup(value), space = parameterSearch(state);
-    if (value === "none") return "Adaptive: local improvements or a new approach, from the evidence. Pick a policy to search the settings in Extra.";
+    if (value === "none") return "Adaptive: local improvements or a new approach, from the evidence. Pick a policy to search the settings below.";
     if (group === "preferences") return INTENT_SAYS[value] + (space
       ? " The model proposes legal settings from it and the measured history."
       : " Guides the next experiment and the design, repair and prototype prompts.");
     if (group === "delegated") return (value === "model" ? "Needs a model connection. " : "Needs the agent installed and set up. ") + (space
-      ? "Proposes points from the settings in Extra; checks and measurements judge them."
+      ? "Proposes points from the settings below; checks and measurements judge them."
       : "Chooses the next job and direction; Design chooses who writes it.");
     var how = { sweep: "Enumerates every distinct combination.", montecarlo: "Samples distinct random points.",
       anneal: "Tries neighboring points, sometimes accepting a worse point as the temperature cools.",
       gradient: "Uses coordinate descent over neighboring choices, rather than calculating derivatives.",
       genetic: "Evolves a population by selection, crossover and mutation.",
       pareto: "Explores trade-offs using a Pareto tree; the algorithm needs at least two objectives." }[value];
-    return how + (space ? " Runs over the settings in Extra." : " Without settings in Extra, it only guides the prompts: no search runs.");
+    return how + (space ? " Runs over the settings below." : " Without settings below, it only guides the prompts: no search runs.");
   }
   var INTENT_SAYS = { adaptive: "Follows the evidence, takes reasoned risks.", explore: "Tries different algorithms or architectures.",
     improve: "Local or structural changes.", tune: "Favors nearby parameter and implementation changes.",
@@ -246,6 +246,15 @@
     return !!(state.flow && state.flow.dse && state.flow.dse !== "none" && knobNames(state).length);
   }
 
+  /** D1245: the search in a few words, as Extra's line and the Graph's rail line say it -- its policy over how many
+      settings ("Sweep over 2 settings"), a policy with none ("Improve, no settings"), or settings no policy walks. */
+  function searchSays(state) {
+    var v = (state.flow || {}).dse || "none", n = knobNames(state).length, c = choiceOf("dse", v);
+    var policy = isAgentValue(v) ? (v === INLINE_AGENT ? "" : "agent ") + agentWord(v) : c ? c.label : v;
+    if (parameterSearch(state)) return policy + " over " + plural(n, "setting");
+    return n ? plural(n, "setting") + ", not searched" : policy + ", no settings";
+  }
+
   /** The half a box is in for this state (for the drawing's colour). */
   function halfOf(state, box) {
     var v = (state.flow || {})[box];
@@ -348,7 +357,11 @@
       dictHint: "the parent aggregate or parent.test" },
     graph: { aria: "The loop: each box is one step", dseKind: "Kind", dsePolicy: "Policy",
       searchOn: ["A search over settings is on:", "each point's settings reach the commands and Design is off; a script or files make each point a design."],
-      searchPicks: "Search over settings picks next job",
+      // D1245: the search's space is the Search panel's -- each setting's name and values, the starting points kept as written
+      space: "Settings to search", spaceSay: "each used as {name} in commands", addSetting: "+ Setting", setting: "Setting", values: "Values, in order",
+      settingPlaceholder: "name", valuesPlaceholder: "4, 8, 16", seeds: "Starting points", seedsSay: "tried first",
+      // what another step says of the Graph's settings, linked (Check's critic, Extra's search)
+      setIn: "set in Graph",
       searchCommand: "Search command", searchPlaceholder: "{python} {home}/search.py {history} {state}", searchHint: "answers each round with the next candidates",
       command: "Command", generatePlaceholder: "{python} {home}/gen.py {artifact} {knob}", generateHint: "writes {artifact}; each setting is {its name}",
       existing: "Existing designs", existingPlaceholder: "designs/a.sv, designs/b.sv", existingHint: "files beside the document, tried in order",
@@ -404,8 +417,7 @@
     // D1237: the folds of the rarer knobs (RARE_BUDGET), each in the panel of the box it belongs to, Extra the rest
     more: { more: "More", set: "set", prototype: "Prototype", toolTurns: "Model's tool turns",
       criticRounds: "Critic rounds", criticRoundsHint: "times it may answer critic, 1 to 5" },
-    extra: { settings: "Settings to search", settingsSay: "each used as {name} in commands", addSetting: "+ Setting", setting: "Setting", values: "Values, in order",
-      partsSay: "each checked on its own, then composed", partsPlaceholder: "decoder, datapath",
+    extra: { partsSay: "each checked on its own, then composed", partsPlaceholder: "decoder, datapath",
       partsModes: [["none", "One design"], ["list", "These parts"], ["decompose", "Parts as it decides"]],
       baselineSay: "pass 0, measured before any design", baselineRun: "Run it", paramsSay: "written to a file, its path {params} in commands", baselineModes: [["off", "off"], ["before", "first"], ["only", "only"]],
       baselineFrom: [["project", "project"], ["file", "file"], ["command", "command"], ["metrics", "numbers"]],
@@ -1557,8 +1569,9 @@
         });
       }
     }
-    (state.space || []).forEach(function (x) {
-      if (String(x.knob || "").trim() && !choicesOf(x.choices).length) error("The setting \"" + x.knob.trim() + "\" has no choices.");
+    at = STEP_OF.flow;                          // D1245: the search's settings are the Graph's Search panel's
+    (state.space || []).forEach(function (x, i) {
+      if (String(x.knob || "").trim() && !choicesOf(x.choices).length) error("The setting \"" + x.knob.trim() + "\" has no choices.", "space-values-" + i);
     });
     var searching = parameterSearch(state);
     if (flow.dse && flow.dse !== "none" && !knobs.length) note("The search policy guides the designs and prototypes; no settings to search are needed.");
@@ -1572,7 +1585,7 @@
     if (flow.orchestrate === "command") {
       if (!String(state.orchestrateCommand || "").trim()) error("Say the search command that picks the next designs.");
       if (state.orchestrateTimeout && !(num(state.orchestrateTimeout) > 0)) error("The search command's time limit should be a number of seconds.");
-      if (searching) error("A search command and a search over settings both pick the next designs: keep one (Graph › Search, or Extra › Settings to search).");
+      if (searching) error("A search command and a search over settings both pick the next designs: in Graph › Search keep the script or the settings.");
     }
     var crits = criticsOf(state);
     CRITIC_BOXES.forEach(function (b) {
@@ -2210,7 +2223,7 @@
               // the views' own helpers (crafter.js, the web app's configure/)
               catalog: function () { return CATALOG; }, runsTool: runsTool, toolWord: toolWord, HALVES: HALVES, INLINE_AGENT: INLINE_AGENT, AGENT_LABELS: function () { return AGENT_LABELS; },
               language: language, impliedLanguage: impliedLanguage, checkType: checkType, isPreset: isPreset, isCustom: isCustom, fits: fits,
-              uniqueName: uniqueName, unitFor: unitFor, dictionarySpec: dictionarySpec, paramOnly: paramOnly, parameterSearch: parameterSearch,
+              uniqueName: uniqueName, unitFor: unitFor, dictionarySpec: dictionarySpec, paramOnly: paramOnly, parameterSearch: parameterSearch, searchSays: searchSays,
               knobNames: knobNames, choiceOf: choiceOf, list: list, num: num, shown: shown, paramsOf: paramsOf, hasParts: hasParts,
               CRITIC_BOXES: CRITIC_BOXES, CRITIC_ROUNDS: CRITIC_ROUNDS, criticsOf: criticsOf, setCritic: setCritic, agentOpts: agentOpts, setAgentOpt: setAgentOpt,
               renameAgent: renameAgent, agentRest: agentRest, probeOf: probeOf, setProbe: setProbe, BUDGET_KEYS: BUDGET_KEYS, RARE_BUDGET: RARE_BUDGET, keptText: keptText,
