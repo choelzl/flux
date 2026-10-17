@@ -311,8 +311,14 @@ def flows(r):
         # Admin › Loops: the same headers, its own remembered order
         r.login("ada")
         r.page("#/admin", f"{tbl} && {names}.includes('N10')", "admin loops, sortable")
-        r.check("Admin › Loops has no Order menu: its headers sort, the owner in the loop's cell, no User column (D926, shell-8)", not b.js("return !!document.querySelector('#main .list-bar select')")
-                and b.js(f"return {head} ? 1 : 0", "User") == 0 and b.js(f"return !!{tbl}.querySelector('tbody .loop-owner')"))
+        r.check("Admin › Loops has no Order menu: its headers sort (D926)", not b.js("return !!document.querySelector('#main .list-bar select')"))
+        cells = b.js(f"return [...{tbl}.querySelectorAll('tbody tr')].map(tr => [tr.querySelector('td.loop-user')?.textContent, tr.querySelector('td.loop-cell a.strong').textContent, tr.querySelector('td.loop-cell').textContent.includes('/')])")
+        r.check("Admin › Loops: the owner in a User column of its own, the Loop column the name alone (D1232)", b.js(f"return {head} ? 1 : 0", "User") == 1
+                and b.js(f"return [...{tbl}.querySelectorAll('thead th')].map(th => th.textContent.replace(/[▴▾]/g, '')).slice(0, 3)") == ["User", "Loop", "State"]
+                and ["bob", "n1", False] in cells and not any(c[2] for c in cells), str(cells))
+        b.js(f"{head}.click(); return 1", "User")
+        users = b.js(f"return [...{tbl}.querySelectorAll('tbody td.loop-user')].map(td => td.textContent)")
+        r.check("Admin › Loops sorts by User (D1232)", users == sorted(users, key=str.lower) and b.js(f"return {sorts}")["User"] == "ascending", str(users))
         b.js(f"{head}.click(); return 1", "Designs")
         kept = b.js("return [localStorage.getItem('flux-sort-admin-loops'), localStorage.getItem('flux-sort-loops')]")
         r.check("Admin › Loops keeps its own order, not the Loops page's (D926)", '"Designs"' in (kept[0] or "") and '"Designs"' not in (kept[1] or ""), str(kept))

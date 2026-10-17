@@ -1665,11 +1665,19 @@ td.cleared s { color: var(--muted); }
 .loop-agent { margin-left: 4px; }
 /* shell-8: every list of loops on one column grid, so State, Activity, Designs and Best line up from table to table */
 .loops-table table.loops-grid { table-layout: fixed; width: 100%; }
-.loops-grid > thead th:nth-child(1) { width: 24%; }
-.loops-grid > thead th:nth-child(2) { width: 21%; }
+.loops-grid > thead th:nth-child(1) { width: 27%; }
+.loops-grid > thead th:nth-child(2) { width: 18%; }
 .loops-grid > thead th:nth-child(3) { width: 17%; }
 .loops-grid > thead th:nth-child(4) { width: 9%; }
 .loops-grid > thead th:nth-child(6) { width: 196px; }
+/* D1232: others' loops -- User and Loop as wide as one's own Loop, the rest one column on */
+.loops-grid.loops-who > thead th:nth-child(1) { width: 8%; }
+.loops-grid.loops-who > thead th:nth-child(2) { width: 19%; }
+.loops-grid.loops-who > thead th:nth-child(3) { width: 18%; }
+.loops-grid.loops-who > thead th:nth-child(4) { width: 17%; }
+.loops-grid.loops-who > thead th:nth-child(5) { width: 9%; }
+.loops-grid.loops-who > thead th:nth-child(6) { width: auto; }
+.loops-grid.loops-who > thead th:nth-child(7) { width: 196px; }
 .loops-grid td { overflow-wrap: anywhere; }
 .loops-grid .loop-access { margin-left: 6px; }
 .loop-main-measurements .goal { font-size: var(--fs-xs); }
@@ -1686,6 +1694,14 @@ td.cleared s { color: var(--muted); }
   .loops-grid > tbody > tr > td.blank { display: none !important; }
   .loops-grid > tbody > tr > td.loop-main-measurements > div { display: inline-block; white-space: nowrap; margin-right: 10px; }
   .loops-grid > tbody > tr > td[data-label]::before { min-width: 5.5em !important; }
+  /* D1232: the user on the first line, "cy / cy_sweep" */
+  .loops-grid.loops-who > tbody > tr { grid-template-columns: auto minmax(0, 1fr) auto; }
+  .loops-grid.loops-who > tbody > tr > td { grid-column: 1 / span 2; }
+  .loops-grid.loops-who > tbody > tr > td.loop-user { grid-column: 1; grid-row: 1; padding-right: 0; margin-right: -6px; white-space: nowrap; color: var(--muted); }
+  .loops-grid.loops-who > tbody > tr > td.loop-user::before { display: none !important; }
+  .loops-grid.loops-who > tbody > tr > td.loop-user::after { content: " /"; }
+  .loops-grid.loops-who > tbody > tr > td.loop-cell { grid-column: 2; grid-row: 1; }
+  .loops-grid.loops-who > tbody > tr > td.loop-acts { grid-column: 3; grid-row: 1 / span 2; }
   .loops-page .sort-strip select, .loops-page .sort-strip button { font-size: var(--fs-md); }
 }
 

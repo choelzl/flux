@@ -387,7 +387,12 @@ def flows(r):
                 r.clean("groups administration")
                 login("cy")
                 r.page("#/", "document.querySelector('.group-loops table')", "group loop discovery")
-                r.check("group loops show the owner and authorized source", b.js("return document.querySelector('.group-loops').textContent.includes('bob') && document.querySelector('.group-loops').textContent.includes(arguments[0])", name))
+                r.check("group loops show the owner in a User column and the loop alone in Loop (D1232)", b.js("""const g = document.querySelector('.group-loops');
+                  return [...g.querySelectorAll('thead th')].slice(0, 2).map(th => th.dataset.label).join() === 'User,Loop'
+                    && [...g.querySelectorAll('tbody tr')].some(tr => tr.querySelector('td.loop-user').textContent === 'bob' && tr.querySelector('td.loop-cell a.strong').textContent === arguments[0])""", name))
+                r.check("a group's State column lines up with one's own list's (D1232)", b.js("""const x = s => document.querySelector(s)?.getBoundingClientRect().left;
+                  const own = x('.loops-section:not(.group-loops) thead th[data-label=State]'), group = x('.group-loops thead th[data-label=State]');
+                  return own == null || Math.abs(own - group) < 2"""))
                 r.check("accounts without create permission have no New loop button", b.js("return !document.querySelector('#main a[href=\"#/configure\"]')"))
                 r.page(f"#/u/bob/app/{name}", "document.querySelector('#main .tabs')", "group viewer")
                 r.check("view permission does not show Start, Check or Leave", b.js("return ![...document.querySelectorAll('#main .page-head button')].some(b => /^(Start|Check|Leave)/.test(b.textContent))"))

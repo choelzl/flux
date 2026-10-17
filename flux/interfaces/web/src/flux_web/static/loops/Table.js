@@ -1,4 +1,4 @@
-// Flux web, loops (D693, D837, D926, D1006, D1095): loops as a table -- who (when not one's own), the loop, its
+// Flux web, loops (D693, D837, D926, D1006, D1095): loops as a table -- whose (when not one's own), the loop, its
 // state, its last activity, its designs (new accepted / accepted / measured, the last two as its Overview counts them), the decision's main measurements; Start, Stop
 // and Restart where one may -- and the list with its search and its state chips.
 
@@ -53,12 +53,15 @@ function Best({ l, name, owner }) {
   });       // shell-11: a number is coloured against its goal, said beside it; one with no goal is plain
 }
 
-/** shell-8: one column grid for every list of loops -- whose (when not one's own) in the loop's cell, "cy / cy_sweep",
-    the access beside it; the last column actions only. shell-9: on a phone a loop is a compact card (flux.css). */
+/** shell-8: one column grid for every list of loops -- the access beside the loop's name, the last column actions
+    only. D1232: a list of others' loops (`who`: Admin, Shared with me, Group) has its owner in a User column of its
+    own before Loop, the two as wide as one's own list's Loop, so State onwards line up from table to table.
+    shell-9: on a phone a loop is a compact card, its user beside its name (flux.css). */
 export function LoopsTable({ loops, who = false, memo = "flux-sort-loops", empty = null }) {
   if (!loops.length) return empty || html`<${Empty} text="No loops yet." />`;
   const cols = [
-    { label: "Loop", key: l => `${who ? `${l.owner || ""}/` : ""}${l.name || l.app}`, asc: true },
+    ...(who ? [{ label: "User", key: l => l.owner || "", asc: true }] : []),
+    { label: "Loop", key: l => l.name || l.app, asc: true },
     { label: "State", key: STATE_RANK },
     { label: "Activity", key: l => l.running ? [1, l.since || 0] : l.last_active ? [0, l.last_active] : null },
     // new accepted (this start) / accepted / measured -- the last two the loop's Overview counts (one source, results.designs)
@@ -71,7 +74,8 @@ export function LoopsTable({ loops, who = false, memo = "flux-sort-loops", empty
     const href = owner ? `#/u/${enc(owner)}/app/${enc(name)}` : `#/app/${enc(name)}`;
     const access = !owner ? "" : l.perm === "edit" ? "can edit" : (l.can_run ?? me.role === "admin") ? "can run" : "watching";
     return html`<tr class="clickable" onClick=${e => { if (!e.target.closest("a, button")) location.hash = href; }}>
-      <td class="loop-cell">${who && l.owner ? html`<span class="muted loop-owner">${`${l.owner} / `}</span>` : ""}<a href=${href} class="strong">${name}</a>${access ? html` <${Tag} cls="loop-access">${access}<//>` : ""}</td>
+      ${who ? html`<td class="loop-user">${l.owner || ""}</td>` : ""}
+      <td class="loop-cell"><a href=${href} class="strong">${name}</a>${access ? html` <${Tag} cls="loop-access">${access}<//>` : ""}</td>
       <td class="loop-state"><${StatePill} st=${l} />${l.question ? html`<${Pill} tone="warn">asks<//>` : ""}${(l.agents || []).map(a => html`<${Tag} k="var(--agent)" cls="loop-agent">${a}<//>`)}</td>
       <td class=${`muted loop-activity${!l.running && !l.last_active ? " blank" : ""}`}><${Activity} l=${l} /></td>
       <td class=${`num mono loop-designs${s.designs ? "" : " blank"}`} title=${s.designs ? `${s.accepted_this_run || 0} accepted this start · ${s.accepted || 0} accepted of ${s.designs} measured in all` : null}>
@@ -80,7 +84,7 @@ export function LoopsTable({ loops, who = false, memo = "flux-sort-loops", empty
       <td class="right loop-acts"><div class="actions end"><${LoopActions} l=${l} name=${name} owner=${owner} href=${href} /></div></td></tr>`;
   };
   // newest activity first (D926)
-  return html`<div class="loops-table"><${SortableTable} memo=${memo} cols=${cols} rows=${loops} row=${row} keyOf=${l => `${l.owner || ""}/${l.name || l.app}`} first=${2} cls="list loops-grid" /></div>`;
+  return html`<div class="loops-table"><${SortableTable} memo=${memo} cols=${cols} rows=${loops} row=${row} keyOf=${l => `${l.owner || ""}/${l.name || l.app}`} first=${who ? 3 : 2} cls=${`list loops-grid${who ? " loops-who" : ""}`} /></div>`;
 }
 
 const view = { q: "", state: "all" };     // the list's search and filter (D693), kept while the page is; its order is the table's (D926)
