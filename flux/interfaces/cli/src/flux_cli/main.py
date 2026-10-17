@@ -201,6 +201,8 @@ def build_parser() -> argparse.ArgumentParser:
     mig_p = task_sub.add_parser("migrate", help="Bring a problem's documents of an earlier form to today's (D811).")
     mig_p.add_argument("folder", help="The problem's folder.")
     mig_p.add_argument("--write", action="store_true", help="Write them (each only when it loads; the original kept as <file>.orig).")
+    mig_p.add_argument("--journal", default=None, metavar="EVENTS",
+                       help="A task journal (events.jsonl) of an earlier form instead: brought to today's (D1236; the original kept as events.jsonl.orig.gz).")
     mig_p.set_defaults(func=_cmd_task_migrate)
     run_p = task_sub.add_parser(
         "run", help="Run a task document through the loop.",
@@ -320,6 +322,23 @@ def _cmd_task_migrate(args: argparse.Namespace) -> int:
     folder = Path(args.folder)
     if folder.is_file():
         folder = folder.parent
+    if args.journal:                                  # D1236: a task journal, by the rules Live read it by
+        import json
+
+        from flux_loop.journal_migrate import migrate_events, migrate_journal
+
+        from flux_web.maintenance import _document_checks
+
+        tests = _document_checks(folder)
+        events = [json.loads(x) for x in Path(args.journal).read_text().splitlines() if x.strip().startswith("{")]
+        _new, said = migrate_events(events, tests)
+        for x in said or ["up to date: nothing to do"]:
+            print(f"{args.journal}: {x}")
+        if said and args.write:
+            migrate_journal(args.journal, tests)
+        elif said:
+            print("(nothing written: --write writes it)")
+        return 0
     got = migrate_loop(folder, write=args.write)
     for d in got["documents"]:
         print(f"{d['file']}{' -> ' + d['to'] if d['to'] != d['file'] else ''}: {d['status']}" + (f" -- {d['why']}" if d["why"] else ""))

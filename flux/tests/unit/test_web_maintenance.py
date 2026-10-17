@@ -471,3 +471,32 @@ def test_old_pass_folders_go_and_the_newest_stays(tmp_path, monkeypatch):
     said, did = m._passes({"days": 3}, None)
     assert did and not (run / older).exists() and (run / old).exists(), said
     assert (run / "events.jsonl").exists() and (run / "turns.jsonl").exists()
+
+
+def test_an_old_task_journal_is_brought_up_to_date_once_its_original_kept(tmp_path, monkeypatch):
+    """(D1236) A journal from before D1233 is rewritten in today's format by the maintenance task: format 2, every
+    task tagged, the original gzipped beside it, marks.jsonl pointing at the new lines; run again, nothing to do."""
+    import gzip
+    import json
+    import shutil
+    from pathlib import Path
+
+    from flux_web.admin import _key, cache_root
+
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "xdg"))
+    d = _loop(tmp_path)
+    run = cache_root() / _key("bob", "x") / "tmp" / "flux-traces" / "x"
+    run.mkdir(parents=True)
+    old = Path(__file__).parent / "fixtures" / "looptree" / "agent.jsonl"
+    shutil.copy(old, run / "events.jsonl")
+    m = _m(_store(tmp_path), [("bob", "x", d)])
+    got = m.run("formats", by="ada")
+    assert got["said"].startswith("1 journal brought up to date"), got
+    events = [json.loads(x) for x in (run / "events.jsonl").read_text().splitlines()]
+    assert events[0]["ev"] == "hello" and events[0]["format"] == 2
+    assert all(e.get("tags", {}).get("box") for e in events if e["ev"] == "start")
+    assert gzip.open(run / "events.jsonl.orig.gz").read() == old.read_bytes()
+    body = (run / "events.jsonl").read_bytes()
+    marks = [json.loads(x) for x in (run / "marks.jsonl").read_text().splitlines()]
+    assert marks and all(body[r["at"]:].startswith(b"{") and json.loads(body[r["at"]:].split(b"\n")[0])["ev"] in ("hello", "mark") for r in marks)
+    assert m.run("formats", by="ada")["said"].startswith("0 journals"), "a journal up to date is left as it is"

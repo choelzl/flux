@@ -62,7 +62,7 @@ TASKS: dict[str, Task] = {t.key: t for t in (
          "as gone).", 168, True),
     Task("runs", "Prune run history", "Each loop keeps its latest starts in the server's run list; older rows "
          "go (a running start never).", 24, True, {"keep": 200}),
-    # D????J4: a journal from before D1233 says nothing of what its tasks are -- brought up to date once (D811 for journals)
+    # D1236: a journal from before D1233 says nothing of what its tasks are -- brought up to date once (D811 for journals)
     Task("formats", "Bring task journals up to date", "A loop's task journal written before the engine said what each "
          "task is (D1233) is rewritten in today's format, once, by the rules Live read it by: each task's box, pass, design "
          "and try, how each try ended, the bookkeeping as notes. The original is kept beside it (events.jsonl.orig.gz). "
@@ -844,8 +844,6 @@ def _thin_transcript(tr: Path, cutoff: float) -> int:
 
 def _document_checks(d: Path) -> list[str]:
     """The loop's document's checks, in order (`flow.test` by name): what a journal's check stopped at never reached."""
-    import json
-
     import yaml
 
     try:
