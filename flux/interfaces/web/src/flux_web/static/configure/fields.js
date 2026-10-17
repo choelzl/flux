@@ -73,3 +73,18 @@ export function Refused({ what = "The document does not load:", text, children }
     ${long ? html`<${More} cls="cfg-why-more" aria-expanded=${String(open)} onClick=${() => setOpen(!open)}>${open ? "Less" : "More"}<//>` : ""}
     ${children}<//>`;
 }
+
+/** D1237: a budget knob in the model's words (WORDS.budget[k]): a menu when it has `options` ("" its default), else a box with
+    its default greyed; read-only (`disabled`) when the budget is kept as written. */
+export function Knob({ M, state, edit, k, disabled = false }) {
+  const w = M.WORDS.budget[k], set = v => edit(() => { state.budget[k] = v; });
+  return w.options ? html`<${Pick} label=${w.label} hint=${w.hint} value=${state.budget[k]} disabled=${disabled} options=${w.options} set=${set} />`
+    : html`<${Text} label=${w.label} value=${state.budget[k]} placeholder=${w.dflt} hint=${w.hint} disabled=${disabled} set=${set} />`;
+}
+
+/** D1237: rare settings folded under More, "· N set" beside it when the document says any (`said` how many). */
+export const MoreFold = ({ M, said = 0, data, children }) => html`<details class="cfg-more" data-more=${data}><summary>${M.WORDS.more.more}${
+  said ? html` <span class="muted">· ${said} ${M.WORDS.more.set}</span>` : ""}</summary>${children}</details>`;
+
+/** How many of the budget's knobs `keys` the state says. */
+export const saidOf = (state, keys) => keys.filter(k => String(state.budget[k] ?? "").trim() !== "").length;

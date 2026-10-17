@@ -3,18 +3,20 @@
 // Search holds the search policy, Measure the cheap-with-costly comparison (calibrate) (D1139).
 // Check, Measure and Choose say where their commands and goals are set; Knowledge is LibraryPanel.js (D1152). An agent's own
 // settings (time limit, session, questions) fold under More, Design's probe below its knobs (D1142). `kept`: the
-// flow is kept as written (who works each box said, not chosen), `keptBudget` the budget (its knobs read-only).
+// flow is kept as written (who works each box said, not chosen), `keptBudget` the budget (its knobs read-only). D1237: the
+// rarer knobs under a More of their box's -- Design's prototype limits and the model's tool turns, Check's critic send-backs,
+// a Search or Choose critic's rounds beside its agent's settings.
 
 import { Notice, html } from "../view.js";
 import { Head } from "../components/Head.js";
-import { Pick, Text, Who, WhoTag } from "./fields.js";
+import { Knob, MoreFold, Pick, Text, Who, WhoTag, saidOf } from "./fields.js";
 import { Knowledge } from "./LibraryPanel.js";
 import { AgentOpts, ProbeFields } from "./AgentOpts.js";
 import { Select } from "../components/Select.js";
 import { isAgent, whoOn, whoOptions } from "./who.js";
 
 /** A budget knob of the loop, empty for its default (greyed); read-only when the budget is kept as written. */
-const Knob = ({ state, edit, label, k, dflt, hint, disabled }) => html`<${Text} label=${label} value=${state.budget[k]} placeholder=${dflt} hint=${hint}
+const Box = ({ state, edit, label, k, dflt, hint, disabled }) => html`<${Text} label=${label} value=${state.budget[k]} placeholder=${dflt} hint=${hint}
   disabled=${disabled} set=${v => edit(() => { state.budget[k] = v; })} />`;
 
 const Goto = ({ go, step, what, children }) => html`<p class="cfg-says">${children} <button type="button" class="link" onClick=${() => go(step)}>${what}</button></p>`;
@@ -41,13 +43,29 @@ export function BoxPanel({ M, state, box, agent, setAgent = () => {}, edit, go, 
       ${only ? "" : which(cur(bx), v => { f[bx] = v; }, bx)}</span>`;
   };
   const critic = bx => {
-    const cur = M.criticsOf(state)[bx], opts = whoOptions(M, "critique", cur, agent);
+    const cur = M.criticsOf(state)[bx], opts = whoOptions(M, "critique", cur, agent), R = M.WORDS.more;
+    // D1237: how often its box answers the critic (Search's, Choose's), folded with the agent's own settings
+    const rounds = cur !== "off" && M.CRITIC_ROUNDS.includes(bx) ? html`<${Text} label=${R.criticRounds} hint=${R.criticRoundsHint} placeholder="1"
+      value=${(state.criticRounds || {})[bx] || ""} disabled=${kept} set=${v => edit(() => { (state.criticRounds = state.criticRounds || {})[bx] = v; })} />` : null;
     return html`<div class="cfg-bar"><span class="muted small">Critic</span><${Who} label=${`The critic on ${M.BOXES[bx].title}`} fixed=${kept} options=${opts}
       on=${whoOn(opts, cur)} pick=${k => edit(() => { M.setCritic(state, bx, opts.find(o => o.k === k).value()); })} />${which(cur, v => M.setCritic(state, bx, v), `critic:${bx}`)}</div>
-      ${isAgent(cur) ? html`<${AgentOpts} M=${M} state=${state} slot=${`critic:${bx}`} edit=${edit} disabled=${kept} />` : ""}`;
+      ${isAgent(cur) || rounds ? html`<${AgentOpts} M=${M} state=${state} slot=${`critic:${bx}`} edit=${edit} disabled=${kept} extra=${rounds}
+        extraSaid=${rounds && String((state.criticRounds || {})[bx] || "").trim() ? 1 : 0} />` : ""}`;
   };
-  const K = (label, k, dflt, hint) => html`<${Knob} state=${state} edit=${edit} label=${label} k=${k} dflt=${dflt} hint=${hint} disabled=${keptBudget} />`;
-  const B = k => K(M.WORDS.budget[k].label, k, M.WORDS.budget[k].dflt, M.WORDS.budget[k].hint);   // D1146: the docs' words too
+  const K = (label, k, dflt, hint) => html`<${Box} state=${state} edit=${edit} label=${label} k=${k} dflt=${dflt} hint=${hint} disabled=${keptBudget} />`;
+  const B = k => html`<${Knob} M=${M} state=${state} edit=${edit} k=${k} disabled=${keptBudget} />`;   // D1146: the docs' words too
+  /** D1237: the rarer knobs of a box, folded under More -- `groups` [heading or null, keys] */
+  const more = (data, groups) => {
+    const all = groups.flatMap(g => g[1]);
+    return html`<${MoreFold} M=${M} data=${data} said=${saidOf(state, all)}>${groups.filter(g => g[1].length).map(([h, keys], i) => html`<div class=${i ? "cfg-sub" : ""} key=${i}>
+      ${h ? html`<h4>${h}</h4>` : ""}<div class="cfg-grid2">${keys.map(B)}</div></div>`)}<//>`;
+  };
+  /** D1237: Design's prototype limits -- a coding agent's own when one designs, the model's otherwise; with no prototype
+      (`none`), only those the document says (any it says is shown) */
+  const protoKeys = none => {
+    const byAgent = isAgent(f.generate), set = k => String(state.budget[k] ?? "").trim() !== "";
+    return M.RARE_BUDGET.design.filter(k => set(k) || (!none && (k.startsWith("prototype_agent_") === byAgent || !/attempts|patience/.test(k))));
+  };
   let head = who(), body = "";
   switch (box) {
     case "orchestrate": {                       // D1139: the search policy is Search's
@@ -85,12 +103,14 @@ export function BoxPanel({ M, state, box, agent, setAgent = () => {}, edit, go, 
           ${K("Revert after", "revert_after", "3", "failed repairs")}`}${M.hasParts(state) ? K("Parts at once", "parallel_parts", "1") : ""}`}</div>
         ${isAgent(f.generate) && !off ? html`<div class="cfg-sub"><h4>Agent turns</h4><div class="cfg-grid2">${K("Continues past time", "agent_continues", "3")}
           ${K("Final turn, s", "agent_grace_s", "¼ of its time")}</div></div>
-          <${ProbeFields} M=${M} state=${state} edit=${edit} disabled=${kept} />` : ""}`;
+          <${ProbeFields} M=${M} state=${state} edit=${edit} disabled=${kept} />` : ""}
+        ${more("generate", [[M.WORDS.more.prototype, protoKeys(made || off || String(state.budget.prototype) === "false")], [M.WORDS.more.toolTurns, M.RARE_BUDGET.turns]])}`;
       break;
     }
     case "test":
       head = html`<${WhoTag} kind="fixed">checks<//>`;
-      body = html`<${Goto} go=${go} step="checks" what=${M.STEP_TITLES[1]}>Its commands are set in<//>${critic("test")}`;
+      body = html`<${Goto} go=${go} step="checks" what=${M.STEP_TITLES[1]}>Its commands are set in<//>${critic("test")}
+        ${more("test", [[null, M.RARE_BUDGET.check]])}`;
       break;
     case "measure": {                           // D1139: calibration is Measure's
       const calib = whoOptions(M, "calibrate", f.calibrate, agent);

@@ -346,6 +346,64 @@ def flows(r):
         r.clean("an agent's settings")
     r.step("agent settings", agent_settings, setup=True)
 
+    def rare_knobs():
+        """D1237: the loop's rarer knobs are edited, folded under More where they belong -- Design's prototype limits and the
+        model's tool turns, Extra's rest; two set are saved into the budget, and a budget of only these is not kept as written."""
+        import yaml
+
+        made = r.api("/apps/new-empty", "POST", {"name": "rare_knobs"})
+        r.check("create a loop for the rarer knobs", made["status"] == 200, made["body"])
+        path = r.data / "users/bob/apps/rare_knobs/problem.yaml"
+        raw = yaml.safe_load(path.read_text())
+        raw["flow"] = {"test": {"test": "true"}}
+        raw["budget"] = {"prototype_patience": 3}
+        path.write_text(yaml.safe_dump(raw, sort_keys=False))
+        setv = ("const [css, v] = arguments; const el = document.querySelector(css); el.value = v;"
+                " el.dispatchEvent(new Event(el.tagName === 'SELECT' ? 'change' : 'input', {bubbles: true})); return 1")
+        more = ".cfg-panel details[data-more=generate]"
+        r.page("#/app/rare_knobs/settings/problem?step=graph", f"document.querySelector('{more}')", "Design's More")
+        r.check("a budget of rare knobs is not kept as written: no notice, its fields editable",
+                b.js(f"return [!!document.querySelector('.cfg-body .cfg-kept'), document.querySelector('{more}').open,"
+                     f" document.querySelector('{more} summary').textContent.trim(),"
+                     f" document.querySelector(\"{more} input[aria-label='Tries after a new best']\").value]") == [False, False, "More · 1 set", "3"])
+        b.js(f"document.querySelector('{more}').open = true; return 1")
+        b.js(setv, f"{more} input[aria-label='Prototype tries']", "12")
+        b.js(setv, f"{more} input[aria-label='Tool rounds per turn']", "3")
+        r.check("the defaults are the placeholders", b.js(f"return document.querySelector(\"{more} input[aria-label='Compute time, s']\").placeholder") == "10")
+        if os.environ.get("FLUX_E2E_SHOTS"):                # Design's More open: light and dark, a desktop's width and a phone's
+            out = Path(os.environ["FLUX_E2E_SHOTS"])
+            out.mkdir(parents=True, exist_ok=True)
+            for theme in ("light", "dark"):
+                for width in (1280, 390):
+                    b.js("document.body.innerHTML = ''; const f = document.createElement('iframe'); f.id = 'phone'; localStorage.setItem('flux-theme', arguments[1]);"
+                         "f.style.cssText = `width:${arguments[0]}px;height:900px;border:0`; f.src = '/?rare=' + Date.now() + '#/app/rare_knobs/settings/problem?step=graph';"
+                         "document.body.append(f); return 1", width, theme)
+                    b.wait(f"(() => {{ const d = document.getElementById('phone').contentDocument; return d && d.querySelector('{more}'); }})()", timeout=20)
+                    b.js(f"const d = document.getElementById('phone').contentDocument, m = d.querySelector('{more}'); m.open = true; m.scrollIntoView({{block: 'start'}}); d.scrollingElement.scrollTop -= 8; return 1")
+                    time.sleep(0.5)
+                    (out / f"rare-knobs-design-{width}px-{theme}.png").write_bytes(
+                        base64.b64decode(b.cmd("WebDriver:TakeScreenshot", {"id": b.find("#phone"), "full": False})["value"]))
+            b.js("localStorage.removeItem('flux-theme'); return 1")
+            b.cmd("WebDriver:Navigate", {"url": f"{r.url}/?after-rare={time.time()}#/"})
+            b.wait("document.querySelector('#main')", timeout=20)
+            r.page("#/app/rare_knobs/settings/problem?step=graph", f"document.querySelector('{more}')", "Design's More again")
+            b.js(f"document.querySelector('{more}').open = true; return 1")
+            b.js(setv, f"{more} input[aria-label='Prototype tries']", "12")
+            b.js(setv, f"{more} input[aria-label='Tool rounds per turn']", "3")
+        r.button("Save to problem.yaml", ".cfg-nav")
+        b.wait("document.querySelector('dialog.dlg[open]') || document.querySelector('.cfg-status.t-ok')", timeout=20, what="the save or its changes")
+        if b.js("return !!document.querySelector('dialog.dlg[open]')"):
+            r.dialog_button("Save")
+        b.wait("document.querySelector('.cfg-status.t-ok') && !document.querySelector('.cfg-status.t-run')", timeout=20, what="the rare knobs saved")
+        budget = yaml.safe_load(path.read_text()).get("budget")
+        r.check("the two set are saved in the budget, beside the one it said", budget == {"prototype_patience": 3, "prototype_attempts": 12, "tool_hops": 3}, str(budget))
+        b.click(".cfg-rail button[data-step=extra]")
+        b.wait("document.querySelector('.cfg[data-step=extra] details[data-more=extra]')", timeout=10, what="Extra's More")
+        r.check("Extra folds the rest under More", not b.js("return document.querySelector('details[data-more=extra]').open")
+                and b.js("return !!document.querySelector(\"details[data-more=extra] input[aria-label='Checks at once']\")"))
+        r.clean("the rarer knobs")
+    r.step("rare knobs", rare_knobs, setup=True)
+
     def box_panels():
         """The UI review, waves 2-5 (D1203-K10): every box's panel one head -- its title, then who works it on a row of its
         own, the agent one choice ("agent") with a menu saying which; a step's pills on its second line, its name whole;
@@ -465,7 +523,7 @@ def flows(r):
         raw = yaml.safe_load(path.read_text())
         raw["flow"] = {"test": {"check": "true"}, "measure": {"bench": {"command": "true", "metrics": ["t"]}}}
         raw["objectives"] = [{"metric": "t", "direction": "minimize", "tie": 0.05}]
-        raw["budget"] = {"steps": 3, "prototype_attempts": 12}
+        raw["budget"] = {"steps": 3, "calibrate": False}         # D1237: `calibrate` is Measure's flow.calibrate, not a knob here
         path.write_text(yaml.safe_dump(raw, sort_keys=False))
         r.page("#/app/kept_parts/settings/problem?step=objective", "document.querySelector('.cfg[data-step=objective] .cfg-kept')", "the kept objectives")
         said = b.js("return document.querySelector('.cfg-body .cfg-kept').innerText")

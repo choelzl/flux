@@ -371,7 +371,39 @@
     budget: { steps: { label: "Designs per pass", dflt: "24" }, passes: { label: "Passes", dflt: "until stopped" },
       parallel: { label: "Passes at once", dflt: "1", hint: "needs an admin on a server" }, batch: { label: "Designs side by side", dflt: "1" },
       repair_attempts: { label: "Repairs per design", dflt: "12" }, exploration_quota: { label: "Share kept for new ideas", dflt: "0", hint: "0 to 1" },
-      finalists: { label: "Finalists measured by", dflt: "3", last: "the last" }, workers: { label: "Tool runs at once", dflt: "auto", hint: "1 for anything timed" } },
+      finalists: { label: "Finalists measured by", dflt: "3", last: "the last" }, workers: { label: "Tool runs at once", dflt: "auto", hint: "1 for anything timed" },
+      // D1237: the rarer knobs, under More -- Design's prototype limits and the model's tool turns, Check's critics, Extra's rest.
+      // A knob with `options` is a menu ([value, label]; "" its default), the others a box with the default greyed.
+      prototype_attempts: { label: "Prototype tries", dflt: "30", hint: "per pass" }, prototype_patience: { label: "Tries after a new best", dflt: "8" },
+      prototype_attempts_max: { label: "Most prototype tries", dflt: "90", hint: "those after a best included" },
+      prototype_agent_attempts: { label: "Agent prototype tries", dflt: "8", hint: "per pass" }, prototype_agent_patience: { label: "Agent tries after a best", dflt: "2" },
+      prototype_agent_attempts_max: { label: "Most agent prototype tries", dflt: "20" },
+      prototype_unmeasured_stop: { label: "Stop after unmeasured", dflt: "4", hint: "prototypes in a row" },
+      prototype_shrink_attempts: { label: "Tries to cheapen", dflt: "8", hint: "once it is verified" },
+      prototype_table_max: { label: "Largest table", dflt: "64", hint: "entries in a prototype's table" },
+      prototype_cost_max: { label: "Highest prototype cost", dflt: "2000", hint: "dearer is dropped; below 0: no ceiling" },
+      tools: { label: "Model calls tools", hint: "needs a server with tool calls", options: [["", "yes (default)"], ["true", "yes"], ["false", "no"]] },
+      tool_hops: { label: "Tool rounds per turn", dflt: "6", hint: "then it must answer" },
+      hop_share: { label: "Window per round", dflt: "0.5", hint: "share; 0: turn's cap" },
+      knowledge_share: { label: "Window for knowledge", dflt: "0.5", hint: "share of context window" },
+      compact: { label: "Compact by", hint: "text past the window", options: [["", "rules (default)"], ["rules", "rules"], ["llm", "model"]] },
+      compact_share: { label: "Compact past", dflt: "0.6", hint: "share of context window" },
+      tool_result_chars: { label: "Tool result, chars", dflt: "40000", hint: "read before the cut" },
+      compute_timeout_s: { label: "Compute time, s", dflt: "10", hint: "most per call" },
+      critique_rounds: { label: "Critic send-backs", dflt: "1", hint: "per passing part; 0 turns critics off" },
+      tools_at_once: { label: "Checks at once", dflt: "unlimited", hint: "checks and measurements, across loop" },
+      screen_only: { label: "Skip costliest stage", options: [["", "no (default)"], ["false", "no"], ["true", "yes"]] },
+      max_tolerance: { label: "Most worse edits tolerated", dflt: "4", hint: "as progress earns more" },
+      structured: { label: "Structured answers", hint: "schema-constrained decoding", options: [["", "yes (default)"], ["true", "yes"], ["false", "no"]] },
+      agent: { label: "Agent takes", dflt: "nothing", hint: "tools, orchestrate, plan" },
+      plan_file: { label: "Plan file", dflt: "none", hint: "loop plan beside document" },
+      patch_context_lines: { label: "Lines around a fault", dflt: "40", hint: "shown in repair prompt" },
+      ahead: { label: "Measure ahead", hint: "admitted part, while next is drafted", options: [["", "yes (default)"], ["true", "yes"], ["false", "no"]] },
+      max_depth: { label: "Sub-loop depth", dflt: "3", hint: "how deep sub-loops nest" },
+      regenerate: { label: "Parts made anew", dflt: "none", hint: "their record history, not a start" } },
+    // D1237: the folds of the rarer knobs (RARE_BUDGET), each in the panel of the box it belongs to, Extra the rest
+    more: { more: "More", set: "set", prototype: "Prototype", toolTurns: "Model's tool turns",
+      criticRounds: "Critic rounds", criticRoundsHint: "times it may answer critic, 1 to 5" },
     extra: { settings: "Settings to search", settingsSay: "each used as {name} in commands", addSetting: "+ Setting", setting: "Setting", values: "Values, in order",
       partsSay: "each checked on its own, then composed", partsPlaceholder: "decoder, datapath",
       partsModes: [["none", "One design"], ["list", "These parts"], ["decompose", "Parts as it decides"]],
@@ -990,12 +1022,12 @@
     }
 
     var b = state.budget || {}, bp = [];
-    ["steps", "passes", "parallel", "batch", "repair_attempts", "workers", "exploration_quota"].concat(MORE_BUDGET).forEach(function (key) {
+    ["steps", "passes", "parallel", "batch", "repair_attempts", "workers", "exploration_quota"].concat(MORE_BUDGET, RARE_KEYS).forEach(function (key) {
       var v = String(b[key] || "").trim();
-      if (v !== "") bp.push([key, typed(v)]);
+      if (v !== "") bp.push([key, RARE_BUDGET.lists.indexOf(key) >= 0 ? list(v) : typed(v)]);   // D1237: the agent's halves, parts made anew
     });
     if (b.prototype) bp.push(["prototype", typed(b.prototype)]);
-    if (bp.length && own("budget")) out += "\nbudget: " + flowMap(bp) + "\n";
+    if (bp.length && own("budget")) out += "\nbudget: {" + bp.map(function (p) { return q(p[0], true) + ": " + inline(p[1], true); }).join(", ") + "}\n";
 
     // the document's own parameters: a command reads them from the file {params} names (D799)
     var pr = (state.params || []).filter(function (x) { return String(x.key || "").trim(); });
@@ -1131,10 +1163,16 @@
 
     // D1040: a critic is said on each box it judges -- the Second opinion on the split (orchestrate),
     // each design the checks passed (test) and the pick (select)
+    // D1237: a critic's rounds (how often its box answers it) beside who it is: {by: model, rounds: 2}
+    var rounds = function (bx, c) {
+      var n = String((state.criticRounds || {})[bx] || "").trim();
+      if (!n || CRITIC_ROUNDS.indexOf(bx) < 0) return c;
+      return Object.assign(typeof c === "string" ? { by: c } : Object.assign({}, c), { rounds: typed(n) });
+    };
     if (boxesKept) {
       var cv = boxVal("critique");
       if (cv !== undefined && cv !== "off" && cv !== "none")
-        (state.criticOn || DEFAULT_CRITICS).forEach(function (bx) { F = withCritic(F, bx, inline(cv, false)); });
+        (state.criticOn || DEFAULT_CRITICS).forEach(function (bx) { F = withCritic(F, bx, inline(rounds(bx, cv), false)); });
     } else {
       var cs = criticsOf(state);                         // each box its own critic (or none)
       CRITIC_BOXES.forEach(function (bx) {
@@ -1144,7 +1182,7 @@
         var val = v === INLINE_AGENT ? (state.agentRaw || {}).critique
           : cr && v === "agent:" + cr.agent.preset ? cr
           : typeof v === "string" && v.indexOf("agent:") === 0 ? { agent: v.slice(6) } : v;
-        F = withCritic(F, bx, inline(toSurface("critique", val), false));
+        F = withCritic(F, bx, inline(rounds(bx, toSurface("critique", val)), false));
       });
     }
 
@@ -1188,6 +1226,8 @@
   /** D1040, D1119: the boxes a critic may judge (surface.py CRITIC_BOXES), and those a lone `critique` judges. */
   var CRITIC_BOXES = ["orchestrate", "test", "measure", "select"];
   var DEFAULT_CRITICS = ["orchestrate", "test", "select"];
+  /** D1237: the boxes whose emitter answers its critic, `rounds` times (spec.py): a check's or a measurement's critic has none. */
+  var CRITIC_ROUNDS = ["orchestrate", "select"];
   /** Each box's critic, a choice of `critique` ("off", "model", "agent:x"): the state's own, else the
       one critic (`flow.critique`) on the boxes it judges (`criticOn`, by default three). */
   function criticsOf(state) {
@@ -1576,6 +1616,31 @@
       var v = String((state.budget || {})[key] || "").trim();
       if (v && !(num(v) >= 0)) error("Budget \"" + key + "\" should be a number of seconds.");
     });
+    // D1237: the rarer knobs, each said on the step that shows it (Extra's, or the Graph's boxes)
+    var bv = function (key) { return String((state.budget || {})[key] || "").trim(); };
+    var bad = function (key, t) { at = RARE_BUDGET.extra.indexOf(key) >= 0 ? STEP_OF.more : STEP_OF.flow; error(t); };
+    ["tools_at_once", "max_tolerance", "tool_hops", "tool_result_chars", "patch_context_lines", "critique_rounds", "max_depth"]
+      .concat(RARE_BUDGET.design.filter(function (k) { return k !== "prototype_cost_max"; })).forEach(function (key) {
+        if (bv(key) && !/^\d+$/.test(bv(key))) bad(key, "Budget \"" + key + "\" should be a whole number.");
+      });
+    ["hop_share", "knowledge_share", "compact_share"].forEach(function (key) {
+      if (bv(key) && !(num(bv(key)) >= 0 && num(bv(key)) <= 1)) bad(key, "Budget \"" + key + "\" should be a share between 0 and 1.");
+    });
+    if (bv("compute_timeout_s") && !(num(bv("compute_timeout_s")) > 0)) bad("compute_timeout_s", "Budget \"compute_timeout_s\" should be a number of seconds.");
+    if (bv("prototype_cost_max") && num(bv("prototype_cost_max")) === null) bad("prototype_cost_max", "Budget \"prototype_cost_max\" should be a number.");
+    ["tools", "structured", "screen_only", "ahead"].forEach(function (key) {
+      if (bv(key) && bv(key) !== "true" && bv(key) !== "false") bad(key, "Budget \"" + key + "\" is true or false.");
+    });
+    if (bv("compact") && ["rules", "llm"].indexOf(bv("compact")) < 0) bad("compact", "Budget \"compact\" is rules or llm (the model).");
+    list(bv("agent")).forEach(function (h) {
+      if (["tools", "orchestrate", "plan"].indexOf(h) < 0) bad("agent", "Budget \"agent\" names the halves the agent takes: tools, orchestrate or plan, not \"" + h + "\".");
+    });
+    at = STEP_OF.flow;
+    Object.keys(state.criticRounds || {}).forEach(function (bx) {
+      var n = String(state.criticRounds[bx] || "").trim();
+      if (n && !(/^\d+$/.test(n) && +n >= 1 && +n <= 5)) error("The critic's rounds on " + boxTitle(bx) + " are a whole number from 1 to 5.");
+    });
+    at = STEP_OF.more;
     var pt = String((state.budget || {}).patching || "").trim();
     if (pt && pt !== "true" && pt !== "false") error("Budget \"patching\" is true (edits) or false (rewrites).");
     var pseen = {};
@@ -1614,7 +1679,18 @@
       how many parts are drafted at once. */
   var MORE_BUDGET = ["explore_every", "explore_after", "cooldown_after", "regress_after", "agent_continues", "agent_grace_s", "budget_s", "patching",
                      "revert_after", "parallel_parts"];            // D1142: when a repair goes back, parts drafted at once
-  var BUDGET_KEYS = ["steps", "passes", "parallel", "batch", "repair_attempts", "finalists", "workers", "prototype", "exploration_quota"].concat(MORE_BUDGET);
+  /** D1237: the rarer knobs, each under a More where it belongs -- Design's prototype limits (`design`) and the model's tool
+      turns (`turns`), Check's critics (`check`), Extra the rest; `lists` said as lists (comma-separated in their box). Left
+      out: `calibrate` (Measure's flow.calibrate), `explore` and `remeasure` (a start's own, not a document's). */
+  var RARE_BUDGET = {
+    design: ["prototype_attempts", "prototype_patience", "prototype_attempts_max", "prototype_agent_attempts", "prototype_agent_patience",
+             "prototype_agent_attempts_max", "prototype_unmeasured_stop", "prototype_shrink_attempts", "prototype_table_max", "prototype_cost_max"],
+    turns: ["tools", "tool_hops", "hop_share", "knowledge_share", "compact", "compact_share", "tool_result_chars", "compute_timeout_s"],
+    check: ["critique_rounds"],
+    extra: ["tools_at_once", "screen_only", "max_tolerance", "structured", "agent", "plan_file", "patch_context_lines", "ahead", "max_depth", "regenerate"],
+    lists: ["agent", "regenerate"] };
+  var RARE_KEYS = RARE_BUDGET.design.concat(RARE_BUDGET.turns, RARE_BUDGET.check, RARE_BUDGET.extra);
+  var BUDGET_KEYS = ["steps", "passes", "parallel", "batch", "repair_attempts", "finalists", "workers", "prototype", "exploration_quota"].concat(MORE_BUDGET, RARE_KEYS);
 
   function argvOf(run) {
     var a = Array.isArray(run) ? run.map(String) : String(run || "").trim().split(/\s+/).filter(Boolean);
@@ -1708,9 +1784,15 @@
       var key = k === "orchestrate" && isSearch(fl[k]) ? "dse" : k;            // D797: a search is the orchestrator's
       var val = fl[k];
       if (val && typeof val === "object" && !Array.isArray(val) && "critic" in val) {   // D1040: the Second opinion
-        if (critic === undefined) critic = val.critic;
+        var cv = val.critic;
+        if (cv && typeof cv === "object" && !Array.isArray(cv) && "rounds" in cv) {     // D1237: how often its box answers it, apart
+          (out._criticRounds = out._criticRounds || {})[k] = cv.rounds;
+          cv = Object.assign({}, cv); delete cv.rounds;
+          if (Object.keys(cv).length === 1 && "by" in cv && typeof cv.by === "string") cv = cv.by;
+        }
+        if (critic === undefined) critic = cv;
         (out._criticOn = out._criticOn || []).push(k);
-        (out._critics = out._critics || {})[k] = toInner("critique", val.critic);
+        (out._critics = out._critics || {})[k] = toInner("critique", cv);
         val = Object.assign({}, val); delete val.critic;
         if (!Object.keys(val).length) continue;
         if (Object.keys(val).length === 1 && "by" in val && k !== "test" && k !== "measure") val = val.by;
@@ -1804,7 +1886,12 @@
       for (k in fl) {
         var v = fl[k];
         if (v && typeof v === "object" && !Array.isArray(v) && "critic" in v) {   // D1040: the Second opinion, apart
-          if (out.critique === undefined) out.critique = v.critic;
+          var kc = v.critic;
+          if (kc && typeof kc === "object" && !Array.isArray(kc) && "rounds" in kc) {   // D1237: its rounds are each box's own
+            kc = Object.assign({}, kc); delete kc.rounds;
+            if (Object.keys(kc).length === 1 && "by" in kc && typeof kc.by === "string") kc = kc.by;
+          }
+          if (out.critique === undefined) out.critique = kc;
           v = Object.assign({}, v); delete v.critic;
           if (!Object.keys(v).length) continue;
           if (Object.keys(v).length === 1 && "by" in v) v = v.by;
@@ -1842,6 +1929,10 @@
     raw = unlifted(raw || {}); normal = unlifted(normal) || raw;
     var s = base(), kept = [], notes = [];
     if (raw._criticOn) s.criticOn = raw._criticOn;          // D1040: the boxes the document's critic judges
+    if (raw._criticRounds) {                                 // D1237: how often a box answers its critic
+      s.criticRounds = {};
+      Object.keys(raw._criticRounds).forEach(function (b) { s.criticRounds[b] = String(raw._criticRounds[b]); });
+    }
     s.keptFlow = {};
     function keep(key, why) {
       var at = KEPT_AT[key] || key;
@@ -2058,13 +2149,18 @@
 
     // budget
     var bu = raw.budget || {};
-    if (Object.keys(bu).every(function (k) { return BUDGET_KEYS.indexOf(k) >= 0; }))
-      BUDGET_KEYS.forEach(function (k) { if (bu[k] !== undefined && bu[k] !== null) s.budget[k] = String(bu[k]); });
-    else {
-      keep("budget", "it sets " + Object.keys(bu).filter(function (k) { return BUDGET_KEYS.indexOf(k) < 0; }).join(", "));
-      // what the document says, shown in the read-only knobs (a kept budget is not written: `budget` is kept whole)
-      BUDGET_KEYS.forEach(function (k) { if (bu[k] !== undefined && bu[k] !== null) s.budget[k] = String(bu[k]); });
-    }
+    // D1237: a list knob is names, each without a comma (its box separates them by commas); any other knob a plain value
+    var said = function (k) {
+      var v = bu[k];
+      if (RARE_BUDGET.lists.indexOf(k) >= 0) return Array.isArray(v) && v.every(function (x) { return typeof x === "string" && x.trim() === x && x && x.indexOf(",") < 0; });
+      return ["string", "number", "boolean"].indexOf(typeof v) >= 0 && (typeof v !== "string" || typed(v) === v.trim());
+    };
+    var odd = Object.keys(bu).filter(function (k) { return bu[k] !== undefined && bu[k] !== null && (BUDGET_KEYS.indexOf(k) < 0 || !said(k)); });
+    if (odd.length) keep("budget", "it sets " + odd.join(", ") + (odd.every(function (k) { return BUDGET_KEYS.indexOf(k) >= 0; }) ? " in a form the configurator does not edit" : ""));
+    // a kept budget shows what the document says in its read-only knobs (it is not written: `budget` is kept whole)
+    BUDGET_KEYS.forEach(function (k) {
+      if (bu[k] !== undefined && bu[k] !== null) s.budget[k] = Array.isArray(bu[k]) ? bu[k].join(", ") : String(bu[k]);
+    });
 
     Object.keys(raw).forEach(function (k) {
       if (STATE_KEYS.indexOf(k) < 0 && k.charAt(0) !== "_") keep(k, k === "seeds" ? "the search's starting points" : "the configurator does not edit it");
@@ -2104,8 +2200,8 @@
               language: language, impliedLanguage: impliedLanguage, checkType: checkType, isPreset: isPreset, isCustom: isCustom, fits: fits,
               uniqueName: uniqueName, unitFor: unitFor, dictionarySpec: dictionarySpec, paramOnly: paramOnly, parameterSearch: parameterSearch,
               knobNames: knobNames, choiceOf: choiceOf, list: list, num: num, shown: shown, paramsOf: paramsOf, hasParts: hasParts,
-              CRITIC_BOXES: CRITIC_BOXES, criticsOf: criticsOf, setCritic: setCritic, agentOpts: agentOpts, setAgentOpt: setAgentOpt,
-              renameAgent: renameAgent, agentRest: agentRest, probeOf: probeOf, setProbe: setProbe, BUDGET_KEYS: BUDGET_KEYS, keptText: keptText,
+              CRITIC_BOXES: CRITIC_BOXES, CRITIC_ROUNDS: CRITIC_ROUNDS, criticsOf: criticsOf, setCritic: setCritic, agentOpts: agentOpts, setAgentOpt: setAgentOpt,
+              renameAgent: renameAgent, agentRest: agentRest, probeOf: probeOf, setProbe: setProbe, BUDGET_KEYS: BUDGET_KEYS, RARE_BUDGET: RARE_BUDGET, keptText: keptText,
               // D1146: who works a box, the words both views say, where a draft stands
               whoOptions: whoOptions, whoOn: whoOn, whoWorks: whoWorks, agentOf: agentOf, agentWord: agentWord,
               skillOn: skillOn, setSkill: setSkill, skillsDoc: skillsDoc, hiddenOf: hiddenOf,

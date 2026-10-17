@@ -1,12 +1,13 @@
 // Flux web, configure (D1116): the Extra step -- settings to search and how to walk them, one design or its parts,
-// a baseline measured first (pass 0), the document's own parameters, and (a new loop, an admin) its resources.
+// a baseline measured first (pass 0), the document's own parameters, (a new loop, an admin) its resources, and under More
+// the loop's rarer knobs no box holds (D1237: tools at once, the agent's halves, a plan file, ...).
 
 import { html } from "../view.js";
 import { Choice } from "../components/Tabs.js";
 import { Tool } from "../components/Head.js";
 import { Select } from "../components/Select.js";
 import { Table } from "../components/Table.js";
-import { Kept, Pick, Text, isKept } from "./fields.js";
+import { Kept, Knob, MoreFold, Pick, Text, isKept, saidOf } from "./fields.js";
 import { Add } from "../components/Add.js";
 
 function Baseline({ M, state, edit }) {
@@ -61,5 +62,7 @@ export function ExtraStep({ M, state, edit, extra, direct }) {
     <section class="cfg-sec"><h3>Parameters <span class="muted">${W.paramsSay}</span></h3>
       ${isKept(state, "params") ? kept("params") : html`${(state.params || []).length ? html`<${Table} heads=${["Name", "Value", ""]} cls="list compact cfg-table">${state.params.map((x, i) => row(state.params, "key", "value", i, "Parameter", "Its value"))}<//>` : ""}
       <div><${Add} onClick=${() => edit(() => { (state.params = state.params || []).push({ key: "", value: "" }); })}>+ Parameter<//></div>`}</section>
-    ${extra ? html`<section class="cfg-sec"><h3>Resources</h3>${extra}</section>` : ""}`;
+    ${extra ? html`<section class="cfg-sec"><h3>Resources</h3>${extra}</section>` : ""}
+    <section class="cfg-sec"><${MoreFold} M=${M} data="extra" said=${saidOf(state, M.RARE_BUDGET.extra)}><div class="cfg-grid2">${M.RARE_BUDGET.extra.map(k => html`<${Knob}
+      key=${k} M=${M} state=${state} edit=${edit} k=${k} disabled=${isKept(state, "budget")} />`)}</div><//></section>`;
 }

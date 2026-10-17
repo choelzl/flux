@@ -198,6 +198,22 @@ def _variant(name: str) -> dict:
         d["flow"]["knowledge"] = {"digest": "claude", "hidden": ["rtl/"]}
     elif name == "hidden_agent":
         d["flow"]["generate"] = {"by": "claude", "hidden": ["method.md"]}
+    # D1237: the rarer knobs, edited under More -- Design's prototype limits and the model's tool turns, Check's critics and
+    # a critic's rounds, Extra's rest; a document of only these is no longer kept as written
+    elif name == "rare_design":
+        d["budget"] = {"prototype": True, "prototype_attempts": 12, "prototype_patience": 3, "prototype_attempts_max": 40,
+                       "prototype_agent_attempts": 4, "prototype_agent_patience": 1, "prototype_agent_attempts_max": 9,
+                       "prototype_unmeasured_stop": 2, "prototype_shrink_attempts": 0, "prototype_table_max": 128, "prototype_cost_max": -1,
+                       "tools": False, "tool_hops": 3, "hop_share": 0.25, "knowledge_share": 0.4, "compact": "llm", "compact_share": 0.7,
+                       "tool_result_chars": 20000, "compute_timeout_s": 2.5}
+    elif name == "rare_check":
+        d["budget"] = {"critique_rounds": 0}
+        d["flow"]["test"] = {"check": "{python} {home}/check.py {artifact}", "critic": "model"}
+        d["flow"]["orchestrate"] = {"critic": {"by": "model", "rounds": 2}}
+        d["flow"]["select"] = {"critic": {"by": "claude", "rounds": 3, "timeout_s": 99}}
+    elif name == "rare_extra":
+        d["budget"] = {"tools_at_once": 1, "screen_only": True, "max_tolerance": 6, "structured": False, "agent": ["tools", "plan"],
+                       "plan_file": "plan.yaml", "patch_context_lines": 20, "ahead": False, "max_depth": 2, "regenerate": ["decoder"]}
     return d
 
 
@@ -205,7 +221,7 @@ def _variant(name: str) -> dict:
                                   "model_search_options", "policy_options", "critic_options", "lessons_options", "library", "library_kept_flow",
                                   "agent_options", "probe_off", "probe_gate_off", "critic_session", "skills_off", "skills_some_off",
                                   "skills_from", "skills_from_some_off", "workbench_off", "workbench_agent", "library_off_workbench",
-                                  "hidden", "hidden_library_off", "hidden_kept_flow", "hidden_agent"])
+                                  "hidden", "hidden_library_off", "hidden_kept_flow", "hidden_agent", "rare_design", "rare_check", "rare_extra"])
 def test_an_untouched_edit_keeps_the_meaning(name, tmp_path):
     src = tmp_path / "src" / name
     src.mkdir(parents=True)
@@ -225,6 +241,12 @@ def test_an_untouched_edit_keeps_the_meaning(name, tmp_path):
     if name.startswith("hidden"):
         assert not [k for k in kept if "knowledge" in k], kept
         assert (after["flow"].get("knowledge") or {}).get("hidden") == (_variant(name)["flow"].get("knowledge") or {}).get("hidden")
+    if name.startswith("rare"):
+        assert kept == [], kept
+        assert after["budget"] == before["budget"] == _variant(name)["budget"], after["budget"]
+    if name == "rare_check":
+        rounds = {b: (after["flow"].get(b) or {}).get("critic", {}).get("rounds") for b in ("orchestrate", "select")}
+        assert rounds == {"orchestrate": 2, "select": 3}, after["flow"]
     if name.startswith("library_kept") or name == "library":
         assert "flow.knowledge" not in kept and "FILE rtl/top.sv:" in after["flow"]["knowledge"]["text"], (kept, after["flow"])
     # a typed choice is the same value of the same type: "01" is not 1, "true" is not True
@@ -603,11 +625,19 @@ def test_the_files_named_are_the_loops_own_checks():
 
 
 def test_a_budget_kept_as_written_shows_its_values_and_is_not_written():
-    """nlu keeps its budget (it sets prototype_attempts...): the read-only knobs showed the defaults (Repairs 12 beside
-    `repair_attempts: 20`). The state holds what the document says; the save still leaves the budget to the merge."""
-    out = _app("nlu")
+    """A budget the configurator does not edit (here `calibrate`, Measure's flow.calibrate) is kept as written: the read-only
+    knobs showed the defaults (Repairs 12 beside `repair_attempts: 20`). The state holds what the document says; the save still
+    leaves the budget to the merge. D1237: nlu's prototype limits are edited now, its budget no longer kept."""
+    doc = {"statement": "x", "budget": {"steps": 24, "repair_attempts": 20, "calibrate": False}}
+    js = ("const c = require(process.argv[1]); const s = c.fromDoc(%s, %s).state;"
+          " process.stdout.write(JSON.stringify({kept: s.kept, budget: s.budget, yaml: c.buildYaml(s)}));") % (json.dumps(doc), json.dumps(doc))
+    r = subprocess.run(["node", "-e", js, str(ASSETS / "crafter-model.js")], capture_output=True, text=True, timeout=60)
+    assert r.returncode == 0, r.stderr
+    out = json.loads(r.stdout)
     assert "budget" in out["kept"] and out["budget"]["steps"] == "24" and out["budget"]["repair_attempts"] == "20", out["budget"]
     assert "\nbudget:" not in out["yaml"]
+    nlu = _app("nlu")
+    assert "budget" not in nlu["kept"] and nlu["budget"]["prototype_attempts_max"] == "90" and "prototype_attempts_max: 90" in nlu["yaml"], nlu["kept"]
 
 
 def test_design_under_a_parameter_only_search_is_off():

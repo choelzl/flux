@@ -9,14 +9,17 @@ import { Pick, Text } from "./fields.js";
 import { Check } from "../components/Check.js";
 
 /** `slot` a box ("generate", "select", "lessons") or "critic:<box>"; nothing when no agent works it. `disabled`: the flow
-    is kept as written. */
-export function AgentOpts({ M, state, slot, edit, disabled = false }) {
+    is kept as written. D1237: `extra` fields of the slot's own (a critic's rounds) first in the same fold, `extraSaid` how
+    many of them are set -- the fold drawn for them alone when no agent works it. */
+export function AgentOpts({ M, state, slot, edit, disabled = false, extra = null, extraSaid = 0 }) {
   const o = M.agentOpts(state, slot);
-  if (!o) return "";
+  if (!o && !extra) return "";
+  if (!o) return html`<details class="cfg-more" data-agent-opts=${slot}><summary>More${extraSaid ? html` <span class="muted">· ${extraSaid} set</span>` : ""}</summary>
+    <div class="cfg-grid2">${extra}</div></details>`;
   const set = k => v => edit(() => M.setAgentOpt(state, slot, k, v));
-  const said = ["timeout_s", "session", "questions", "max_questions", "wait_s"].filter(k => o[k] !== undefined).length, rest = M.agentRest(state, slot);
+  const said = ["timeout_s", "session", "questions", "max_questions", "wait_s"].filter(k => o[k] !== undefined).length + extraSaid, rest = M.agentRest(state, slot);
   return html`<details class="cfg-more" data-agent-opts=${slot}><summary>More${said ? html` <span class="muted">· ${said} set</span>` : ""}</summary>
-    <div class="cfg-grid2">
+    <div class="cfg-grid2">${extra}
       <${Text} label=${M.WORDS.checks.timeLimit} value=${o.timeout_s ?? ""} placeholder="default" disabled=${disabled} set=${set("timeout_s")} />
       ${slot === "generate" ? "" : html`<${Pick} label="Session" value=${o.session || ""} disabled=${disabled} set=${set("session")}
         options=${[["", "fresh each turn"], ["pass", "one per pass"]]} />`}

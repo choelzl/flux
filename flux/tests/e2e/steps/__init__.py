@@ -11,6 +11,7 @@ ORDER = (
     "library box",
     "knowledge skills",
     "agent settings",
+    "rare knobs",
     "box panels",
     "preset named",
     "kept read-only",
