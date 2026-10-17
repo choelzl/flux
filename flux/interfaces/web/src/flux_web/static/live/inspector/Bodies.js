@@ -3,9 +3,9 @@
 
 import { html } from "../../view.js";
 import { bytes, dur, plural } from "../../format.js";
-import { WORK_COLORS as COLORS, phaseKind } from "../work_style.js";
+import { WORK_COLORS as COLORS, boxOf } from "../work_style.js";
 import { Block, Fold, Pre, StepRow, Stream } from "./bits.js";
-import { bestOf, candidateOf, cell, checkResult, chooseColumns, colorOf, dictsOf, fieldsOf, isTool, linesOf, meanOf, measured, metricsOf, notReached,
+import { bestOf, designOf, cell, checkResult, chooseColumns, colorOf, dictsOf, fieldsOf, isTool, linesOf, meanOf, measured, metricsOf, notReached,
   poolSaid, running, stdoutOf, taskLabel, tidyCommand, tidyWords, usualOf } from "./parts.js";
 import { Fact, Facts, Pill, Tag } from "../../components/Tone.js";
 import { Table } from "../../components/Table.js";
@@ -16,7 +16,7 @@ const lineCount = t => plural(linesOf(t).length, "line");
 /** The numbers a measurement gave, against the best so far (D1063: whose; D1064: a dictionary's too, key by
     key, D1075: each coloured by its own way), the goals first (D1068). */
 function Metrics({ n, env, out, metrics }) {
-  const { best, goals } = bestOf(n, env), dicts = dictsOf(out), me = candidateOf(n);
+  const { best, goals } = bestOf(n, env), dicts = dictsOf(out), me = designOf(n);
   const order = Object.keys(goals), rank = k => order.includes(k) ? order.indexOf(k) : order.length;
   const rows = [...Object.entries(metrics).map(([k, v]) => [k, v, v]), ...Object.entries(dicts).map(([k, d]) => [k, d, meanOf(d)])].sort((a, b) => rank(a[0]) - rank(b[0]));
   const compares = rows.some(([k]) => best[k]);
@@ -74,7 +74,7 @@ export function ToolBody({ n, env, mem }) {
 
 /** A search: the point it proposed (D1094: how much of the space -- "point 1 of 4") and that candidate's way through the pass. */
 export function SearchBody({ n, a, env }) {
-  const c = candidateOf(n), o = n.output || {}, of = Number(o.points), k = Number(o.candidates) || 0, was = Number(o["measured before"]) || 0;
+  const c = designOf(n), o = n.output || {}, of = Number(o.points), k = Number(o.candidates) || 0, was = Number(o["measured before"]) || 0;
   const where = of > 0 && k > 0 ? (k === 1 ? `point ${was + 1} of ${of}` : `points ${was + 1}–${was + k} of ${of}`) : "";
   return html`<div class="task-inspector">
     ${c || where ? html`<div class="facts"><${Fact} label="point" value=${[c, where].filter(Boolean).join(" · ")} /></div>` : ""}
@@ -138,7 +138,7 @@ export function CriticBody({ n }) {
 /** Any other task: its own box's steps (D1029) with what each gave, the checks it never reached (D1066); no
     steps of its own -- what it came to, its short results said plainly (D1059). */
 export function StepsBody({ n, a, env }) {
-  const kind = phaseKind(n), kids = n.kids.filter(k => phaseKind(k) === kind);
+  const kind = boxOf(n), kids = n.kids.filter(k => boxOf(k) === kind);
   if (kids.length) return html`<div class="task-inspector"><div class="alt-steps">${kids.map(x => html`<${StepRow} key=${x.id} x=${x} a=${a} N=${env.N} />`)}
     ${notReached(n, env.tests).map(t => html`<div key=${t} class="alt-step-row note skipped" title="not run: a check before it failed"><span>${`○ ${t} · not run`}</span></div>`)}</div></div>`;
   const said = Object.entries(n.output || {}).filter(([k, v]) => !k.startsWith("_") && v != null && v !== "" && typeof v !== "object" && String(v).length <= 160).slice(0, 4);

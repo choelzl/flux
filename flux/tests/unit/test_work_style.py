@@ -1,13 +1,13 @@
 """D977: Live's timeline classifies and cuts work as the server does -- the JS kind rule equals
 `flux_web.timeline.kind_of`, and a task's own time leaves its children's out."""
 
-import base64
 import json
 import shutil
-import subprocess
 from pathlib import Path
 
 import pytest
+
+import live_js
 
 from flux_web.timeline import kind_of
 
@@ -25,11 +25,9 @@ PHASES = [("agent: claude", ""), ("llm: propose", ""), ("model call", ""), ("too
 
 
 def run(js):
-    uri = "data:text/javascript;base64," + base64.b64encode((STATIC / "live/work_style.js").read_bytes()).decode()
-    script = f"import({json.dumps(uri)}).then(m => process.stdout.write(JSON.stringify(({js})(m))));"
-    r = subprocess.run(["node", "-e", script], capture_output=True, text=True, timeout=30)
-    assert r.returncode == 0, r.stderr
-    return json.loads(r.stdout)
+    """work_style.js's functions, with legacy.js's kindOf (a journal before D1233 is read by its rules)."""
+    return live_js.run("import * as W from './live/work_style.js'; import * as L from './live/legacy.js';\n"
+                       f"process.stdout.write(JSON.stringify(({js})({{ ...W, kindOf: L.kindOf, phaseKind: L.boxOf }})));")
 
 
 def test_the_kind_of_work_is_the_same_in_the_page_and_the_server():

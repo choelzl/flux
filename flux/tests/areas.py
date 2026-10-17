@@ -46,7 +46,7 @@ UNTESTED = ["scripts/**", "tests/unit/*.txt"]
 
 AREAS: dict[str, dict[str, list[str]]] = {
     "live": {
-        "sources": [S + "live/**", W + "timeline.py", W + "run_history.py", *_loop("journal", "observe")],
+        "sources": [S + "live/**", W + "timeline.py", W + "run_history.py", *_loop("journal", "observe"), "tests/unit/live_js.py"],
         "unit": ["test_live_*.py", "test_web_d917.py", "test_web_d918.py", "test_web_run_history.py", "test_empty_starts.py",
                  "test_work_style.py", "test_web_time.py", "test_web_stamp.py", "test_journal.py", "test_agent_live.py",
                  "test_web_document_selection.py"],

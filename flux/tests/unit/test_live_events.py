@@ -1,13 +1,13 @@
 """D752, D1095: Live's task model (live/events.js) replayed from journals under node, as the page replays them --
 a recorded sweep, a new start, a question, a tool's exit, an agent's time limit, a journal cut short."""
 
-import base64
 import json
 import shutil
-import subprocess
 from pathlib import Path
 
 import pytest
+
+import live_js
 
 HERE = Path(__file__).parent
 EVENTS = HERE.parents[1] / "interfaces/web/src/flux_web/static/live/events.js"
@@ -17,13 +17,10 @@ pytestmark = pytest.mark.skipif(shutil.which("node") is None, reason="node is no
 
 def replay(events: str, body: str):
     """`body` (JS, with `LT` the module and `m` the model the journal on stdin was applied to) writes its answer."""
-    uri = "data:text/javascript;base64," + base64.b64encode(EVENTS.read_bytes()).decode()
-    js = ("import(process.argv[1]).then(LT => { const m = LT.model(), said = [];\n"
-          "for (const l of require('fs').readFileSync(0, 'utf8').split('\\n')) if (l.trim()) { const r = LT.apply(m, JSON.parse(l)); if (r.question) said.push(r.question); }\n"
-          + body + "\n});")
-    r = subprocess.run(["node", "-e", js, uri], input=events, capture_output=True, text=True, timeout=60)
-    assert r.returncode == 0, r.stderr
-    return json.loads(r.stdout)
+    js = ("import * as LT from './live/events.js'; import { readFileSync } from 'fs';\n{ const m = LT.model(), said = [];\n"
+          "for (const l of readFileSync(0, 'utf8').split('\\n')) if (l.trim()) { const r = LT.apply(m, JSON.parse(l)); if (r.question) said.push(r.question); }\n"
+          + body + "\n}")
+    return live_js.run(js, events)
 
 
 def lines(ev: list[dict]) -> str:

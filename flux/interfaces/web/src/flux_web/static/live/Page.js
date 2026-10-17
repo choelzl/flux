@@ -6,7 +6,7 @@ import { appHref, when } from "../ui.js";
 import { plural } from "../format.js";
 import { StreamPill } from "../components/StatePill.js";
 import { scrollState, restoreScroll } from "../scroll.js";
-import { phaseKind } from "./work_style.js";
+import { boxOf } from "./work_style.js";
 import { taskState as state } from "./model.js";
 import { passName } from "./views.js";
 import { NO_PASS } from "./store.js";
@@ -101,7 +101,7 @@ function Body({ store }) {
       if (s.boxView) return el.querySelector(`[data-box="${CSS.escape(s.boxView.key)}"]`);
       if (v.selected == null) return null;
       const node = v.model.nodes.get(v.selected);
-      return el.querySelector(`[data-task="${CSS.escape(String(v.selected))}"]`) || (node && el.querySelector(`[data-kind="${phaseKind(node)}"]`));
+      return el.querySelector(`[data-task="${CSS.escape(String(v.selected))}"]`) || (node && el.querySelector(`[data-kind="${boxOf(node)}"]`));
     };
     if (s.reveal) {
       s.reveal = false;

@@ -1,32 +1,10 @@
 // Pure task selection shared by the three Live representations.
-/** D1052: a note with no task of its own (a scripted search's scope list) is the pass it was written in, as a task there would be. */
-export const notePass = (note, marks) => taskPass({ name: note.name, t0: note.t, seq: note.seq, parent: null }, marks);
-export function taskPass(node, marks) {
-  let root = node;
-  for (let p = node; p; p = p.parent) {
-    const value = p.params?.pass;
-    if (value != null && value !== "" && Number.isFinite(Number(value))) return Number(value);
-    root = p;
-  }
-  let pass = null;
-  // D1041: a mark is before a task by its place in the journal -- a pass's last steps can start in the
-  // millisecond its successor's mark is written; by time alone (journals without the order) within 1ms
-  const before = mark => mark.seq != null && root.seq != null ? mark.seq < root.seq : mark.t <= root.t0 + .001;
-  for (const mark of marks) if (mark.name === "pass" && before(mark) && Number.isFinite(Number(mark.n))) pass = Number(mark.n);
-  if (pass != null) return pass;
-  // D978: before the first mark -- the engine marks passes from the second (or the baseline) on, so
-  // what ran before is the pass before it, as Live counts it; the run's own setup (the document
-  // checked, the papers read, the round planned) and anything before a baseline stay Setup
-  const first = marks.find(m => m.name === "pass" && Number.isFinite(Number(m.n)));
-  if (/^\s*(validate|digest|plan\b|lessons)/i.test(String(root.name))) return null;
-  // D1012: no mark yet -- the first pass is not marked: its work is Pass 1, as Live says; its setup
-  // (the papers, the library, the tools' gate) the start's Setup, as Live keeps it
-  // D1143: an agent's digest on its own (a journal written before its quiet step held it) is that Setup too
-  const digest = /^\s*agent\s*:/i.test(String(root.name)) && /^\s*digest\b/i.test(String(root.why || ""));
-  if (!first) return digest || /^\s*(knowledge|records|feedback|extract|setup|gate:\s*(tools|the problem)|propose:\s*decompose)/i.test(String(root.name)) ? null : 1;
-  if (Number(first.n) <= 0) return null;
-  return Number(first.n) - 1;
-}
+import { notePassOf, passOf } from "./facts.js";
+
+/** D1052: a note with no task of its own (a scripted search's scope list) is the pass it was written in. */
+export const notePass = notePassOf;
+/** The pass a task is in (facts.js: as the engine says it, D1233). */
+export const taskPass = passOf;
 
 /** D1181: passes in their order -- Setup (null) first, then by number (R, half-way, between its two). */
 export const byPass = (a, b) => a == null ? (b == null ? 0 : -1) : b == null ? 1 : Number(a) - Number(b);
@@ -36,7 +14,7 @@ export function taskScope(model, pass = "current") {
   const membership = new Map(all.map(n => [n.id, taskPass(n, model.marks)]));
   // D1041: a run of one pass is never marked -- a setup step after its work began (the mentor read
   // again between designs) is that pass's, as it is in a marked pass, not a Setup between its steps
-  if (!model.marks.some(m => m.name === "pass")) {
+  if (!model.marks.some(m => m.name === "pass") && !(model.format >= 2)) {   // a journal before D1233: its tasks say no pass
     const rootOf = n => { while (n.parent) n = n.parent; return n; };
     const began = Math.min(...all.filter(n => !n.parent && membership.get(n.id) === 1).map(n => n.t0));
     for (const n of all) { const r = rootOf(n); if (membership.get(n.id) == null && r.t0 > began) membership.set(n.id, 1); }

@@ -101,9 +101,9 @@ def test_a_workers_phases_sit_under_the_phase_that_handed_them_out_with_its_part
     stage = starts[0]
     tools = [e for e in starts if e["name"] == "tool:python3"]
     assert len(tools) == 3 and all(e["parent"] == stage["id"] for e in tools)
-    assert stage["params"]["part"] == "exp" and all(e["params"]["part"] == "exp" for e in tools)
+    assert stage["tags"]["part"] == "exp" and all(e["tags"]["part"] == "exp" for e in tools)
     decide = next(e for e in starts if e["name"] == "decide")
-    assert decide["parent"] is None and "part" not in decide["params"], "the tag ends with its block"
+    assert decide["parent"] is None and "tags" not in decide, "the tag ends with its block"
     assert next(e for e in starts if e["name"] == "alone")["parent"] is None
 
 

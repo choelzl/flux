@@ -35,15 +35,8 @@ def _split(params: dict | None, keys: tuple[str, ...]) -> tuple[dict, dict]:
     """(D1233) A phase's params as (its inputs, its tags): the facts the engine tags a task with are said
     apart from what it was given."""
     params = dict(params or {})
-    tags = {k: params[k] for k in keys if k in params and params[k] not in (None, "")}
-    for k in tags:
-        if k not in _ALSO_INPUTS:
-            del params[k]
+    tags = {k: params.pop(k) for k in keys if k in params and params[k] not in (None, "")}
     return params, tags
-
-
-#: the tags a page before format 2 read among the inputs (its pass, D747; its part, D739): kept there too
-_ALSO_INPUTS = ("pass", "part")
 
 
 def _tag_keys() -> tuple[tuple[str, ...], tuple[str, ...]]:
@@ -183,7 +176,9 @@ class Journal:
         with self._lock:
             parent = self._parent()
         _params, tags = _split(params, _tag_keys()[0])
-        self._write({"ev": "note", "parent": parent, "name": name, "why": _cut(why), "output": _capped(output or {}),
+        output, ends = _split(output, _tag_keys()[1])
+        tags.update(ends)
+        self._write({"ev": "note", "parent": parent, "name": name, "why": _cut(why), "output": _capped(output),
                      **({"tags": _cut(tags)} if tags else {})})
 
     def phase_after(self, name: str, why: str, params: dict, seconds: float, failed: bool, output: dict) -> None:

@@ -9,21 +9,14 @@ from pathlib import Path
 
 import pytest
 
+import live_js
+
 STATIC = Path(__file__).parents[2] / "interfaces/web/src/flux_web/static"
 pytestmark = pytest.mark.skipif(shutil.which("node") is None, reason="node is not on PATH")
 
 
 def run(js):
-    uri = lambda f: "data:text/javascript;base64," + base64.b64encode(  # noqa: E731
-        (STATIC / f).read_text().replace('"./work_style.js"', json.dumps(WS)).replace('"./model.js"', json.dumps(MODEL)).encode()).decode()
-    script = f"import({json.dumps(uri('live/views.js'))}).then(m => process.stdout.write(JSON.stringify(({js})(m))));"
-    r = subprocess.run(["node", "-e", script], capture_output=True, text=True, timeout=30)
-    assert r.returncode == 0, r.stderr
-    return json.loads(r.stdout)
-
-
-WS = "data:text/javascript;base64," + base64.b64encode((STATIC / "live/work_style.js").read_bytes()).decode()
-MODEL = "data:text/javascript;base64," + base64.b64encode((STATIC / "live/model.js").read_bytes()).decode()
+    return live_js.module("live/views.js", js)
 TREE = """
   const mk = (id, name, why, parent, t0, t1, failed) => ({id, name, why, parent, t0, t1, failed, kids: []});
   const dse = mk(1, "DSE: batch", "", null, 0, 30), gen = mk(2, "tool:gen.py", "generate lut-chunk=4", dse, 0, 1);
@@ -71,8 +64,7 @@ def test_a_search_done_as_a_note_is_a_box_that_ran():
       const b = m.flowBoxes([{{node: d}}], 3, true, [{{name: "orchestrate: scope list", why: "", t: 0, output: {{scopes: 2}}}}]);
       const s = b.find(x => x.key === "search"); return [s.state, s.notes.length, s.runs.length]; }}""")
     assert got == ["ok", 1, 0]
-    script = f"import({json.dumps(MODEL)}).then(m => process.stdout.write(String(m.notePass({{name: 'orchestrate: scope list', t: 4, seq: 9}}, [{{name: 'pass', n: 3, t: 1, seq: 2}}]))));"
-    assert subprocess.run(["node", "-e", script], capture_output=True, text=True, timeout=30).stdout == "3"     # the pass it was written in
+    assert live_js.module("live/model.js", "m => m.notePass({name: 'orchestrate: scope list', t: 4, seq: 9}, [{name: 'pass', n: 3, t: 1, seq: 2}])") == 3   # the pass it was written in
 
 
 def test_a_box_whose_step_failed_says_so_though_it_finished():
@@ -119,14 +111,7 @@ def test_what_each_box_is_set_to_comes_from_the_document():
 
 def run_inspector(js):
     """D1095: the inspector's readers, live/inspector/parts.js -- plain functions, under node."""
-    uri = lambda f: "data:text/javascript;base64," + base64.b64encode(  # noqa: E731
-        (STATIC / f).read_text().replace('"./work_style.js"', json.dumps(WS)).replace('"./model.js"', json.dumps(MODEL)).encode()).decode()
-    src = (STATIC / "live/inspector/parts.js").read_text().replace('"../work_style.js"', json.dumps(WS)).replace('"../views.js"', json.dumps(uri("live/views.js"))) \
-        .replace('"../../format.js"', json.dumps(uri("format.js")))
-    mod = "data:text/javascript;base64," + base64.b64encode(src.encode()).decode()
-    r = subprocess.run(["node", "-e", f"import({json.dumps(mod)}).then(m => process.stdout.write(JSON.stringify(({js})(m))));"], capture_output=True, text=True, timeout=30)
-    assert r.returncode == 0, r.stderr
-    return json.loads(r.stdout)
+    return live_js.module("live/inspector/parts.js", js)
 
 
 def test_the_inspector_reads_a_check_and_a_measurement_from_what_they_printed():
@@ -138,8 +123,8 @@ def test_the_inspector_reads_a_check_and_a_measurement_from_what_they_printed():
 
 
 def test_a_measurement_names_its_candidate_after_its_stage():
-    got = run("""m => [m.candidateOf({why: "stage screen lut-chunk=4", kids: []}), m.candidateOf({why: "estimate place tree-chunk=2", kids: []}),
-      m.candidateOf({why: "generate lut-chunk=4", kids: []}), m.candidateOf({why: "test lut-chunk=4", kids: []}), m.candidateOf({why: "decide", kids: []})]""")
+    got = run("""m => [m.designOf({why: "stage screen lut-chunk=4", kids: []}), m.designOf({why: "estimate place tree-chunk=2", kids: []}),
+      m.designOf({why: "generate lut-chunk=4", kids: []}), m.designOf({why: "test lut-chunk=4", kids: []}), m.designOf({why: "decide", kids: []})]""")
     assert got == ["lut-chunk=4", "tree-chunk=2", "lut-chunk=4", "lut-chunk=4", ""]
 
 

@@ -1,42 +1,18 @@
 // D978: what Live's three views say about the tasks -- a task's name in the timeline's words,
 // the flow a pass went through, and what each box is set to (from the document as written).
-import { kindOf, phaseKind, workLabel } from "./work_style.js";
+import { workLabel } from "./work_style.js";
+import { boxOf, designOf, isAI, isAgent, isModel, noteBox, stepOf, workerOf } from "./facts.js";
+export { designOf, stepOf };
 import { taskState as state } from "./model.js";
 
 const SETUP_SAYS = { "gate: tools": "tools ready", "gate: the problem": "problem answerable", "propose: decompose": "parts" };
-const turnOf = n => String(n.params?.turn || n.name);          // D1050: a wrapper's taken-in turn
-const isAgent = n => /^\s*agent\s*:/i.test(turnOf(n));
-const isModel = n => /^\s*(llm\b|model)/i.test(turnOf(n));
-
-/** The candidate a task works on: from its own or a descendant's purpose ("generate lut-chunk=4"). */
-export function candidateOf(n) {
-  const stack = [n];
-  while (stack.length) {
-    const x = stack.shift(), why = String(x.why || "");
-    const m = /^(?:stage|estimate)\s+\S+\s+(\S+)/i.exec(why) || /^(?:generate|test)\s+(\S+)/i.exec(why);   // a measurement names its stage first
-    if (m) return m[1];
-    // D1063: a check's test says the design it ran on after its name ("apply x=1", "ut demo#3")
-    const t = /^\s*tool\s*:/i.test(String(x.name)) && /^\S+\s+(\S+)$/.exec(why.trim());
-    if (t) return t[1];
-    stack.push(...(x.kids || []));
-  }
-  return "";
-}
 
 /** A task as the timeline says it (TN1): its kind, then what it is -- the tool as the document
     says it, the stage, the candidate; the engine's own name stays in the inspector. */
-/** D1037: the check or stage a command runs, from what it was told (`build bau#43`, `stage esl bau#43`);
-    "" for a command that is no check or stage, or the gate's default single check (its program says more). */
-export function ranFor(n) {
-  const w = String(n.why || "").trim().split(/\s+/);
-  if (w[0] === "stage" && w[1]) return w[1];
-  if (w[0] === "estimate" && w[1]) return `estimate ${w[1]}`;
-  return !w[0] || ["generate", "search", "baseline", "focus", "scope", "test"].includes(w[0]) ? "" : w[0];
-}
 /** D1037: a command's program, said beside the check or stage it runs; "" for anything else. */
 export function taskNote(n) {
   const name = String(n.name || ""), at = name.indexOf(":");
-  if (!/^\s*tool\s*:/i.test(name) || !(ranFor(n) || phaseKind(n) === "design" && candidateOf(n))) return "";   // D1063: a generator's program too
+  if (!/^\s*tool\s*:/i.test(name) || !(stepOf(n) || boxOf(n) === "design" && designOf(n))) return "";   // D1063: a generator's program too
   return name.slice(at + 1).trim().replace(/^fluxpreset\s+/, "");
 }
 export function taskLabel(n) {
@@ -46,18 +22,18 @@ export function taskLabel(n) {
   const rest = at < 0 ? "" : name.slice(at + 1).trim().replace(/^(agent|llm|model):\S+\s+/i, "");
   if (/^\s*agent\s*:/i.test(name)) return `Agent · ${rest}`;
   if (/^\s*(llm\b|model)/i.test(name)) return rest ? `Model · ${rest}` : "Model";
-  const kind = workLabel(phaseKind(n));
+  const kind = workLabel(boxOf(n));
   if (SETUP_SAYS[low]) return `Setup · ${SETUP_SAYS[low]}`;
   if (head === "knowledge") return `Setup · ${/^digest/i.test(rest) ? "papers" : /^mentor/i.test(rest) ? "mentor" : /^workbench/i.test(rest) ? "workbench" : "inputs"}`;
   // D1063: a design's generator says the design it made ("Design · x=1"), its program the line's note
-  if (head === "tool" && kind === "Design" && candidateOf(n)) return `${kind} · ${candidateOf(n)}`;
+  if (head === "tool" && kind === "Design" && designOf(n)) return `${kind} · ${designOf(n)}`;
   // D1064: a stage's command says the design it measures ("Measure · slow · x#4")
-  if (head === "tool" && kind === "Measure" && candidateOf(n) && ranFor(n)) return `${kind} · ${ranFor(n)} · ${candidateOf(n)}`;
-  if (head === "tool") return `${kind} · ${ranFor(n) || rest.replace(/^fluxpreset\s+/, "") || "command"}`;   // D1037: the document's name
+  if (head === "tool" && kind === "Measure" && designOf(n) && stepOf(n)) return `${kind} · ${stepOf(n)} · ${designOf(n)}`;
+  if (head === "tool") return `${kind} · ${stepOf(n) || rest.replace(/^fluxpreset\s+/, "") || "command"}`;   // D1037: the document's name
   // D1063: a measurement says the design it measured ("Measure · esl · x#4"; the views say "#4")
-  if ((head === "simulation" || head === "analytical") && rest) { const c = candidateOf(n); return c ? `${kind} · ${rest} · ${c}` : `${kind} · ${rest}`; }
-  if (head === "dse") { const c = candidateOf(n); return c ? `Search · ${c}` : "Search"; }
-  if (head === "test" && rest === "gate") { const c = candidateOf(n); return c ? `Check · ${c}` : "Check"; }   // D1051; D1061: a check, said "check"
+  if ((head === "simulation" || head === "analytical") && rest) { const c = designOf(n); return c ? `${kind} · ${rest} · ${c}` : `${kind} · ${rest}`; }
+  if (head === "dse") { const c = designOf(n); return c ? `Search · ${c}` : "Search"; }
+  if (head === "test" && rest === "gate") { const c = designOf(n); return c ? `Check · ${c}` : "Check"; }   // D1051; D1061: a check, said "check"
   // D1050: a design's checks said one way -- its build and check, the gate's verdict on it
   if (head === "test" && /^(?:fast )?check\s/i.test(rest)) return `${kind} · ${rest.replace(/^(?:fast )?check\s+/i, "").trim()}`;      // D1054: a check, said "check"
   if (head === "test" && /^judge\s/i.test(rest)) return `${kind} · ${rest.slice(6).trim()}`;
@@ -95,26 +71,26 @@ export const passName = p => p == null ? "Setup" : Number(p) === 0 ? "Pass 0 · 
 export const passShort = p => p == null ? "S" : Number.isInteger(Number(p)) ? String(p) : "R";
 
 // the boxes of each flow, in order; a pass shows the boxes it is still to reach as waiting
-const SETUP_BOXES = [["Document", n => /^(validate|gate)\b/i.test(n.name)], ["Parts", n => /^(propose:\s*decompose|critique:\s*decomposition)/i.test(n.name)], ["Library", n => /^(knowledge|records)\b/i.test(n.name) || kindOf(n.name, n.why) === "setup" && /^\s*agent\s*:/i.test(n.name)],
+const SETUP_BOXES = [["Document", n => /^(validate|gate)\b/i.test(n.name)], ["Parts", n => /^(propose:\s*decompose|critique:\s*decomposition)/i.test(n.name)], ["Library", n => /^(knowledge|records)\b/i.test(n.name) || boxOf(n) === "setup" && isAgent(n)],
   ["Papers", n => /digest|paper/i.test(n.name)], ["Plan", n => /^plan\b/i.test(n.name)]];
 const PASS_KINDS = ["plan", "search", "design", "check", "measure", "choose"];   // D1054: a pass that planned (its part) shows it      // D1034: a critique is in the box it judges
 
 /** A draft: an agent's or a model's turn, or a design step of its own -- never a command it ran, a brief or a composition. */
-export const isDraft = c => !/^\s*tool\s*:/i.test(String(c.name)) && ((phaseKind(c) === "design" && !/^\s*(propose|template-fill)\b/i.test(String(c.name)))
-  || /^\s*(agent|llm|model)\b/i.test(String(c.params?.turn || c.name)));
+export const isDraft = c => !/^\s*tool\s*:/i.test(String(c.name)) && ((boxOf(c) === "design" && !/^\s*(propose|template-fill)\b/i.test(String(c.name)))
+  || isAI(c));
 /** D1181: the agents that drafted a box's runs, as their turns name them ("codex") -- not the document's say. */
 export const agentsOf = runs => [...new Set(runs.flatMap(function all(n) { return [n, ...(n.kids || []).flatMap(all)]; })
-  .map(n => (/^\s*agent\s*:\s*(\S+)/i.exec(String(n.params?.turn || n.name)) || [])[1]).filter(Boolean))];
+  .map(n => isAgent(n) ? workerOf(n).slice(6) : "").filter(Boolean))];
 /** D1054: a design box's tries -- its drafts, or each run that drafted nothing of its own (a generator command) -- as the tree numbers them. */
 export const triesOf = runs => runs.reduce((t, n) => t + Math.max(1, (n.kids || []).filter(isDraft).length), 0);
 /** D1054: the box a task is drawn in. A check is the Check box's -- but a check that failed inside a
     design sent it back: it is that design's try, and so is everything under it. */
 export function boxKind(n) {
-  const k = phaseKind(n);
+  const k = boxOf(n);
   if (k !== "check") return k;
   // D1181: a check the model ran inside its own turn is a step of that try -- no pass of the Check box
-  if (/^inside the turn\b/i.test(String(n.output?.measured ?? "")) && n.parent && phaseKind(n.parent) === "design") return "design";
-  for (let p = n; p; p = p.parent) if (p.failed && p.parent && phaseKind(p) === "check" && phaseKind(p.parent) === "design") return "design";
+  if (/^inside the turn\b/i.test(String(n.output?.measured ?? "")) && n.parent && boxOf(n.parent) === "design") return "design";
+  for (let p = n; p; p = p.parent) if (p.failed && p.parent && boxOf(p) === "check" && boxOf(p.parent) === "design") return "design";
   return k;
 }
 /** D1094: when a design's run handed its design on -- the time its first check or measurement began, the
@@ -179,10 +155,10 @@ export function flowBoxes(rows, p, running, notes = []) {
   const kinds = kind === "baseline" ? ["check", "measure"] : kind === "remeasure" ? ["check", "measure", "choose"] : PASS_KINDS;
   // D1052: work done quickly is a note, not a task (D1047) -- a box whose work this pass is only notes ran, it is not missing
   // D1054: only a search -- an evaluation or a decision that is a note had nothing to work on (D1053), no box
-  const noted = k => k === "search" ? notes.filter(n => kindOf(n.name, n.why) === k) : [];
+  const noted = k => k === "search" ? notes.filter(n => noteBox(n) === k) : [];
   const present = new Set([...rows.map(r => boxKind(r.node)), ...kinds.filter(k => noted(k).length)]);
   // D1059: a design composed inside a measurement is the measurement's; a second design later in the pass is a design
-  const inMeasure = n => { for (let p = n.parent; p; p = p.parent) if (phaseKind(p) === "measure") return true; return false; };
+  const inMeasure = n => { for (let p = n.parent; p; p = p.parent) if (boxOf(p) === "measure") return true; return false; };
   const boxes = kinds.filter(k => present.has(k) || (running && kind === "pass" && k !== "plan"))
     .map(k => ({ key: k, title: workLabel(k), kind: k,
       runs: runsOf(rows, n => boxKind(n) === k && (k !== "design" || !inMeasure(n))), notes: noted(k) }));

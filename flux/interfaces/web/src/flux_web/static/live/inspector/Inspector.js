@@ -6,12 +6,12 @@ import { Empty, html, useLayoutEffect } from "../../view.js";
 import { dur, num } from "../../format.js";
 import { showRaw } from "../../viewer.js";
 import { restoreScroll, scrollState } from "../../scroll.js";
-import { WORK_COLORS as COLORS, passTime, phaseKind, workLabel } from "../work_style.js";
+import { WORK_COLORS as COLORS, passTime, boxOf, workLabel } from "../work_style.js";
 import { passName, taskNote } from "../views.js";
 import { Block, Fold, StepRow, TaskPill, memoryOf } from "./bits.js";
 import { AgentChat, ModelChat } from "./Chat.js";
 import { ChooseBody, CriticBody, NotesFold, SearchBody, StepsBody, ToolBody } from "./Bodies.js";
-import { candidateOf, colorOf, has, headOf, isAgent, isModel, isTool, metricsOf, plain, running, stdoutOf, taskLabel, tidyWords, tryWhy } from "./parts.js";
+import { designOf, colorOf, has, headOf, isAgent, isModel, isTool, metricsOf, plain, running, stdoutOf, taskLabel, tidyWords, tryWhy } from "./parts.js";
 import { Pill, Tag } from "../../components/Tone.js";
 import { Head, Tool } from "../../components/Head.js";
 import { Meter } from "../../components/Stat.js";
@@ -29,7 +29,7 @@ function runner(n, title = "") {
 function TaskHead({ n, env, a }) {
   // a design's generator says the program it ran, as its tree line does ("Design · x#2 · gen.py") -- the draft's
   // agent turn is "Design · x#2" (D1056)
-  const N = env.N, label = plain(taskLabel(n), N), prog = isTool(n) && phaseKind(n) === "design" ? taskNote(n) : "";
+  const N = env.N, label = plain(taskLabel(n), N), prog = isTool(n) && boxOf(n) === "design" ? taskNote(n) : "";
   const title = prog && !label.includes(prog) ? `${label} · ${prog}` : label, parents = [];
   for (let p = n.parent; p; p = p.parent) { const l = plain(taskLabel(p), N); if (l !== title && l.includes(" · ") && !/·\s*evaluation$/i.test(l)) parents.unshift(p); }
   // D1066: a reason that is the loop's own name says nothing; D1094: nor one that is only the engine's source name
@@ -50,7 +50,7 @@ function Body({ n, env, a, mem }) {
   if (isTool(n)) return html`<${ToolBody} n=${n} env=${env} mem=${mem} />`;
   if (n.kids.length === 1 && isTool(n.kids[0]) && !(n.kids[0].kids || []).length) return html`<${ToolBody} n=${n.kids[0]} env=${env} mem=${mem} />`;
   // D1148: a setup step that is only its agent's or model's turn (the workbench's digest) shows that turn
-  const turn = n.kids.length === 1 && !(n.kids[0].kids || []).length && (isAgent(n.kids[0]) || isModel(n.kids[0])) && phaseKind(n) === "setup" ? n.kids[0] : null;
+  const turn = n.kids.length === 1 && !(n.kids[0].kids || []).length && (isAgent(n.kids[0]) || isModel(n.kids[0])) && boxOf(n) === "setup" ? n.kids[0] : null;
   if (turn) return html`<${Body} n=${turn} env=${env} a=${a} mem=${memoryOf(turn.id)} />`;
   const hd = headOf(n);
   if (hd === "dse") return html`<${SearchBody} n=${n} a=${a} env=${env} />`;
@@ -90,9 +90,9 @@ export function PassSummary({ p, nodes, a, N, head = true }) {
   const total = Object.values(kinds).reduce((x, y) => x + y, 0) + shown || 1, order = Object.keys(COLORS).filter(k => kinds[k]);
   const said = [...order.map(k => [workLabel(k), kinds[k]]), ...(shown ? [["idle", shown]] : [])].sort((x, y) => y[1] - x[1]);
   const live = nodes.some(n => n.t1 == null), failed = nodes.some(n => n.failed);
-  const cand = nodes.map(candidateOf).find(Boolean) || "";
-  const meas = nodes.filter(n => isTool(n) && phaseKind(n) === "measure").map(n => metricsOf(stdoutOf(n))).find(m => Object.keys(m).length) || {};
-  const steps = top.filter(n => phaseKind(n) !== "setup");
+  const cand = nodes.map(designOf).find(Boolean) || "";
+  const meas = nodes.filter(n => isTool(n) && boxOf(n) === "measure").map(n => metricsOf(stdoutOf(n))).find(m => Object.keys(m).length) || {};
+  const steps = top.filter(n => boxOf(n) !== "setup");
   return html`${head ? html`<${Head} cls="alt-ihead" stripe=${COLORS.setup} title=${passName(p)}>
       <${Pill} tone=${live ? "run" : failed ? "bad" : "ok"}>${live ? "running" : failed ? "failed" : "done"}<//>
       <span class="muted">${dur(t1 - t0)}</span><//>` : ""}

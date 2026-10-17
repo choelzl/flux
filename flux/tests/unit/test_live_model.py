@@ -1,28 +1,24 @@
 """Live scopes sparse/parallel passes and resumed starts without mixing their tasks."""
 
-import base64
 import json
 import shutil
-import subprocess
 from pathlib import Path
 
 import pytest
+
+import live_js
 
 STATIC = Path(__file__).parents[2] / "interfaces/web/src/flux_web/static"
 pytestmark = pytest.mark.skipif(shutil.which("node") is None, reason="node is not on PATH")
 
 
 def evaluate(events, expression):
-    uri = lambda p: "data:text/javascript;base64," + base64.b64encode((STATIC / p).read_bytes()).decode()   # noqa: E731
-    script = """Promise.all([import(process.argv[1]), import(process.argv[2])]).then(([LT, {taskScope, currentTask, taskPass, campaignForStart, taskState, taskWindow}]) => {
-const events = JSON.parse(require('fs').readFileSync(0, 'utf8')), model=LT.model();
+    script = """import * as LT from "./live/events.js"; import { taskScope, currentTask, taskPass, campaignForStart, taskState, taskWindow } from "./live/model.js";
+import { readFileSync } from "fs";
+const events = JSON.parse(readFileSync(0, 'utf8')), model=LT.model();
 for (const event of events) LT.apply(model, event);
-  process.stdout.write(JSON.stringify(EXPRESSION));
-});""".replace("EXPRESSION", expression)
-    result = subprocess.run(["node", "-e", script, uri("live/events.js"), uri("live/model.js")],
-                            input=json.dumps(events), capture_output=True, text=True, timeout=30)
-    assert result.returncode == 0, result.stderr
-    return json.loads(result.stdout)
+process.stdout.write(JSON.stringify(EXPRESSION));""".replace("EXPRESSION", expression)
+    return live_js.run(script, json.dumps(events))
 
 
 def start(id, t, parent=None, name="generation: draft", **params):

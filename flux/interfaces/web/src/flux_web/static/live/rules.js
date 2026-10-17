@@ -1,17 +1,16 @@
 // Live (D1095): how a task, a try, a pass ended -- the rules every view judges by (the tree's lines,
 // the graph's boxes, the chain's chips), in one place. Plain functions of the task model, no page.
 
-import { phaseKind } from "./work_style.js";
-import { candidateOf, flowBoxes, taskLabel } from "./views.js";
+import { boxOf } from "./facts.js";
+import { designOf, flowBoxes, taskLabel } from "./views.js";
 
 export const CRIT = /^\s*critique\s*:/i;
 export const STAGE = /^\s*(simulation|analytical)\s*:/i;
-export const AI = /^\s*(agent|llm|model)\b/i;
 export const isCritique = n => CRIT.test(String(n.name));
 
 /** D1082: a design that got past its failures -- finished well, its last step ended well (not one cut off). */
 const getsPast = p => {
-  if (phaseKind(p) !== "design" || p.t1 == null || p.failed || p.timedOut || p.interrupted) return false;
+  if (boxOf(p) !== "design" || p.t1 == null || p.failed || p.timedOut || p.interrupted) return false;
   const last = [...(p.kids || [])].sort((a, b) => a.t0 - b.t0).at(-1);
   return !last || (last.t1 != null && !last.failed && !last.interrupted && !last.timedOut);
 };
@@ -25,9 +24,9 @@ export function judge(model, membership) {
   const later = new Map();
   // D1089: a design run that failed (out of time) when a later run of the design in its pass got past it
   const laterPasses = n => {
-    if (phaseKind(n) !== "design") return false;
+    if (boxOf(n) !== "design") return false;
     if (!later.has(n.id)) later.set(n.id, [...(n.parent ? n.parent.kids : model.roots || [])]
-      .some(k => k !== n && k.t0 > n.t0 && phaseKind(k) === "design" && (membership.get(k.id) ?? null) === (membership.get(n.id) ?? null) && getsPast(k)));
+      .some(k => k !== n && k.t0 > n.t0 && boxOf(k) === "design" && (membership.get(k.id) ?? null) === (membership.get(n.id) ?? null) && getsPast(k)));
     return later.get(n.id);
   };
   const recovered = n => { if (laterPasses(n)) return true; for (let p = n.parent; p; p = p.parent) if (getsPast(p) || laterPasses(p)) return true; return false; };
@@ -54,8 +53,8 @@ export function judge(model, membership) {
 /** D1061: a step that is only its one step of the same kind (a choice and its pick) is that step; D1066: a
     choice opens its pick beside a critique of it too; a command is its step's (D1034). */
 export const soleOf = n => {
-  const k = (n?.kids || []).filter(x => !(phaseKind(n) === "choose" && isCritique(x)));
-  return k.length === 1 && phaseKind(k[0]) === phaseKind(n) && !(k[0].kids || []).length && !/^\s*tool\s*:/i.test(String(k[0].name)) ? k[0] : null;
+  const k = (n?.kids || []).filter(x => !(boxOf(n) === "choose" && isCritique(x)));
+  return k.length === 1 && boxOf(k[0]) === boxOf(n) && !(k[0].kids || []).length && !/^\s*tool\s*:/i.test(String(k[0].name)) ? k[0] : null;
 };
 /** What follows a label's kind word ("Check · ut" -> "ut"). */
 export const rest = n => { const l = taskLabel(n), at = l.indexOf(" · "); return at < 0 ? "" : l.slice(at + 3); };
@@ -77,7 +76,7 @@ export const numbersOf = (n, goals = []) => {
     .slice(0, 3).map(([, k, v]) => `${k} ${v.trim()}`).join(" · ");
 };
 /** The design a try made: its draft's own, the check after it, or the design it was asked for. */
-export const madeOf = (t, opens = t.lead) => candidateOf(t.lead) || t.steps.map(candidateOf).find(Boolean)
+export const madeOf = (t, opens = t.lead) => designOf(t.lead) || t.steps.map(designOf).find(Boolean)
   || (/\S+#\S+/.exec(String(t.lead.params?.["turn why"] || opens.why || t.lead.why || "")) || [""])[0] || "";
 
 /** Designs said by their id (D1059): only the loop's own name goes ("#4") -- a part's keeps its part

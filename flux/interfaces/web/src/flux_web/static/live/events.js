@@ -2,34 +2,27 @@
 // with recorded journals (flux/tests/unit/test_live_events.py). `apply(model, event)` one journal line; `applyLive`
 // the live state; `settle` a run that ended with tasks still open. Nothing here touches the page.
 
+import * as L from "./legacy.js";
+import { isAgent } from "./facts.js";
+
 const LOOP_MARKS = new Set(["pass", "ended", "waiting", "outputs"]);
 
 export const model = () => ({ nodes: new Map(), roots: [], marks: [], standings: new Map() });
 
-const isAgent = n => /^\s*agent\s*:/i.test(String(n.name));
 const noteOn = (m, parent, note) => { if (parent) (parent.notes || (parent.notes = [])).push(note); else (m.notes || (m.notes = [])).push(note); };
 
-// D1148: the quiet setup steps (D1047) -- one written at its end, its start dated back, in a journal before D1143
-const QUIET_SETUP = /^\s*(knowledge\s*:|propose\s*:\s*decompose|gate\s*:\s*(tools|the problem))/i;
-/** D1148: a quiet step written after the tasks it ran (a journal before D1143: the workbench's agent turn a top
-    task, the step after it) takes them in, as the engine now writes them -- each sibling that began in the step's
-    time and already ended, no pass mark since (the same pass). Setup then lists the step once, its agent its pill. */
-function takeIn(m, step, sibs) {
-  const lastMark = m.marks.reduce((s, k) => k.name === "pass" ? Math.max(s, k.seq || 0) : s, 0);
-  const inside = sibs.filter(k => k.t1 != null && k.t0 >= step.t0 - .002 && k.seq > lastMark);
-  for (const k of inside) { sibs.splice(sibs.indexOf(k), 1); k.parent = step; step.kids.push(k); }
-}
 
 /** One event of the journal into the model; "hello" (a new start) begins it afresh. Returns what the page may
     want to know besides: {reset} or {question}. */
 export function apply(m, e) {
-  if (e.ev === "hello") { m.nodes.clear(); m.roots.length = 0; m.standings.clear(); m.marks.length = 0; m.notes = []; m.before = 0; m.cut = false; m.settled = false; return { reset: true }; }
+  if (e.ev === "hello") { m.format = Number(e.format) || 1; m.nodes.clear(); m.roots.length = 0; m.standings.clear(); m.marks.length = 0; m.notes = []; m.before = 0; m.cut = false; m.settled = false; return { reset: true }; }
   if (e.ev === "window") { m.before = Number(e.before) || 0; m.cut = !!e.cut; return {}; }   // D759: passes left out before the window
   if (e.ev === "start") {
-    const n = { id: e.id, name: e.name, why: e.why, params: e.params, t0: e.t, seq: m.seq = (m.seq || 0) + 1, fields: {}, kids: [], parent: null };
+    // D1234: the facts the engine says of it (D1233), read through facts.js -- a journal before them by its rules
+    const n = { id: e.id, name: e.name, why: e.why, params: e.params, tags: e.tags || {}, fmt: m.format || 1, t0: e.t, seq: m.seq = (m.seq || 0) + 1, fields: {}, kids: [], parent: null };
     m.nodes.set(e.id, n);
     const p = e.parent != null && m.nodes.get(e.parent);
-    if (QUIET_SETUP.test(String(e.name))) takeIn(m, n, p ? p.kids : m.roots);
+    if (n.fmt < 2 && L.QUIET_SETUP.test(String(e.name))) L.takeIn(m, n, p ? p.kids : m.roots);   // D1148: a journal before D1143
     if (p) { n.parent = p; p.kids.push(n); } else m.roots.push(n);
   } else if (e.ev === "update") {
     const u = m.nodes.get(e.id);
@@ -38,6 +31,7 @@ export function apply(m, e) {
     const d = m.nodes.get(e.id);
     if (!d) return {};
     d.t1 = e.t; d.seconds = e.seconds; d.output = e.output; d.interrupted = false;          // D928: its own end, not a settled one
+    if (e.tags) d.tags = { ...d.tags, ...e.tags };                                         // D1233: how its work came out
     // D757: a tool that exited with an error failed, though its step went on
     d.failed = e.failed || (String(d.name).startsWith("tool:") && e.output && e.output.exit != null && e.output.exit !== 0)
       // a check that said an error ended failed: a journal from before its `failed` was written ("test: build" not built)
@@ -56,14 +50,15 @@ export function apply(m, e) {
       m.nodes.delete(d.id);
       const sib = d.parent ? d.parent.kids : m.roots, at = sib.indexOf(d);
       if (at >= 0) sib.splice(at, 1);
-      noteOn(m, d.parent, { name: d.name, why: d.why, t: d.t0, output: e.output || {}, seq: d.seq });
+      noteOn(m, d.parent, { name: d.name, why: d.why, t: d.t0, output: e.output || {}, seq: d.seq, ...(d.fmt >= 2 ? { tags: d.tags } : {}) });
     }
   } else if (e.ev === "params") {                 // D1050: a wrapper took in its one agent or model turn: its inputs join
     const pw = m.nodes.get(e.id);
-    if (pw) pw.params = { ...(pw.params || {}), ...(e.params || {}) };
+    if (pw) { pw.params = { ...(pw.params || {}), ...(e.params || {}) }; if (e.tags) pw.tags = { ...pw.tags, ...e.tags }; }
   } else if (e.ev === "publish") m.standings.set(e.key, e.payload);
   else if (e.ev === "note") {                     // D1047: a quiet step (a brief, a frontier) -- on its task, not a task
-    noteOn(m, e.parent != null && m.nodes.get(e.parent), { name: e.name, why: e.why, t: e.t, output: e.output || {}, seq: m.seq = (m.seq || 0) + 1 });
+    noteOn(m, e.parent != null && m.nodes.get(e.parent), { name: e.name, why: e.why, t: e.t, output: e.output || {}, seq: m.seq = (m.seq || 0) + 1,
+      ...(e.tags || m.format >= 2 ? { tags: e.tags || {} } : {}) });
   } else if (e.ev === "mark" && e.name === "question") {
     try { return { question: JSON.parse(e.why) }; } catch (_) { return {}; }
   } else if (e.ev === "mark" && LOOP_MARKS.has(e.name)) {

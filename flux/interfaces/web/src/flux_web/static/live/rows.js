@@ -11,11 +11,11 @@
 // {type: "wait", key, depth, k, title, said} (a box still to come: "waiting", or "not recorded" when a later one ran).
 
 import { dur } from "../format.js";
-import { WORK_COLORS as COLORS, AGENT_COLOR, kindOf, workLabel, phaseKind } from "./work_style.js";
-import { boxKind, candidateOf, flowBoxes, isDraft, ownView, passName, taskLabel, taskNote, waitWord } from "./views.js";
-import { notReached as unreached } from "./inspector/parts.js";
+import { WORK_COLORS as COLORS, AGENT_COLOR, workLabel } from "./work_style.js";
+import { boxOf, isAI, isTurn, noteBox, notReachedOf } from "./facts.js";
+import { boxKind, designOf, flowBoxes, isDraft, ownView, passName, taskLabel, taskNote, waitWord } from "./views.js";
 import { byPass, taskState as state } from "./model.js";
-import { AI, STAGE, checkWord, ended, firstFailing, isCritique, madeOf, numbersOf, rejectedBy, rest, soleOf } from "./rules.js";
+import { STAGE, checkWord, ended, firstFailing, isCritique, madeOf, numbersOf, rejectedBy, rest, soleOf } from "./rules.js";
 
 const TRIES = 5;
 const STRETCH = ["search", "design", "check", "measure"];
@@ -30,7 +30,7 @@ const markOf = (n, J) => n.t1 == null ? "spin"
     selected, passShown (a pass in the inspector: its row the picked one), model, membership, J (rules.js judge), N (namer), goals, isFolded, opened, allTries,
     pass, passView, passNotes, noteShort, scopeRows (every task of the scope, for the boxes still to come). */
 export function lines(rows, v) {
-  const { selected, J, N, goals } = v, out = [], notReached = n => unreached(n, v.tests);
+  const { selected, J, N, goals } = v, out = [], notReached = n => notReachedOf(n, v.tests);
   const ids = new Set(rows.map(r => r.node.id)), kids = new Map();
   for (const r of rows) if (r.parent != null && ids.has(r.parent)) (kids.get(r.parent) || kids.set(r.parent, []).get(r.parent)).push(r);
   // D1012: a task whose one child is of its own kind and has children of its own is one line;
@@ -40,12 +40,12 @@ export function lines(rows, v) {
     const only = kids.get(r.node.id);
     // D1181: not a search's one point -- the work it proposed is the boxes after it (D1054), its own outcome there
     if (only && only.length === 1 && /^\s*tool\s*:/i.test(String(only[0].node.name)) && !(kids.get(only[0].node.id) || []).length
-      && !(phaseKind(r.node) === "search" && ["design", "check", "measure"].includes(phaseKind(only[0].node)))) {
+      && !(boxOf(r.node) === "search" && ["design", "check", "measure"].includes(boxOf(only[0].node)))) {
       kids.delete(r.node.id); merged.set(r.node.id, [only[0].node]); continue;
     }
     for (let k = kids.get(r.node.id); k && k.length === 1; k = kids.get(r.node.id)) {
       const c = k[0], ck = kids.get(c.node.id);
-      if (!ck || !ck.length || phaseKind(c.node) !== phaseKind(r.node) || /^\s*agent\s*:/i.test(String(c.node.name))) break;
+      if (!ck || !ck.length || boxOf(c.node) !== boxOf(r.node) || /^\s*agent\s*:/i.test(String(c.node.name))) break;
       kids.set(r.node.id, ck); merged.set(r.node.id, [...(merged.get(r.node.id) || []), c.node]);
     }
   }
@@ -53,7 +53,7 @@ export function lines(rows, v) {
   const aiOf = new Map();
   for (const r of rows) {
     const only = kids.get(r.node.id);
-    if (only && only.length === 1 && AI.test(String(only[0].node.name)) && !(kids.get(only[0].node.id) || []).length) { aiOf.set(r.node.id, only[0].node); kids.delete(r.node.id); }
+    if (only && only.length === 1 && isTurn(only[0].node) && !(kids.get(only[0].node.id) || []).length) { aiOf.set(r.node.id, only[0].node); kids.delete(r.node.id); }
   }
   // D1037: a merged command says its program
   const note = n => [...(merged.get(n.id) || []).map(c => taskNote(c) || taskLabel(c).replace(/^[^·]*·\s*/, "")), ...(merged.has(n.id) ? [] : [taskNote(n)])]
@@ -62,7 +62,7 @@ export function lines(rows, v) {
   const now = Date.now() / 1000, secs = n => n.seconds ?? (n.t1 ?? now) - n.t0;
   const span = nodes => dur(Math.max(...nodes.map(n => n.t1 ?? now)) - Math.min(...nodes.map(n => n.t0)));
   const fold = (key, collapsed, label) => ({ key, collapsed, label });
-  const colour = (n, kind = phaseKind(n)) => COLORS[kind] || (AI.test(String(n.params?.turn || n.name)) ? AGENT_COLOR : COLORS.setup);
+  const colour = (n, kind = boxOf(n)) => COLORS[kind] || (isAI(n) ? AGENT_COLOR : COLORS.setup);
   const aiPill = (n, title) => ({ k: AGENT_COLOR, text: "AI", title });
   const partial = nodes => nodes.some(n => J.hardFail(n) || n.rejected || J.marked(n.id));
   // D1044: a box's line says the box, then what it worked on; a step under it drops the box's name
@@ -71,9 +71,9 @@ export function lines(rows, v) {
     // D1064: a critique says whose and what it said ("critique · #3 · rejected")
     const verdict = String(n.output?.verdict ?? n.fields?.verdict ?? ""), of = String(n.why || "").replace(/@\S*$/, "").trim();
     const crit = ["critique", of && !/^round\b/i.test(of) ? N.short(of) : "", /^(rejected|sent back)/i.test(verdict) ? "rejected" : verdict ? "no objection" : ""].filter(Boolean).join(" · ");
-    if (isCritique(n)) return box ? [{ b: workLabel(phaseKind(n) || "check") }, ` ${crit}`] : [crit];
-    if (box) return [{ b: workLabel(phaseKind(n) || "setup") }, r ? { cls: "alt-what", text: ` ${N.shortAll(r)}`, title: r } : ""];
-    const parentKind = n.parent ? phaseKind(n.parent) : null, kind = phaseKind(n);
+    if (isCritique(n)) return box ? [{ b: workLabel(boxOf(n) || "check") }, ` ${crit}`] : [crit];
+    if (box) return [{ b: workLabel(boxOf(n) || "setup") }, r ? { cls: "alt-what", text: ` ${N.shortAll(r)}`, title: r } : ""];
+    const parentKind = n.parent ? boxOf(n.parent) : null, kind = boxOf(n);
     if (!r) return [kind ? kind : full];                                    // D1045: "Check" alone under Design is "check"
     return [N.shortAll(!parentKind || !kind || parentKind === kind || /^gate\b/.test(r) ? r : `${kind} · ${r}`)];
   };
@@ -82,7 +82,7 @@ export function lines(rows, v) {
   const line = (r, depth, named = null, box = false, extra = [], flat = false) => {
     const n = box ? ownView(r.node) : r.node, under = flat ? [] : kids.get(n.id) || [], finished = n.t1 != null;
     const collapsed = !!under.length && v.isFolded(n.id, finished, holds(n.id) && n.id !== selected);
-    const kind = phaseKind(n), opens = aiOf.get(n.id) || n, label = named ? [].concat(named) : said(n, box), rejected = rejectedBy(n);
+    const kind = boxOf(n), opens = aiOf.get(n.id) || n, label = named ? [].concat(named) : said(n, box), rejected = rejectedBy(n);
     const picked = !v.passShown && (n.id === selected || opens.id === selected || (merged.get(n.id) || []).some(c => c.id === selected));   // D1064: its merged command too
     const nums = STAGE.test(String(n.name)) ? numbersOf(n, goals) : "";
     out.push({ type: "row", key: `t:${n.id}`, depth, cls: `${box ? "box" : "step"}${secs(n) < .05 && !under.length ? " quiet" : ""}`, k: colour(n, kind),
@@ -94,7 +94,7 @@ export function lines(rows, v) {
         n.failed && kind === "check" && (n.kids || []).length && firstFailing(n) ? { cls: "alt-what", text: ` · ${firstFailing(n)}` } : "",   // D1063
         collapsed && notReached(n).length ? { cls: "muted small", text: ` · ${notReached(n).join(", ")} not run` } : ""],   // D1065
       pills: [isCritique(n) ? { text: "critic" } : null,                                              // D1068: a critic, then the ai
-        AI.test(String(n.params?.turn || n.name)) || aiOf.has(n.id) ? aiPill(n, (aiOf.get(n.id) || n).name) : null].filter(Boolean),
+        isAI(n) || aiOf.has(n.id) ? aiPill(n, (aiOf.get(n.id) || n).name) : null].filter(Boolean),
       time: dur(secs(n)) });
     if (!collapsed) runs(under, depth + 1);      // D1038: its children grouped as the pass's are
     if (!collapsed && under.length) skipRows(n, depth + 1);
@@ -119,15 +119,15 @@ export function lines(rows, v) {
     if (run.length < 2) return line(run[0], depth, null, box);
     const nodes = run.map(r => r.node), first = nodes[0], key = `again:${first.id}`, finished = nodes.every(n => n.t1 != null);
     const collapsed = v.isFolded(key, finished, nodes.some(n => holds(n.id)));
-    const opensTries = phaseKind(first) === "design";             // D1045: a step repeated elsewhere is one line, ×N
-    const ai = nodes.some(n => aiOf.has(n.id) || AI.test(String(n.params?.turn || n.name)));
+    const opensTries = boxOf(first) === "design";             // D1045: a step repeated elsewhere is one line, ×N
+    const ai = nodes.some(n => aiOf.has(n.id) || isAI(n));
     // D1181: an agent's turns again and again inside a try are its turns, not tries of their own
-    const word = nodes.every(n => AI.test(String(n.name))) && first.parent && isDraft(first.parent) ? "turn" : "try";
-    toggleRow(key, depth, box ? "box" : "step", COLORS[phaseKind(first)] || COLORS.setup, nodes, said(first, box),
+    const word = nodes.every(n => isTurn(n)) && first.parent && isDraft(first.parent) ? "turn" : "try";
+    toggleRow(key, depth, box ? "box" : "step", COLORS[boxOf(first)] || COLORS.setup, nodes, said(first, box),
       [{ count: true, text: `×${run.length}`, title: `${run.length} ${word === "try" ? "tries" : "turns"} in this pass` }, ai ? { k: AGENT_COLOR, text: "AI" } : null].filter(Boolean),
       span(nodes), opensTries ? fold(key, collapsed, taskLabel(first)) : null);
     if (!collapsed && opensTries) newestFirst(key, run.map((r, i) => [r, i]), ([r, i]) => {
-      const what = candidateOf(r.node) || note(r.node);
+      const what = designOf(r.node) || note(r.node);
       line(r, depth + 1, [`${word} ${i + 1}`], false, what ? [{ cls: "alt-what", text: ` ${what}` }] : []);
     }, depth + 1);
   };
@@ -143,7 +143,7 @@ export function lines(rows, v) {
     const run = list.slice(k, k + 2 * m), nodes = run.map(r => r.node), first = nodes[0], key = `again:${first.id}`;
     const collapsed = v.isFolded(key, nodes.every(n => n.t1 != null), nodes.some(n => holds(n.id)));
     const last = [run[2 * m - 2].node, run[2 * m - 1].node];
-    out.push({ type: "row", key: `g:${key}`, depth, cls: "", k: COLORS[phaseKind(first)] || COLORS.setup, fold: fold(key, collapsed, taskLabel(first)),
+    out.push({ type: "row", key: `g:${key}`, depth, cls: "", k: COLORS[boxOf(first)] || COLORS.setup, fold: fold(key, collapsed, taskLabel(first)),
       act: { toggle: key, collapsed }, btnCls: nodes.every(n => n.t1 != null) ? "" : "running",
       mark: nodes.every(n => n.t1 != null) ? doneMark(ended(last), partial(nodes)) : "spin",
       name: [taskLabel(first), { cls: "muted small", text: ` · ${taskLabel(nodes[1]).replace(/^[^·]*·\s*/, "")}` }],
@@ -152,7 +152,7 @@ export function lines(rows, v) {
   };
   // D1041: one stretch of a box's work in a row is one line of that box, its tasks under it
   const stretch = (run, depth, box = false) => {
-    const nodes = run.map(r => r.node), kind = phaseKind(nodes[0]), key = `stretch:${nodes[0].id}`;
+    const nodes = run.map(r => r.node), kind = boxOf(nodes[0]), key = `stretch:${nodes[0].id}`;
     const collapsed = v.isFolded(key, nodes.every(n => n.t1 != null), nodes.some(n => holds(n.id)));
     toggleRow(key, depth, box ? "box" : "step", COLORS[kind] || COLORS.setup, nodes, [box ? { b: workLabel(kind) } : workLabel(kind)], [], span(nodes),
       fold(key, collapsed, workLabel(kind)));
@@ -160,9 +160,9 @@ export function lines(rows, v) {
   };
   const runs = (list, depth, inStretch = false, box = false) => {
     for (let k = 0; k < list.length;) {
-      const kind = phaseKind(list[k].node);
+      const kind = boxOf(list[k].node);
       let s = k + 1;
-      while (box && !inStretch && STRETCH.includes(kind) && s < list.length && phaseKind(list[s].node) === kind) s++;
+      while (box && !inStretch && STRETCH.includes(kind) && s < list.length && boxOf(list[s].node) === kind) s++;
       if (s - k >= 2 && new Set(list.slice(k, s).map(r => taskLabel(r.node))).size > 1) { stretch(list.slice(k, s), depth, box); k = s; continue; }
       let e = k + 1;
       while (e < list.length && taskLabel(list[e].node) === taskLabel(list[k].node) && !(kids.get(list[k].node.id) || []).length === !(kids.get(list[e].node.id) || []).length) e++;
@@ -184,7 +184,7 @@ export function lines(rows, v) {
   };
   const draftsIn = n => {
     // D1181: a run that is its one draft (D1012 merged them): that draft is its try, its turns the try's steps
-    const wrap = (merged.get(n.id) || []).find(c => isDraft(c) && !AI.test(String(c.name)));
+    const wrap = (merged.get(n.id) || []).find(c => isDraft(c) && !isTurn(c));
     if (wrap) return [{ lead: wrap, steps: (kids.get(n.id) || []).map(r => r.node) }];
     const t = triesIn(n); if (t) return t; const k = (kids.get(n.id) || []).map(r => r.node), i = k.findIndex(isDraft);
     return i >= 0 ? [{ lead: k[i], steps: k.filter((_, j) => j !== i) }] : null; };   // one draft: every other step is its
@@ -194,7 +194,7 @@ export function lines(rows, v) {
   const unchecked = t => {
     const lead = t.lead, sib = lead.parent?.kids || [], i = sib.indexOf(lead);
     if (t.run || i < 0 || lead.t1 == null) return false;
-    const j = sib.findIndex((c, k) => k > i && isDraft(c)), isCheck = c => phaseKind(c) === "check";
+    const j = sib.findIndex((c, k) => k > i && isDraft(c)), isCheck = c => boxOf(c) === "check";
     if (sib.slice(i + 1, j < 0 ? undefined : j).some(isCheck) || !sib.some(isCheck)) return false;
     return j >= 0 || (lead.parent.t1 != null && !!lead.parent.failed);
   };
@@ -204,7 +204,7 @@ export function lines(rows, v) {
     const under = t.run ? (kids.get(t.lead.id) || []) : t.steps.map(n => ({ node: n, parent: null }));
     // D1181: the run's last draft, when the run failed with no step of the try failing -- no design came of it
     const run = t.run ? null : t.lead.parent, lastOf = run && !(run.kids || []).some(k => k !== t.lead && k.t0 > t.lead.t0 && isDraft(k));
-    const noDesign = lastOf && run.t1 != null && phaseKind(run) === "design" && J.hardFail(run) ? String(run.output?.error || "").split("\n")[0] || "no design" : "";
+    const noDesign = lastOf && run.t1 != null && boxOf(run) === "design" && J.hardFail(run) ? String(run.output?.error || "").split("\n")[0] || "no design" : "";
     const collapsed = onlyLine || !under.length || v.isFolded(key, !running, all.some(n => holds(n.id)) && all[0]?.id !== selected);
     const opens = aiOf.get(t.lead.id) || t.lead, picked = !v.passShown && all.some(n => n.id === selected) && (onlyLine || opens.id === selected || t.lead.id === selected);   // D1075
     const what = made(t);
@@ -215,19 +215,19 @@ export function lines(rows, v) {
     for (const x of t.steps.flatMap(deep)) x.tryNo = t.part ? null : i;          // D1182: its steps say the try too
     opens.tryFailed = !running && (failedStep || unbuilt || noDesign) && !opens.failed ? fail || "its check failed" : null;   // D1075: the panel says how the try ended
     const shortMade = N.short(what), asPart = t.part && shortMade.startsWith(t.part.split(" ")[0]);   // D1066: "lo#1", not "lo #1"
-    out.push({ type: "row", key: `try:${t.lead.id}`, depth, cls: "step try", k: COLORS[phaseKind(t.lead) || "design"] || COLORS.design,
+    out.push({ type: "row", key: `try:${t.lead.id}`, depth, cls: "step try", k: COLORS[boxOf(t.lead) || "design"] || COLORS.design,
       fold: under.length && !onlyLine ? fold(key, collapsed, t.part || `try ${i}`) : null,
       act: { task: opens }, btnCls: state(opens), picked, title: t.lead.name,
       mark: running ? "spin" : unbuilt ? { tone: "warn", title: "refused before it was built" }
         : !failedStep && (opens.timedOut || t.lead.timedOut) ? markOf(opens.timedOut ? opens : t.lead, J)
         : doneMark(!!failedStep || !!t.lead.failed || !!fail, all.some(n => J.marked(n.id))),
       name: [asPart ? shortMade : t.part || `try ${i}`, what && !asPart ? { cls: "alt-what", text: ` ${shortMade}`, title: what } : "", fail ? { cls: "alt-what", text: ` · ${fail}` } : ""],
-      pills: aiOf.has(t.lead.id) || AI.test(String(t.lead.params?.turn || t.lead.name)) ? [{ k: AGENT_COLOR, text: "AI" }] : [],
+      pills: aiOf.has(t.lead.id) || isAI(t.lead) ? [{ k: AGENT_COLOR, text: "AI" }] : [],
       time: span(all) });
     if (!collapsed) runs(under, depth + 1);
   };
   const boxLine = (nodes, depth) => {
-    const first = nodes[0], last = nodes.at(-1), kind = phaseKind(first) || "setup", key = `box:${first.id}`;
+    const first = nodes[0], last = nodes.at(-1), kind = boxOf(first) || "setup", key = `box:${first.id}`;
     // D1045: only a design has tries -- its drafts, each with the checks after it, numbered across its runs
     let tries = kind === "design" ? nodes.flatMap(n => draftsIn(n) || [{ lead: n, steps: [], run: true }]) : null;
     if (tries && tries.length < 2) tries = null;
@@ -244,16 +244,16 @@ export function lines(rows, v) {
     const picked = !v.passShown && nodes.length === 1 && (first.id === selected || opens.id === selected || (merged.get(first.id) || []).some(c => c.id === selected));   // D1065
     // D1055; D1063: the newest design's latest stage -- not the evaluation's, which measures the composition again
     const stages = kind === "measure" ? all.filter(n => STAGE.test(String(n.name)) && numbersOf(n, goals)) : [];
-    const newest = candidateOf(stages.filter(n => !/^\s*evaluation\b/i.test(String(n.parent?.name || ""))).at(-1) || stages.at(-1) || {});
-    const staged = (newest && stages.filter(n => candidateOf(n) === newest).at(-1)) || stages.at(-1) || null;
+    const newest = designOf(stages.filter(n => !/^\s*evaluation\b/i.test(String(n.parent?.name || ""))).at(-1) || stages.at(-1) || {});
+    const staged = (newest && stages.filter(n => designOf(n) === newest).at(-1)) || stages.at(-1) || null;
     const planned = kind === "plan" ? String(last.output?.picked ?? last.output?.next ?? "") : "";
     const lastTry = kind === "design" ? (tries || lone || draftsIn(last) || []).at(-1) : null, made1 = lastTry ? made(lastTry) : "";   // D1061
     const failing = kind === "check" ? [firstFailing(last), notReached(last).length ? `${notReached(last).join(", ")} not run` : ""].filter(Boolean).join(" · ") : "";   // D1061; D1065
     const decided = kind === "choose" ? all.map(n => n.output?.decision).filter(Boolean).at(-1) : "";   // D1063
     const picked1 = decided ? (ended(nodes) ? `${N.short(decided)} rejected` : `★ ${N.short(decided)}`) : "";
-    const what = staged ? `${String(staged.name).split(":")[1].trim()}${candidateOf(staged) ? ` ${N.short(candidateOf(staged))}` : ""} · ${numbersOf(staged, goals)}`
+    const what = staged ? `${String(staged.name).split(":")[1].trim()}${designOf(staged) ? ` ${N.short(designOf(staged))}` : ""} · ${numbersOf(staged, goals)}`
       : planned ? `picked ${planned}` : kind === "plan" ? "" : picked1 || [made1 || rest(last), failing].filter(Boolean).join(" · ");
-    const ai = all.some(n => AI.test(String(n.params?.turn || n.name)) || aiOf.has(n.id)), crit = all.some(isCritique), rejected = all.some(rejectedBy);
+    const ai = all.some(n => isAI(n) || aiOf.has(n.id)), crit = all.some(isCritique), rejected = all.some(rejectedBy);
     out.push({ type: "row", key: `box:${first.id}`, depth, cls: "box", k: COLORS[kind] || COLORS.setup,
       fold: tries || steps.length ? fold(key, collapsed, workLabel(kind)) : null,
       act: { task: opens }, btnCls: state(lone ? opens : nodes.length === 1 ? first : last), picked, title: lone ? opens.name : nodes.map(n => n.name).join(" · "),
@@ -270,20 +270,20 @@ export function lines(rows, v) {
     else { runs(steps, depth + 1); if (nodes.length === 1) skipRows(first, depth + 1); }
   };
   // D1054: a check that passed inside a design is the Check box's; one that failed stays the try's
-  const passedIn = n => (kids.get(n.id) || []).filter(r => phaseKind(r.node) === "check" && boxKind(r.node) === "check").map(r => r.node);
+  const passedIn = n => (kids.get(n.id) || []).filter(r => boxOf(r.node) === "check" && boxKind(r.node) === "check").map(r => r.node);
   const boxes = (list, depth) => {
     // D1054: a search that holds the work it proposed (a sweep's point) is the Search line alone, that work the boxes after it
     list = list.flatMap(r => {
-      if (phaseKind(r.node) !== "search") return [r];
-      const own = kids.get(r.node.id) || [], work = own.filter(c => ["design", "check", "measure"].includes(phaseKind(c.node)));
+      if (boxOf(r.node) !== "search") return [r];
+      const own = kids.get(r.node.id) || [], work = own.filter(c => ["design", "check", "measure"].includes(boxOf(c.node)));
       if (!work.length) return [r];
       kids.set(r.node.id, own.filter(c => !work.includes(c)));
       return [r, ...work];
     });
     for (let k = 0; k < list.length;) {
-      const kind = phaseKind(list[k].node) || "setup";
+      const kind = boxOf(list[k].node) || "setup";
       let e = k + 1;
-      while (e < list.length && (phaseKind(list[e].node) || "setup") === kind) e++;
+      while (e < list.length && (boxOf(list[e].node) || "setup") === kind) e++;
       const nodes = list.slice(k, e).map(r => r.node);
       k = e;
       // D1059; D1063: the evaluation's own children, not what the tree drew under it
@@ -295,7 +295,7 @@ export function lines(rows, v) {
       boxLine(nodes, depth);
       if (!moved.length) continue;
       let f = k;                                           // the Check box after it holds them first
-      while (f < list.length && phaseKind(list[f].node) === "check") f++;
+      while (f < list.length && boxOf(list[f].node) === "check") f++;
       boxLine([...moved.map(([, c]) => c), ...list.slice(k, f).map(r => r.node)], depth);
       k = f;
     }
@@ -321,7 +321,7 @@ export function lines(rows, v) {
           depth = 1;
         }
         // D1012: every setup task of the pass in one Setup line; D1094: one step is a Setup line too
-        const lead = g.p != null ? g.rows.filter(r => phaseKind(r.node) === "setup") : [], others = g.rows.filter(r => !lead.includes(r));
+        const lead = g.p != null ? g.rows.filter(r => boxOf(r.node) === "setup") : [], others = g.rows.filter(r => !lead.includes(r));
         if (lead.length > 1) {
           const key = `setup:${g.p}`, nodes = lead.map(r => r.node);
           const collapsed = v.isFolded(key, nodes.every(n => n.t1 != null), nodes.some(n => holds(n.id))) || (!v.opened.has(key) && !nodes.some(n => holds(n.id)));
@@ -331,7 +331,7 @@ export function lines(rows, v) {
           if (!collapsed) runs(lead, depth + 1);
         } else lead.forEach(r => { const l = taskLabel(r.node), at = l.indexOf(" · "); line(r, depth, [`Setup · ${at < 0 ? l : l.slice(at + 3)}`]); });
         // D1054: a search done as a note (D1052) is the pass's Search line
-        const searched = g.p != null && !others.some(r => phaseKind(r.node) === "search") ? v.passNotes(g.p).filter(n => kindOf(n.name, n.why) === "search") : [];
+        const searched = g.p != null && !others.some(r => boxOf(r.node) === "search") ? v.passNotes(g.p).filter(n => noteBox(n) === "search") : [];
         if (searched.length) out.push({ type: "row", key: `note:${g.p}`, depth, cls: "box", k: COLORS.search, fold: null, act: { box: { p: g.p, key: "search" } },
           btnCls: "", mark: doneMark(false, false), name: [{ b: "Search" }, { cls: "alt-what", text: ` ${searched.map(n => v.noteShort(n, g.p)).join(", ")}` }], pills: [], noTime: true });
         boxes(others, depth);
@@ -347,8 +347,8 @@ export function lines(rows, v) {
     boxList(runsOf, key, kind) {
       const own = n => {   // D1065; D1066: "critique · #3" -- its mark says the verdict, the narrow line keeps the design
         if (isCritique(n)) { const of = String(n.why || "").replace(/@\S*$/, "").trim(); return of && !/^round\b/i.test(of) ? `critique · ${N.short(of)}` : "critique"; }
-        const full = taskLabel(n), at = full.indexOf(" · "), r = at >= 0 && phaseKind(n) === kind ? full.slice(at + 3) : full;
-        const c = candidateOf(n), named = /^\s*test\s*:\s*(?:fast )?check\b/i.test(String(n.name)) ? `check · ${r}` : r;      // D1054
+        const full = taskLabel(n), at = full.indexOf(" · "), r = at >= 0 && boxOf(n) === kind ? full.slice(at + 3) : full;
+        const c = designOf(n), named = /^\s*test\s*:\s*(?:fast )?check\b/i.test(String(n.name)) ? `check · ${r}` : r;      // D1054
         return N.shortAll(kind === "check" && c && !named.includes(c) && !named.includes(N.short(c)) ? `${named} · ${c}` : named);   // D1059
       };
       if (kind === "design") {                    // D1045: the same tries as the tree; D1059; D1061: runs of other names are parts

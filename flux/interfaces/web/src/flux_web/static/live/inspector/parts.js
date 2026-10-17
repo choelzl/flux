@@ -1,16 +1,15 @@
 // Live's inspector (D982, D1095): what a task is and what it gave -- plain functions of a task and the
 // task model, no page.
 
-import { AGENT_COLOR, WORK_COLORS as COLORS, phaseKind } from "../work_style.js";
-import { candidateOf, ranFor, taskLabel } from "../views.js";
+import { AGENT_COLOR, WORK_COLORS as COLORS, boxOf } from "../work_style.js";
+import { designOf, stepOf, taskLabel } from "../views.js";
+import { isAgent, isModel, notReachedOf } from "../facts.js";
 import { num, plural } from "../../format.js";
 
-export const turnOf = n => String(n.params?.turn || n.name);          // D1050: a wrapper's taken-in turn
-export const isAgent = n => /^\s*agent\s*:/i.test(turnOf(n));
+export { isAgent, isModel };
 export const isTool = n => /^\s*tool\s*:/i.test(String(n.name));
-export const isModel = n => /^\s*(llm\b|model\b)/i.test(turnOf(n));
 export const headOf = n => String(n.name).toLowerCase().split(":")[0].trim();
-export const colorOf = n => isAgent(n) ? AGENT_COLOR : COLORS[phaseKind(n)] || COLORS.setup;
+export const colorOf = n => isAgent(n) ? AGENT_COLOR : COLORS[boxOf(n)] || COLORS.setup;
 export const running = n => n.t1 == null;
 /** A task's pill: its tone and its word -- D1075: a try whose check failed is a failed try. */
 export const stateOf = n => running(n) ? ["run", "running"] : n.interrupted ? ["warn", "interrupted"] : n.failed ? ["bad", "failed"] : n.timedOut ? ["warn", "time limit"]
@@ -44,8 +43,7 @@ export const meanOf = d => { const xs = Object.values(d || {}).filter(x => typeo
 export const cell = v => v == null ? "—" : typeof v === "object" ? Object.entries(v).map(([k, x]) => `${k} ${typeof x === "number" ? num(x) : x}`).join(" · ") : num(v);
 
 /** D1065: the document's checks a check stopped at a failure never reached. */
-export const notReached = (n, tests = []) => n.failed && tests.length && (n.kids || []).some(k => k.failed)
-  ? tests.filter(t => !(n.kids || []).some(k => ranFor(k) === t)) : [];
+export const notReached = notReachedOf;
 /** D1066: a label whose "what" is the loop's own name is its kind alone ("Design", not "Design · demo-x");
     every design said by its id (rules.js namer). */
 export const plain = (t, N) => { const at = String(t).lastIndexOf(" · "); return at > 0 && N.loopNamed(String(t).slice(at + 3)) ? String(t).slice(0, at) : N.shortAll(String(t)); };
@@ -67,7 +65,7 @@ export function summaryOf(x) {
   const leaves = x.kids?.length ? x.kids.flatMap(k => k.kids?.length ? k.kids : [k]) : [x];
   // D1059: a step that failed says so first -- which test, and how many of its cases
   const bad = leaves.length > 1 && leaves.find(l => l.failed && failingOf(stdoutOf(l))?.failing);
-  if (bad) { const f = failingOf(stdoutOf(bad)); return `${ranFor(bad) || "a test"} ${f.failing} failing${f.of != null ? ` of ${f.of}` : ""}`; }
+  if (bad) { const f = failingOf(stdoutOf(bad)); return `${stepOf(bad) || "a test"} ${f.failing} failing${f.of != null ? ` of ${f.of}` : ""}`; }
   // D1068: several checks that passed -- how many, not the first one's own line
   if (leaves.length > 1 && leaves.every(l => !l.failed && failingOf(stdoutOf(l)))) return `${leaves.length} checks, none failing`;
   for (const l of leaves) {
@@ -90,10 +88,10 @@ export function usualOf(n, nodes) {
     dictionary's by its mean) -- and the record's (D1094: the loop's, from every pass), by the goals' directions. */
 export function bestOf(n, env) {
   const goals = Object.fromEntries((env.goals || []).map(g => [g.metric, /max/i.test(g.direction || "") ? 1 : -1]));
-  const best = {}, stageOf = x => String(x.why || "").split(/\s+/).slice(0, 2).join(" "), mine = candidateOf(n);
+  const best = {}, stageOf = x => String(x.why || "").split(/\s+/).slice(0, 2).join(" "), mine = designOf(n);
   for (const x of env.nodes.values()) {
-    if (x === n || x.t1 == null || x.failed || x.name !== n.name || stageOf(x) !== stageOf(n) || x.t0 > n.t0 || (mine && candidateOf(x) === mine)) continue;
-    const who = candidateOf(x);
+    if (x === n || x.t1 == null || x.failed || x.name !== n.name || stageOf(x) !== stageOf(n) || x.t0 > n.t0 || (mine && designOf(x) === mine)) continue;
+    const who = designOf(x);
     for (const [k, v] of Object.entries(metricsOf(stdoutOf(x)))) if (goals[k] && (best[k] == null || goals[k] * v > goals[k] * best[k].v)) best[k] = { v, who };
     for (const [k, d] of Object.entries(dictsOf(stdoutOf(x)))) {
       const m = meanOf(d);
@@ -114,7 +112,7 @@ export function measured(nodes) {
   const by = new Map();
   for (const x of nodes.values()) {
     if (x.t1 == null || x.failed || !isTool(x)) continue;
-    const c = candidateOf(x), m = { ...metricsOf(stdoutOf(x)), ...dictsOf(stdoutOf(x)) };
+    const c = designOf(x), m = { ...metricsOf(stdoutOf(x)), ...dictsOf(stdoutOf(x)) };
     if (c && Object.keys(m).length) by.set(c, { ...(by.get(c) || {}), ...m });
   }
   for (const x of nodes.values()) {
@@ -165,4 +163,4 @@ export function poolSaid(why, shown) {
     time_ms" is "smallest time_ms", "least area_um2 at …" "smallest area_um2 at …" (the engine's one wording). */
 export const tidyWords = t => String(t).replace(/\b(\d+) (\w+)\(s\)/g, (_, k, x) => plural(Number(k), x)).replace(/^\s*the\s+(?=(smallest|largest|least|most)\b)/i, "")
   .replace(/^\s*least\b/i, "smallest").replace(/^\s*most\b/i, "largest");
-export { candidateOf, taskLabel };
+export { designOf, taskLabel };

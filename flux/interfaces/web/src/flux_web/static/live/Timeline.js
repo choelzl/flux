@@ -5,7 +5,7 @@
 import { cx, html } from "../view.js";
 import { Close } from "../components/Head.js";
 import { dur } from "../format.js";
-import { WORK_COLORS as COLORS, AGENT_COLOR, aiWorking, ownSpans, phaseKind, tickText, workLabel } from "./work_style.js";
+import { WORK_COLORS as COLORS, AGENT_COLOR, aiWorking, ownSpans, boxOf, tickText, workLabel } from "./work_style.js";
 import { taskState as state } from "./model.js";
 import { passShort, taskLabel } from "./views.js";
 
@@ -23,7 +23,7 @@ export function Timeline({ v, a }) {
   const rows = v.scopeRows, now = Date.now() / 1000, end = n => n.t1 ?? now;
   const t0 = Math.min(...rows.map(r => r.node.t0)), t1 = Math.max(t0 + .001, ...rows.map(r => end(r.node)));
   const segs = rows.flatMap(({ node: n, depth }) => ownSpans(n, end).filter(([x, y]) => y > x || n.t1 == null || !n.kids.length)
-    .map(([s0, s1]) => ({ n, depth, t0: s0, t1: s1, kind: phaseKind(n) })));
+    .map(([s0, s1]) => ({ n, depth, t0: s0, t1: s1, kind: boxOf(n) })));
   // D985: narrow (one pass, in the column) the chart fits the column: a shorter margin, three ticks
   const narrow = (v.width || 380) < 500;
   const W = narrow ? Math.max(200, v.width - 4) : Math.max(300, v.width || 380), L = narrow ? 62 : 90, R = narrow ? 18 : 12, T = 18, B = 26, lane = 22;
@@ -35,8 +35,8 @@ export function Timeline({ v, a }) {
   const agents = segs.filter(x => aiWorking(x.n));
   // D977: a task that holds other kinds of work (a search over its designs) is drawn by its own time; a thin line
   // in its lane says the span it wraps, as the tree's time for it does
-  const wraps = rows.map(r => r.node).filter(n => n.kids.some(k => phaseKind(k) !== phaseKind(n)) && lanes.includes(phaseKind(n)))
-    .map(n => ({ n, kind: phaseKind(n), t0: n.t0, t1: end(n) }));
+  const wraps = rows.map(r => r.node).filter(n => n.kids.some(k => boxOf(k) !== boxOf(n)) && lanes.includes(boxOf(n)))
+    .map(n => ({ n, kind: boxOf(n), t0: n.t0, t1: end(n) }));
   const spans = new Map();
   for (const r of rows) { const p = v.membership.get(r.node.id) ?? null, sp = spans.get(p) || [Infinity, -Infinity]; spans.set(p, [Math.min(sp[0], r.node.t0), Math.max(sp[1], end(r.node))]); }
   const bands = [...spans.entries()].sort((x, y) => x[1][0] - y[1][0])
