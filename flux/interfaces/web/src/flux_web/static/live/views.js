@@ -1,7 +1,7 @@
 // D978: what Live's three views say about the tasks -- a task's name in the timeline's words,
 // the flow a pass went through, and what each box is set to (from the document as written).
 import { workLabel } from "./work_style.js";
-import { boxOf, designOf, isAgent, isModel, noteBox, stepOf, tryNote, tryOf, triesOf, workerOf } from "./facts.js";
+import { boxOf, designOf, isAgent, isModel, leadNote, noteBox, stepOf, tryNote, tryOf, triesOf, workerOf } from "./facts.js";
 export { designOf, stepOf };
 import { taskState as state } from "./model.js";
 
@@ -50,17 +50,9 @@ export function taskLabel(n) {
   if (rest) return kind;
   return low === kind.toLowerCase() ? kind : `${kind} · ${name}`;
 }
-/** D1056: the design a draft made -- named by the check after it (its siblings up to the next draft); "" when none was checked. */
+/** D1056: the design a draft made -- its try's, as the engine says it (D1235), else the one it was asked for. */
 function draftDesign(n) {
-  const sib = n.parent?.kids || [], at = sib.indexOf(n);
-  for (const x of sib.slice(at + 1)) {
-    if (/\bdraft\s+\d+\s*$/i.test(String(x.name))) break;
-    const m = /^\s*test\s*:\s*(?:(?:fast )?check|judge)\s+(\S+)/i.exec(String(x.name)) || /\s(\S+#\S+)\s*$/.exec(String(x.why || ""));
-    if (m) return m[1];                           // D1065: the whole name -- each view says it by its own rule
-  }
-  // D1059: no check after it (stopped at its time limit) -- the design it was asked for, as its try line says
-  const asked = /\S+#\S+/.exec(String(n.params?.["turn why"] || n.why || ""));
-  return asked ? asked[0] : "";
+  return leadNote(n)?.design || n.tags?.design || "";
 }
 
 /** Which flow a pass draws: the setup (before pass 0 or 1), the baseline (pass 0), or a pass. */
@@ -159,13 +151,6 @@ export function flowBoxes(rows, p, running, notes = []) {
   const boxes = kinds.filter(k => present.has(k) || (running && kind === "pass" && k !== "plan"))
     .map(k => ({ key: k, title: workLabel(k), kind: k,
       runs: runsOf(rows, n => boxKind(n) === k && (k !== "design" || !inMeasure(n))), notes: noted(k) }));
-  // D1059: an evaluation is the loop taking designs through the stages -- its measurements are the box's own runs
-  // (a journal before D1235: the engine no longer writes an evaluation around them)
-  for (const b of boxes) if (b.kind === "measure") {
-    const inBox = b.runs.inBox;
-    b.runs = b.runs.flatMap(n => /^\s*evaluation\s*$/i.test(String(n.name)) && (n.kids || []).length ? n.kids : [n]);
-    b.runs.inBox = inBox;
-  }
   if (kind === "baseline" && boxes.length && boxes.every(b => ["ok", "part"].includes(boxState(b.runs)))) boxes.push({ key: "record", title: "Record", kind: "setup", runs: [], done: true });
   // D1138: the pass's own setup (the tools' gate, the parts, the library read, the workbench) is its first box,
   // as the tree's Setup line -- the setup work no other box's work holds

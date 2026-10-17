@@ -547,17 +547,6 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
                 return {"steps": []}
         return {"steps": _masks().fields(steps)}
 
-    @app.get("/api/apps/{name}/timeline")
-    def loop_timeline(name: str, start: int | None = None, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, Any]:
-        """Where one start's time went (D694): its phases as bars, and per kind of work."""
-        from .timeline import timeline
-
-        _w, _whose, _d, run = loop_of(name, user, owner)
-        path = runs.events_path(run)
-        if not path or not os.path.exists(path):
-            return {"starts": [], "start": None, "bars": [], "kinds": [], "passes": []}
-        return timeline(path, start, running=bool(runs.live(run)) if run else False)
-
     @app.get("/api/apps/{name}/usage")
     def loop_usage(name: str, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, Any]:
         """What the loop's model and agent turns cost (D694); D1072: from the usage log's sums -- a

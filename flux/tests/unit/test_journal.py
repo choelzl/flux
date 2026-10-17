@@ -398,3 +398,23 @@ def test_a_runs_journal_holds_its_work_and_how_each_try_came_out(tmp_path, monke
     assert notes[-1]["tags"]["outcome"] == "passed"
     assert all(starts[e["parent"]]["name"].split(":")[0] != "test" for e in starts.values()
                if e["name"].startswith("tool:") and e["parent"] in starts), "a check's one command is the check's own task"
+
+
+def test_a_models_round_is_a_note_of_its_turn_however_long(tmp_path):
+    """(D1240) A round's chat is the turn's: `quiet_s=None` makes a quiet step a note whatever its time; a failed
+    one is still a task."""
+    import time as _time
+
+    j = Journal(str(tmp_path / "events.jsonl"))
+    flux_profile.add_listener(j)
+    try:
+        with flux_profile.phase("llm: turn", why="t"):
+            with flux_profile.phase("llm: round", why="hop 1", quiet=True, quiet_s=None):
+                _time.sleep(0.6)
+            with flux_profile.phase("llm: round", why="hop 2", quiet=True, quiet_s=None) as out:
+                out["failed"] = True
+    finally:
+        flux_profile.remove_listener(j)
+    events, _ = read_events(str(tmp_path / "events.jsonl"))
+    assert [e["why"] for e in events if e["ev"] == "note"] == ["hop 1"]
+    assert [e["why"] for e in events if e["ev"] == "start" and e["name"] == "llm: round"] == ["hop 2"]

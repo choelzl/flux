@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 
 import live_js
+from flux_loop.journal_migrate import migrate_events
 
 STATIC = Path(__file__).parents[2] / "interfaces/web/src/flux_web/static"
 pytestmark = pytest.mark.skipif(shutil.which("node") is None, reason="node is not on PATH")
@@ -17,40 +18,43 @@ pytestmark = pytest.mark.skipif(shutil.which("node") is None, reason="node is no
 
 def run(js):
     return live_js.module("live/views.js", js)
+# a pass of a sweep as the engine writes it (D1233): each task says its box, its design, its check or stage; a check's
+# and a stage's one command are the step's own (D1235)
 TREE = """
-  const mk = (id, name, why, parent, t0, t1, failed) => ({id, name, why, parent, t0, t1, failed, kids: []});
-  const dse = mk(1, "DSE: batch", "", null, 0, 30), gen = mk(2, "tool:gen.py", "generate lut-chunk=4", dse, 0, 1);
-  const test = mk(3, "test: gate", "1 candidate", dse, 1, 10), gold = mk(4, "tool:fluxpreset golden", "test lut-chunk=4", test, 1, 10);
-  const sim = mk(5, "simulation: screen", "", dse, 10, 30), rtl = mk(6, "tool:fluxpreset rtl measure", "stage screen lut-chunk=4", sim, 10, 30);
-  const evalu = mk(7, "evaluation", "", null, 31, 31.1), agent = mk(8, "agent: claude", "", null, 0, null);
-  dse.kids = [gen, test, sim]; test.kids = [gold]; sim.kids = [rtl];
-  const all = [dse, gen, test, gold, sim, rtl, evalu];
+  const mk = (id, name, why, parent, t0, t1, failed, tags = {}) => ({id, name, why, parent, t0, t1, failed, kids: [], fmt: 2, tags});
+  const dse = mk(1, "DSE: batch", "", null, 0, 30, false, {box: "search"});
+  const gen = mk(2, "tool:gen.py", "generate lut-chunk=4", dse, 0, 1, false, {box: "design", design: "lut-chunk=4", try: 1});
+  const test = mk(3, "test: gate", "1 candidate", dse, 1, 10, false, {box: "check", design: "lut-chunk=4", step: "golden"});
+  test.params = {turn: "tool:fluxpreset golden", command: "fluxpreset golden x.sv"};
+  const sim = mk(5, "simulation: screen", "1 design", dse, 10, 30, false, {box: "measure", design: "lut-chunk=4", step: "screen"});
+  sim.params = {turn: "tool:fluxpreset rtl measure"};
+  const agent = mk(8, "agent: claude", "", null, 0, null, false, {box: "design", worker: "agent:claude"});
+  dse.kids = [gen, test, sim];
+  const all = [dse, gen, test, sim];
   const rows = all.map(node => ({node}));
 """
 
 
 def test_tasks_are_named_kind_first_then_what():
-    got = run(f"""m => {{ {TREE} return [...all, agent, {{name: "gate: tools", kids: []}}, {{name: "knowledge: prepare popcount", kids: []}}, {{name: "critique: decision", kids: []}}, {{name: "knowledge: mentor", kids: []}}, {{name: "knowledge: digest", kids: []}}].map(m.taskLabel); }}""")
-    assert got == ["Search · lut-chunk=4", "Design · lut-chunk=4", "Check · lut-chunk=4", "Check · golden", "Measure · screen · lut-chunk=4", "Measure · screen · lut-chunk=4",
-                   "Measure · evaluation", "Agent · claude", "Setup · tools ready", "Setup · inputs", "Choose · critique",
-                   "Setup · mentor", "Setup · papers"]
-
+    note = lambda name, box, step: f'{{name: "{name}", kids: [], fmt: 2, tags: {{box: "{box}", step: "{step}"}}}}'  # noqa: E731
+    got = run(f"""m => {{ {TREE} return [...all, agent, {note("gate: tools", "setup", "tools ready")}, {note("knowledge: prepare popcount", "setup", "inputs")},
+      {{name: "critique: decision", kids: [], fmt: 2, tags: {{box: "choose"}}}}, {note("knowledge: mentor", "setup", "mentor")}, {note("knowledge: digest", "setup", "papers")}].map(m.taskLabel); }}""")
+    assert got == ["Search · lut-chunk=4", "Design · lut-chunk=4", "Check · lut-chunk=4", "Measure · screen · lut-chunk=4",
+                   "Agent · claude", "Setup · tools ready", "Setup · inputs", "Choose · critique", "Setup · mentor", "Setup · papers"]
 
 
 def test_the_workbench_digest_is_the_passs_setup_not_its_design():
-    """D1143: the workbench's README was written by an agent turn inside the quiet `knowledge: workbench` --
-    no task while it ran, so the turn was a top task, an agent's: Design. A journal written so still draws it in
-    Setup (an agent's `digest` turn is the library's); one written now has the turn under its step."""
+    """D1143: the workbench's README is written by an agent turn under `knowledge: workbench`, the Setup's: the
+    step says its box and its turn takes it (D1233)."""
     got = run("""m => {
-      const mk = (id, name, why, parent, t0, t1 = t0 + 1) => ({id, name, why, parent, t0, t1, kids: []});
-      const old = mk(1, "agent: claude", "digest workbench", null, 0, 5), after = mk(2, "knowledge: workbench", "its README", null, 0, 5);
-      const gen = mk(3, "generation: x draft 1", "", null, 6);
-      const step = mk(4, "knowledge: workbench", "its README", null, 0, 5), turn = mk(5, "agent: claude", "digest workbench", step, 0.1, 5);
+      const mk = (id, name, why, parent, t0, t1, tags) => ({id, name, why, parent, t0, t1: t1 ?? t0 + 1, kids: [], fmt: 2, tags});
+      const gen = mk(3, "generation: x draft 1", "", null, 6, 7, {box: "design"});
+      const step = mk(4, "knowledge: workbench", "its README", null, 0, 5, {box: "setup", step: "workbench"}), turn = mk(5, "agent: claude", "digest workbench", step, 0.1, 5, {worker: "agent:claude"});
       step.kids = [turn];
       const box = (nodes, key) => (m.flowBoxes(nodes.map(node => ({node})), 2, true).find(b => b.key === key)?.runs || []).map(n => n.id);
-      return [box([old, after, gen], "setup"), box([old, after, gen], "design"), box([step, turn, gen], "setup"),
-              m.taskLabel(step), m.flowBoxes([old, after].map(node => ({node})), null, false).map(b => [b.key, b.runs.map(n => n.id)])]; }""")
-    assert got == [[1, 2], [3], [4], "Setup · workbench", [["Library", [1, 2]]]]
+      return [box([step, turn, gen], "setup"), box([step, turn, gen], "design"), m.taskLabel(step), m.flowBoxes([step, turn].map(node => ({node})), null, false).map(b => [b.key, b.runs.map(n => n.id)])]; }""")
+    assert got == [[4], [3], "Setup · workbench", [["Library", [4]]]]
+
 
 def test_a_pass_flow_has_its_boxes_and_composing_after_measuring_is_no_repair():
     got = run(f"""m => {{ {TREE} const b = m.flowBoxes(rows, 6, false);
@@ -60,43 +64,40 @@ def test_a_pass_flow_has_its_boxes_and_composing_after_measuring_is_no_repair():
 
 def test_a_search_done_as_a_note_is_a_box_that_ran():
     """D1052: a scripted search's scope list is a note with no task (D1047): its box is there and done, not missing."""
-    got = run(f"""m => {{ {TREE} const d = mk(1, "generation: improve x", "", null, 0, 5);
-      const b = m.flowBoxes([{{node: d}}], 3, true, [{{name: "orchestrate: scope list", why: "", t: 0, output: {{scopes: 2}}}}]);
+    got = run(f"""m => {{ {TREE} const d = mk(1, "generation: improve x", "", null, 0, 5, false, {{box: "design"}});
+      const b = m.flowBoxes([{{node: d}}], 3, true, [{{name: "orchestrate: scope list", why: "", t: 0, output: {{scopes: 2}}, tags: {{box: "search", pass: 3}}}}]);
       const s = b.find(x => x.key === "search"); return [s.state, s.notes.length, s.runs.length]; }}""")
     assert got == ["ok", 1, 0]
-    assert live_js.module("live/model.js", "m => m.notePass({name: 'orchestrate: scope list', t: 4, seq: 9}, [{name: 'pass', n: 3, t: 1, seq: 2}])") == 3   # the pass it was written in
+    assert live_js.module("live/model.js", "m => m.notePass({name: 'orchestrate: scope list', t: 4, seq: 9, tags: {pass: 3}}, [])") == 3   # the pass it was written in
 
 
 def test_a_box_whose_step_failed_says_so_though_it_finished():
-    """D995: a measure that ended with one of its tools failing (exit 1) is "!", not ✓."""
-    got = run(f"""m => {{ {TREE} rtl.failed = true; const b = m.flowBoxes(rows, 6, false); return b.map(x => x.state); }}""")
-    assert got == ["ok", "ok", "ok", "part"]            # D1061: the measure is the Measure box's failure, not the search's that holds it
+    """D995: a measure that ended with its command failing (exit 1) is the Measure box's failure, not the search's that holds it."""
+    got = run(f"""m => {{ {TREE} sim.failed = true; const b = m.flowBoxes(rows, 6, false); return b.map(x => x.state); }}""")
+    assert got == ["ok", "ok", "ok", "bad"]
 
 
 def test_a_design_after_a_check_is_a_repair_counted_on_the_box():
-    got = run(f"""m => {{ {TREE} const again = {{id: 9, name: "tool:gen.py", why: "generate lut-chunk=4", parent: null, t0: 5, t1: 6, kids: []}};
+    got = run(f"""m => {{ {TREE} const again = mk(9, "tool:gen.py", "generate lut-chunk=4", null, 5, 6, false, {{box: "design", design: "lut-chunk=4", try: 2}});
       const b = m.flowBoxes([...rows, {{node: again}}], 6, false); return [b.find(x => x.key === "design").count, m.repaired(b)]; }}""")
     assert got == [2, True]
 
 
 def test_a_boxs_count_is_how_many_times_its_work_ran_not_how_many_tasks_it_holds():
-    """D1038: a gate of four tests is one Check; a design an evaluation composes is the measurement's;
-    a decision's own steps are one Choose; four library reads in a row are one Library."""
+    """D1038: a gate of four tests is one Check; a decision's own steps are one Choose; four library reads in a row are one Library."""
     got = run("""m => {
-      const mk = (id, name, parent, t0) => ({id, name, parent, t0, t1: t0 + 1, kids: []});
-      const gen = mk(1, "generation: improve x#1", null, 0), turn = mk(2, "agent: claude", gen, 0);
-      const gate = mk(3, "test: gate", null, 2), tests = [4, 5, 6, 7].map(i => mk(i, "tool:check.py", gate, 2 + i / 10));
-      const sim = mk(8, "simulation: esl", null, 4), tool = mk(9, "tool:measure.py", sim, 4);
-      const ev = mk(10, "evaluation", null, 6), comp = mk(11, "template-fill: compose", ev, 6), climb = mk(12, "simulation: esl", ev, 7);
-      const dec = mk(13, "decide", null, 9), front = mk(14, "frontier", dec, 9), pick = mk(15, "decide", dec, 9.5), crit = mk(16, "critique: decision", dec, 9.8);
-      gen.kids = [turn]; gate.kids = tests; sim.kids = [tool]; ev.kids = [comp, climb]; dec.kids = [front, pick, crit];
-      const all = [gen, turn, gate, ...tests, sim, tool, ev, comp, climb, dec, front, pick, crit];
+      const mk = (id, name, parent, t0, tags) => ({id, name, parent, t0, t1: t0 + 1, kids: [], fmt: 2, tags});
+      const gen = mk(1, "generation: improve x#1", null, 0, {box: "design"}), turn = mk(2, "agent: claude", gen, 0, {box: "design", worker: "agent:claude", try: 1});
+      const gate = mk(3, "test: gate", null, 2, {box: "check"}), tests = [4, 5, 6, 7].map(i => mk(i, "tool:check.py", gate, 2 + i / 10, {box: "check"}));
+      const sim = mk(8, "simulation: esl", null, 4, {box: "measure"}), climb = mk(12, "simulation: esl", null, 7, {box: "measure"});
+      const dec = mk(13, "decide", null, 9, {box: "choose"}), crit = mk(16, "critique: decision", dec, 9.8, {box: "choose"});
+      gen.kids = [turn]; gate.kids = tests; dec.kids = [crit];
+      const all = [gen, turn, gate, ...tests, sim, climb, dec, crit];
       const b = m.flowBoxes(all.map(node => ({node})), 1, false);
-      const lib = [1, 2, 3, 4].map(i => mk(20 + i, "knowledge: mentor", null, i)), doc = mk(30, "gate: tools", null, 0);
+      const lib = [1, 2, 3, 4].map(i => mk(20 + i, "knowledge: mentor", null, i, {box: "setup"})), doc = mk(30, "gate: tools", null, 0, {box: "setup"});
       const s = m.flowBoxes([doc, ...lib].map(node => ({node})), null, false);
-      return [Object.fromEntries(b.map(x => [x.key, x.count])), Object.fromEntries(s.map(x => [x.key, x.count])), [dec, pick, crit].map(m.taskLabel)]; }""")
-    assert got == [{"design": 1, "check": 1, "measure": 1, "choose": 1}, {"Document": 1, "Library": 1},
-                   ["Choose", "Choose", "Choose · critique"]]
+      return [Object.fromEntries(b.map(x => [x.key, x.count])), Object.fromEntries(s.map(x => [x.key, x.count])), [dec, crit].map(m.taskLabel)]; }""")
+    assert got == [{"design": 1, "check": 1, "measure": 1, "choose": 1}, {"Document": 1, "Library": 1}, ["Choose", "Choose · critique"]]
 
 
 def test_what_each_box_is_set_to_comes_from_the_document():
@@ -122,18 +123,17 @@ def test_the_inspector_reads_a_check_and_a_measurement_from_what_they_printed():
     assert got[3] == {"fmax_mhz": 3162.34, "area_um2": 4.47606, "cells": 45, "power_w": 7.5e-05}
 
 
-def test_a_measurement_names_its_candidate_after_its_stage():
-    got = run("""m => [m.designOf({why: "stage screen lut-chunk=4", kids: []}), m.designOf({why: "estimate place tree-chunk=2", kids: []}),
-      m.designOf({why: "generate lut-chunk=4", kids: []}), m.designOf({why: "test lut-chunk=4", kids: []}), m.designOf({why: "decide", kids: []})]""")
-    assert got == ["lut-chunk=4", "tree-chunk=2", "lut-chunk=4", "lut-chunk=4", ""]
+def test_a_measurement_names_its_design_as_the_engine_says_it():
+    got = run("""m => { const t = (design, kids = []) => ({fmt: 2, tags: design ? {design} : {}, kids});
+      return [m.designOf(t("lut-chunk=4")), m.designOf(t("", [t(""), t("tree-chunk=2")])), m.designOf(t(""))]; }""")
+    assert got == ["lut-chunk=4", "tree-chunk=2", ""]
 
 
 def test_a_critique_is_in_the_box_it_judges_with_a_badge_not_a_box_of_its_own():
     """D1034: no Critic box -- a critique of a design is the Check box's, of the decision the Choose box's;
     the box says a critic judged it."""
-    got = run(f"""m => {{ {TREE} const crit = {{id: 20, name: "critique: d#3", why: "d#3", parent: null, t0: 32, t1: 33, kids: []}};
-      const pick = {{id: 21, name: "decide: frontier", why: "", parent: null, t0: 34, t1: 35, kids: []}};
-      const judge = {{id: 22, name: "critique: decision", why: "d#3", parent: null, t0: 35, t1: 36, kids: []}};
+    got = run(f"""m => {{ {TREE} const crit = mk(20, "critique: d#3", "d#3", null, 32, 33, false, {{box: "check"}});
+      const pick = mk(21, "decide", "", null, 34, 35, false, {{box: "choose"}}), judge = mk(22, "critique: decision", "d#3", null, 35, 36, false, {{box: "choose"}});
       const b = m.flowBoxes([...rows, {{node: crit}}, {{node: pick}}, {{node: judge}}], 6, false);
       return b.map(x => [x.key, !!x.critic]); }}""")
     assert ["critic", True] not in got and ["critic", False] not in got
@@ -142,30 +142,29 @@ def test_a_critique_is_in_the_box_it_judges_with_a_badge_not_a_box_of_its_own():
 
 def test_a_command_is_named_by_its_check_or_stage_its_program_beside():
     """D1037: `build.sh` run for the check named build is "Check · build", its program a note; a stage's
-    command "Measure · esl"; the gate's default check, and a command for no check, keep the program."""
-    got = run("""m => { const mk = (name, why) => ({name, why, kids: [], parent: {name: "test: fast check d#1", kids: []}});
-      const xs = [mk("tool:build.sh", "build d#43"), mk("tool:sim.py", "stage esl d#43"), mk("tool:fluxpreset golden", "test d#3"),
-                  mk("tool:gen.py", "generate x=1")];
+    command "Measure · esl"; a generator's command its design."""
+    got = run("""m => { const mk = (name, why, tags) => ({name, why, kids: [], fmt: 2, tags, parent: {name: "test: check d#1", kids: [], fmt: 2, tags: {box: "check"}}});
+      const xs = [mk("tool:build.sh", "build d#43", {box: "check", step: "build", design: "d#43"}), mk("tool:sim.py", "stage esl d#43", {box: "measure", step: "esl", design: "d#43"}),
+                  mk("tool:gen.py", "generate x=1", {box: "design", design: "x=1"})];
       return xs.map(x => [m.taskLabel(x), m.taskNote(x)]); }""")
-    assert got == [["Check · build", "build.sh"], ["Measure · esl · d#43", "sim.py"], ["Check · golden", ""], ["Design · x=1", "gen.py"]]
+    assert got == [["Check · build", "build.sh"], ["Measure · esl · d#43", "sim.py"], ["Design · x=1", "gen.py"]]
 
 
 def test_a_box_whose_result_a_critic_rejected_is_partial_not_failed():
     """D1065: the box did its work -- "!"; the critique is its red ✗."""
-    got = run("""m => { const st = {id: 1, name: "simulation: esl", why: "1 design", parent: null, t0: 0, t1: 1, kids: []};
-      st.kids = [{id: 2, name: "tool:sim.py", why: "stage esl d#3", parent: st, t0: 0, t1: 1, kids: []}];
-      const cr = {id: 3, name: "critique: measurement", why: "d#3@esl", parent: null, t0: 1, t1: 2, failed: true, kids: []};
-      return m.flowBoxes([st, st.kids[0], cr].map(node => ({node})), 2, false).find(b => b.key === "measure").state; }""")
+    got = run("""m => { const st = {id: 1, name: "simulation: esl", why: "1 design", parent: null, t0: 0, t1: 1, kids: [], fmt: 2, tags: {box: "measure"}};
+      const cr = {id: 3, name: "critique: measurement", why: "d#3@esl", parent: null, t0: 1, t2: 2, t1: 2, failed: true, kids: [], fmt: 2, tags: {box: "measure"}};
+      return m.flowBoxes([st, cr].map(node => ({node})), 2, false).find(b => b.key === "measure").state; }""")
     assert got == "part"
 
 
 def test_a_passs_own_setup_is_its_first_box():
-    """D1138: a pass's setup (the tools' gate, the parts, the library read) was in no box -- the graph left it out
-    while the tree drew its Setup line; it is the first box, and setup work inside another box's work stays there."""
+    """D1138: a pass's setup (the tools' gate, the parts, the library read) is the first box, and setup work inside
+    another box's work stays there."""
     got = run("""m => {
-      const mk = (id, name, parent, t0, t1 = t0 + 1) => ({id, name, parent, t0, t1, kids: []});
-      const gate = mk(1, "gate: tools", null, 0), parts = mk(2, "propose: decompose", null, 1), lib = mk(3, "knowledge: workbench", null, 2, null);
-      const gen = mk(4, "generation: x draft 1", null, 3), inner = mk(5, "knowledge: mentor", gen, 3.5);
+      const mk = (id, name, parent, t0, t1, box) => ({id, name, parent, t0, t1: t1 === undefined ? t0 + 1 : t1, kids: [], fmt: 2, tags: {box}});
+      const gate = mk(1, "gate: tools", null, 0, undefined, "setup"), parts = mk(2, "propose: decompose", null, 1, undefined, "setup"), lib = mk(3, "knowledge: workbench", null, 2, null, "setup");
+      const gen = mk(4, "generation: x draft 1", null, 3, undefined, "design"), inner = mk(5, "knowledge: mentor", gen, 3.5, undefined, "setup");
       gen.kids = [inner];
       const b = m.flowBoxes([gate, parts, lib, gen, inner].map(node => ({node})), 2, true);
       const s = m.flowBoxes([gate, parts].map(node => ({node})), null, false);
@@ -174,7 +173,7 @@ def test_a_passs_own_setup_is_its_first_box():
     assert got == [["setup", "search", "design", "check", "measure", "choose"], "setup", "Setup", "run", [1, 2, 3], ["Document", "Parts"]]
 
 
-def views(tmp_path, events, js):
+def views(tmp_path, events, js, tests=None):
     """The views as the page draws them -- the journal on stdin replayed (events.js), the tree's and the graph's
     lines worked out (rows.js) -- `js` given the modules and the model."""
     shutil.copytree(STATIC / "live", tmp_path / "live")
@@ -186,7 +185,6 @@ import * as W from "./live/work_style.js"; import * as LM from "./live/logmodel.
 import { readFileSync } from "fs";
 const m = LT.model();
 for (const l of readFileSync(0, "utf8").split("\\n")) if (l.trim()) LT.apply(m, JSON.parse(l));
-M.ready(m);
 const sc = M.taskScope(m, "all");
 const v = { selected: null, model: m, membership: sc.membership, J: R.judge(m, sc.membership), N: R.namer(["x"]), goals: [],
   isFolded: () => false, opened: new Set(), allTries: new Set(), pass: "all", passView: null, passNotes: () => [],
@@ -194,6 +192,7 @@ const v = { selected: null, model: m, membership: sc.membership, J: R.judge(m, s
 const said = l => l.type !== "row" ? l.type : [l.name.map(s => typeof s === "string" ? s : s.b || s.text || "").join("").trim(),
   l.pills.map(p => p.text).join(","), l.act.task ? l.act.task.id : null];
 process.stdout.write(JSON.stringify((__BODY__)({ LT, M, V, R, W, LM, P, F, lines, m, sc, v, said })));""".replace("__BODY__", js))
+    events, _ = migrate_events(events, tests)       # D1236: a journal of an earlier form, as the converter brings it up
     r = subprocess.run(["node", str(tmp_path / "run.js")], input="".join(json.dumps(e) + "\n" for e in events),
                        capture_output=True, text=True, timeout=30)
     assert r.returncode == 0, r.stderr
@@ -321,7 +320,7 @@ def test_a_try_of_a_run_that_failed_is_a_failed_try_counted_as_the_graph_counts(
       return [lines(sc.rows, v).tree().filter(l => l.type === "row" && l.depth <= 4).map(l => [{_TEXT}(l), typeof l.mark === "string" ? l.mark : l.mark.tone]).slice(1, 5),
               d.count, V.agentsOf(d.runs)]; }}""")
     said = error or "no design"
-    assert got[0] == [["Design whole", "bad"], [f"try 3 · {said}", "bad"], ["codex", "ok"], ["turn 2", "ok"]], got
+    assert got[0] == [["Design #1.3", "bad"], [f"try 3 #1.3 · {said}", "bad"], ["codex", "ok"], ["turn 2 x#1.3", "ok"]], got   # D1236: the design each draft was asked for
     assert got[1] == 3 and got[2] == ["codex"]
 
 
@@ -402,8 +401,7 @@ def test_older_words_tokens_and_the_model_are_said_as_now():
 
 def test_a_choice_says_when_its_table_is_not_the_pool():
     """popsweep: "4 in the pool" over 5 designs listed; sw: "6 in the pool" over 1."""
-    got = run_inspector("""m => [m.poolSaid("4 in the pool", 5), m.poolSaid("6 in the pool", 1), m.poolSaid("8 in the pool", 8),
-      m.poolSaid("3 in the pool, 1 rejected", 3), m.poolSaid("again, without x#1", 2), m.poolSaid("6 in the pool", 0)]""")
+    got = run_inspector("""m => [m.poolSaid(4, 5), m.poolSaid(6, 1), m.poolSaid(8, 8), m.poolSaid(3, 3), m.poolSaid(undefined, 2), m.poolSaid(6, 0)]""")
     assert got == ["5 shown: every design measured, 4 of them in the pool", "1 of 6 shown: the rest measured in passes not loaded", "", "", "", ""]
 
 

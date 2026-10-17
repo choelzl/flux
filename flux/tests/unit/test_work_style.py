@@ -1,90 +1,47 @@
-"""D977: Live's timeline classifies and cuts work as the server does -- the JS kind rule equals
-`flux_web.timeline.kind_of`, and a task's own time leaves its children's out."""
+"""D977: Live's timeline cuts work by the box each task says it is (D1233), and a task's own time leaves its
+children's out."""
 
-import json
 import shutil
-from pathlib import Path
 
 import pytest
 
 import live_js
 
-from flux_web.timeline import kind_of
-
-STATIC = Path(__file__).parents[2] / "interfaces/web/src/flux_web/static"
 pytestmark = pytest.mark.skipif(shutil.which("node") is None, reason="node is not on PATH")
-
-PHASES = [("agent: claude", ""), ("llm: propose", ""), ("model call", ""), ("tool:gen.py", "generate x=1"),
-          ("tool:fluxpreset rtl measure", "stage screen x=1"), ("tool:python3", "estimate y"),
-          ("tool:fluxpreset golden", "test x"), ("tool: compile", "build all"), ("tool:yosys", ""),
-          ("knowledge: prepare p", ""), ("propose: decompose", ""), ("propose: next", ""), ("propose: brief d#1", "once per part"), ("gate: tools", ""),
-          ("gate: the problem", ""), ("gate: admitted", ""), ("generation: build x", ""), ("generation: current", ""),
-          ("build: lib", ""), ("test: gate", ""), ("simulation: screen", ""), ("evaluation", ""),
-          ("template-fill: compose", ""), ("decide", ""), ("frontier", ""), ("critique: decision", ""),
-          ("DSE: batch", ""), ("orchestrate: next step", ""), ("agent: claude", "orchestrate"), ("agent: claude", "digest workbench"), ("agent: claude", "digest paper.pdf"), ("knowledge: workbench", ""), ("plan: round", ""), ("search: tree", ""), ("Setup", ""), ("unknown thing", "")]
 
 
 def run(js):
-    """work_style.js's functions, with legacy.js's kindOf (a journal before D1233 is read by its rules)."""
-    return live_js.run("import * as W from './live/work_style.js'; import * as L from './live/legacy.js';\n"
-                       f"process.stdout.write(JSON.stringify(({js})({{ ...W, kindOf: L.kindOf, phaseKind: L.boxOf }})));")
+    return live_js.run("import * as W from './live/work_style.js';\n"
+                       f"process.stdout.write(JSON.stringify(({js})(W)));")
 
 
-def test_the_kind_of_work_is_the_same_in_the_page_and_the_server():
-    got = run(f"m => {json.dumps(PHASES)}.map(([n, w]) => m.kindOf(n, w))")
-    assert got == [kind_of(n, w) for n, w in PHASES]
-
-
-def test_a_task_bar_is_its_own_time_and_a_kind_comes_from_above():
+def test_a_task_bar_is_its_own_time_and_its_box_comes_from_its_tags():
     got = run("""m => {
-      const p = {name: "DSE: batch", why: "", t0: 0, t1: 10, kids: []};
-      const a = {name: "tool:x", why: "test c", t0: 1, t1: 4, kids: [], parent: p}, b = {name: "agent: claude", t0: 3, t1: 6, kids: [], parent: p};
-      const c = {name: "tool:y", why: "", t0: 4, t1: 5, kids: [], parent: b};
+      const p = {name: "DSE: batch", why: "", fmt: 2, tags: {box: "search"}, t0: 0, t1: 10, kids: []};
+      const a = {name: "tool:x", why: "test c", fmt: 2, tags: {box: "check"}, t0: 1, t1: 4, kids: [], parent: p};
+      const b = {name: "agent: claude", fmt: 2, tags: {worker: "agent:claude"}, t0: 3, t1: 6, kids: [], parent: p};
+      const c = {name: "tool:y", why: "", fmt: 2, tags: {}, t0: 4, t1: 5, kids: [], parent: b};
       p.kids = [a, b]; b.kids = [c];
       const end = n => n.t1;
       return {own: m.ownSpans(p, end), leaf: m.ownSpans(a, end), agent: m.ownSpans(b, end),
-              kinds: [m.phaseKind(p), m.phaseKind(a), m.phaseKind(b), m.phaseKind(c)]};
+              kinds: [m.boxOf(p), m.boxOf(a), m.boxOf(b), m.boxOf(c)]};
     }""")
     assert got["own"] == [[0, 1], [6, 10]], "the children's time, side by side counted once, is not the batch's"
     assert got["leaf"] == [[1, 4]] and got["agent"] == [[3, 4], [5, 6]]
-    assert got["kinds"] == ["search", "check", "search", "search"], "an agent and its tools take the work they are under"
-
-
-def test_a_designs_brief_is_its_design_not_a_choice():
-    """D1029: `propose: brief` prepares the design agent's brief before generation -- it was Choose, done
-    in seconds, so the pass looked decided while its checks still ran."""
-    from flux_web.timeline import kind_of
-
-    assert kind_of("propose: brief bau#3", "once per part") == "design"
-    assert kind_of("propose: what next", "") == "choose" and kind_of("propose: finalists", "") == "choose"
-
-
-def test_the_climb_through_the_stages_is_measure_work():
-    """D1031: `evaluation` (compose, measure, cutoffs, routing) is what Measure does -- it was Design, so a pass
-    measuring its design said "Design · evaluation, running"."""
-    from flux_web.timeline import kind_of
-
-    assert kind_of("evaluation", "the measured designs taken through the stages") == "measure"
+    assert got["kinds"] == ["search", "check", "search", "search"], "a task that says no box is in the one around it"
 
 
 def test_an_agents_turn_taken_into_its_draft_is_agent_activity_while_it_runs():
-    """D1138: a draft that took in its first agent or model turn (D1050: `params.turn`, no task of its own) had no
-    overlay on the timeline while the agent worked -- only its later turns, tasks named `agent:`, had one."""
+    """D1138: a draft that took in its first agent or model turn (D1050) is agent work while it runs: the turn's
+    worker is the draft's (D1233)."""
     got = run("""m => {
-      const draft = {name: "generation: x draft 1", why: "x#1", params: {turn: "agent: claude"}, t0: 0, t1: null, kids: []};
-      const plain = {name: "generation: x draft 2", why: "x#2", t0: 0, t1: null, kids: []};
-      const model = {name: "plan: the loop", params: {turn: "llm: plan"}, t0: 0, t1: 5, kids: []};
-      const tool = {name: "tool:check.py", why: "test x#1", t0: 1, t1: 2, kids: [], parent: draft};
+      const draft = {name: "generation: x draft 1", why: "x#1", fmt: 2, tags: {worker: "agent:claude"}, t0: 0, t1: null, kids: []};
+      const plain = {name: "generation: x draft 2", why: "x#2", fmt: 2, tags: {}, t0: 0, t1: null, kids: []};
+      const model = {name: "plan: the loop", fmt: 2, tags: {worker: "model:qwen"}, t0: 0, t1: 5, kids: []};
+      const tool = {name: "tool:check.py", why: "test x#1", fmt: 2, tags: {}, t0: 1, t1: 2, kids: [], parent: draft};
       const now = 10, end = n => n.t1 ?? now;
       return [m.aiWorking(draft), m.aiWorking(plain), m.aiWorking(model), m.aiWorking(tool), m.ownSpans(draft, end)]; }""")
     assert got == [True, False, True, True, [[0, 10]]], "the running turn's activity is drawn up to now"
-
-
-def test_an_agents_digest_is_setup_work():
-    """D1143: an agent's turn digesting the library or the workbench (`why` "digest ...") is the Setup's, even with no
-    setup step above it (a journal written before the quiet step held its turn) -- it was an agent's: Design."""
-    assert kind_of("agent: claude", "digest workbench") == "setup" and kind_of("agent: codex", "digest a.pdf") == "setup"
-    assert kind_of("agent: claude", "lo#2") is None
 
 
 def test_a_short_charts_ticks_are_milliseconds():

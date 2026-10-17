@@ -34,7 +34,8 @@ function TaskHead({ n, env, a }) {
   const title = prog && !label.includes(prog) ? `${label} · ${prog}` : label, parents = [];
   for (let p = n.parent; p; p = p.parent) { const l = plain(taskLabel(p), N); if (l !== title && l.includes(" · ")) parents.unshift(p); }
   // D1066: a reason that is the loop's own name says nothing; D1094: nor one that is only the engine's source name
-  const w = String(n.why || ""), why = w && !N.loopNamed(w.trim()) && !/^\s*(agent|tool|model|llm)\s*:\s*\S+\s*$/i.test(w) ? tidyWords(N.shortAll(w)) : "";   // D1182: its try, not the engine's attempt
+  // a choice says the pool it chose from (D1235: its field), as its `why` once said it
+  const w = n.output?.pool != null ? `${n.output.pool} in the pool` : /^\s*try\s+\d+\s*$/i.test(String(n.why || "")) ? "" : String(n.why || ""), why = w && !N.loopNamed(w.trim()) && !/^\s*(agent|tool|model|llm)\s*:\s*\S+\s*$/i.test(w) ? tidyWords(N.shortAll(w)) : "";   // D1182: its try, not the engine's attempt
   const raw = () => showRaw(JSON.stringify({ name: n.name, input: n.params, fields: n.fields, output: n.output }, null, 2), `${n.name} · raw`);
   return html`<${Head} cls="alt-ihead" stripe=${colorOf(n)} title=${title} hint=${taskLabel(n)} tools=${html`<${Tool} icon="raw" label="Raw" cls="raw-view" onClick=${raw} />
       <${Tool} icon="fullscreen" label="Fullscreen" big cls="fullscreen-button" onClick=${() => a.fullscreen(n.name)} />`}>

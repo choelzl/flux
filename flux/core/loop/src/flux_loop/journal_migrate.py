@@ -129,9 +129,11 @@ class _Start:
         for i, e in enumerate(self.events):
             e["_seq"] = i
             if e.get("ev") == "start":
-                self.nodes[e.get("id")] = {"s": e, "e": None, "kids": [], "notes": []}
+                self.nodes[e.get("id")] = {"s": e, "e": None, "kids": [], "notes": [], "p": []}
             elif e.get("ev") == "end" and e.get("id") in self.nodes:
                 self.nodes[e["id"]]["e"] = e
+            elif e.get("ev") == "params" and e.get("id") in self.nodes:      # D1050: the turn a wrapper took in
+                self.nodes[e["id"]]["p"].append(e)
         for nid, n in self.nodes.items():
             p = self.nodes.get(n["s"].get("parent"))
             if p is not None:
@@ -139,6 +141,14 @@ class _Start:
         for e in self.events:
             if e.get("ev") == "note" and e.get("parent") in self.nodes:
                 self.nodes[e["parent"]]["notes"].append(e)
+
+    def params(self, nid: Any) -> dict:
+        """A task's inputs: its start's, and those of the turn it took in (D1050)."""
+        n = self.nodes[nid]
+        out = dict(n["s"].get("params") or {})
+        for e in n["p"]:
+            out.update(e.get("params") or {})
+        return out
 
     def parent(self, nid: Any) -> Any:
         p = self.nodes[nid]["s"].get("parent")
@@ -184,16 +194,38 @@ class _Start:
             self.nodes[k]["s"]["parent"] = up
         for note in n["notes"]:
             note["parent"] = up
-        gone = {id(n["s"]), id(n["e"])}
+        gone = {id(n["s"]), id(n["e"]), *(id(p) for p in n["p"])}
         self.events[:] = [e for e in self.events if id(e) not in gone]
         self.index()
 
 
 # ---------------------------------------------------------------- the steps
+def _verdicts(st: _Start, said: Callable[[str], None]) -> None:
+    """What the engine writes as fields since, read from an older journal's words: a critic's rejection (D1075:
+    `rejected`, its verdict "REJECTED…"/"SENT BACK…"), an agent stopped at its time limit (D1053: `timed out`, exit
+    124), a check that did not build (D1167: `failed`, its `error` said)."""
+    n = 0
+    for nid, node in st.nodes.items():
+        e = node["e"]
+        if e is None:
+            continue
+        if not isinstance(e.get("output"), dict):
+            e["output"] = {}
+        o = e["output"]
+        name = st.name(nid)
+        if _CRIT.match(name) and not o.get("rejected") and re.match(r"^(REJECTED|SENT BACK)", str(o.get("verdict") or "")):
+            o["rejected"], n = True, n + 1
+        if re.match(r"^\s*agent\s*:", name, re.I) and str(o.get("exit")) == "124" and not o.get("timed out"):
+            o["timed out"], n = True, n + 1
+        if re.match(r"^\s*test\s*:", name, re.I) and o.get("error") and not e.get("failed"):
+            e["failed"], n = True, n + 1
+    if n:
+        said(f"{n} verdicts said as fields")
+
+
 def _d1148(st: _Start, said: Callable[[str], None]) -> None:
     """A quiet setup step written after the tasks it ran (before D1143) takes them in, as Live read it."""
-    last_mark, seen, moved = -1, [], 0
-    by_id = {e.get("id"): e for e in st.events if e.get("ev") == "start"}
+    last_mark, seen, moved, first = -1, [], 0, {}
     ended = {e.get("id"): e for e in st.events if e.get("ev") == "end"}
     for i, e in enumerate(st.events):
         if e.get("ev") == "mark" and e.get("name") == "pass":
@@ -205,11 +237,14 @@ def _d1148(st: _Start, said: Callable[[str], None]) -> None:
                 if (s.get("parent") == e.get("parent") and s["id"] in ended and ended[s["id"]]["_seq"] < i
                         and float(s.get("t") or 0) >= float(e.get("t") or 0) - 0.002 and s["_seq"] > last_mark):
                     s["parent"] = e["id"]
+                    first.setdefault(id(e), (e, s))
                     moved += 1
         seen.append(e)
+    for e, s in first.values():                      # the step's start before the first task it took in, as the engine writes it now
+        del st.events[_at(st.events, e)]
+        st.events.insert(_at(st.events, s), e)
     if moved:
         said(f"{moved} tasks taken in by the quiet step written after them")
-    del by_id
     st.index()
 
 
@@ -257,20 +292,23 @@ def _d1233(st: _Start, said: Callable[[str], None]) -> None:
         return "design" if agent else "setup"
 
     roots_pass: dict[Any, Any] = {}
+    orig_pass = {nid: (n["s"].get("params") or {}).get("pass") for nid, n in st.nodes.items()}   # read before any is moved to the tags
     for nid, n in st.nodes.items():
         s = n["s"]
         params = dict(s.get("params") or {})
         inturn = re.match(r"^\s*test\s*:", st.name(nid)) and str(st.out(nid).get("measured") or "").startswith("inside the turn")
         chain = list(st.chain(nid))
-        given = next((st.nodes[p]["s"].get("params", {}).get("pass") for p in chain
-                      if (st.nodes[p]["s"].get("params") or {}).get("pass") not in (None, "")), None)
+        given = next((orig_pass[p] for p in chain if orig_pass.get(p) not in (None, "")), None)
         root = chain[-1]
         if root not in roots_pass:
             roots_pass[root] = pass_of(st.name(root), st.why(root), st.nodes[root]["s"]["_seq"])
         p = pass_of("", "", 0, given) if given not in (None, "") else roots_pass[root]
         tags = {"box": "design" if inturn else box_of(nid), "pass": p, "part": params.pop("part", None),
                 "design": _design_own(st.name(nid), st.why(nid)), "step": _step_of(st.why(nid)) if _TOOL.match(st.name(nid)) else "",
-                "worker": _worker_of(st.name(nid), params)}
+                "worker": _worker_of(st.name(nid), st.params(nid))}
+        if not tags["design"] and re.match(r"^\s*(agent|generation|generate|repair|prototype)\b", st.name(nid), re.I):
+            asked = re.search(r"\S+#\S+", str(st.params(nid).get("turn why") or st.why(nid)))      # D1059: the design a draft was asked for
+            tags["design"] = asked.group(0) if asked else ""
         params.pop("pass", None)
         s["params"] = params
         s["tags"] = {k: v for k, v in tags.items() if v not in (None, "")}
@@ -336,20 +374,25 @@ def _right_tasks(st: _Start, said: Callable[[str], None], tests: list[str] | Non
             continue
         t = n["kids"][0]
         head = st.name(nid).split(":")[0].strip().lower()
-        if not _TOOL.match(st.name(t)) or st.nodes[t]["kids"] or n["s"]["tags"].get("box") == "search":
+        if not _TOOL.match(st.name(t)) or st.nodes[t]["kids"] or n["s"]["tags"].get("box") == "search" \
+                or st.params(nid).get("turn") \
+                or st.nodes[t]["s"]["tags"].get("box") != n["s"]["tags"].get("box"):     # a draft's check is no command of the draft
             continue
         if head not in ("test", "simulation", "analytical") and not re.match(r"^\s*generation:.*\bdraft\s+\d+\s*$", st.name(nid), re.I):
             continue
         ts, te = st.nodes[t]["s"], st.nodes[t]["e"]
         p = {k: v for k, v in (ts.get("params") or {}).items() if k in ("command", "folder", "stdin")}
         n["s"]["params"] = {**(n["s"].get("params") or {}), **p, "turn": st.name(t), **({"turn why": st.why(t)} if st.why(t) else {})}
-        for k in ("design", "step"):
-            if ts.get("tags", {}).get(k):
-                n["s"]["tags"][k] = ts["tags"][k]
+        prog = re.sub(r"^\s*tool\s*:\s*", "", st.name(t)).replace("fluxpreset ", "").strip()
+        step = ts.get("tags", {}).get("step") or prog                     # Live said a command by its program when no check named it
+        if ts.get("tags", {}).get("design"):
+            n["s"]["tags"]["design"] = ts["tags"]["design"]
+        n["s"]["tags"]["step"] = step
         if n["e"] is not None and te is not None:
             n["e"]["output"] = {**(te.get("output") or {}), **(n["e"].get("output") or {})}
             if st.failed(t):
                 n["e"]["failed"] = True
+                n["e"]["tags"] = {**(n["e"].get("tags") or {}), "failed at": step}
         st.drop(t)
         folds += 1
     # a check that stopped at a failure: where, and what it never reached (the document's checks, in order)
@@ -365,13 +408,13 @@ def _right_tasks(st: _Start, said: Callable[[str], None], tests: list[str] | Non
     _tries(st)
     # short waits, a model's rounds, numbers read back: notes on their task
     noted = 0
-    for nid in list(st.nodes):
+    for nid in sorted(st.nodes, key=lambda x: -len(list(st.chain(x)))):     # the deepest first: a step whose tasks were notes is one
         n = st.nodes.get(nid)
         if n is None or n["kids"] or n["e"] is None or st.failed(nid):
             continue
         name, o = st.name(nid), st.out(nid)
         quiet = (_QUIET.match(name) or o.get("reused") or re.match(r"^\s*measure:", name) and "provided" in st.why(nid))
-        if not quiet or float(n["e"].get("seconds") or 0) >= 0.5:
+        if not quiet or float(n["e"].get("seconds") or 0) >= 0.5 and not re.match(r"^\s*llm:\s*round", name, re.I):   # a round: a note however long
             continue
         note = {"t": n["e"].get("t"), "ev": "note", "parent": n["s"].get("parent"), "name": name, "why": st.why(nid),
                 "output": o, "tags": n["s"].get("tags") or {}}
@@ -448,8 +491,9 @@ def _tries(st: _Start) -> None:
                 f = st.out(k).get("failing") if k is not None else None
                 what = (tags(k).get("step") if k is not None else "") or "a test"
                 outcome, why = "check failed", f"{what} {f} failing" if f else f"{what} failed"
-            elif not g.get("run") and _unchecked(st, r, lead, drafts, is_draft):
-                outcome, why = "not built", ""
+            elif not g.get("run") and _unchecked(st, r, lead, drafts, is_draft) and not (
+                    last and st.failed(r) and not any(tags(k).get("box") == "check" for k in kids) and not re.search(r"\bagain\b|already measured", str(st.out(r).get("error") or ""))):
+                outcome, why = "not built", ""      # refused before it was built; the last of a failed run that drafted nothing: no design
             elif o.get("timed out") or str(o.get("exit")) == "124" and re.match(r"^\s*agent", st.name(lead), re.I):
                 outcome, why = "out of time", ""
             elif st.failed(lead) or last and st.nodes[r]["e"] is not None and st.failed(r):
@@ -469,20 +513,23 @@ def _tries(st: _Start) -> None:
 
 
 def _unchecked(st: _Start, run: Any, lead: Any, drafts: list, is_draft: Callable[[Any], bool]) -> bool:
-    """D1064: a draft its run never checked though it checks its drafts -- refused before it was built."""
+    """D1064: a draft its run never checked -- refused before it was built (a patch rejected, a design measured
+    already) -- in a run that checks its drafts, or one that failed with every draft unchecked (Live read the last
+    try of a run as passed: the engine says it was not built, D1235)."""
     sib = sorted(st.nodes[run]["kids"], key=lambda k: float(st.nodes[k]["s"].get("t") or 0))
     i = sib.index(lead)
     j = next((k for k in range(i + 1, len(sib)) if is_draft(sib[k])), None)
 
     def is_check(k: Any) -> bool:
         return st.nodes[k]["s"]["tags"].get("box") == "check"
-    if any(is_check(k) for k in sib[i + 1:j]) or not any(is_check(k) for k in sib):
+    if any(is_check(k) for k in sib[i + 1:j]):
         return False
-    return j is not None or st.nodes[run]["e"] is not None and st.failed(run)
+    return any(is_check(k) for k in sib) or st.nodes[run]["e"] is not None and st.failed(run)
 
 
 #: Each change the journal went through, in order: (decision, what it does, step(start, said, tests)).
 STEPS: list[tuple[str, str, Callable[..., None]]] = [
+    ("D1075", "a critic's rejection, an agent out of time, a check that did not build: fields", lambda st, said, tests: _verdicts(st, said)),
     ("D1148", "a quiet setup step written after its tasks takes them in", lambda st, said, tests: _d1148(st, said)),
     ("D1233", "every task says its box, pass, design, step and worker", lambda st, said, tests: _d1233(st, said)),
     ("D1235", "the right tasks: no evaluation, one decide, a check's one command its own, tries and how they came out",

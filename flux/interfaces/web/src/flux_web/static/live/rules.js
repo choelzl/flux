@@ -18,7 +18,7 @@ const getsPast = p => {
 /** D1031: a list of tries or passes is judged by how it ended -- its last one failed is ✗. */
 export const ended = nodes => { const last = [...nodes].sort((a, b) => (a.t1 ?? a.t0) - (b.t1 ?? b.t0)).at(-1); return !!last?.failed; };
 /** D1044: a critique that rejected what it judged; D1075: guidance, "!" -- not a failure. */
-export const rejectedBy = n => isCritique(n) && /^(rejected|sent back|objection)/i.test(String(n.output?.verdict ?? n.fields?.verdict ?? ""));
+export const rejectedBy = n => isCritique(n) && !!n.rejected;
 
 /** The judge of one render: the model's passes read once (D1089), what each design run's answer is. */
 export function judge(model, membership) {

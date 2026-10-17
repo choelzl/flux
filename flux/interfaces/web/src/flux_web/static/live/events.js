@@ -2,8 +2,6 @@
 // with recorded journals (flux/tests/unit/test_live_events.py). `apply(model, event)` one journal line; `applyLive`
 // the live state; `settle` a run that ended with tasks still open. Nothing here touches the page.
 
-import * as L from "./legacy.js";
-import { isAgent } from "./facts.js";
 
 const LOOP_MARKS = new Set(["pass", "ended", "waiting", "outputs"]);
 
@@ -18,11 +16,10 @@ export function apply(m, e) {
   if (e.ev === "hello") { m.format = Number(e.format) || 1; m.nodes.clear(); m.roots.length = 0; m.standings.clear(); m.marks.length = 0; m.notes = []; m.before = 0; m.cut = false; m.settled = false; return { reset: true }; }
   if (e.ev === "window") { m.before = Number(e.before) || 0; m.cut = !!e.cut; return {}; }   // D759: passes left out before the window
   if (e.ev === "start") {
-    // D1234: the facts the engine says of it (D1233), read through facts.js -- a journal before them by its rules
-    const n = { id: e.id, name: e.name, why: e.why, params: e.params, tags: e.tags || {}, fmt: m.format || 1, t0: e.t, seq: m.seq = (m.seq || 0) + 1, fields: {}, kids: [], parent: null };
+    // D1234: the facts the engine says of it (D1233), read through facts.js
+    const n = { id: e.id, name: e.name, why: e.why, params: e.params, tags: e.tags || {}, t0: e.t, seq: m.seq = (m.seq || 0) + 1, fields: {}, kids: [], parent: null };
     m.nodes.set(e.id, n);
     const p = e.parent != null && m.nodes.get(e.parent);
-    if (n.fmt < 2 && L.QUIET_SETUP.test(String(e.name))) L.takeIn(m, n, p ? p.kids : m.roots);   // D1148: a journal before D1143
     if (p) { n.parent = p; p.kids.push(n); } else m.roots.push(n);
   } else if (e.ev === "update") {
     const u = m.nodes.get(e.id);
@@ -33,32 +30,22 @@ export function apply(m, e) {
     d.t1 = e.t; d.seconds = e.seconds; d.output = e.output; d.interrupted = false;          // D928: its own end, not a settled one
     if (e.tags) d.tags = { ...d.tags, ...e.tags };                                         // D1233: how its work came out
     // D757: a tool that exited with an error failed, though its step went on
-    d.failed = e.failed || (String(d.name).startsWith("tool:") && e.output && e.output.exit != null && e.output.exit !== 0)
-      // a check that said an error ended failed: a journal from before its `failed` was written ("test: build" not built)
-      || (/^\s*test\s*:/i.test(String(d.name)) && !!e.output && !!e.output.error);
-    // D997: an agent stopped at its time limit (exit 124) is a warning, not a failure
-    d.timedOut = !!e.output && (!!e.output["timed out"] || isAgent(d) && Number(e.output.exit) === 124);   // D1053
+    d.failed = e.failed || (String(d.name).startsWith("tool:") && e.output && e.output.exit != null && e.output.exit !== 0);
+    // D997, D1053: an agent stopped at its time limit is a warning, not a failure
+    d.timedOut = !!e.output?.["timed out"];
     if (d.timedOut) d.failed = false;
     // D1089: a draft whose final turn (D1088) ended well handed its design in -- not one out of time
-    if (d.timedOut && d.kids.some(k => isAgent(k) && k.t1 != null && !k.failed && !(k.output && k.output["timed out"]))) { d.timedOut = false; d.graced = true; }
+    if (d.timedOut && d.kids.some(k => /^\s*agent\s*:/i.test(String(k.name)) && k.t1 != null && !k.failed && !k.output?.["timed out"])) { d.timedOut = false; d.graced = true; }
     // D1075: a critic's rejection (or a division sent back) is guidance -- "!", not a failed step
-    d.rejected = /^\s*critique\s*:/i.test(String(d.name)) && !!e.output && (!!e.output.rejected || /^(REJECTED|SENT BACK)/.test(String(e.output.verdict || "")));
+    d.rejected = !!e.output?.rejected;
     if (d.rejected) d.failed = false;
-    // D1055: an evaluation that ran nothing under it and ended at once did nothing to see -- a note, not a task;
-    // D1061: so is a stage whose numbers were read back from before -- it measured nothing
-    if ((/^\s*evaluation\s*$/i.test(String(d.name)) && (Number(e.seconds) || 0) < 0.5 || e.output && e.output.reused) && !d.kids.length && !d.failed) {
-      m.nodes.delete(d.id);
-      const sib = d.parent ? d.parent.kids : m.roots, at = sib.indexOf(d);
-      if (at >= 0) sib.splice(at, 1);
-      noteOn(m, d.parent, { name: d.name, why: d.why, t: d.t0, output: e.output || {}, seq: d.seq, ...(d.fmt >= 2 ? { tags: d.tags } : {}) });
-    }
   } else if (e.ev === "params") {                 // D1050: a wrapper took in its one agent or model turn: its inputs join
     const pw = m.nodes.get(e.id);
     if (pw) { pw.params = { ...(pw.params || {}), ...(e.params || {}) }; if (e.tags) pw.tags = { ...pw.tags, ...e.tags }; }
   } else if (e.ev === "publish") m.standings.set(e.key, e.payload);
   else if (e.ev === "note") {                     // D1047: a quiet step (a brief, a frontier) -- on its task, not a task
     noteOn(m, e.parent != null && m.nodes.get(e.parent), { name: e.name, why: e.why, t: e.t, output: e.output || {}, seq: m.seq = (m.seq || 0) + 1,
-      ...(e.tags || m.format >= 2 ? { tags: e.tags || {} } : {}) });
+      tags: e.tags || {} });
   } else if (e.ev === "mark" && e.name === "question") {
     try { return { question: JSON.parse(e.why) }; } catch (_) { return {}; }
   } else if (e.ev === "mark" && LOOP_MARKS.has(e.name)) {

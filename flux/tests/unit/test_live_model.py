@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 import live_js
+from flux_loop.journal_migrate import migrate_events
 
 STATIC = Path(__file__).parents[2] / "interfaces/web/src/flux_web/static"
 pytestmark = pytest.mark.skipif(shutil.which("node") is None, reason="node is not on PATH")
@@ -18,7 +19,7 @@ import { readFileSync } from "fs";
 const events = JSON.parse(readFileSync(0, 'utf8')), model=LT.model();
 for (const event of events) LT.apply(model, event);
 process.stdout.write(JSON.stringify(EXPRESSION));""".replace("EXPRESSION", expression)
-    return live_js.run(script, json.dumps(events))
+    return live_js.run(script, json.dumps(migrate_events(events)[0] if events else events))   # D1236: brought up to date first
 
 
 def start(id, t, parent=None, name="generation: draft", **params):
@@ -97,7 +98,7 @@ def test_parallel_branches_use_time_rather_than_tree_order_for_recent_and_curren
 
 
 def test_explicit_child_pass_keeps_its_subtree_without_pulling_in_another_pass():
-    events = [mark(3, 1), start(1, 2), start(2, 3, parent=1, **{"pass": "7"}),
+    events = [mark(3, 1), start(1, 2), start(2, 3, parent=1, name="generation: x", **{"pass": "7"}),
               start(3, 4, parent=2, name="tool: benchmark"), start(4, 5, parent=1)]
     got = evaluate(events, "(() => { const scope=taskScope(model,'7'); return {rows:scope.rows.map(r=>[r.node.id,r.depth,r.parent]),current:taskScope(model).current}; })()")
     assert got == {"rows": [[2, 0, None], [3, 1, 2]], "current": [3, 7]}
@@ -171,7 +172,7 @@ def test_a_mark_is_after_the_tasks_that_started_before_it_in_the_journal_though_
     events = [start(1, 1.0), start(2, 5.0, name="evaluation"), start(3, 5.0005, name="decide"), mark(2, 5.0005),
               start(4, 5.0006, name="generation: next")]
     got = evaluate(events, "(() => { const m = taskScope(model, 'all').membership; return [1, 2, 3, 4].map(i => m.get(i)); })()")
-    assert got == [1, 1, 1, 2]
+    assert got == [1, None, 1, 2], "the evaluation is no task (D1235): its decision and the run before are pass 1"
 
 
 def test_a_run_of_one_unmarked_pass_keeps_its_later_setup_steps_in_the_pass():
@@ -179,8 +180,8 @@ def test_a_run_of_one_unmarked_pass_keeps_its_later_setup_steps_in_the_pass():
     between its steps; the steps before its work began are the start's Setup."""
     events = [start(1, 1, name="propose: decompose"), start(2, 2, name="knowledge: mentor"), start(3, 3, name="propose: brief x"),
               start(4, 4), start(5, 5, name="knowledge: mentor"), start(6, 6, parent=5, name="tool:x"), start(7, 7, name="evaluation")]
-    got = evaluate(events, "(() => { const m = taskScope(model, 'all').membership; return [1, 2, 3, 4, 5, 6, 7].map(i => m.get(i)); })()")
-    assert got == [None, None, 1, 1, 1, 1, 1]
+    got = evaluate(events, "(() => { const m = taskScope(model, 'all').membership; return [4, 5, 6].map(i => m.get(i)); })()")
+    assert got == [1, 1, 1], "the decomposition, the mentor, the brief and the climb are no tasks (D1235); the mentor read again is the pass's"
 
 
 def test_an_agents_digest_before_the_first_mark_is_the_starts_setup():

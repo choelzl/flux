@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 import live_js
+from flux_loop.journal_migrate import migrate_events
 
 HERE = Path(__file__).parent
 EVENTS = HERE.parents[1] / "interfaces/web/src/flux_web/static/live/events.js"
@@ -20,7 +21,9 @@ def replay(events: str, body: str):
     js = ("import * as LT from './live/events.js'; import { readFileSync } from 'fs';\n{ const m = LT.model(), said = [];\n"
           "for (const l of readFileSync(0, 'utf8').split('\\n')) if (l.trim()) { const r = LT.apply(m, JSON.parse(l)); if (r.question) said.push(r.question); }\n"
           + body + "\n}")
-    return live_js.run(js, events)
+    # D1236: a journal of an earlier form is read as the converter brings it up to date
+    old = [json.loads(x) for x in events.splitlines() if x.strip()]
+    return live_js.run(js, "".join(json.dumps(e) + "\n" for e in migrate_events(old)[0]))
 
 
 def lines(ev: list[dict]) -> str:

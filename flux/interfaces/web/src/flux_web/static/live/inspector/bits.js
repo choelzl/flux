@@ -24,7 +24,7 @@ export function StepRow({ x, a, N }) {
   return html`<button type="button" class="alt-step-row" style=${`--k:${x.failed ? "var(--bad)" : colorOf(x)}`} data-task=${String(x.id)} onClick=${() => a.select(x.id)}>
     <${Glyph} tone=${running(x) ? "run" : x.failed ? "bad" : x.rejected ? "warn" : "ok"} />
     <span class="alt-task-name" title=${taskLabel(x)}>${N.shortAll(taskLabel(x))}${s ? html`<span class="muted">${` — ${s}`}</span>` : ""}
-      ${crit ? html`<span class="muted">${` — ${/^(rejected|sent back)/i.test(String(x.output?.verdict ?? "")) ? "rejected" : x.output?.verdict ? "no objection" : ""}`}</span>` : ""}</span>
+      ${crit ? html`<span class="muted">${` — ${x.rejected ? "rejected" : x.output?.verdict ? "no objection" : ""}`}</span>` : ""}</span>
     <span class="mono muted small">${dur(x.seconds ?? (x.t1 ?? Date.now() / 1000) - x.t0)}</span></button>`;
 }
 

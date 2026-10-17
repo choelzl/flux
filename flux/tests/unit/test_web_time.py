@@ -1,173 +1,19 @@
-"""D694: where a loop's time goes (the journal's phases by kind of work), what its turns cost
-(tokens as the agents and the model reported them), the charts' measurements thinned, and a
-restarted server finding a running loop again."""
+"""D694: what a loop's turns cost (tokens as the agents and the model reported them), the charts'
+measurements thinned, and a restarted server finding a running loop again. Where a start's time went is
+Live's Timeline, from the journal's tags (the server's own timeline, flux_web/timeline.py, retired: D1240)."""
 
 from __future__ import annotations
 
 import json
 import types
 
-import pytest
 
 from flux_web.results import thin
-from flux_web.timeline import kind_of, timeline
 from flux_web.usage_log import UsageLog
 
 
 def _journal(path, rows):
     path.write_text("".join(json.dumps(r) + "\n" for r in rows))
-
-
-def test_the_timeline_counts_parallel_work_once_and_splits_the_starts(tmp_path):
-    p = tmp_path / "events.jsonl"
-    _journal(p, [
-        {"t": 0, "ev": "hello", "pid": 1},
-        {"t": 0, "ev": "start", "id": 1, "parent": None, "name": "propose: decompose", "why": ""},
-        {"t": 0, "ev": "end", "id": 1, "name": "propose: decompose", "seconds": 0},
-        {"t": 1, "ev": "hello", "pid": 2},                                   # the second start
-        {"t": 1, "ev": "start", "id": 1, "parent": None, "name": "propose: decompose", "why": ""},
-        {"t": 1, "ev": "end", "id": 1, "name": "propose: decompose", "seconds": 0},
-        {"t": 1, "ev": "start", "id": 2, "parent": None, "name": "generation: build x#1", "why": ""},
-        {"t": 1, "ev": "start", "id": 3, "parent": 2, "name": "agent: claude", "why": "x"},
-        {"t": 11, "ev": "update", "id": 3, "name": "agent: claude", "fields": {"status": "done"}},
-        {"t": 11, "ev": "end", "id": 3, "name": "agent: claude", "seconds": 10},
-        {"t": 11, "ev": "end", "id": 2, "name": "generation: build x#1", "seconds": 10},
-        {"t": 11, "ev": "start", "id": 4, "parent": None, "name": "evaluation", "why": ""},
-        {"t": 11, "ev": "start", "id": 5, "parent": 4, "name": "simulation: screen", "why": ""},
-        {"t": 11, "ev": "start", "id": 6, "parent": 5, "name": "tool:yosys", "why": "a"},
-        {"t": 11, "ev": "start", "id": 7, "parent": 5, "name": "tool:yosys", "why": "b"},    # side by side
-        {"t": 15, "ev": "end", "id": 6, "name": "tool:yosys", "seconds": 4},
-        {"t": 16, "ev": "end", "id": 7, "name": "tool:yosys", "seconds": 5, "failed": True},
-        {"t": 16, "ev": "end", "id": 5, "name": "simulation: screen", "seconds": 5},
-        {"t": 16, "ev": "end", "id": 4, "name": "evaluation", "seconds": 5},
-        {"t": 16, "ev": "start", "id": 8, "parent": None, "name": "propose: decompose", "why": ""},
-        {"t": 16, "ev": "end", "id": 8, "name": "propose: decompose", "seconds": 0},
-        {"t": 16, "ev": "start", "id": 9, "parent": None, "name": "test: gate", "why": ""},       # never ended
-    ])
-    t = timeline(str(p), now=20.0)
-    assert t["start"] == 1 and len(t["starts"]) == 2
-    kinds = {k["kind"]: k for k in t["kinds"]}
-    assert kinds["check"]["busy"] == 14 and kinds["check"]["agent_busy"] == 10
-    assert kinds["check"]["agent_share"] == 10 / 19, "agent activity is part of the category, with the same wall-clock denominator"
-    scr = kinds["measure"]
-    assert scr["count"] == 2 and scr["summed"] == 9 and scr["busy"] == 5, "two tools side by side: busy once, summed twice"
-    assert scr["mean"] == 4.5 and scr["longest"] == 5 and kinds["check"]["longest"] == 10, "D772: a call's average and the longest"
-    assert t["passes"] == [1, 16]
-    gate = next(b for b in t["bars"] if b["name"] == "test: gate")
-    assert gate["running"] and gate["t1"] == 20.0, "a phase not ended in a live start runs to now"
-    assert any(b["failed"] for b in t["bars"] if b["kind"] == "measure")
-    assert timeline(str(p), 0)["bars"][0]["kind"] == "setup", "the first start keeps its setup work"
-    assert "agent" not in kinds and "model" not in kinds
-
-
-def test_agent_activity_overlaps_work_without_swallowing_builds_or_tests(tmp_path):
-    p = tmp_path / "events.jsonl"
-    rows = [{"t": 0, "ev": "hello", "pid": 1}]
-    phases = [
-        (1, None, "generate: prototype", 0, 20),
-        (2, 1, "agent: claude", 1, 19),
-        (3, 2, "build: prototype", 5, 8),
-        (4, 2, "test: prototype", 9, 12),
-        (5, None, "knowledge: prepare", 20, 30),
-        (6, 5, "agent: claude", 21, 29),
-    ]
-    for ident, parent, name, a, b in phases:
-        rows.extend([{"t": a, "ev": "start", "id": ident, "parent": parent, "name": name},
-                     {"t": b, "ev": "end", "id": ident, "name": name}])
-    _journal(p, sorted(rows, key=lambda r: r["t"]))
-    t = timeline(str(p), now=30, running=False)
-    kinds = {k["kind"]: k for k in t["kinds"]}
-    assert set(kinds) == {"design", "check", "setup"}
-    assert kinds["design"]["busy"] == 14 and kinds["design"]["agent_busy"] == 12
-    assert kinds["check"]["busy"] == kinds["check"]["agent_busy"] == 6
-    assert kinds["setup"]["busy"] == 10 and kinds["setup"]["agent_busy"] == 8
-    assert sum(k["busy"] for k in t["kinds"]) == t["wall"]
-    assert sum(k["agent_busy"] for k in t["kinds"]) == 26
-    assert sum(b["t1"] - b["t0"] for b in t["bars"] if b["agent"]) == 26
-    assert not any(b["kind"] == "design" and b["t0"] < 12 and b["t1"] > 9 for b in t["bars"])
-
-
-
-def test_a_draft_that_took_in_its_agent_turn_is_agent_work_while_it_runs(tmp_path):
-    """D1138: a draft's first agent turn is the draft itself (D1050: a `params` event, its `turn`) -- agent work
-    from then, up to now while it runs, as the agent's own task is."""
-    p = tmp_path / "events.jsonl"
-    _journal(p, [{"t": 0, "ev": "hello", "pid": 1},
-                 {"t": 0, "ev": "start", "id": 1, "parent": None, "name": "generation: x draft 1", "why": "x#1"},
-                 {"t": 1, "ev": "params", "id": 1, "params": {"prompt": "long " * 100, "turn": "agent: claude"}},
-                 {"t": 2, "ev": "start", "id": 2, "parent": 1, "name": "tool:check.py", "why": "test x#1"}])
-    t = timeline(str(p), now=10, running=True)
-    bars = {b["phase"]: b for b in t["bars"]}
-    assert bars[1]["agent"] and bars[2]["agent"], "the draft and the check its agent runs are agent work"
-    assert t["running"] and max(b["t1"] for b in t["bars"]) == 10
-
-def test_existing_agent_journal_groups_builds_and_tests_without_an_agent_lane():
-    from pathlib import Path
-
-    p = Path(__file__).parent / "fixtures/looptree/agent.jsonl"
-    t = timeline(str(p), running=False)
-    kinds = {k["kind"]: k for k in t["kinds"]}
-    assert kinds["design"]["agent_busy"] > 9
-    assert kinds["design"]["busy"] >= kinds["design"]["agent_busy"]
-    assert kinds["check"]["busy"] > 24
-    assert not any(b["kind"] == "design" and b["name"] == "tool:python3" for b in t["bars"])
-    assert not {"agent", "model", "build", "test", "generation"} & kinds.keys()
-
-
-@pytest.mark.parametrize(("name", "kind"), [
-    ("gate: tools", "setup"), ("gate: the problem", "setup"), ("propose: decompose", "setup"),
-    ("knowledge: digest papers", "setup"), ("records: re-verify *", "setup"), ("feedback: notes", "setup"),
-    ("plan: route", "plan"), ("dse: small variations", "search"),
-    ("generation: x", "design"), ("generate: prototype", "design"), ("repair: x", "design"), ("evaluation", "measure"),
-    ("generation: build x", "check"), ("build: x", "check"), ("test: gate", "check"), ("gate: x", "check"),
-    ("simulation: screen x", "measure"), ("simulation: confirm x", "measure"), ("calibrate: screen", "measure"),
-    ("propose: finalists", "choose"), ("orchestrate: x", "search"), ("decide: x", "choose"),
-    ("critique: decision", "choose"), ("critique: part", "check"), ("critique: decomposition", "setup"),
-    ("agent: claude", None), ("llm: generating (model)", None), ("model: deciding", None),
-])
-def test_timeline_categories_do_not_include_subtask_names(name, kind):
-    assert kind_of(name) == kind
-
-
-def test_agent_time_unions_nested_and_parallel_calls_and_ignores_unrelated_work(tmp_path):
-    p = tmp_path / "events.jsonl"
-    rows = [{"t": 0, "ev": "hello"}]
-    for ident, parent, name, a, b in [
-        (1, None, "generation: x", 0, 20), (2, 1, "agent: claude", 2, 10),
-        (3, 2, "agent: opencode", 3, 7),
-        (4, None, "generation: y", 0, 20), (5, 4, "agent: claude", 5, 12),
-        (6, None, "test: unrelated", 0, 20), (7, 6, "llm: checking", 1, 19),
-    ]:
-        rows.extend([{"t": a, "ev": "start", "id": ident, "parent": parent, "name": name},
-                     {"t": b, "ev": "end", "id": ident}])
-    _journal(p, sorted(rows, key=lambda r: r["t"]))
-    t = timeline(str(p), now=20, running=False)
-    kinds = {k["kind"]: k for k in t["kinds"]}
-    design = kinds["design"]
-    assert design["busy"] == 20 and design["summed"] == 40
-    assert design["agent_busy"] == 10 and design["agent_share"] == 0.5
-    assert kinds["check"]["agent_busy"] == 0
-    assert not any(b["agent"] for b in t["bars"] if b["kind"] == "check")
-    assert timeline(str(p), now=20, running=False, limit=1)["kinds"] == t["kinds"], "stats include even the bars omitted from the chart"
-
-
-def test_agent_and_model_subtasks_inherit_work_but_tool_intent_can_change_it(tmp_path):
-    p = tmp_path / "events.jsonl"
-    rows = [{"t": 0, "ev": "hello"}]
-    for ident, parent, name, why, a, b in [
-        (1, None, "decide: finalists", "", 0, 10), (2, 1, "agent: claude", "", 1, 9),
-        (3, 2, "llm: reasoning", "", 2, 3), (4, 2, "tool:python", "test a finalist", 4, 6),
-        (5, 2, "tool:yosys", "stage confirm a finalist", 6, 8),
-    ]:
-        rows.extend([{"t": a, "ev": "start", "id": ident, "parent": parent, "name": name, "why": why},
-                     {"t": b, "ev": "end", "id": ident}])
-    _journal(p, sorted(rows, key=lambda r: r["t"]))
-    t = timeline(str(p), now=10, running=False)
-    kinds = {k["kind"]: k for k in t["kinds"]}
-    assert kinds["choose"]["busy"] == 6 and kinds["choose"]["agent_busy"] == 4
-    assert kinds["check"]["busy"] == kinds["check"]["agent_busy"] == 2
-    assert kinds["measure"]["busy"] == kinds["measure"]["agent_busy"] == 2
-    assert next(b for b in t["bars"] if b["phase"] == 3)["kind"] == "choose"
 
 
 def test_usage_adds_the_agents_and_the_models_tokens(tmp_path):
@@ -255,58 +101,3 @@ def test_a_restarted_server_finds_a_running_loop_and_stops_it(tmp_path):
         proc.kill()
 
 
-def test_the_timeline_reads_the_journal_as_it_grows(tmp_path):
-    """D779: a running loop's next look parses only what was added; a half-written line waits; a
-    new file is read afresh; an end's output is not kept."""
-    import json as _json
-
-    from flux_web.timeline import _CACHE, starts
-
-    p = tmp_path / "events.jsonl"
-    rows = [{"t": 1, "ev": "hello"}, {"t": 2, "ev": "start", "id": 1, "parent": None, "name": "simulation: screen", "why": "x" * 900},
-            {"t": 3, "ev": "end", "id": 1, "seconds": 1, "failed": False, "output": {"big": "z" * 10000}}]
-    p.write_text("".join(_json.dumps(r) + "\n" for r in rows))
-    first = starts(str(p))
-    assert len(first) == 1 and len(first[0]) == 3 and "output" not in first[0][2] and len(first[0][1]["why"]) == 200
-    read = _CACHE[str(p)][1]
-    with p.open("a") as fh:
-        fh.write(_json.dumps({"t": 4, "ev": "hello"}) + "\n" + '{"t": 5, "ev": "sta')
-    again = starts(str(p))
-    assert len(again) == 2 and len(again[1]) == 1 and _CACHE[str(p)][1] > read, "only the new bytes"
-    assert first[0] is not again[0] or len(first[0]) == 3, "a returned start is not changed under its reader"
-    p.unlink()
-    p.write_text(_json.dumps({"t": 9, "ev": "hello"}) + "\n")
-    assert len(starts(str(p))) == 1, "a new file: read afresh"
-
-
-def test_the_timeline_built_as_the_journal_grows_is_the_one_read_whole(tmp_path):
-    """D780: the phases of a start are added as its events come; what the page gets equals a
-    reading of the whole file afresh, ended or running."""
-    import json as _json
-
-    import flux_web.timeline as tl
-
-    p = tmp_path / "events.jsonl"
-    rows = [{"t": 0, "ev": "hello"}]
-    n = 0
-
-    def grow(k):
-        nonlocal n
-        with p.open("a") as fh:
-            for _ in range(k):
-                n += 1
-                fh.write(_json.dumps({"t": n, "ev": "start", "id": n, "parent": None if n % 3 else n - 1,
-                                      "name": ["simulation: screen", "agent: claude", "generation: x"][n % 3], "why": ""}) + "\n")
-                if n % 4:
-                    fh.write(_json.dumps({"t": n + 0.5, "ev": "end", "id": n, "seconds": 0.5, "failed": n % 7 == 0}) + "\n")
-
-    import shutil
-
-    p.write_text("".join(_json.dumps(r) + "\n" for r in rows))
-    for i, k in enumerate((10, 25, 7)):
-        grow(k)
-        for running in (True, False):
-            built = tl.timeline(str(p), now=n + 10, running=running)          # added to what the last look built
-            fresh = tmp_path / f"fresh-{i}-{running}.jsonl"                     # the same file, never looked at
-            shutil.copy(p, fresh)
-            assert built == tl.timeline(str(fresh), now=n + 10, running=running), (k, running)

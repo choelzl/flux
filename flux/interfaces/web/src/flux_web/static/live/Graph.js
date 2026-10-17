@@ -79,11 +79,12 @@ function Box({ b, i, y, BH, note, shown, v, a, task, isOpen, listed, wait }) {
 }
 
 export function Graph({ v, a }) {
-  const passes = [...new Set(v.scopeRows.map(r => v.membership.get(r.node.id) ?? null))].sort(byPass);   // D1181: in pass order
+  // D1181: in pass order; D1235: the pass the head says, at work with no task yet, too (live-32)
+  const passes = [...new Set([...v.scopeRows.map(r => v.membership.get(r.node.id) ?? null), ...(v.starting ? [v.headerPass] : [])])].sort(byPass);
   const selPass = v.membership.get(v.selected) ?? null;
   const shown = v.pass === "all" ? (passes.includes(v.chainPass) ? v.chainPass : passes.includes(selPass) ? selPass : passes.at(-1)) : passes.at(-1);
   const inPass = v.scopeRows.filter(r => (v.membership.get(r.node.id) ?? null) === shown);
-  const boxes = flowBoxes(inPass, shown, inPass.some(r => r.node.t1 == null), v.passNotes(shown)), back = repaired(boxes);
+  const boxes = flowBoxes(inPass, shown, inPass.some(r => r.node.t1 == null) || (v.starting && shown === v.headerPass), v.passNotes(shown)), back = repaired(boxes);
   const g = [], at = {};
   let y = 6;
   boxes.forEach((b, i) => {

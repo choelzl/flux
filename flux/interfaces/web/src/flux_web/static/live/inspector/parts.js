@@ -100,7 +100,7 @@ export function bestOf(n, env) {
       if (goals[k] && m != null && (best[k] == null || goals[k] * m > goals[k] * best[k].m)) best[k] = { v: d, m, who };
     }
   }
-  const stage = (/^(?:stage|estimate)\s+(\S+)/i.exec(String(n.why || "")) || /^\s*(?:simulation|analytical)\s*:\s*(\S+)/i.exec(String(n.name || "")) || [])[1];
+  const stage = stepOf(n);                         // D1233: the stage it measured, as the engine says it
   for (const d of (stage && env.record) || []) {
     const nums = d.stages?.[stage], who = String(d.name || "");
     if (!nums || (mine && (who === mine || who.endsWith(mine)))) continue;
@@ -154,10 +154,10 @@ export function checkResult(n, out) {
   const fails = failingOf(out), f = fieldsOf(n), exited = f.exit != null && f.exit !== "" && Number(f.exit) !== 0;
   return fails ? { ...fails, exited, ok: fails.failing === 0 && !exited && !n.failed } : null;
 }
-/** The pool the engine chose from ("6 in the pool", the choice's why) is not the table: that lists the designs
+/** The pool the engine chose from (the choice's `pool`, D1235) is not the table: that lists the designs
     measured in the passes loaded -- said when the two differ. */
-export function poolSaid(why, shown) {
-  const pool = Number((/^\s*(\d+) in the pool\b/.exec(String(why || "")) || [])[1]) || 0;
+export function poolSaid(given, shown) {
+  const pool = Number(given) || 0;
   return !pool || !shown || pool === shown ? "" : shown < pool ? `${shown} of ${pool} shown: the rest measured in passes not loaded`
     : `${shown} shown: every design measured, ${pool} of them in the pool`;
 }

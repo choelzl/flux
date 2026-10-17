@@ -4,16 +4,14 @@ flux_loop.journal_migrate. The looptree fixtures are journals of that age."""
 from __future__ import annotations
 
 import json
-import shutil
 from pathlib import Path
 
 import pytest
 
-import live_js
 from flux_loop.journal_migrate import migrate_events
 
 FIX = Path(__file__).parent / "fixtures" / "looptree"
-OLD = ["agent.jsonl", "parallel.jsonl", "sweep.jsonl"]
+OLD = ["agent.jsonl", "parallel.jsonl", "sweep.jsonl", "scripted.jsonl"]
 BOXES = {"setup", "plan", "search", "design", "check", "measure", "choose"}
 
 
@@ -47,19 +45,26 @@ def test_a_journal_up_to_date_is_left_as_it_is(name):
     assert twice == once and not said
 
 
-@pytest.mark.parametrize("name", OLD)
-def test_the_tries_and_how_they_ended_are_the_ones_live_read(name, tmp_path):
-    """The converter's tries are Live's legacy reading of the same journal (live/legacy.js annotateTries), number for
-    number, outcome for outcome."""
-    new, _ = migrate_events(_load(name))
-    said = sorted((n["tags"].get("pass"), n["tags"]["try"], n["tags"]["outcome"]) for n in new if n["ev"] == "note" and n["name"] == "try")
-    shutil.copy(FIX / name, live_js.folder() / name)
-    script = """import * as LT from "./live/events.js"; import * as M from "./live/model.js"; import { readFileSync } from "fs";
-const m = LT.model();
-for (const l of readFileSync(PATH, "utf8").split("\\n")) if (l.trim()) LT.apply(m, JSON.parse(l));
-M.ready(m);
-const out = [];
-for (const n of [...m.nodes.values(), m]) for (const [k, t] of Object.entries(n.ltries || {})) out.push([Number(k), t.outcome]);
-process.stdout.write(JSON.stringify(out));""".replace("PATH", json.dumps(str(live_js.folder() / name)))
-    read = live_js.run(script)
-    assert said and sorted(tuple(x) for x in read) == sorted(x[1:] for x in said), (said, read)
+def test_the_tries_and_how_they_ended_are_the_ones_the_engine_says():
+    """scripted.jsonl: a python loop recorded before D1233 with scripted replies (a draft refused by its check, then
+    repaired; patches refused, designs measured already). Converted, its tries and how each ended are the ones the
+    engine writes for the same run since D1235, try for try."""
+    new, _ = migrate_events(_load("scripted.jsonl"))
+    got = [(n["tags"].get("pass"), n["tags"]["try"], n["tags"]["outcome"]) for n in new if n["ev"] == "note" and n["name"] == "try"]
+    p3 = ["check failed", "not built", "not built", "check failed", "not built"] * 3
+    assert got == [(1, 1, "check failed"), (1, 2, "passed"), (2, 1, "not built"), (2, 2, "passed"),
+                   *[(3, i + 1, o) for i, o in enumerate(p3)]], got
+
+
+def test_a_draft_that_took_in_its_turn_keeps_its_command_a_task():
+    """adder8: a draft that took in its agent's turn (D1050) and then ran the generator is the agent's draft, its
+    command a task under it -- as the engine writes it (the first inline turn takes the draft; a command after it is
+    a task of its own). Folding the command in made the draft a command and lost the agent's conversation."""
+    st = lambda i, t, name, why, parent=None, **params: {"ev": "start", "id": i, "t": t, "parent": parent, "name": name, "why": why, "params": params}  # noqa: E731
+    en = lambda i, t: {"ev": "end", "id": i, "t": t, "seconds": 1, "failed": False, "output": {}}  # noqa: E731
+    old = [{"ev": "hello", "t": 0}, st(1, 1, "generation: x drafts", "each checked"),
+           st(2, 2, "generation: claude draft 1", "x", 1, turn="agent: claude"), st(3, 3, "tool:gen.py", "generate x#2", 2), en(3, 4), en(2, 5), en(1, 6)]
+    new, _ = migrate_events(old)
+    starts = {e["id"]: e for e in new if e["ev"] == "start"}
+    assert 3 in starts and starts[3]["parent"] == 2 and starts[2]["params"]["turn"] == "agent: claude"
+    assert starts[2]["tags"].get("worker") == "agent:claude"

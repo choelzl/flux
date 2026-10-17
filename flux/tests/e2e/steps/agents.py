@@ -206,6 +206,8 @@ def flows(r):
             events = [{"ev": "hello", "t": now - 30}, {"ev": "mark", "name": "pass", "t": now - 29, "why": '{"n":1}'},
                       task(1, now - 28, "generation: current", **{"pass": 1}),
                       task(4, now - 27, "agent: claude", 1, prompt=turn["prompt"], command="claude --print")]
+            from flux_loop.journal_migrate import migrate_events      # D1236: a journal of an earlier form, brought up to date
+            events = migrate_events(events)[0]
             history = {"starts": [{"id": 31, "record_id": 31, "started": now - 30, "running": True}], "campaigns": []}
             # the frame's own fetch and EventSource answer for this loop (installed once its first page is up)
             mock = """const w = document.getElementById('phone').contentWindow, base = '/api/apps/' + arguments[0], [turn, ask, agent, history, events, steps] = [...arguments].slice(1);

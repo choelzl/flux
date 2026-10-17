@@ -332,7 +332,8 @@ def _absorbing() -> list[dict]:
 
 
 @contextmanager
-def phase(name: str, why: str = "", quiet: bool = False, absorb: bool = False, inline: bool = False, silent: bool = False, **params):
+def phase(name: str, why: str = "", quiet: bool = False, absorb: bool = False, inline: bool = False, silent: bool = False,
+          quiet_s: float | None = QUIET_S, **params):
     """Time a block into `name`. Records even when the block raises, so a slow failure is
     not free.
 
@@ -415,7 +416,7 @@ def phase(name: str, why: str = "", quiet: bool = False, absorb: bool = False, i
             try:
                 if not quiet:
                     lis.phase_end(token, name, secs, failed, output)
-                elif failed or secs >= QUIET_S or work:
+                elif failed or (quiet_s is not None and secs >= quiet_s) or work:   # quiet_s None: a note however long
                     _open_quiet(lis)       # D1143: the quiet steps it ran in, a task when it is one
                     _call(lis, "phase_after", name, why, params, secs, failed, output)
                 else:

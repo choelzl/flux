@@ -25,6 +25,8 @@ def flows(r):
                   {"ev": "start", "id": 3, "name": "tool: old compiler", "parent": 1, "t": 1006, "params": {"command": "old build"}},
                   {"ev": "end", "id": 3, "t": 1007, "seconds": 1, "output": {"stdout": "old compiler output"}},
                   {"ev": "end", "id": 1, "t": 1008, "seconds": 5, "output": {}}]
+        from flux_loop.journal_migrate import migrate_events          # D1236: a journal of an earlier form, brought up to date
+        events = migrate_events(events)[0]
         history = {"starts": [{"id": 911, "record_id": 911, "started": 2000, "ended": 2100, "rc": 0},
                               {"id": 910, "record_id": 911, "started": 1000, "ended": 1100, "rc": 0}],
                    "campaigns": [{"campaign_id": "retained-campaign", "created_at": "1970-01-01T00:00:00Z", "status": "paused", "run_id": 911}]}
@@ -393,6 +395,9 @@ def flows(r):
                            {**task(52, 122, "tool: compile", 51, command="make build"), "why": "build"},
                            end(52, 123, exit=2, stdout="BUILD OUTPUT", stderr="compiler failed"),
                            task(53, 124, "agent: interrupted", 51, prompt="Interrupted prompt"), end(51, 125)]
+            # D1236: journals of an earlier form, as the converter brings them up to date
+            from flux_loop.journal_migrate import migrate_events
+            events, older, interrupted = (migrate_events(x)[0] for x in (events, older, interrupted))
             history = {"starts": [{"id": 31, "record_id": 31, "started": now - 30, "running": True},
                                   {"id": 25, "record_id": 25, "started": 120, "ended": 130, "rc": -15},
                                   {"id": 21, "record_id": 21, "started": 100, "ended": 105, "rc": 0},
@@ -645,7 +650,7 @@ def flows(r):
                 choose("Live pass", "current")
                 b.js("""const stream=window.__altStreams.at(-1), t=Date.now()/1000-18;
                   for(let i=0;i<205;i++) {
-                    stream.emit('events',{ev:'start',id:1000+i,t:t+i*.002,parent:3,name:'tool: bulk '+i,params:{command:i===0?'python3 oldest-special.py':'python3 sample.py'}});
+                    stream.emit('events',{ev:'start',id:1000+i,t:t+i*.002,parent:3,name:'tool: bulk '+i,params:{command:i===0?'python3 oldest-special.py':'python3 sample.py'},tags:{try:1}});
                     stream.emit('events',{ev:'end',id:1000+i,t:t+i*.002+.001,seconds:.001,output:{exit:0}});
                   } return 1;""")
                 b.wait("document.querySelector('.alt-summary').textContent.includes('207 tasks')", what="long task journal (208, the agent at work inside its draft counted once)")
@@ -664,7 +669,7 @@ def flows(r):
                   s.emit('events',{ev:'end',id:4,t,seconds:30,output:{}});
                   s.emit('events',{ev:'end',id:3,t,seconds:30,output:{}});
                   s.emit('events',{ev:'mark',name:'pass',t:t+.01,why:'{"n":3}'});
-                  s.emit('events',{ev:'start',id:2000,t:t+.02,name:'agent: next',params:{pass:3,prompt:'Next agent prompt'}});return 1;""")
+                  s.emit('events',{ev:'start',id:2000,t:t+.02,name:'agent: next',params:{prompt:'Next agent prompt'},tags:{pass:3,box:'design',worker:'agent:next'}});return 1;""")
                 b.wait("document.querySelector('.alt-detail .pill.t-ok')?.textContent==='done'", what="pass completes while paused")
                 r.check("pausing Follow pins the inspected task and pass when the loop advances", b.js("return document.querySelector('.alt-detail').dataset.task==='4' && document.querySelector('[aria-label=\"Live pass\"]').value==='2' && document.querySelector('.alt-controls button').textContent==='Follow' && document.querySelector('.alt-controls button').getAttribute('aria-pressed')==='false'"))
                 r.button("Follow", ".alt-controls")
@@ -680,9 +685,9 @@ def flows(r):
                 b.wait("document.querySelector('.alt-tree')", what="the tree again")
                 r.check("and leaves the tasks' Follow as it was", b.js("return document.querySelector('.alt-controls button').getAttribute('aria-pressed') === 'true' && !!document.querySelector('[aria-label=\"Live pass\"]')"))
                 b.js("""const s = window.__altStreams.at(-1), t = Date.now() / 1000;      // D1016: a design continued in its pass -- twice the same task
-                  for (const [id, t0] of [[901, t], [902, t + 10]]) { s.emit('events', {ev: 'start', id, t: t0, parent: null, name: 'generation: improve wheel#7', why: 'gate', params: {}});
+                  for (const [id, t0] of [[901, t], [902, t + 10]]) { s.emit('events', {ev: 'start', id, t: t0, parent: null, name: 'generation: improve wheel#7', why: 'gate', params: {}, tags: {box: 'design', pass: 2}});
                     s.emit('events', {ev: 'end', id, t: t0 + 5, seconds: 5, output: {}}); } return 1""")
-                b.wait("document.querySelector('.alt-tree .tag.count')", what="the repeated design as one line")
+                b.wait("document.querySelector('.alt-tree .tag.count')", what="the repeated design as one line", said="document.querySelector('.live-alt')?.innerText.slice(0, 800)")
                 r.check("D1016, D1045: a box's runs in a row are one line, ×N, its tries under it", b.js(
                     "const p = document.querySelector('.alt-tree .tag.count'); return p.textContent === '×3' && p.closest('.alt-tree-row').querySelector('.alt-task-name').textContent === 'Design improve wheel#7'"))   # D1064: a design not named after its loop keeps its name
                 choose("Live start", "21")

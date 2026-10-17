@@ -529,10 +529,10 @@ class OpenAIChatProposer:
                 if round_ and self._crowded(messages, budget.compact_share):
                     self._compact_rounds(messages, budget, out, notes)
                 # one name for every round, so the timing tab sums a turn into one row
-                # (D1235) a round is the turn's: a note on it, a task when it failed or took its time
+                # (D1240) a round is the turn's -- its chat shows it: a note on the turn, a task only when it failed
                 with phase("llm: round", why=f"hop {round_ + 1} of {budget.hops + 1}"
                            + (", the answer, no tools" if last else "") + f", {len(messages)} {'message' if len(messages) == 1 else 'messages'}",
-                           quiet=True) as inner:
+                           quiet=True, quiet_s=None) as inner:
                     try:
                         message = self._exchange(messages, schema if last else None, think, inner,
                                                  tools=None if last or prompted else tools, hop_share=budget.hop_share,

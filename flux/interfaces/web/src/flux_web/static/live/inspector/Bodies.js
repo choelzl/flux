@@ -109,7 +109,7 @@ export function ChooseBody({ n, a, env }) {
   const sign = g0 && dir ? (/max/i.test(dir) ? -1 : 1) : 0, num = v => typeof v === "number" ? v : null;
   rows.sort((x, y) => (y[0] === chosen) - (x[0] === chosen) || (g0 && sign ? sign * ((num(x[1][g0.metric]) ?? Infinity * sign) - (num(y[1][g0.metric]) ?? Infinity * sign)) : 0));
   const id = c => env.N.shortAll(c);
-  const shown = poolSaid(n.output?.pool != null ? `${n.output.pool} in the pool` : n.why, rows.length);   // D1235: the pool is the choice's field
+  const shown = poolSaid(n.output?.pool, rows.length);   // D1235: the pool is the choice's field
   return html`<div class="task-inspector">
     ${refused ? html`<div class="alt-result bad" style="--k:var(--bad)"><span class="alt-big" title=${chosen}>${`✗ ${id(chosen)}`}</span>
         <span class="muted">${`picked, then rejected by the critic${rejected.get(chosen) ? `: ${rejected.get(chosen)}` : ""}`}</span></div>`
@@ -127,10 +127,10 @@ export function ChooseBody({ n, a, env }) {
 /** A critic: the verdict as a badge, the subject as a design's name and its numbers. */
 export function CriticBody({ n }) {
   const f = fieldsOf(n), verdict = String(f.verdict ?? ""), subject = String(f.subject ?? "");
-  const agreed = /no objection|stands|agree|^ok/i.test(verdict);
+  const agreed = !n.rejected;          // D1075: the engine says a rejection (`rejected`); anything else stands
   const m = /^([^:{]+):\s*(\{.*\})\s*$/s.exec(subject), numbers = m ? metricsOf(m[2].replace(/['"{},]/g, " ").replace(/\s*:\s*/g, "=")) : {};
   return html`<div class="task-inspector">
-    ${verdict ? html`<div class="alt-verdict"><${Pill} tone=${agreed ? "ok" : /^rejected/i.test(verdict) ? "bad" : "warn"}>${agreed ? "No objection" : /^rejected/i.test(verdict) ? "Rejected" : "Objection"}<//>${agreed ? "" : html`<span>${verdict}</span>`}</div>` : ""}
+    ${verdict ? html`<div class="alt-verdict"><${Pill} tone=${agreed ? "ok" : "bad"}>${agreed ? "No objection" : "Rejected"}<//>${agreed ? "" : html`<span>${verdict}</span>`}</div>` : ""}
     ${subject ? html`<div><div class="alt-label">Subject</div>${m ? html`<div class="alt-verdict"><${Tag} k=${COLORS.choose}>${m[1].trim()}<//>
       <span class="mono muted small">${Object.entries(numbers).map(([k, v]) => `${k} ${cell(v)}`).join(" · ")}</span></div>` : html`<div class="mono">${subject}</div>`}</div>` : ""}</div>`;
 }

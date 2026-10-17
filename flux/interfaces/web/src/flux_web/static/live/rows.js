@@ -53,7 +53,7 @@ export function lines(rows, v) {
     const full = taskLabel(n), at = full.indexOf(" · "), r = at < 0 ? "" : full.slice(at + 3);
     // D1064: a critique says whose and what it said ("critique · #3 · rejected")
     const verdict = String(n.output?.verdict ?? n.fields?.verdict ?? ""), of = String(n.why || "").replace(/@\S*$/, "").trim();
-    const crit = ["critique", of && !/^round\b/i.test(of) ? N.short(of) : "", n.rejected || /^(rejected|sent back)/i.test(verdict) ? "rejected" : verdict ? "no objection" : ""].filter(Boolean).join(" · ");
+    const crit = ["critique", of && !/^round\b/i.test(of) ? N.short(of) : "", n.rejected ? "rejected" : verdict ? "no objection" : ""].filter(Boolean).join(" · ");
     if (isCritique(n)) return box ? [{ b: workLabel(boxOf(n) || "check") }, ` ${crit}`] : [crit];
     if (box) return [{ b: workLabel(boxOf(n) || "setup") }, r ? { cls: "alt-what", text: ` ${N.shortAll(r)}`, title: r } : ""];
     const parentKind = n.parent ? boxOf(n.parent) : null, kind = boxOf(n);
@@ -135,8 +135,10 @@ export function lines(rows, v) {
   };
   // D1233: a design run's tries are its tasks by the try they say; a passed try's checks are the Check box's (D1054)
   const moved = new Set();
-  const triesOfRun = n => triesOf(n, v.model).map(t => ({ ...t, steps: t.steps.filter(x => !moved.has(x.id) && ids.has(x.id)) }))
-    .filter(t => ids.has(t.lead.id));
+  // a run that says no try of its own (it drafted nothing: a composition, a transpiled prototype) is one, as it ran
+  const asTry = n => [{ lead: n, steps: [], members: [n], run: true, note: n.t1 == null ? null : { outcome: n.failed ? "no design" : "passed", why: String(n.output?.error || "").split("\n")[0], design: "" } }];
+  const triesOfRun = n => { const t = triesOf(n, v.model); return (t.length ? t : asTry(n)).map(x => ({ ...x, steps: x.steps.filter(s => !moved.has(s.id) && ids.has(s.id)) }))
+    .filter(x => ids.has(x.lead.id)); };
   const passed = t => ["passed", "drafted"].includes(t.note?.outcome);
   const madeBy = t => t.note?.design || t.members.map(designOf).find(Boolean) || "";
   /** A try's line: how it came out (the engine's word), what it made, its steps under it. */
@@ -245,7 +247,8 @@ export function lines(rows, v) {
       const top = rows.filter(r => r.parent == null), byP = new Map();
       for (const r of top) { const p = v.membership.get(r.node.id) ?? null; (byP.get(p) || byP.set(p, { p, rows: [] }).get(p)).rows.push(r); }
       // D1235: the pass at work that has no task yet is a row of its own, "starting" (live-32)
-      const starting = v.headerPass != null && !byP.has(v.headerPass) && (v.pass === "all" || v.pass === "current" || Number(v.pass) === v.headerPass);
+      const starting = v.headerPass != null && !byP.has(v.headerPass) && !v.scope?.current?.some(p => p !== v.headerPass)
+        && (v.pass === "all" || v.pass === "current" || Number(v.pass) === v.headerPass);
       if (starting) byP.set(v.headerPass, { p: v.headerPass, rows: [], starting: true });
       const groups = [...byP.values()].sort((x, y) => byPass(x.p, y.p));
       const inPass = p => v.scopeRows.filter(r => (v.membership.get(r.node.id) ?? null) === p);

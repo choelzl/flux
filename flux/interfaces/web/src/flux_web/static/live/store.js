@@ -5,7 +5,7 @@
 import { api, loopApi, loopStream } from "../ui.js";
 import { changes } from "../view.js";
 import { journal } from "./journal.js";
-import { campaignForStart, currentTask, notePass, ready, taskScope, taskWindow } from "./model.js";
+import { campaignForStart, currentTask, notePass, taskScope, taskWindow } from "./model.js";
 import { passOf } from "../components/StatePill.js";
 import { docNotes, flowBoxes } from "./views.js";
 import { judge, namer } from "./rules.js";
@@ -94,8 +94,7 @@ export function createStore(ctx) {
     if (!ins) return null;
     if (s.startId === "current") ins.ended(ctx.st.running ? null : ctx.st.last_active || null);
     ins.settle();                                   // a cut-short journal settled before its current pass and status
-    // D1235: a journal before D1233 numbers its tries by the old rules; the pass at work is the one the page's head says (live-22)
-    ready(ins.model);
+    // D1235: the pass at work is the one the page's head says (live-22)
     const headerPass = s.startId === "current" ? passOf(ctx.st) : null;
     const scope = taskScope(ins.model, s.pass, headerPass);
     if (s.following || !scope.rows.some(r => r.node.id === s.selected)) s.selected = currentTask(scope.rows)?.id ?? null;

@@ -1,17 +1,10 @@
 // Pure task selection shared by the three Live representations.
 import { isAgent, isTurn, notePassOf, passOf } from "./facts.js";
-import { annotateTries } from "./legacy.js";
 
 /** D1052: a note with no task of its own (a scripted search's scope list) is the pass it was written in. */
-export const notePass = notePassOf;
+export const notePass = note => notePassOf(note);
 /** The pass a task is in (facts.js: as the engine says it, D1233). */
-export const taskPass = passOf;
-
-/** What the views read before they draw: a journal before D1233 has its tries numbered by the old rules. */
-export function ready(model) {
-  if (!(model.format >= 2)) annotateTries(model, n => passOf(n, model.marks));
-  return model;
-}
+export const taskPass = n => passOf(n);
 
 /** D1181: passes in their order -- Setup (null) first, then by number (R, half-way, between its two). */
 export const byPass = (a, b) => a == null ? (b == null ? 0 : -1) : b == null ? 1 : Number(a) - Number(b);
@@ -21,18 +14,12 @@ export const byPass = (a, b) => a == null ? (b == null ? 0 : -1) : b == null ? 1
 export function taskScope(model, pass = "current", headerPass = null) {
   const all = [...model.nodes.values()].sort((a, b) => a.t0 - b.t0 || Number(a.id) - Number(b.id));
   const membership = new Map(all.map(n => [n.id, taskPass(n, model.marks)]));
-  // D1041: a run of one pass is never marked -- a setup step after its work began (the mentor read
-  // again between designs) is that pass's, as it is in a marked pass, not a Setup between its steps
-  if (!model.marks.some(m => m.name === "pass") && !(model.format >= 2)) {   // a journal before D1233: its tasks say no pass
-    const rootOf = n => { while (n.parent) n = n.parent; return n; };
-    const began = Math.min(...all.filter(n => !n.parent && membership.get(n.id) === 1).map(n => n.t0));
-    for (const n of all) { const r = rootOf(n); if (membership.get(n.id) == null && r.t0 > began) membership.set(n.id, 1); }
-  }
   const passes = [...new Set([...model.marks.filter(m => m.name === "pass" && m.n != null).map(m => Number(m.n)),
     ...membership.values()].filter(n => n != null && Number.isFinite(n)))].sort((a, b) => a - b);
   const active = new Set(all.filter(n => n.t1 == null).map(n => membership.get(n.id)).filter(n => n != null));
   const last = model.marks.filter(m => m.name === "pass" && m.n != null).at(-1)?.n ?? passes.at(-1);
-  const current = active.size > 1 ? active : headerPass != null ? new Set([Number(headerPass)]) : active.size ? active : new Set(last == null ? [] : [Number(last)]);
+  // the passes at work; between two passes (nothing at work) the one the head says is starting, not the last one done
+  const current = active.size ? active : headerPass != null ? new Set([Number(headerPass)]) : new Set(last == null ? [] : [Number(last)]);
   const nodes = all.filter(n => pass === "all" || (pass === "current" ? !current.size || current.has(membership.get(n.id)) : membership.get(n.id) === Number(pass)));
   const included = new Set(nodes.map(n => n.id));
   const ordered = [], visit = node => { ordered.push(node); node.kids.filter(k => included.has(k.id)).forEach(visit); };
