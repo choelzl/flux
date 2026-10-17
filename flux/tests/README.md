@@ -1,11 +1,40 @@
 # tests/ — unit, integration, e2e, golden
 
+## Running a part: areas and changed files
+
+`tests/check.py` runs ruff, the unit suite, the heavy tests and the e2e side by side. `tests/areas.py`
+splits the suite into areas -- live, configurator, author, hidden, results, overview, files, loops,
+account, admin, agents, talk, document, presets, knowledge, sandbox, docs, shell, engine, llm, tui,
+apps, repo -- each its product files (`sources`), its unit test files and its e2e steps. From `flux/`:
+
+```sh
+nix develop --command python3 tests/check.py --list               # the areas: unit files, e2e steps
+nix develop --command python3 tests/check.py --area live          # Live's unit files, heavy tests, e2e steps
+nix develop --command python3 tests/check.py --area live,files unit   # only their unit files
+nix develop --command python3 tests/check.py --changed            # what the uncommitted and untracked changes touch
+nix develop --command python3 tests/check.py --changed main~3     # ... the changes since main~3
+```
+
+`--changed` says the areas it picked and how many files mapped to each. A changed unit test file
+or step module runs its own areas. A file in `areas.SHARED` (view.js, ui.js, state.js, flux.css,
+components/, app.py, store.py, document/spec.py, the harness, check.py ...), or a file in flux/ that
+no area names, runs everything. A new unit test file goes in an area's `unit` list (or matches one
+of its globs). A new e2e step goes in its area's module and in `steps.ORDER`.
+`unit/test_areas.py` fails until both are done.
+
+## The web e2e
+
 `e2e/web_ui.py` runs the web interface in headless Firefox against its own temporary server,
 users, and loop data. Run it from `flux/` with
 `nix develop --command python3 tests/e2e/web_ui.py`. It exits nonzero on a failed check and
-saves failure screenshots under the browser fixture's `shots/` folder.
+saves failure screenshots under the browser fixture's `shots/` folder. The harness (the server,
+`Browser`, `Run`, shared helpers) is `e2e/harness.py`. The steps are in `e2e/steps/<area>.py`, one
+module per area, and run in `steps.ORDER`. A step that needs the setup when it runs on a shard of
+its own (bob logged in, the sweep `sw` run once) says `r.step(name, fn, setup=True)`. `check.py`
+keeps the steps that build on an earlier step's work together (`CHAINS`) and deals the rest over
+its shards by `WEIGHT`.
 
-The independent flows in `e2e/web_ui_general.py` cover deep-link reloads and browser history,
+The independent flows in `e2e/steps/files.py`, `account.py` and `admin.py` cover deep-link reloads and browser history,
 delayed file responses and retries, concurrent edits and unsaved drafts, literal rendering of
 file and agent text, logout/re-login isolation, and admin restart confirmations and results.
 Run these flows with:
@@ -35,7 +64,7 @@ Explore and Variations tests check that old best designs and cached prototypes a
 source seeds, that comparison intent/numbers remain available, and that earlier candidates survive
 failed experiments. Variations also bypass incumbent tuning and prototype cost passes.
 
-`e2e/web_ui_lifecycle.py` also covers fullscreen drafts (selection, scroll, Escape and navigation),
+`e2e/steps/files.py`, `loops.py` and `live.py` also cover fullscreen drafts (selection, scroll, Escape and navigation),
 raw file output, reset warnings/cancellation and retained inputs/settings, and older starts'
 logs, complete agent turns, design source, reloads and delayed responses. It uses real loop
 records and API responses, without models or agents:

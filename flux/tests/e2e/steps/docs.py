@@ -1,7 +1,10 @@
 """The docs' loop crafter page (D1166): the web app's configurator mounted with no server -- the site laid out as
 the docs' hook publishes it (website/hooks.py: the app's modules at assets/app/), served by a plain static server.
 Its six steps, the docs' theme as the app's, the Graph's circle and Knowledge, and the document it downloads read
-back by the model to the same text."""
+back by the model to the same text.
+
+Run through web_ui.py (D1171: the steps of the area `docs`, tests/areas.py)."""
+
 from __future__ import annotations
 
 import functools
@@ -15,7 +18,8 @@ from pathlib import Path
 
 import yaml
 
-REPO = Path(__file__).resolve().parents[3]
+
+REPO = Path(__file__).resolve().parents[4]
 WEBSITE = REPO / "website"
 R = "document.getElementById('flux-crafter').shadowRoot"
 
@@ -37,7 +41,7 @@ def docs_site(into: Path) -> Path:
     return page
 
 
-def docs_flows(r):
+def flows(r):
     b = r.b
 
     def docs_crafter():

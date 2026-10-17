@@ -2,7 +2,9 @@
 lock, the document says it), the configurator's Knowledge box lists it and adds another, then the folder shown again;
 a new loop's configurator with a folder dropped hidden (the draft says it, the loop made hides it); New loop › Agent
 sending the files marked hidden to the author. FLUX_E2E_SHOTS=<dir>: the Files tab and the Knowledge box at 1280 and
-390 px, light and dark; the new loop's Knowledge box at 1280 px, light and dark."""
+390 px, light and dark; the new loop's Knowledge box at 1280 px, light and dark.
+
+Run through web_ui.py (D1171: the steps of the area `hidden`, tests/areas.py)."""
 
 from __future__ import annotations
 
@@ -15,7 +17,8 @@ from pathlib import Path
 
 import yaml
 
-from web_ui_general import file_api, put
+from harness import file_api, put
+
 
 #: files picked as a folder (or as files) in an uploader's input: [path, text] each -- a folder's paths start with it
 PICK = """const [css, files, folder] = arguments, input = document.querySelector(css);
@@ -33,7 +36,7 @@ def put_hidden(r, name, path):
     return r.api(f"/apps/{name}/hidden", "PUT", {"path": path, "hidden": True})
 
 
-def hidden_flows(r, watch):
+def flows(r):
     b = r.b
 
     def hidden_from_ai():

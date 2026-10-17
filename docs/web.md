@@ -500,7 +500,9 @@ are ordinary variables here.
 ## Testing the web UI
 
 - `python3 tests/check.py` (from `flux/`, dev shell): ruff, unit, heavy and browser tests in
-  parallel (~2.5 min); `tests/check.py unit e2e` for some.
+  parallel (~4 min); `tests/check.py unit e2e` for some. `--area live,files` runs only those
+  areas' unit files and browser steps (`tests/areas.py`, `--list` for the areas); `--changed`
+  only the areas the uncommitted changes touch (`--changed main~3`: since that commit).
 - `python3 tests/e2e/web_ui.py`: its own `flux serve` with three users, headless Firefox through
   every page (login, New loop, upload, tabs, Files, Direct edit, variables, sharing, start/stop,
   watcher, admin, dark theme, agent Test with a stand-in Codex, phone width). Fails on script

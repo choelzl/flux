@@ -11,7 +11,7 @@ import os
 import time
 from pathlib import Path
 
-from web_ui_general import loop
+from harness import loop
 
 JOURNALS = os.environ.get("FLUX_E2E_GALLERY_JOURNALS", "")
 

@@ -1,7 +1,7 @@
 """The docs' loop crafter page is the web app's configurator (D1166): website/hooks.py publishes the app's modules
 the page's script imports (followed, module by module) at assets/app/; the page mounts them in a shadow root with
 the app's stylesheet, its :root and body read as the root's host; the configurator asks where it runs through
-configure/host.js only. The page itself, end to end: tests/e2e/web_ui_docs.py."""
+configure/host.js only. The page itself, end to end: tests/e2e/steps/docs.py."""
 
 from __future__ import annotations
 
