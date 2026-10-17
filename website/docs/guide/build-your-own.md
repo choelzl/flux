@@ -1,8 +1,8 @@
-# Configure a loop
+# Configure
 
 Start with the [working loop](tutorial.md), copy a bundled application, or use `flux new NAME`.
 The document describes the experiment; the scripts beside it define how to generate, check,
-and measure a design. Use the [parameter reference](parameters.md) for defaults and allowed values.
+and measure a design. Use the [Document reference](parameters.md) for defaults and allowed values.
 
 ## Define the goal and interface
 
@@ -220,9 +220,9 @@ flow:
 
 `params` reaches scripts through the `{params}` JSON file. Knowledge files and notes reach
 model prompts; the loop's `library/` and the operator's shared library supply papers.
-`digest` chooses who summarizes them; `lessons` reuses lessons from campaign records.
+`digest` chooses who summarizes them; `lessons` reuses lessons from the loop's record.
 `knowledge: off` disables this reading.
 
 Check each edited document with `flux task check FOLDER`, then do a bounded run with
 `flux task run FOLDER --passes 1`. Continue with [Search and agents](loop-shape.md) or look up
-the remaining fields in the [parameter reference](parameters.md).
+the remaining fields in the [Document reference](parameters.md).

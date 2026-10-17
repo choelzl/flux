@@ -23,8 +23,8 @@ metric a name, direction and unit, then print JSON such as `timings={"parse": 12
 Objectives can use a named test, such as `timings.parse`, or the parent aggregate (`timings`).
 Aggregation defaults to mean; choose median, min, max, sum or none. Missing values are ignored,
 and a group with no finite values stays unmeasured.
-Results and Decision offer a test selector and **All** to expand the group. Measurement
-visibility is under **Settings → Preferences**, saved for your browser and loop.
+**Results › Designs** offers a test selector and **All** to expand the group. Which measurements
+show is under **Settings › Preferences**, saved for your browser and loop.
 
 Here there is no server: files you write or drop under **Prompt › Files** stay in this page, so
 the configurator can say which files the document names and lacks, and **Save draft** keeps the
@@ -33,11 +33,10 @@ the download button beside the document) saves the document. The agents offered 
 ones (Claude Code, Codex, OpenCode); a server's own agents and its shared library appear in the
 web app only.
 
-Use [Create your first loop](tutorial.md) for the scripts that accompany a complete example,
-and the [parameter reference](parameters.md) to understand a field before changing it.
+Use [First loop](tutorial.md) for the scripts that accompany a complete example,
+and the [Document reference](parameters.md) to understand a field before changing it.
 The form writes the document; you still supply any custom scripts, reference models, or data
-that its commands name. Loop names use 1–60 letters, digits, hyphens or underscores, in any
-position. Save the document as `problem.yaml` inside your loop folder, add those files,
+that its commands name. Loop names follow the [naming rule](parameters.md#files-and-loading). Save the document as `problem.yaml` inside your loop folder, add those files,
 then run `flux task check FOLDER` and a bounded first pass.
 
 <div id="flux-crafter">

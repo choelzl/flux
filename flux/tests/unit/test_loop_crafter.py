@@ -559,7 +559,7 @@ def test_the_crafter_page_mounts_the_builder_and_links_its_guides():
     links = set(re.findall(r"\]\(([^)]+)\)", page))
     assert {"tutorial.md", "build-your-own.md", "parameters.md"} <= links
     for link in links:
-        assert (guide / link).is_file(), link
+        assert (guide / link.partition("#")[0]).is_file(), link
 
 
 def test_the_guides_document_the_crafters_flow_and_search_settings():
@@ -568,6 +568,9 @@ def test_the_guides_document_the_crafters_flow_and_search_settings():
     reference = (guide / "parameters.md").read_text()
     fields = set(re.findall(r"^\| `(flow\.[^`]+)` \|", reference, re.M))
     for key, box in BUILT["boxes"].items():
+        if key == "critique":                         # the crafter's second opinion is each box's critic
+            assert "### Critics" in reference and "`critic:`" in reference
+            continue
         if box["flow"] or key == "measure":
             written = "orchestrate.dse" if key == "dse" else key
             assert f"flow.{written}" in fields, key

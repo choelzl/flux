@@ -132,7 +132,6 @@ appears in **Orchestrate** when the document is reopened.
 flow:
   orchestrate: {by: claude, dse: adaptive}
   generate: claude
-  critique: claude
 budget:
   exploration_quota: 0.25
 ```
@@ -164,7 +163,7 @@ contract still apply to every new design.
 
 Guidance reaches initial generation, repairs, prototype work, and later improvements. Logs
 record the selected move and its reason. A finite budget or manual stop controls the run;
-reaching a goal or keeping the same incumbent does not stop an unlimited campaign.
+reaching a goal or keeping the same incumbent does not stop an unlimited run.
 
 ## Put agents in the right steps
 
@@ -176,19 +175,33 @@ flow:
   orchestrate: {by: claude, dse: adaptive}
   plan: {by: claude, session: pass}
   generate: {by: claude, timeout_s: 1800, probe: {gate: 20, stages: 3}}
-  critique: claude
   select: {by: claude, finalists: 2}
   knowledge: {digest: claude, lessons: mined}
 ```
 
 `claude`, `codex`, and `opencode` are built in; a server can offer additional named agents.
-They can plan, generate, critique, and advise decisions. `flow.test` and `flow.measure` remain
+They can plan, generate, and advise decisions. `flow.test` and `flow.measure` remain
 commands: an agent cannot replace their factual results. Selection still uses
 the objectives; an agent's advice is checked and can fall back to the rules.
 
+A **critic** is a second opinion on one box: `critic:` under `orchestrate` (the split or the
+direction), `test` (a design the checks passed), `measure` (a stage's numbers) or `select` (the
+pick). It is `model`, an agent, or `{by: ..., rounds: N}`. A rejection is a verdict: the design
+fails, the numbers are marked, or the pick is made again without it.
+
+```yaml
+flow:
+  test:
+    correctness: "{python} {home}/check.py {artifact}"
+    critic: claude
+  select: {finalists: 2, critic: {by: model, rounds: 2}}
+```
+
+See [critics](parameters.md#critics) for each box's rules.
+
 A generation agent resumes one session for a part through its repairs until that part is
 admitted; a later improvement starts fresh. Do not set `session` on `generate`. Decision
-steps such as `plan` and `critique` accept `session: turn` (default) or `session: pass`.
+steps such as `plan` and a critic accept `session: turn` (default) or `session: pass`.
 
 Agents can use `flux probe` to check their current file during a turn. `probe` budgets those
 checks per turn. Direct use of certain raw tools is restricted by default; `allow` can give

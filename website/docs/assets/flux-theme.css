@@ -1,0 +1,64 @@
+/* The site in the web app's colours: flux.css's tokens mapped onto Material's variables, light then dark.
+   mkdocs.yml sets palette primary/accent to custom and lists this file in extra_css. */
+:root, [data-md-color-scheme="default"] {
+  --flux-bg: #f5f6f4; --flux-panel: #ffffff; --flux-ink: #1c1e22; --flux-muted: #697079; --flux-line: #e3e5e1; --flux-soft: #f0f1ee;
+  --flux-accent: #2c64d8; --flux-forge: #f66824; --flux-logo-ink: #3f5268;
+  --md-primary-fg-color: var(--flux-panel);          /* the header is the app's white top bar */
+  --md-primary-fg-color--light: var(--flux-soft);
+  --md-primary-fg-color--dark: var(--flux-line);
+  --md-primary-bg-color: var(--flux-ink);            /* text and icons on the header */
+  --md-primary-bg-color--light: var(--flux-muted);
+  --md-accent-fg-color: var(--flux-accent);
+  --md-accent-fg-color--transparent: rgb(44 100 216 / .1);
+  --md-typeset-a-color: var(--flux-accent);
+  --md-default-bg-color: var(--flux-panel);
+  --md-default-fg-color: var(--flux-ink);
+  --md-default-fg-color--light: var(--flux-muted);
+  --md-default-fg-color--lightest: var(--flux-line);
+  --md-code-bg-color: var(--flux-soft);
+  --md-code-fg-color: var(--flux-ink);
+  --md-code-hl-comment-color: #6a737d; --md-code-hl-string-color: #1a7f37; --md-code-hl-keyword-color: #8250df;
+  --md-code-hl-number-color: #b35900; --md-code-hl-name-color: #0550ae; --md-code-hl-function-color: #0a6e8a;
+  --md-footer-bg-color: var(--flux-ink); --md-footer-bg-color--dark: #111316;
+}
+[data-md-color-scheme="slate"] {
+  --flux-bg: #131518; --flux-panel: #1b1e22; --flux-ink: #e5e7ea; --flux-muted: #939aa3; --flux-line: #2b3036; --flux-soft: #22262b;
+  --flux-accent: #6f9dff; --flux-logo-ink: #b7c4d4;
+  --md-hue: 215;
+  --md-primary-fg-color: var(--flux-panel);
+  --md-primary-fg-color--light: var(--flux-soft);
+  --md-primary-fg-color--dark: var(--flux-line);
+  --md-primary-bg-color: var(--flux-ink);
+  --md-primary-bg-color--light: var(--flux-muted);
+  --md-accent-fg-color: var(--flux-accent);
+  --md-accent-fg-color--transparent: rgb(111 157 255 / .12);
+  --md-typeset-a-color: var(--flux-accent);
+  --md-default-bg-color: var(--flux-bg);
+  --md-default-fg-color: var(--flux-ink);
+  --md-default-fg-color--light: var(--flux-muted);
+  --md-default-fg-color--lighter: #6b727b;
+  --md-default-fg-color--lightest: var(--flux-line);
+  --md-code-bg-color: var(--flux-panel);
+  --md-code-fg-color: var(--flux-ink);
+  --md-code-hl-comment-color: #7d8590; --md-code-hl-string-color: #a5d6a7; --md-code-hl-keyword-color: #c792ea;
+  --md-code-hl-number-color: #f2b36b; --md-code-hl-name-color: #82aaff; --md-code-hl-function-color: #89ddff;
+  --md-footer-bg-color: #0f1114; --md-footer-bg-color--dark: #0b0c0e;
+}
+/* the header and tabs as the app's top bar: a panel with a hairline, the current tab underlined in accent */
+.md-header, .md-tabs { background-color: var(--md-primary-fg-color); color: var(--md-primary-bg-color); }
+.md-header { box-shadow: none; border-bottom: 1px solid var(--flux-line); }
+.md-tabs { border-bottom: 1px solid var(--flux-line); }
+.md-header__title { font-weight: 800; letter-spacing: -.02em; }
+.md-tabs__link { opacity: 1; color: var(--flux-muted); }
+.md-tabs__link--active, .md-tabs__link:hover { color: var(--flux-ink); }
+.md-tabs__item--active .md-tabs__link { text-decoration: underline 2px var(--flux-accent); text-underline-offset: 14px; }
+.md-search__form { background-color: var(--flux-soft); }
+.md-search__input { color: var(--flux-ink); }
+.md-search__input::placeholder, .md-search__icon { color: var(--flux-muted); }
+.md-typeset h1 { color: var(--flux-ink); font-weight: 700; letter-spacing: -.01em; }
+.md-typeset table:not([class]) { border-color: var(--flux-line); }
+.md-typeset table:not([class]) th { background: var(--flux-soft); }
+.md-nav__link--active, .md-nav__link:is(:focus,:hover) { color: var(--flux-accent); }
+/* the mark: its ink as the app's --logo-ink */
+.md-header__button.md-logo { color: var(--flux-logo-ink); }
+.md-header__button.md-logo svg.flux-logo { height: 1.4rem; width: 1.4rem; fill: none; }

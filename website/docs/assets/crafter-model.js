@@ -1,4 +1,4 @@
-/* The Flux problem builder's model (website/docs/guide/loop-crafter.md, the web app's configurator).
+/* The Flux configurator's model (website/docs/guide/loop-crafter.md, the web app's configurator).
 
    The document side, pure, for a browser and for node alike: `buildYaml(state) -> string`,
    `check(state) -> [{level, text}]`, `fromDoc(raw, normal)` and the vocabulary they draw from. The
@@ -978,9 +978,10 @@
     var id = String(state.id || "").trim() || WORDS.prompt.namePlaceholder;
     var loopPath = id.charAt(0) === "-" ? "./" + id : id;
     // D786: the document is the folder's problem.yaml; the folder's name is the id, not said here
-    var out = "# " + id + "/problem.yaml: made with the Flux problem builder.\n" +
+    var out = "# " + id + "/problem.yaml, from the Flux configurator\n" +
               "#     flux task check " + loopPath + "\n" +
-              "#     flux task run " + loopPath + "            # until stopped; --passes N for N\n\n";
+              "#     flux task run " + loopPath + " --passes 1\n" +
+              "#     (without --passes it runs until stopped)\n\n";
     out += prose("statement", String(state.statement || "").trim() || "(say what you want made)");
     if (String(state.contract || "").trim()) out += prose("contract", state.contract);
     var basepass = state.baseline || {};

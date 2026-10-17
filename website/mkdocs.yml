@@ -19,21 +19,27 @@ theme:
     - content.code.copy
     - toc.follow
     - search.suggest
+  # the web app's palette and mark: assets/flux-theme.css maps its tokens; overrides/partials/logo.html
+  # draws the mark inline; the favicon is the app's own logo.svg, published by hooks.py
+  favicon: assets/app/logo.svg
   palette:
     - media: "(prefers-color-scheme: light)"
       scheme: default
-      primary: deep purple
-      accent: deep purple
+      primary: custom
+      accent: custom
       toggle:
         icon: material/brightness-7
-        name: Switch to dark mode
+        name: Dark mode
     - media: "(prefers-color-scheme: dark)"
       scheme: slate
-      primary: deep purple
-      accent: deep purple
+      primary: custom
+      accent: custom
       toggle:
         icon: material/brightness-4
-        name: Switch to light mode
+        name: Light mode
+
+extra_css:
+  - assets/flux-theme.css
 
 # the loop crafter page runs the web app's configurator: its modules published from flux_web/static
 hooks:
@@ -57,8 +63,8 @@ markdown_extensions:
 nav:
   - Home: index.md
   - Build a loop:
-      - Create your first loop: guide/tutorial.md
-      - Configure a loop: guide/build-your-own.md
+      - First loop: guide/tutorial.md
+      - Configure: guide/build-your-own.md
       - Search and agents: guide/loop-shape.md
       - Loop crafter: guide/loop-crafter.md
   - Reference:

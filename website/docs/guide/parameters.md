@@ -1,11 +1,10 @@
 # Document reference
 
 Everything a loop's document, `problem.yaml`, can say, and the contract every command it names
-must follow: arguments, placeholders, what to print, exit codes. It is written from the code;
-`tests/unit/test_document_reference.py` fails when the code accepts a key this page does not
-name.
+must follow: arguments, placeholders, what to print, exit codes. It is written from the code
+and checked against it.
 
-Use [Configure a loop](build-your-own.md) for why you would choose each setting,
+Use [Configure](build-your-own.md) for why you would choose each setting,
 `flux task check FOLDER` to validate a document, and `flux task migrate FOLDER --write` to
 upgrade an older one.
 
@@ -55,8 +54,8 @@ params: {n_max: 1000000}                                    # your own settings,
 
 ## Files and loading
 
-- **The folder is the loop.** Its name is the loop's id: letters, digits, `_`, `-` and `.`,
-  not starting with `.`. There is no `id` key; saying one is refused.
+- **The folder is the loop.** Its name is the loop's id: 1 to 60 letters, digits, `_` and `-`.
+  There is no `id` key; saying one is refused.
 - **The document** is `problem.yaml` (or `problem.yml`, `problem.json`). Alternates beside it
   are `NAME.problem.yaml`; each has its own record, `out/<id>.NAME.db`.
 - **Beside it:** your scripts, `library/` (papers and notes the model reads), `workbench/`
@@ -66,8 +65,9 @@ params: {n_max: 1000000}                                    # your own settings,
   mapping is refused. Unknown keys are refused with a "did you mean" hint.
 - **Older documents** are never upgraded silently: `flux task migrate FOLDER` shows what
   changes and `--write` saves it.
-- **Normal form:** equivalent spellings (`critique: model` and `{by: model}`) load to the same
+- **Normal form:** equivalent spellings (`plan: model` and `plan: {by: model}`) load to the same
   document and share one record.
+- **`off` as a key** must be quoted (`"off": true`): unquoted, YAML reads it as `false`.
 
 ## Document fields
 
@@ -111,7 +111,7 @@ built-in tool's full command (in practice the Verilator lint line, which gives
 
 ```yaml
 flow:
-  critique: claude                              # an agent, no options
+  generate: claude                              # an agent, no options
   plan: {by: claude, session: pass}             # an agent with options
   validate: model                               # Flux's own model
   calibrate: off                                # a word
@@ -130,7 +130,6 @@ flow:
 | `flow.generate` | `model`, agent, `{command: ...}`, `{catalog: [paths]}` | yes | Write each design |
 | `flow.test` | A command, or an ordered map of named checks | never | Decide correctness ([checks](#check-settings)) |
 | `flow.measure` | An ordered map of named stages | never | Put numbers on passing designs ([measurements](#measurement-settings)) |
-| `flow.critique` | `off`, `model`, agent | yes | Object to a division, a part or a decision; never a veto |
 | `flow.select` | `objectives`, agent, `{finalists: N}` | yes | Choose the decision; an agent only breaks ties |
 | `flow.calibrate` | `on`, `off` | no | Compare a costly stage's numbers with the cheap stage's |
 | `flow.feedback` | `human`, `off` | no | Take your notes from Talk into the next prompt |
@@ -142,7 +141,7 @@ flow:
   to guide a model or agent: `adaptive` (default), `explore`, `improve`, `tune`, `finetune`,
   `variations`, or a policy name (`sweep`, `montecarlo`, `anneal`, `gradient`, `genetic`,
   `pareto`) as an emphasis. `dse` guides; it never forbids.
-- <a id="scope"></a>**`orchestrate.scope`** (D1022), for a loop of one whole design (no parts,
+- <a id="scope"></a>**`orchestrate.scope`**, for a loop of one whole design (no parts,
   sub-loops or knobs): each pass works on one scope of it. `list` is a command printing the scopes,
   one a line, its name first; `brief`, given `{scope}`, prints what the design agent is told of it;
   `check`, given `{scope}` and `{artifact}`, checks the scope on a design that passed the gate
@@ -166,6 +165,32 @@ flow:
   cannot separate; the objectives' choice stands otherwise.
 - **`plan`** is checked before use; a plan that fails the check falls back to the document's
   order.
+
+### Critics
+
+A critic is a second opinion on one box, said as `critic:` inside it. Only four boxes take one:
+
+| Box | What the critic judges | A rejection | `rounds` |
+|---|---|---|---|
+| `orchestrate` | The split into parts, or the pass's direction | The work is divided again with the objection | yes |
+| `test` | A design the checks passed | The design fails; the objection is its note on the record | no |
+| `measure` | A stage's numbers | The result is marked rejected and never chosen; it is not measured again | no |
+| `select` | The pick | The decision is made again without it | yes |
+
+```yaml
+flow:
+  orchestrate: {by: claude, critic: model}
+  test:
+    correctness: "{python} {home}/check.py {artifact}"
+    critic: claude
+  select: {finalists: 2, critic: {by: claude, rounds: 2, timeout_s: 600}}
+```
+
+A critic is `model`, an agent, your own agent (`{by: {command: [...]}}`), or
+`{by: ..., rounds: N, ...agent options}`. `rounds` (1 to 5, default 1) is how many times the box
+answers an objection, on `orchestrate` and `select` only. A rejection holds for later passes.
+`budget.critique_rounds` bounds how often a test critic sends a passing design back; `0` turns
+the critics off. The older `flow.critique` is refused; `flux task migrate` turns it into critics.
 
 ### Check settings
 
@@ -206,7 +231,7 @@ verdict is in the [check contract](#check-command).
 | `cutoff` | None | A gate before the next stage, or a list of gates that must all pass |
 | `estimate` | Off | Predict first, and skip designs the estimate already rules out |
 
-A stage names its metrics only (D1028). A metric printed as a dictionary, `name={"a": 1, "b": 2}`
+A stage names its metrics only. A metric printed as a dictionary, `name={"a": 1, "b": 2}`
 (or inside a JSON object of metrics), is read as one: each finite value becomes `name.a`,
 `name.b`, a test each. Missing, `null` and non-finite values stay unmeasured, never zero. To rank
 by the dictionary as a whole, its objective says so: `{metric: name, type: dict, aggregate: sum,
@@ -241,7 +266,7 @@ stage.
 | `lessons` | `off` | Lessons drawn from the record: `off`, `mined`, or an agent |
 | `workbench` | who digests | Who sums up the agents' `workbench/` when it changed: `off`, `model`, or an agent (`{by: claude, timeout_s: 600}` with its options); unsaid, whoever digests the papers |
 | `hidden` | Empty | Files, folders or globs (relative to the folder) the AI agents may not read: tests, checks, a gate's files and their parameters; see [Hidden from AI](#hidden-from-ai) |
-| `off` | `false` | `off: true` turns reading off (`lessons`, `workbench` and `hidden` may stand beside it); `knowledge: off` is the same |
+| `off` | `false` | `"off": true` turns reading off (`lessons`, `workbench` and `hidden` may stand beside it); `knowledge: off` is the same |
 
 `knowledge: claude` is short for `{digest: claude}`. `by:` on the knowledge box is refused:
 say `digest:`. While knowledge is on, the loop's `library/` and the server's shared library
@@ -288,8 +313,8 @@ box's, a critic, the lessons' and the digests') finds them in its work directory
 ```yaml
 skills: off                                  # none, not the built-in one either
 skills: [skills, ../shared-skills]           # these folders instead of skills/
-skills: {off: [flux-loop-commands, rtl-style]}   # skills/ and the built-in one, these two off
-skills: {from: [../shared-skills], off: [old-style]}
+skills: {"off": [flux-loop-commands, rtl-style]}   # skills/ and the built-in one, these two off
+skills: {from: [../shared-skills], "off": [old-style]}
 ```
 
 ## Search settings
@@ -437,7 +462,7 @@ says `type: dict` for has no number of its own: an objective names one of its te
 | `revert_after` | `3` | Failed compile repairs before going back to the last good design |
 | `regress_after` | `2` | Worsening edits in a row tolerated at first |
 | `max_tolerance` | `4` | Most that tolerance grows |
-| `critique_rounds` | `1` | Critic send-backs allowed for a passing part |
+| `critique_rounds` | `1` | Times a [critic](#critics) may send a passing design back; `0` turns critics off |
 
 `finalists` is set with `flow.select.finalists` and calibration with `flow.calibrate`; as
 `budget` keys they are refused. Only `exploration_quota` and `prototype` values are
@@ -783,7 +808,7 @@ resume: [...]}`. Write `command` as a **list**.
 
 `flux tools` prints the catalog; the configurator offers these as check types and
 measurement tools. `{x}` other than the loop's placeholders are the tool's parameters. Most are
-Flux's presets, `fluxpreset NAME ...` (D968, D970): nothing to copy into the loop's folder.
+Flux's presets, `fluxpreset NAME ...`: nothing to copy into the loop's folder.
 
 | Tool | Role | Command | Parameters (default) | Reports / passes |
 |---|---|---|---|---|
@@ -816,7 +841,7 @@ power_w=... cell_count=... path_ps=... worst_slack_ps=...` (`stat`: `area_um2`, 
 `route` adds `drc_errors`, `wirelength_um`). `synth` times the netlist unplaced, `place` after
 placement, `route` after routing (timing from global routing). `fluxpreset prog` builds with `--build`
 (`{out}` is the program it builds), prints `name=value` lines, and exits 3 when the build fails
-(before D969 it was `flux prog`; `flux task migrate` rewrites it). `fluxpreset bench DESIGN.py --call f --args "(1000,)"`
+(older documents said `flux prog`; `flux task migrate` rewrites it). `fluxpreset bench DESIGN.py --call f --args "(1000,)"`
 loads the design, times `f(1000)` over `--runs` (after `--warmup`) and prints `time_ms` (the median),
 `time_min_ms` and `time_spread_ms`; exit 3 when the design does not load, 1 when it raises.
 `fluxpreset cases` calls the design's function on cases -- a JSON table (`[args]` or `{"args", "kwargs",
@@ -884,7 +909,7 @@ prints `vectors_failing`, `units_passing`, `units`. Needs `pycircuit` and `aslre
 
 ## Flux presets
 
-Flux's prebuilt checks and measurements (`flux/presets/`, D968): `fluxpreset NAME ...` in a
+Flux's prebuilt checks and measurements (`flux/presets/`): `fluxpreset NAME ...` in a
 document, or in a shell inside the dev shell. `fluxpreset` alone lists them; `fluxpreset describe
 [NAME]` prints their catalog entries; `fluxpreset NAME --help` describes one.
 
@@ -912,7 +937,7 @@ document, or in a shell inside the dev shell. `fluxpreset` alone lists them; `fl
 | `bench` | `fluxpreset bench DESIGN.py --call F --args "(1000,)" [--runs 5] [--warmup 1]` |
 | `champsim` | `fluxpreset champsim build\|check\|run\|stats ARTIFACT --traces DIR [--warmup N --sim N]` |
 
-**Every preset keeps one interface** (D970; `tests/unit/test_flux_presets.py` checks it):
+**Every preset keeps one interface:**
 
 | | |
 |---|---|
@@ -978,22 +1003,28 @@ actions; they do not stop an open-ended run. Most loops omit it.
 
 ## Common refusals
 
+`flux task check` prints `not a task:` and the reason, and exits 2. The usual ones:
+
 | Message (start) | Fix |
 |---|---|
-| `keys a problem document does not have: X (did you mean Y?)` | A misspelled or removed key; `flux task migrate` handles old ones |
-| `a document does not say its id` | Remove `id:`; rename the folder instead |
+| `keys a document does not have: X; the keys are ...` | A misspelled or removed key; `flux task migrate` handles old ones. `id` is one: rename the folder instead |
 | `` `statement` must be a non-empty string `` | Say what is to be made |
+| `` `problem.yaml` names 1 path the loop folder does not have `` | Add the listed file to the folder, or fix the key that names it |
 | `flow: X is not a box of the drawing` | Use one of the boxes in [flow settings](#flow-settings) |
-| `flow.X: who works it is by -- {by: X}` | Write `{by: claude}`, not `{agent: claude}` |
-| `... never delegated to an agent: it establishes facts` | `test` and `measure` are commands only |
+| `flow.critique is a critic on each box it judges` | Write `critic:` under `orchestrate`, `test`, `measure` or `select` ([critics](#critics)) |
+| `flow.test is never delegated to an agent: it establishes facts` | `test` and `measure` are commands only |
 | `flow.X: K is not a setting of this box or an agent's` | An option on the wrong box ([agent options](#agent-options)) |
-| `timeout_s is an agent's option, not model's` | Agent options need `by: <agent>` |
+| `flow.X: timeout_s is an agent's option, not model's` | Agent options need `by: <agent>` |
 | `flow.generate is "model", {command: [...]}, {catalog: [...]} ...` | One form only; no `timeout_s` on generate |
-| `flow.dse is orchestrate: ...` / `flow.extract is knowledge: ...` | Old names: `orchestrate` and `knowledge.lessons` |
+| `flow.generate.agent.session: generate keeps one session per part` | Remove `session` from `generate` |
+| `flow.dse is orchestrate` / `flow.extract is knowledge: {lessons: mined}` | Old names: `orchestrate` and `knowledge.lessons` |
+| `flow.knowledge: who digests the papers is digest:` | Write `knowledge: {digest: claude}`, not `by:` |
 | `... says {x}, which is neither a knob ... nor the loop's` | A misspelled placeholder, or a knob not in the space |
 | `flow.dse.space knobs (...) are said by no command` | Name a `{knob}` or `{point}` in a command, or generate with a command |
-| `a command stage needs metrics ... or metrics_re` | Say what the stage prints |
-| `a task divides into parts ... or into subtasks ..., not both` | Choose one |
+| `flow.measure.X: a command stage needs metrics ... or metrics_re` | Say what the stage prints |
+| `roles.orchestrator: P: K is not one of its fields` | An option the policy does not have; the message lists its fields ([search settings](#search-settings)) |
+| `a task divides into parts of ONE artifact or into subtasks ..., not both` | Choose one |
 | `budget keys [...] are not loop knobs` | See [budget](#budget); `finalists` and `calibrate` belong in `flow` |
-| `pareto needs two objectives` | Add a second objective or choose another policy |
+| `flow.dse: pareto needs two objectives` | Add a second objective or choose another policy |
 | `baseline takes file OR command OR metrics` | One source per baseline |
+| `` `problem.yaml` is not a mapping of keys `` | The file is a list or a single value; start from `flux new NAME` |

@@ -127,7 +127,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     new_p = subparsers.add_parser(
         "new", help="Write a loop's baseline to fill in: the skeleton problem.yaml, a README of the folder's parts, library/ (D825).")
-    new_p.add_argument("name", help="The loop's name (letters, digits, _): its id, and its folder unless --dir.")
+    new_p.add_argument("name", help="The loop's name (1-60 letters, digits, _ and -): its id, and its folder unless --dir.")
     new_p.add_argument("--dir", default=None, help="Where to write it (default: ./<name>); it must not exist or be empty.")
     new_p.set_defaults(func=cmd_new)
 
