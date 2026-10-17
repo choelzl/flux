@@ -20,6 +20,6 @@ export function Overview({ r, notes, bench, use, prefs, ideas = null }) {
   const card = (all, id, small = false) => all[id]?.({ key: id, "data-overview-card": id, "data-overview-small": small ? "true" : undefined }) ?? null;
   return html`<div class="stats ov-stats" style=${`--overview-count:${prefs.layout.stats.length}`}>${prefs.layout.stats.map(id => card(stats, id, true))}</div>
     ${st.failed && (st.error || []).length ? html`<${Card} cls="why-failed" role="alert" title="Why it stopped"
-      actions=${html`<button class="small" onClick=${() => goTab("Live", "log")}>Log</button>`}><pre class="why-lines">${st.error.join("\n")}</pre><//>` : ""}
+      actions=${html`${designs.length || (r.checked || []).length ? html`<button class="small" onClick=${() => goTab("Results")}>Results</button>` : ""}<button class="small" onClick=${() => goTab("Live", "log")}>Log</button>`}><pre class="why-lines">${st.error.join("\n")}</pre><//>` : ""}
     <div class="grid-2 ov">${prefs.layout.columns.map((ids, column) => html`<div class="col" data-overview-column=${column}>${ids.map(id => card(cards, id))}</div>`)}</div>`;
 }

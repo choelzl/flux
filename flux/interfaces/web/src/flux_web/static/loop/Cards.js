@@ -9,9 +9,10 @@ import { Failed } from "../components/Tone.js";
 
 export const Reading = ({ lines = 7 }) => html`<${Card}><${Skeleton} lines=${lines} /><//>`;
 
-/** `start()` for whoever may run it; without a document, the way to have an agent write one. */
-export const NotRun = ({ info, name, mine, start }) => html`<${Card}>${info.document
-  ? html`<${Empty} text="Not run yet." action=${start ? html`<${Act} cls="small primary" onClick=${start}>Start<//>` : null} />`
+/** `start()` for whoever may run it, disabled while an agent writes the problem (`writing`: why); without a
+    document, the way to have an agent write one. */
+export const NotRun = ({ info, name, mine, start, writing = "" }) => html`<${Card}>${info.document
+  ? html`<${Empty} text="Not run yet." action=${start ? html`<${Act} cls="small primary" disabled=${!!writing} title=${writing || null} onClick=${start}>Start<//>` : null} />`
   : html`<${Empty} text="No problem document yet." action=${mine ? html`<a class="btn small" href=${`${appHref(info.owner, name)}/settings/problem/agent`}>Have an agent write it</a>` : null} />`}<//>`;
 
 export const NoResults = () => html`<${Card}><${Empty} text="No results yet." /><//>`;

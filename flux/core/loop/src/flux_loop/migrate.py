@@ -17,6 +17,7 @@ folder's name, the record follows: `out/` files and the record's campaigns are r
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import sqlite3
 from pathlib import Path
@@ -563,7 +564,10 @@ def _one(folder: Path, path: Path, docs: list[Path], entry: dict[str, Any], writ
         try:
             load_task(str(trial / target.name))
         except Exception as exc:  # noqa: BLE001 -- said; the original left alone
-            entry.update(status="failed", why=f"the result does not load: {exc}")
+            said_ = str(exc)
+            for at in {str(trial.resolve()), str(trial)}:          # the trial's folder is a temporary one: its files said by name
+                said_ = said_.replace(at + os.sep, "").replace(at, folder.name)
+            entry.update(status="failed", why=f"the result does not load: {said_}")
             return moves
     if not write:
         entry["status"] = "would migrate"

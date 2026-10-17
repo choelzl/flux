@@ -14,6 +14,7 @@ import { Bin } from "../components/Bin.js";
 import { Stat, SummaryTable, ValueCell } from "./parts.js";
 import { DecisionCard, LastPass, own } from "./Decision.js";
 import { Pill } from "../components/Tone.js";
+import { passOf } from "../components/StatePill.js";
 
 /** Each card is `a => vnode` (`a` its attributes: which card it is), or null. `o`: { ctx, r, notes, bench, use, ideas, main, objs, dec, comparison, directions, unit }. */
 export function overviewCards(o) {
@@ -34,15 +35,16 @@ export function overviewCards(o) {
   const tokens = n => total?.counted ? fmtTok(n) : "—", partial = total?.partial ? "Includes incomplete usage" : "";
   const stats = {
     state: a => html`<${Stat} ...${a} label="State" value=${st.running ? "running" : st.last_active ? (st.failed ? "failed" : st.stopped ? "stopped" : "idle") : "never run"} onClick=${go("Live")}
-      sub=${st.running ? html`since <${Ago} t=${st.since} />${st.passes != null ? ` · pass ${st.passes + (st.at_rest ? 0 : 1)}` : ""}` : st.last_active ? html`last active <${Ago} t=${st.last_active} />` : ""} />`,
+      sub=${st.running ? html`since <${Ago} t=${st.since} />${passOf(st) != null ? ` · pass ${passOf(st)}` : ""}` : st.last_active ? html`last active <${Ago} t=${st.last_active} />` : ""} />`,
     // D1092: a loop with no measure stage still chooses -- on its checks; D1094: the designs only their checks judged, said beside the measured
     designs: a => html`<${Stat} ...${a} label="Designs measured" value=${String(designs.length)} onClick=${go("Results")}
       sub=${!designs.length && (r.passes || []).some(p => p.conclusion?.decision) ? "no measure stage: chosen on its checks"
-        : !designs.length && (r.checked || []).length ? `${r.checked.length} checked, not measured · ${r.checked.filter(u => u.verdict === "failed").length} failed its checks`
+        : !designs.length && (r.checked || []).length ? `${r.checked.length} checked, not measured · ${r.checked.filter(u => u.verdict === "failed").length} failed checks`
         : `${counts ? counts.accepted : 0} accepted · ${counts?.pending ? counts.pending + " pending · " : ""}${counts?.rejected ? counts.rejected + " rejected · " : ""}${counts ? counts.failed : 0} failed`} />`,
     // D1094: every pass begun, a failed one too -- as many as the tree shows; those that decided nothing said apart
-    passes: a => { const ps = r.passes || [], n = Math.max(r.passes_begun || 0, ps.length), none = n - ps.length;
-      return html`<${Stat} ...${a} label="Passes" value=${String(n)} sub=${html`${none ? `${none} without a decision · ` : ""}${ps.length ? html`last decided <${Ago} t=${ps.at(-1).when} />` : n ? "none decided" : ""}`} />`; },
+    // the loop's passes over every start; the head's "pass N" is this start's (the same number with one start)
+    passes: a => { const ps = r.passes || [], n = Math.max(r.passes_begun || 0, ps.length), none = n - ps.length, here = passOf(st);
+      return html`<${Stat} ...${a} label="Passes" value=${String(n)} sub=${html`${here && here < n ? `${here} this start · ` : ""}${none ? `${none} without a decision · ` : ""}${ps.length ? html`last decided <${Ago} t=${ps.at(-1).when} />` : n ? "none decided" : ""}`} />`; },
     usage: a => html`<${Stat} ...${a} label="Agents" value=${total ? plural(total.turns, "turn") : "—"} onClick=${go("Agents")}
       sub=${total ? `${dur(total.seconds) || "0s"}${total.counted ? ` · ${fmtTok(total.tokens_in)} → ${fmtTok(total.tokens_out)} tokens` : ""}${total.cost_usd ? ` · $${total.cost_usd.toFixed(2)}` : ""}` : "Usage unavailable"} />`,
     objective: a => html`<${Stat} ...${a} label="Objective" value=${html`<span class="obj-line">${r.objectives || "—"}</span>`} />`,

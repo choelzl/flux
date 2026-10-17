@@ -486,18 +486,24 @@ def banner(title: str, *, width: int = 79) -> str:
     return lead + "═" * max(0, width - len(lead))
 
 
+def _one(text: object) -> str:
+    """An item on one line: a reason that spans lines (a check's output) would read as lines of its own in the log,
+    each stamped as a separate event (D1183)."""
+    return " ".join(str(text).split())
+
+
 def established(lessons: Sequence[str]) -> list[str]:
     """WHAT THIS RUN ESTABLISHED, one dash per lesson; [] when there are none."""
     if not lessons:
         return []
-    return ["WHAT THIS RUN ESTABLISHED", *[f"  - {line}" for line in lessons]]
+    return ["WHAT THIS RUN ESTABLISHED", *[f"  - {_one(line)}" for line in lessons]]
 
 
 def not_established(items: Sequence[str]) -> list[str]:
     """NOT ESTABLISHED: what the run honestly cannot claim; [] when nothing is owed."""
     if not items:
         return []
-    return ["NOT ESTABLISHED", *[f"  - {line}" for line in items]]
+    return ["NOT ESTABLISHED", *[f"  - {_one(line)}" for line in items]]
 
 
 def refused(items: Sequence, *, cap: int = 6,
@@ -507,7 +513,7 @@ def refused(items: Sequence, *, cap: int = 6,
     if not items:
         return []
     lines = [f"REFUSED ({len(items)})"]
-    lines += [f"  - {render(item)}" for item in items[:cap]]
+    lines += [f"  - {_one(render(item))}" for item in items[:cap]]
     if len(items) > cap:
         lines.append(f"  ... and {len(items) - cap} more")
     return lines

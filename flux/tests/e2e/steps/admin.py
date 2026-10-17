@@ -425,7 +425,7 @@ def flows(r):
                     r.page("#/admin", "document.querySelector('.ctl-grid')", "admin restart controls")
 
                 page()
-                r.button("Restart", ".ctl-grid")
+                r.button("Restart all", ".ctl-grid")
                 b.wait("document.querySelector('dialog.dlg[open]')", what="restart confirmation")
                 text = b.js("return document.querySelector('dialog.dlg[open]').innerText")
                 r.check("restart confirmation lists remaining finite budget and unlimited settings", "bob/ui-admin-restart: 5 of 10 passes remaining · screen only" in text
@@ -433,24 +433,26 @@ def flows(r):
                 r.check("restart confirmation explains finishing the pass and retained data", "finish their current pass" in text and "Files, results and logs are kept" in text)
                 r.dialog_button("Cancel")
                 r.check("canceling restart sends no request", b.js("return window.__restartCalls") == 0)
-                r.button("Restart", ".ctl-grid")
+                r.button("Restart all", ".ctl-grid")
                 r.dialog_button("Restart loops")
                 b.wait("window.__restartCalls === 1 && [...document.querySelectorAll('.toast')].some(t => t.textContent.includes('2 loops scheduled to restart'))", what="restart result")
                 r.check("confirming restart requests the pass boundary and reports scheduling", b.js("return window.__restartOptions.now===false"))
                 page()
                 b.js("window.__restartFailed = true; return 1")
-                r.button("Restart", ".ctl-grid")
+                r.button("Restart all", ".ctl-grid")
                 r.dialog_button("Restart loops")
                 b.wait("document.querySelector('dialog.dlg[open]')?.innerText.includes('Restart results')", what="partial restart result")
                 r.check("restart failures identify the affected loop", "bob/ui-admin-restart: still stopping" in b.js("return document.querySelector('dialog.dlg[open]').innerText"))
                 r.dialog_button("Close")
                 b.js("window.__restartPaused = true; return 1")
                 page()
-                disabled = "return [...document.querySelectorAll('.ctl-grid button')].find(b => b.textContent === 'Restart').disabled"
+                disabled = "return [...document.querySelectorAll('.ctl-grid button')].find(b => b.textContent === 'Restart all').disabled"
                 r.check("restart is disabled while starts are paused", b.js(disabled))
                 b.js("window.__restartPaused = false; window.__restartEmpty = true; return 1")
                 page()
                 r.check("restart is disabled without active loops", b.js(disabled))
+                r.check("Stop all is disabled too with none running, as Restart all is (review shell-2)",
+                        b.js(disabled.replace("'Restart all'", "'Stop all'")) and "Running: 0" in b.js("return document.querySelector('.ctl-grid').innerText"))
                 r.clean("admin restart controls")
             finally:
                 b.js("window.fetch = window.__restartFetch; return 1")
@@ -621,6 +623,11 @@ def flows(r):
             b.wait(f"document.querySelector('#main a[href=\"#/app/{name}\"]')", what="viewed user's loop list")
             r.check("viewed user has their loops and no admin navigation", name in r.text()
                     and not b.js("return [...document.querySelectorAll('#nav a')].some(a => a.textContent === 'Admin')"))
+            r.check("read-only: no Start, Stop or Restart on the list's rows (review shell-3)",
+                    not b.js("return [...document.querySelectorAll('#main table.list tbody button')].some(x => /^(Start|Stop|Restart)$/.test(x.textContent))"))
+            r.page(f"#/app/{name}", "document.querySelector('#main .tabs')", "viewed user's loop")
+            r.check("read-only: the loop's head offers no Start (review shell-3)",
+                    not b.js("return [...document.querySelectorAll('#main .page-head button')].some(x => /^(Start|Stop|Restart)$/.test(x.textContent))"))
             r.page(f"#/app/{name}/files", "document.querySelector('.files-card')", "viewed user's files")
             contents = file_api(r, name, "visible.txt")
             r.check("view-as reads the user's actual files", contents["status"] == 200 and contents["body"] == "the user's file")

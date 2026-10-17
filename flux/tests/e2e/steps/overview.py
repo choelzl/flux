@@ -387,7 +387,7 @@ def flows(r):
                 for metric in data["metrics"]:
                     b.click(f'input[data-main-metric="{metric}"]')
                 page("", "document.querySelector('.decision-nums')")
-                r.check("all main metrics can be disabled without hiding result columns", b.js("return !document.querySelector('.decision-nums [data-summary-metric]') && document.querySelectorAll('.best-n th.measurement-head').length === 3"))
+                r.check("all main metrics can be disabled without hiding result columns", b.js("return !document.querySelector('.decision-nums [data-summary-metric]') && document.querySelectorAll('.best-n:not([data-part]) th.measurement-head').length === 3"))
                 b.cmd("WebDriver:SetWindowRect", {"width": 390, "height": 900})
                 page("settings", "document.querySelector('.measurement-options')")
                 r.check("measurement preferences fit phone screens", b.js("return document.documentElement.scrollWidth <= innerWidth + 1 && document.querySelector('.measurement-options').scrollWidth <= document.querySelector('.measurement-options').clientWidth + 1"))
@@ -457,7 +457,7 @@ objectives: [{metric: timings.fast, goal: 15, direction: minimize},
                 r.check("All unrolls grouped subcolumns and keeps unavailable tests", b.js("return document.querySelectorAll('table.designs th.measurement-head').length === 5 && document.querySelector('th[scope=colgroup][title=timings]').colSpan === 4 && document.querySelector('.dictionary-expand').getAttribute('aria-pressed') === 'true' && [...document.querySelectorAll('table.designs tbody tr')].every(tr => tr.cells.length === 8)"))
                 b.wait("[...document.querySelectorAll('table.designs tbody tr')].every(tr => tr.querySelector('td.num').dataset.label === 'timings')", what="grouped table column labels: the aggregate first (D1014)")
                 page("", "document.querySelector('.best-n')")
-                r.check("Decision shares dictionary expansion", b.js("return document.querySelectorAll('.best-n th.measurement-head').length === 5 && !document.querySelector('.dictionary-select')"))
+                r.check("Decision shares dictionary expansion", b.js("return document.querySelectorAll('.best-n:not([data-part]) th.measurement-head').length === 5 && !document.querySelector('.dictionary-select')"))
                 page("results/graphs", "document.querySelector('.chart-ctl select')")
                 r.check("D1013: the axes' pickers list a dictionary's tests under it", b.js(
                     "const s = document.querySelector('.chart-ctl select'), g = s.querySelector('optgroup');"

@@ -76,6 +76,18 @@ def test_an_agent_writes_a_new_loops_problem_from_a_description_and_files(server
     assert not (tmp / "data/users/bob/apps/z").exists(), "a refused start leaves no loop behind"
 
 
+def test_a_loops_state_says_an_agent_writes_its_problem_so_start_waits(server, monkeypatch):
+    """Review results-28: Start was offered while the agent still wrote check.py, and the start route refuses it
+    meanwhile -- the loop's state says `authoring`, the head's and Overview's Start read it."""
+    _app, c, _tmp = server
+    monkeypatch.setenv("FAKE_SLEEP", "3")
+    assert c.post("/api/apps/new-by-agent", data={"name": "slow", "prompt": "an adder", "author": "opencode"}, headers=H).status_code == 200
+    assert c.get("/api/apps/slow/state").json()["authoring"] is True
+    assert c.get("/api/apps/slow").json()["state"]["authoring"] is True
+    _wait(c, "slow")
+    assert c.get("/api/apps/slow/state").json()["authoring"] is False and c.get("/api/apps/slow").json()["state"]["authoring"] is False
+
+
 def test_files_given_hidden_from_ai_reach_the_author_as_hidden(server):
     """D1159: the files a new loop's author is given, marked hidden from AI, go to `flux ask --hidden` as the author
     places them (library/<name>); a name not among the files sent is ignored."""

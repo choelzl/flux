@@ -112,6 +112,34 @@ def test_measured_designs_accepted_or_failed_by_the_limits(tmp_path):
     assert got["metrics"][:2] == ["fmax_mhz", "area_um2"] and got["limits"][0]["goal"] == 1000
 
 
+def test_an_accepted_design_never_misses_a_goal_at_the_stage_it_shows(tmp_path):
+    """Review results-7: the table's ✓ beside a red value read as a contradiction. A value is red where it misses a
+    goal at the stage shown (`meets`), and a goal is a limit: a design missing one is failed -- a baseline too."""
+    db = str(tmp_path / "r.db")
+    rec = Records(db, objective={"study": "t"}, name="t")
+    rec.remember("objectives", {"objectives": [{"metric": "fmax_mhz", "direction": "maximize", "goal": 2000},
+                                               {"metric": "area_um2", "direction": "minimize"}]})
+    for name, base, f in (("t#0", True, 1790.0), ("t#1", False, 2105.0), ("t#2", False, 1990.0)):
+        for stage, k in (("screen", 1.04), ("confirm", 1.0)):
+            rec.trial({"name": name, "artifact": name, "meta": {"baseline": base}}, f"{name}@{stage}", stage=stage,
+                      strategy="loop", metrics={"fmax_mhz": f * k, "area_um2": 20.0}, evaluator=stage)
+    rec.close("paused")
+    got = designs(db, [{"name": "screen"}, {"name": "confirm"}], decision="t#1")
+    by = {d["name"]: d for d in got["designs"]}
+    assert by["t#0"]["verdict"] == "failed" and by["t#0"]["meets"]["fmax_mhz"] is False, "the baseline is judged too"
+    assert by["t#1"]["verdict"] == "accepted" and by["t#1"]["meets"]["fmax_mhz"] is True
+    for d in [*got["designs"], *designs(_record(tmp_path / "x"), STAGES, decision="fast")["designs"]]:
+        assert d["verdict"] != "accepted" or all(d["meets"].values()), (d["name"], d["meets"])
+
+
+def test_the_accepted_designs_of_a_start_are_counted_for_the_loops_list(tmp_path):
+    """Review shell-1: the list's Designs are "new accepted / accepted / measured" -- this start's accepted ones too."""
+    db = _record(tmp_path)
+    old = designs(db, STAGES, decision="fast", since=0)
+    assert old["accepted_this_start"] == old["counts"]["accepted"] == 1 and old["this_start"] == 3
+    assert designs(db, STAGES, decision="fast", since=4e9)["accepted_this_start"] == 0
+
+
 def test_a_within_cutoff_is_judged_against_the_best_measured(tmp_path):
     stages = [{"name": "screen", "cutoff": {"metric": "fmax_mhz", "within": 0.9}}, {"name": "confirm"}]
     got = designs(_record(tmp_path), stages)

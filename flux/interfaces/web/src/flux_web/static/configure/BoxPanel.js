@@ -34,10 +34,11 @@ export function BoxPanel({ M, state, box, agent, setAgent = () => {}, edit, go, 
   const which = (cur, set, slot) => isAgent(cur) && cur !== M.INLINE_AGENT && !kept ? html`<${Select} aria-label="Which coding agent" value=${cur.slice(6)}
     options=${M.AGENTS.map(a => [a, labels[a] || a])} onChange=${a => { setAgent(a); edit(() => { M.renameAgent(state, slot, a); set(`agent:${a}`); }); }} />` : "";
   const opts = slot => html`<${AgentOpts} M=${M} state=${state} slot=${slot} edit=${edit} disabled=${kept} />`;
+  const off = M.paramOnly(state);                 // D911: a parameter-only search -- Design does not run
   const who = (bx = box) => {
-    const opts = whoOptions(M, bx, cur(bx), agent);
+    const only = bx === "generate" && off, opts = whoOptions(M, bx, cur(bx), agent, only);
     return html`<span class="cfg-who-row"><${Who} label=${`Who works ${M.BOXES[bx].title}`} fixed=${kept} options=${opts} on=${whoOn(opts, cur(bx))} pick=${choose(bx, opts)} />
-      ${which(cur(bx), v => { f[bx] = v; }, bx)}</span>`;
+      ${only ? "" : which(cur(bx), v => { f[bx] = v; }, bx)}</span>`;
   };
   const critic = bx => {
     const cur = M.criticsOf(state)[bx], opts = whoOptions(M, "critique", cur, agent);
@@ -74,13 +75,13 @@ export function BoxPanel({ M, state, box, agent, setAgent = () => {}, edit, go, 
           hint=${W.generateHint} set=${v => edit(() => { state.generateCommand = v; })} />` : ""}
         ${f.generate === "catalog" ? html`<${Text} label=${W.existing} wide value=${state.generateCatalog} placeholder=${W.existingPlaceholder}
           hint=${W.existingHint} set=${v => edit(() => { state.generateCatalog = v; })} />` : ""}
-        <div class="cfg-grid2">${B("steps")}${B("repair_attempts")}
+        <div class="cfg-grid2">${B("steps")}${off ? "" : html`${B("repair_attempts")}
           <${Pick} label=${W.prototype} hint=${W.prototypeHint} disabled=${keptBudget} value=${state.budget.prototype} set=${v => edit(() => { state.budget.prototype = v; })}
             options=${W.prototypes} />
           <${Pick} label="Repair by" disabled=${keptBudget} value=${state.budget.patching} set=${v => edit(() => { state.budget.patching = v; })}
             options=${[["", "edits (default)"], ["true", "edits"], ["false", "rewrites"]]} />
-          ${K("Revert after", "revert_after", "3", "failed repairs")}${M.hasParts(state) ? K("Parts at once", "parallel_parts", "1") : ""}</div>
-        ${isAgent(f.generate) ? html`<div class="cfg-sub"><h4>Agent turns</h4><div class="cfg-grid2">${K("Continues past time", "agent_continues", "3")}
+          ${K("Revert after", "revert_after", "3", "failed repairs")}${M.hasParts(state) ? K("Parts at once", "parallel_parts", "1") : ""}`}</div>
+        ${isAgent(f.generate) && !off ? html`<div class="cfg-sub"><h4>Agent turns</h4><div class="cfg-grid2">${K("Continues past time", "agent_continues", "3")}
           ${K("Final turn, s", "agent_grace_s", "¼ of its time")}</div></div>
           <${ProbeFields} M=${M} state=${state} edit=${edit} disabled=${kept} />` : ""}`;
       break;
@@ -112,6 +113,6 @@ export function BoxPanel({ M, state, box, agent, setAgent = () => {}, edit, go, 
     default:
   }
   return html`<${Head} title=${b.title} hint=${b.says} actions=${head || null} />
-    ${box !== "knowledge" && isAgent(f[box]) && !M.parameterSearch(state) ? opts(box) : ""}
+    ${box !== "knowledge" && isAgent(f[box]) && !M.parameterSearch(state) && !(box === "generate" && off) ? opts(box) : ""}
     ${body}`;
 }

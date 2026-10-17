@@ -268,3 +268,31 @@ def test_a_quiet_step_that_holds_a_task_is_its_parent(tmp_path):
     assert by[("note", "frontier")]["parent"] == step["id"]
     assert ("note", "knowledge: prepare") in by and ("start", "knowledge: prepare") not in by
     assert [e["ev"] for e in events if e.get("name") == "knowledge: workbench"] == ["start", "end"]
+
+
+def test_a_generation_that_made_no_design_says_why():
+    """D1181: a run that drafted no design ended failed with an empty output -- Live's Design line was ✗ with no
+    word why, over tries that each passed. Its reason is on it, on one line."""
+    from flux_loop.loop import _draft
+
+    class Gen:
+        name = "x"
+
+        def generate(self, sg, method, state, human):
+            return None, None, "nothing built in 5 tries\n0 failing of 0"
+
+    seen = []
+
+    class Listener:
+        def phase_start(self, name, why, params):
+            return name
+
+        def phase_end(self, token, name, seconds, failed, output):
+            seen.append((name, failed, dict(output)))
+
+    flux_profile.set_listener(Listener())
+    try:
+        _draft(Gen(), None, None, "", None)
+    finally:
+        flux_profile.clear_listener()
+    assert seen == [("generation: x", True, {"error": "nothing built in 5 tries 0 failing of 0"})]

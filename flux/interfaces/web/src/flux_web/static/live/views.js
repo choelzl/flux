@@ -102,6 +102,9 @@ const PASS_KINDS = ["plan", "search", "design", "check", "measure", "choose"];  
 /** A draft: an agent's or a model's turn, or a design step of its own -- never a command it ran, a brief or a composition. */
 export const isDraft = c => !/^\s*tool\s*:/i.test(String(c.name)) && ((phaseKind(c) === "design" && !/^\s*(propose|template-fill)\b/i.test(String(c.name)))
   || /^\s*(agent|llm|model)\b/i.test(String(c.params?.turn || c.name)));
+/** D1181: the agents that drafted a box's runs, as their turns name them ("codex") -- not the document's say. */
+export const agentsOf = runs => [...new Set(runs.flatMap(function all(n) { return [n, ...(n.kids || []).flatMap(all)]; })
+  .map(n => (/^\s*agent\s*:\s*(\S+)/i.exec(String(n.params?.turn || n.name)) || [])[1]).filter(Boolean))];
 /** D1054: a design box's tries -- its drafts, or each run that drafted nothing of its own (a generator command) -- as the tree numbers them. */
 export const triesOf = runs => runs.reduce((t, n) => t + Math.max(1, (n.kids || []).filter(isDraft).length), 0);
 /** D1054: the box a task is drawn in. A check is the Check box's -- but a check that failed inside a
@@ -109,6 +112,8 @@ export const triesOf = runs => runs.reduce((t, n) => t + Math.max(1, (n.kids || 
 export function boxKind(n) {
   const k = phaseKind(n);
   if (k !== "check") return k;
+  // D1181: a check the model ran inside its own turn is a step of that try -- no pass of the Check box
+  if (/^inside the turn\b/i.test(String(n.output?.measured ?? "")) && n.parent && phaseKind(n.parent) === "design") return "design";
   for (let p = n; p; p = p.parent) if (p.failed && p.parent && phaseKind(p) === "check" && phaseKind(p.parent) === "design") return "design";
   return k;
 }

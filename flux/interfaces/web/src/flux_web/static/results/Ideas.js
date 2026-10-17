@@ -36,7 +36,7 @@ function Queue({ idea, refresh }) {
     refresh();
   };
   return idea.queued
-    ? html`<div class="idea-queue"><${Tag} k="var(--accent)" title="Tested in this order">${idea.queued === 1 ? "next pass" : `queued · ${idea.queued}`}<//>
+    ? html`<div class="idea-queue"><${Tag} k="var(--accent)" title="Tested in this order">${idea.queued === 1 ? "next pass" : Number.isInteger(idea.queued) ? `queued · ${idea.queued}` : "queued"}<//>
         <${Act} cls="small" onClick=${turn} title="Take it off the queue">Unqueue<//></div>`
     : html`<div class="idea-queue"><${Act} cls="small" onClick=${turn} title="Next free pass designs it">Queue<//></div>`;
 }

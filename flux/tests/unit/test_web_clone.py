@@ -59,5 +59,6 @@ def test_an_empty_loop_is_the_baseline_to_fill_in(tmp_path):
     d = tmp_path / "data/users/bob/apps/blank"
     assert (d / "README.md").is_file() and (d / "library").is_dir() and "statement:" in (d / "problem.yaml").read_text()
     v = bob.get("/api/apps/blank/document").json()
-    assert v["raw"]["statement"] and v["error"], "the configurator reads it, and says what is missing"
+    # its statement and contract empty, for the configurator's placeholders; the loader says what is to fill in first
+    assert v["raw"]["statement"] == "" and v["raw"]["contract"] == "" and "statement" in v["error"], v
     assert bob.post("/api/apps/new-empty", json={"name": "blank"}, headers=H).status_code == 400

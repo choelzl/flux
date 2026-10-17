@@ -325,7 +325,7 @@ def designs(db: str, stages: list[dict[str, Any]], decision: str | None = None, 
     while the record is unchanged; with `stale_s`, also while it changed less than that ago --
     a running loop's line in a list need not be read again on every look. `since` (a start's
     time, D901): the result also says `this_start`, the designs first measured since, counted over
-    every design, not the page. `campaign` and `until`: one campaign as it stood at a past start's end."""
+    every design, not the page, and `accepted_this_start`, those of them accepted. `campaign` and `until`: one campaign as it stood at a past start's end."""
     key = (db, json.dumps(stages, sort_keys=True, default=str), limit, campaign, until)
     said = json.dumps(decision, sort_keys=True, default=str)
     sig = _signature(db)
@@ -334,12 +334,12 @@ def designs(db: str, stages: list[dict[str, Any]], decision: str | None = None, 
         if got is not None:
             _KEPT.move_to_end(key)
     if got is not None and got[1] == said and (got[0] == sig or time.monotonic() - got[2] < stale_s):
-        out, firsts = got[3], got[4]
+        out, firsts, accepted = got[3], got[4], got[5]
     else:
         out = _designs(db, stages, decision, limit, campaign, until)
-        firsts = out.pop("_firsts", [])
+        firsts, accepted = out.pop("_firsts", []), out.pop("_accepted_firsts", [])
         with _KEEPING:                                 # as it stands after the read (opening it touches its log)
-            _KEPT[key] = (_signature(db), said, time.monotonic(), out, firsts)
+            _KEPT[key] = (_signature(db), said, time.monotonic(), out, firsts, accepted)
             _KEPT.move_to_end(key)
             while len(_KEPT) > 1 and (len(_KEPT) > _KEEP_VIEWS or sum(len(v[4]) for v in _KEPT.values()) > _KEEP_DESIGNS):
                 _KEPT.popitem(last=False)
@@ -348,8 +348,9 @@ def designs(db: str, stages: list[dict[str, Any]], decision: str | None = None, 
     try:
         t0 = float(since)
     except (TypeError, ValueError):
-        return {**out, "this_start": 0}
-    return {**out, "this_start": len(firsts) - bisect.bisect_left(firsts, t0)}
+        return {**out, "this_start": 0, "accepted_this_start": 0}
+    return {**out, "this_start": len(firsts) - bisect.bisect_left(firsts, t0),
+            "accepted_this_start": len(accepted) - bisect.bisect_left(accepted, t0)}
 
 
 def _when(s: Any) -> float:
@@ -534,7 +535,8 @@ def _designs(db: str, stages: list[dict[str, Any]], decision: str | None, limit:
     limits = [{"metric": o.metric, "direction": o.direction, "goal": o.goal, "stage": o.stage} for o in objectives]
     # Goal-free objectives drive ranking; constraints should not displace that metric in summaries.
     main = next((o.metric for o in vector if o.goal is None), metrics[0] if metrics else None)
-    result = {"_firsts": sorted(_when(d["first"]) for d in out),          # D901: for `this_start`, over every design
+    result = {"_firsts": sorted(_when(d["first"]) for d in out),
+              "_accepted_firsts": sorted(_when(d["first"]) for d in out if d["verdict"] == "accepted"),   # the loops list's new accepted          # D901: for `this_start`, over every design
             "designs": out[:limit], "total": len(out), "feasible": any(d["decision"] for d in out), "closest": closest,
             "counts": {k: sum(1 for d in out if d["verdict"] == k) for k in ("accepted", "pending", "failed", "rejected")},
             "decision_rejected": undone["name"] if undone is not None else None,

@@ -2,7 +2,8 @@
 // partial last line held back), each with the run's own time when the stamper wrote one; what a line is (a start's
 // marker, a problem, a warning, good news); a filter (text, or /regex/). Plain functions, no page.
 
-const PROBLEM = /\b(error|errors|traceback|exception|failed|failure|refused|did not build|timed out|killed)\b|✗/i;
+// D1183: a command that exited with an error, a design that never came of a draft -- the run's own failures too
+const PROBLEM = /\b(error|errors|traceback|exception|failed|failure|refused|did not build|timed out|killed|no design|nothing built)\b|\bexit(?:ed| code| status)?\s+[1-9]\d*\b|✗/i;
 const WARN = /\b(warning|nudged|retry|stopping|interrupted|could not)\b/i;
 const GOOD = /\b(ADMITTED|DECISION|passed|decided)\b/;
 const MARK = /^── started (.+?) ──$/;

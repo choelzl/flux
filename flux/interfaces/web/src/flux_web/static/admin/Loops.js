@@ -56,8 +56,8 @@ function Controls({ loops, paused }) {
   return html`<${Card} title="Controls"><div class="ctl-grid">
     ${line("Starts", paused ? html`<${Pill} tone="warn">paused<//><span class="muted">${paused}</span><${Act} cls="small primary" onClick=${() => pause(null)}>Resume starts<//>`
       : html`<input placeholder="why (users see it)" value=${reason} onInput=${e => setReason(e.currentTarget.value)} /><${Act} cls="small" onClick=${() => pause(reason.trim() || "maintenance")}>Pause new starts<//>`)}
-    ${line(`Running: ${running.length}`, html`<${Act} cls="small" onClick=${stopAll}>Stop<//>
-      <${Act} cls="small" disabled=${!running.length || !!paused} title=${paused ? "Resume starts before restarting loops" : "Keeps run settings and results"} onClick=${() => restartAll(running)}>Restart<//>`)}
+    ${line(`Running: ${running.length}`, html`<${Act} cls="small" disabled=${!running.length} title=${running.length ? "Each running loop, after its pass" : "No loop is running"} onClick=${stopAll}>Stop all<//>
+      <${Act} cls="small" disabled=${!running.length || !!paused} title=${!running.length ? "No loop is running" : paused ? "Resume starts before restarting loops" : "Keeps run settings and results"} onClick=${() => restartAll(running)}>Restart all<//>`)}
     ${line("Users", html`<${Act} cls="small" onClick=${notifyDialog}>Notify…<//>`)}</div><//>`;
 }
 

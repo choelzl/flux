@@ -111,6 +111,10 @@ function Body({ store }) {
       const t = target(), box = el.getBoundingClientRect(), at = t?.getBoundingClientRect();
       if (t && (at.bottom > box.bottom || at.top < box.top)) t.scrollIntoView({ block: "nearest" });
     }
+    if (s.revealPass) {                              // D1182: the pass opened -- its row in sight, as a task's is
+      s.revealPass = false;
+      if (s.passView !== NO_PASS) el.querySelector(`[data-pass="${CSS.escape(String(s.passView ?? "setup"))}"]`)?.scrollIntoView({ block: "nearest" });
+    }
     if (s.focusFold != null) { el.querySelector(`[data-fold="${CSS.escape(String(s.focusFold))}"]`)?.focus({ preventScroll: true }); s.focusFold = null; }
     if (s.focusChoice) { el.querySelector(".alt-choice [data-task]")?.focus({ preventScroll: true }); s.focusChoice = false; }
     if (s.revealDetails) {

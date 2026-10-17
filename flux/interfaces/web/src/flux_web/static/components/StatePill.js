@@ -12,8 +12,12 @@ export function StatePill({ st }) {
   return html`<${Pill}>${st.last_active ? "idle" : "never run"}<//>`;
 }
 
+/** The pass a running loop is in, numbered as Live numbers this start's passes (the baseline 0); null when unknown --
+    the head, Overview's State and Passes cards read it here, one rule. */
+export const passOf = st => !st?.running ? null : st.baseline ? 0 : st.passes != null ? st.passes + (st.at_rest ? 0 : 1) : null;
+
 export const LastSaid = ({ st }) => st.running
-  ? html`running since <${Ago} t=${st.since} />${st.baseline ? " · baseline pass 0" : st.passes != null ? ` · pass ${st.passes + (st.at_rest ? 0 : 1)}` : ""}`
+  ? html`running since <${Ago} t=${st.since} />${st.baseline ? " · baseline pass 0" : passOf(st) != null ? ` · pass ${passOf(st)}` : ""}`
   : st.last_active ? html`last active <${Ago} t=${st.last_active} />` : "never run";
 
 /** D856: the page's connection to a loop, said only while it is not connected -- a green "live" beside an idle loop

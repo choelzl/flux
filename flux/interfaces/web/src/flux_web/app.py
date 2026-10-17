@@ -228,7 +228,7 @@ def create_app(data: str | Path, *, sandbox: bool = True, secure_cookie: bool = 
             return {"designs": 0, "accepted": 0}
         # D901: every design, not the first page's -- 1,200 designs were said as 1,000, 1,000 this start
         out: dict[str, Any] = {"designs": got["total"], "accepted": got["counts"]["accepted"],
-                               "this_run": got["this_start"], "feasible": got["feasible"], "metrics": got["metrics"],
+                               "this_run": got["this_start"], "accepted_this_run": got["accepted_this_start"], "feasible": got["feasible"], "metrics": got["metrics"],
                                "main_metrics": got["main_metrics"]}
         dec = next((d for d in got["designs"] if d["decision"]), None)
         if dec is not None:

@@ -76,3 +76,14 @@ export function ownSpans(node, end) {
   if (cursor < t1 || !node.kids.length) spans.push([cursor, t1]);
   return spans;
 }
+
+/** D1182: where a pass's time went -- its span (first start to last end, as the tree's line says it), each
+    kind's own time, and the time none of its tasks ran (`idle`: passes side by side take turns), so the parts
+    add up to the span. `end(n)`: a task's end, or now while it runs. */
+export function passTime(nodes, end) {
+  const t0 = Math.min(...nodes.map(n => n.t0)), t1 = Math.max(...nodes.map(end)), kinds = {}, all = [];
+  for (const n of nodes) for (const [s0, s1] of ownSpans(n, end)) { const k = phaseKind(n); kinds[k] = (kinds[k] || 0) + (s1 - s0); all.push([s0, s1]); }
+  let busy = 0, at = -Infinity;
+  for (const [s0, s1] of all.sort((a, b) => a[0] - b[0])) { const a = Math.max(s0, at); if (s1 > a) { busy += s1 - a; at = s1; } }
+  return { t0, t1, kinds, idle: Math.max(0, t1 - t0 - busy) };
+}

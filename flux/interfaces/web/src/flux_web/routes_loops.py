@@ -654,6 +654,37 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
         except (WorkspaceError, ValueError, OSError) as exc:
             raise fail(exc) from exc
 
+    @app.post("/api/apps/{name}/document/named")
+    def named_in_document(name: str, body: DocSave, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, Any]:
+        """The files a document names beside it, and which the loop lacks, by the loop's own check (D1157): the
+        configurator's form (its kept keys carried over as a save would) or Direct edit's text, as it stands.
+        A sub-loop's file is there when every sub-loop has it; what the loop writes (out/) is never missing."""
+        import yaml
+
+        from flux_loop.author import files_named, is_draft
+
+        from .configure import merged, views
+
+        w, _whose = reader(user, owner, name)
+        try:
+            doc = w.meta(name).get("document")
+            path = w.path(name, doc or "")
+            text = body.text
+            if body.kept:
+                try:
+                    text = merged(body.text, views(path)["raw"] or {}, body.kept)
+                except ValueError:
+                    pass
+            try:
+                said = yaml.safe_load(text)
+            except yaml.YAMLError:
+                said = None
+            if not isinstance(said, dict):
+                return {"named": [], "missing": [], "later": []}
+            return files_named(said, path.parent, is_draft(path.parent))
+        except (WorkspaceError, ValueError, OSError) as exc:
+            raise fail(exc) from exc
+
     @app.put("/api/apps/{name}/document")
     def save_document(name: str, body: DocSave, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, Any]:
         """The configurator's YAML, with the keys it keeps carried over as written (D686)."""
@@ -770,7 +801,7 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
             raise HTTPException(404, str(exc)) from exc
         perm = access(user, owner, name)[2]
         return {"name": name, "owner": whose.name, "mine": whose.id == user.id, "perm": perm, **w.meta(name), "files": w.files(name),
-                "state": runs.state(whose, name), "can_run": store.can_run(user, whose, name),
+                "state": {**runs.state(whose, name), "authoring": authoring.running(w.app(name))}, "can_run": store.can_run(user, whose, name),
                 "can_ask": store.can_ask(user, whose, name),                                         # D991
                 "result_preferences": preferences(store, whose.name, name),
                 "can_edit": perm in ("owner", "edit", "admin"), "can_leave": user.name in store.shares(whose.name, name)}
@@ -993,8 +1024,9 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
     # ---- the loop: running or not; a start resumes it from its record (D689)
     @app.get("/api/apps/{name}/state")
     def loop_state(name: str, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, Any]:
-        w, whose, _d, run = loop_of(name, user, owner)
-        return {**runs.state(whose, name, run), "document": w.meta(name).get("document")}
+        w, whose, d, run = loop_of(name, user, owner)
+        # `authoring`: an agent writes its problem -- Start waits (the start route refuses it meanwhile)
+        return {**runs.state(whose, name, run), "document": w.meta(name).get("document"), "authoring": authoring.running(d)}
 
     @app.get("/api/loops")
     def loops_state(user: User = Depends(user_of)) -> list[dict[str, Any]]:

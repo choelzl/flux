@@ -243,9 +243,7 @@
   function hasParts(state) { return state.partsMode === "decompose" || (state.partsMode === "list" && list(state.parts).length > 0); }
 
   function parameterSearch(state) {
-    return !!(state.flow && state.flow.dse && state.flow.dse !== "none" && (state.space || []).some(function (r) {
-      return String(r.knob || "").trim() && choicesOf(r.choices).length;
-    }));
+    return !!(state.flow && state.flow.dse && state.flow.dse !== "none" && knobNames(state).length);
   }
 
   /** The half a box is in for this state (for the drawing's colour). */
@@ -271,8 +269,9 @@
     value = value === undefined ? k : value;
     return { k: k, label: label, cls: cls, is: function (v) { return v === value; }, value: function () { return value; } };
   }
-  /** A box's kinds of worker, for its current value `cur`: [{k, label, cls, is(v), value()}]. */
-  function whoOptions(box, cur, agent) {
+  /** A box's kinds of worker, for its current value `cur`: [{k, label, cls, is(v), value()}]. `searchOnly`: Design
+      under a parameter-only search (paramOnly) -- off, unless a script or files make each point a design (D911). */
+  function whoOptions(box, cur, agent, searchOnly) {
     var a = { k: "agent", cls: "agent", label: isAgentValue(cur) ? agentWord(cur) : agent, is: isAgentValue,
               value: function () { return isAgentValue(cur) ? cur : "agent:" + agent; } };
     function modelOf(vals) {
@@ -285,7 +284,11 @@
       case "feedback": return [whoOpt("human", "notes", "rules"), whoOpt("off", "off", "off")];
       // D1133: no `orchestrate:` line is Flux's default -- rules pick the kind of work (a model picks the part when there are parts)
       case "orchestrate": return [whoOpt("default", "default", "rules"), whoOpt("rules", "rules", "rules"), modelOf(["model", "tools"]), a, whoOpt("command", "script", "script")];
-      case "generate": return [whoOpt("model", "model", "model"), a, whoOpt("command", "script", "script"), whoOpt("catalog", "files", "script")];
+      case "generate":
+        if (searchOnly) return [{ k: "off", label: "off", cls: "off", is: function (v) { return v !== "command" && v !== "catalog"; },
+                                  value: function () { return cur !== "command" && cur !== "catalog" ? cur : "model"; } },
+                                whoOpt("command", "script", "script"), whoOpt("catalog", "files", "script")];
+        return [whoOpt("model", "model", "model"), a, whoOpt("command", "script", "script"), whoOpt("catalog", "files", "script")];
       case "critique": return [whoOpt("off", "off", "off"), whoOpt("model", "model", "model"), a];
       case "calibrate": return [whoOpt("on", "on", "rules"), whoOpt("off", "off", "off")];
       case "select": return [whoOpt("objectives", "goals", "rules"), a];
@@ -343,7 +346,7 @@
     objective: { add: "+ Objective…", addLabel: "Add to the objective", none: "(add a measurement first)",
       dictHint: "the parent aggregate or parent.test" },
     graph: { aria: "The loop: each box is one step", dseKind: "Kind", dsePolicy: "Policy",
-      searchOn: ["A search over settings is on:", "only a script turns a point into a design; with a model or agent, the settings only reach the commands."],
+      searchOn: ["A search over settings is on:", "each point's settings reach the commands and Design is off; a script or files make each point a design."],
       searchPicks: "Search over settings picks next job",
       searchCommand: "Search command", searchPlaceholder: "{python} {home}/search.py {history} {state}", searchHint: "answers each round with the next candidates",
       command: "Command", generatePlaceholder: "{python} {home}/gen.py {artifact} {knob}", generateHint: "writes {artifact}; each setting is {its name}",
@@ -371,27 +374,57 @@
       baselineSay: "pass 0", baselineModes: [["off", "off"], ["before", "first"], ["only", "only"]],
       baselineFrom: [["project", "project"], ["file", "file"], ["command", "command"], ["metrics", "numbers"]],
       baselineFile: "baseline.sv", baselineCommand: "{python} {home}/baseline.py {artifact}", addMetric: "+ Metric", deepest: "deepest" },
-    save: { draft: "Save draft", draftSaved: "Draft saved.", saving: "Saving…", saved: "Saved.", kept: "Kept as written", vsSaved: "vs saved" },
+    save: { draft: "Save draft", draftSaved: "Draft saved.", saving: "Saving…", saved: "Saved.", kept: "Kept as written", vsSaved: "vs saved",
+      // D912: the draft's line above the configurator, the docs' page's too
+      draftOf: "Draft", unnamed: "unnamed", staged: "staged", discard: "Discard draft",
+      // D825: the starter left as it came
+      starterSum: "not filled in yet", starterLeft: "not filled in yet: what to make and a check (Prompt, Check & Measure)",
+      starterWhat: "Not filled in yet:", starterWhy: "say what to make in Prompt and add a check in Check & Measure; the loop loads once both are said." },
   };
 
   /** D912: where a draft stands -- the document, its files, the loop's own check, a start -- apart, each [kind, what,
       words]. `files` {missing} when the page knows them; `save` a page that saves (the check and the start said too). */
   function plural(n, one) { return n + " " + (n === 1 ? one : one + "s"); }
-  function readiness(msgs, o) {
-    var named = o.named || [], files = o.files, calm = o.calm;
+  /** Where a draft stands, once: `rows` Save's checklist ([kind, what, words]) and `sum` the rail's line under Save,
+      both from the same points. `o.loadError` the loader's refusal of the document as saved (said first); `o.files`
+      {missing, later} -- `later` a golden model the loop's model writes before its first pass (D604); `o.isNew` a
+      loop to create. */
+  function standing(msgs, o) {
+    var named = o.named || [], files = o.files, calm = o.calm, loadError = String(o.loadError || "");
     var errors = msgs.filter(function (m) { return m.level === "error"; }).length;
-    var rows = [[errors ? (calm ? "todo" : "error") : "ok", "Document", errors ? plural(errors, "thing") + " to " + (calm ? "do" : "fix") + ", below" : "complete"]];
-    var missing = files ? files.missing : null;
+    var todo = plural(errors, "thing") + " to " + (calm ? "do" : "fix");
+    var rows = [];
+    // the starter as it came: what is left said calmly, not as the loader's refusal (it goes red once edited)
+    if (o.starter) rows.push(["todo", "Starter", WORDS.save.starterLeft]);
+    else if (loadError) rows.push(["error", "Loads", "no: the loader refuses it as saved"]);    // its words are the page's notice
+    rows.push([errors ? (calm ? "todo" : "error") : "ok", "Document", errors ? todo + ", below" : "complete"]);
+    var missing = files ? files.missing : null, later = (files && files.later) || [];
+    var there = named.filter(function (p) { return later.indexOf(p) < 0; });
+    var by = later.length ? later.join(", ") + " written by the loop's model first" : "";
     if (missing) rows.push([missing.length ? "error" : "ok", "Files", missing.length ? "missing " + missing.join(", ") + " (Prompt › Files)"
-      : named.length === 1 ? named[0] + " present" : named.length ? "all " + named.length + " present" : "none named"]);
+      : [there.length === 1 ? there[0] + " present" : there.length ? "all " + there.length + " present" : later.length ? "" : "none named", by].filter(Boolean).join("; ")]);
     else if (named.length) rows.push(["note", "Files", "put " + named.join(", ") + " beside the document"]);
-    if (o.save === false) return rows;
-    var ck = o.checked || ["note", "not checked yet"];
-    rows.push([ck[0], "Checked", ck[1]]);
-    var go = !errors && !(missing || []).length && ck[0] === "ok";
-    rows.push([go ? "ok" : "note", "Ready to run", go ? "yes" : "after a Check passes"]);
-    return rows;
+    var ck = o.save === false ? null : o.checked || ["note", "not checked yet"];
+    if (ck) rows.push([ck[0], "Checked", ck[1]]);
+    // what stands in the way first: the Ready line names it, the rail says every one
+    var gone = (missing || []).length, failed = ck && ck[0] === "error";
+    var blocker = loadError ? "after the document loads" : errors ? "after " + todo : gone ? "after " + plural(gone, "missing file") + (gone === 1 ? " is" : " are") + " added"
+      : failed ? "after a Check passes" : ck && ck[0] !== "ok" ? "after a Check passes" : "";
+    if (ck) rows.push([blocker ? "note" : "ok", "Ready to run", blocker || "yes"]);
+    if (o.starter) return { rows: rows, sum: WORDS.save.starterSum };
+    var sum = [loadError ? "does not load" : "", errors ? todo : "", gone ? plural(gone, "file") + " missing" : "", failed ? "check failed" : ""].filter(Boolean);
+    return { rows: rows, sum: sum.length ? sum.join(" · ") : o.isNew ? "ready to create" : "ready to save" };
   }
+  /** Whether a document as written is the starter left as it came (D825): no statement, no contract, no check said
+      -- what `flux new` and New loop › Create without files write. Read from its content, not a mark. */
+  function unfilled(raw) {
+    if (!raw || typeof raw !== "object") return false;
+    var blank = function (v) { return v === undefined || v === null || String(v).trim() === ""; };
+    var flow = raw.flow && typeof raw.flow === "object" ? raw.flow : {};
+    return blank(raw.statement) && blank(raw.contract) && blank(flow.test) && blank(raw.gate);
+  }
+  /** Save's checklist alone (standing's rows). */
+  function readiness(msgs, o) { return standing(msgs, o).rows; }
 
   // ------------------------------------------------------------------ the tool catalog
   /* The integrated tools (website/docs/assets/tools.json = `flux tools --json`, D654): checks a
@@ -803,9 +836,15 @@
     return found.length === 1 ? found[0] : "";
   }
 
+  /** The settings a space kept as written names (`flow.dse.space`): searched all the same, edited in Direct edit. */
+  function keptKnobs(state) {
+    var sp = ((state && state.keptFlow) || {})["flow.dse.space"];
+    return sp && typeof sp === "object" && !Array.isArray(sp) ? Object.keys(sp) : [];
+  }
   function knobNames(state) {
-    return (state.space || []).filter(function (r) { return String(r.knob || "").trim() && choicesOf(r.choices).length; })
+    var own = (state.space || []).filter(function (r) { return String(r.knob || "").trim() && choicesOf(r.choices).length; })
       .map(function (r) { return r.knob.trim(); });
+    return own.concat(keptKnobs(state).filter(function (k) { return own.indexOf(k) < 0; }));
   }
 
   function gateOf(g) {
@@ -1260,7 +1299,12 @@
   /** The files beside the document the state names (`{home}/...` words, knowledge files), in order (D912). */
   function namedFiles(state, cat) {
     var r = resolve(state, cat || CATALOG), files = [];
-    function add(f) { if (f && files.indexOf(f) < 0) files.push(f); }
+    // D1157, as the loop's own check (flux_loop.author.named_files): what the loop writes as it runs (out/, workbench/)
+    // and a path with a placeholder in it are not named
+    function add(f) {
+      f = String(f || "").replace(/^\.\//, "");
+      if (f && f !== "/" && f.indexOf("{") < 0 && !/^(out|workbench)(\/|$)/.test(f) && f.charAt(0) !== "/" && files.indexOf(f) < 0) files.push(f);
+    }
     function cmd(c) { homeFiles(c).forEach(add); }
     r.checks.forEach(function (c) { cmd(c.run); });
     r.stages.forEach(function (st) { cmd(st.command); if (st.estimate && st.estimate.command) cmd(st.estimate.command); });
@@ -1275,6 +1319,20 @@
     list(state.knowledgeFiles).forEach(add);
     add(String(state.knowledgeSheet || "").trim());
     return files;
+  }
+
+  /** The golden models the checks name (`--golden {home}/x`): one the folder lacks the loop's model writes before
+      its first pass (D604), so it is not missing (as the loop's own check says, outside an agent's draft). */
+  function goldenFiles(state, cat) {
+    var out = [];
+    resolve(state, cat || CATALOG).checks.forEach(function (c) {
+      var w = shellSplit(c.run);
+      for (var i = 0; i + 1 < w.length; i++) {
+        var m = w[i] === "--golden" && /^\{home\}\/(.+)$/.exec(w[i + 1]);
+        if (m && out.indexOf(m[1]) < 0) out.push(m[1]);
+      }
+    });
+    return out;
   }
 
   /** The step of the web's wizard each part of the state is edited on (D912). D941: six steps, by id;
@@ -1995,7 +2053,8 @@
       BUDGET_KEYS.forEach(function (k) { if (bu[k] !== undefined && bu[k] !== null) s.budget[k] = String(bu[k]); });
     else {
       keep("budget", "it sets " + Object.keys(bu).filter(function (k) { return BUDGET_KEYS.indexOf(k) < 0; }).join(", "));
-      if (bu.finalists !== undefined && bu.finalists !== null) s.budget.finalists = String(bu.finalists);   // D775: flow.select's own
+      // what the document says, shown in the read-only knobs (a kept budget is not written: `budget` is kept whole)
+      BUDGET_KEYS.forEach(function (k) { if (bu[k] !== undefined && bu[k] !== null) s.budget[k] = String(bu[k]); });
     }
 
     Object.keys(raw).forEach(function (k) {
@@ -2041,7 +2100,7 @@
               // D1146: who works a box, the words both views say, where a draft stands
               whoOptions: whoOptions, whoOn: whoOn, whoWorks: whoWorks, agentOf: agentOf, agentWord: agentWord,
               skillOn: skillOn, setSkill: setSkill, skillsDoc: skillsDoc, hiddenOf: hiddenOf,
-              STEP_TITLES: STEP_TITLES, WORDS: WORDS, readiness: readiness };
+              STEP_TITLES: STEP_TITLES, WORDS: WORDS, readiness: readiness, standing: standing, unfilled: unfilled, goldenFiles: goldenFiles, keptKnobs: keptKnobs };
 
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.FluxCrafterModel = api;

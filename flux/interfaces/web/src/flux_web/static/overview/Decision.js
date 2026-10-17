@@ -15,23 +15,25 @@ import { Table } from "../components/Table.js";
 export const own = (ctx, x) => String(x) === ctx.name ? "whole" : String(x).startsWith(`${ctx.name}#`) ? String(x).slice(ctx.name.length) : String(x);
 
 /** The best designs (D696): the decision, then the others by the loop's own order -- the server's ranking
-    (D809), else accepted first, the deepest stage reached, then each objective without a limit in turn. */
+    (D809), else accepted first, the deepest stage reached, then each objective without a limit in turn. A loop of
+    parts ranks its whole designs (the best parts combined) first, then each part's own best under its name: a part
+    is never ranked against a whole; a loop without parts, the one ranking. */
 function BestTable({ r, n, comparison, unit }) {
   const ctx = useLoop();
   const objs = r.objective_list || [], order = r.stages || [], groups = r.metric_groups || {};
   const ms = [...new Set([...objs.map(o => o.metric), ...(r.metrics || [])])];
   const columns = useColumns(ctx, ms, groups), values = useValuesMode(ctx);
-  const key = d => [d.rank != null ? d.rank : Infinity, d.decision ? 0 : 1, d.verdict === "accepted" ? 0 : 1, -order.indexOf(d.shown),
+  const key = d => [d.decision ? 0 : 1, d.rank != null ? d.rank : Infinity, d.verdict === "accepted" ? 0 : 1, -order.indexOf(d.shown),
     ...objs.filter(o => o.goal == null).map(o => { const v = d.numbers[o.metric]; return v == null ? Infinity : o.direction === "minimize" ? v : -v; })];
   const cmp = (a, b) => { const x = key(a), y = key(b); for (let i = 0; i < x.length; i++) if (x[i] !== y[i]) return x[i] < y[i] ? -1 : 1; return 0; };
-  const top = (r.designs || []).slice().sort(cmp).slice(0, n);
-  if (top.length < 2) return null;
-  const names = designLabels(r.designs, ctx.name);
+  const all = r.designs || [], parts = [...new Set(all.map(d => d.part || "").filter(Boolean))].sort();
+  const ranked = [["", all.filter(d => !d.part)], ...parts.map(p => [p, all.filter(d => d.part === p)])]
+    .map(([part, ds]) => [part, ds.slice().sort(cmp).slice(0, n)]).filter(([part, top]) => top.length >= (part ? 1 : 2));
+  if (!ranked.length) return null;
+  const names = designLabels(all, ctx.name);
   const metrics = columns.visible(), dict = dictionaryClasses(metrics, groups), labels = measurementLabels(metrics, groups);       // D1014
   const hid = m => columns.hidden(m) ? " hidden-measurement" : "";
-  return html`<div class="blk result-table-surface" data-values=${values.mode}>
-    <div class="best-table-head"><h3>${`Best ${top.length}`}</h3>${columns.controls}${values.toggle}</div>
-    <${Table} cls="list compact best-n" thead=${html`<${GroupRow} metrics=${metrics} groups=${groups} leading=${3} />
+  const table = (part, top) => html`<${Table} key=${part || "whole"} cls="list compact best-n" data-part=${part || null} thead=${html`<${GroupRow} metrics=${metrics} groups=${groups} leading=${3} />
       <tr><th /><th>Design</th><th class="status-column">Status</th>
         ${metrics.map(m => html`<th class=${`num measurement-head${hid(m)}${dict.get(m) || ""}`} aria-label=${m} title=${`${m}${unit[m] ? " (" + unit[m] + ")" : ""}`}><${MeasurementHeader} text=${labels.get(m)} /></th>`)}</tr>`}>
       ${top.map((d, i) => html`<tr class=${`clickable ${d.verdict}`} onClick=${() => ctx.goTab("Results")}>
@@ -40,7 +42,11 @@ function BestTable({ r, n, comparison, unit }) {
         <td class="status-column"><${VerdictBadge} verdict=${d.verdict} reason=${d.why.join("; ")} /></td>
         ${metrics.map(m => { const ok = d.meets[m], display = measurementText(d, m, comparison, num, values.relative);
           return html`<td class=${`num mono${hid(m)}${dict.get(m) || ""}${ok === true ? " meets" : ok === false ? " misses" : ""}`}
-            title=${`${display.title}${unit[m] ? " · " + unit[m] : ""}${ok === true ? " · meets the limit" : ok === false ? " · misses the limit" : ""}`}>${display.text}</td>`; })}</tr>`)}<//></div>`;
+            title=${`${display.title}${unit[m] ? " · " + unit[m] : ""}${ok === true ? " · meets the limit" : ok === false ? " · misses the limit" : ""}`}>${display.text}</td>`; })}</tr>`)}<//>`;
+  return html`<div class="blk result-table-surface" data-values=${values.mode}>
+    ${ranked.map(([part, top], i) => html`<div key=${part || "whole"} class="best-group">
+      <div class="best-table-head"><h3>${`Best ${top.length}${part ? ` · ${part}` : parts.length ? " · whole" : ""}`}</h3>${i ? "" : html`${columns.controls}${values.toggle}`}</div>
+      ${table(part, top)}</div>`)}</div>`;
 }
 
 /** The decision (D1092: said "#3"), the closest when none meets every requirement (D900), or why there is none. */

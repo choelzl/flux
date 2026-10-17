@@ -1094,6 +1094,8 @@ def _draft(problem: Problem, state: LoopState, sg: str | None, method: str, huma
     with _phase(f"generation: {tag}", why=method or "drafts, each checked, repaired when it fails") as out:
         got = problem.generate(sg, method, state, human)
         out["failed"] = got[0] is None              # D1054: no design came of it -- the design failed, not "!"
+        if got[0] is None and got[2]:
+            out["error"] = " ".join(str(got[2]).split())[:300]      # D1181: why, on the task Live shows failed
         return got
 
 

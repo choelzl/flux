@@ -16,6 +16,7 @@ import { useModel } from "./app/configure/model.js";
 import { filesStore } from "./app/configure/files.js";
 import { download } from "./app/configure/DocView.js";
 import { Configurator } from "./app/configure/Configurator.js";
+import { DraftLine } from "./app/configure/DraftLine.js";
 
 const HERE = new URL(".", import.meta.url).href.replace(/\/$/, "");
 const DRAFT = "flux-docs-crafter-draft";
@@ -31,9 +32,10 @@ const used = s => !!(s && (String(s.id || "").trim() || String(s.statement || ""
 
 /** The configurator over a draft: kept in this browser by Save draft, its files in this page. */
 function Crafter({ M, draft, restart }) {
-  const staged = useRef(new Map()).current;
+  const staged = useRef(new Map()).current, [, redraw] = useState(0);
   const state = useMemo(() => draft?.state || M.base(), [draft]);
-  const store = useMemo(() => filesStore(null, () => M.buildYaml(state), { staged, namedOf: () => M.namedFiles(state) }), [state]);
+  const store = useMemo(() => filesStore(null, () => M.buildYaml(state), { staged, namedOf: () => M.namedFiles(state), goldenOf: () => M.goldenFiles(state),
+    onDraw: () => redraw(n => n + 1) }), [state]);
   useEffect(() => { store.draw(); }, [store]);
   const save = async yaml => {
     download(yaml, "problem.yaml");
@@ -43,9 +45,10 @@ function Crafter({ M, draft, restart }) {
     remember(DRAFT, { state: s, step });
     return staged.size ? `${M.WORDS.save.draftSaved} The files added stay with this page only.` : M.WORDS.save.draftSaved;
   };
-  return html`<div class="draft-line muted small">${`Draft: ${String(state.id || "").trim() || "unnamed"} · `}<button type="button" class="link" onClick=${restart}>Start over</button></div>
+  // the draft's line as the web's New loop says it, its name followed as it is typed
+  return html`<${DraftLine} M=${M} state=${state} staged=${staged.size} discard=${restart} />
     <${Configurator} M=${M} state=${state} step=${stepOfHash() || draft?.step || "prompt"} touched=${used(draft?.state)} calm isNew
-      onStep=${id => history.replaceState(null, "", `#step=${id}`)} onChange=${() => store.watch()}
+      onStep=${id => history.replaceState(null, "", `#step=${id}`)} onChange=${() => { store.watch(); redraw(n => n + 1); }}
       save=${save} saveDraft=${saveDraft} saveLabel="Download problem.yaml" store=${store}
       checked=${() => ["note", "run flux task check FOLDER on your loop's folder"]} nameLabel="Loop name" namePlaceholder="my_loop" />`;
 }
@@ -53,7 +56,7 @@ function Crafter({ M, draft, restart }) {
 function Page() {
   const M = useModel(), [draft, setDraft] = useState(() => recallJson(DRAFT)), [gen, setGen] = useState(0);
   const restart = async () => {
-    if (!await confirmDialog("Start over?", ["The form is cleared:", "name, statement, checks, measurements, the graph's choices and the files added"], { ok: "Start over", danger: true })) return;
+    if (!await confirmDialog("Discard draft?", ["The form is cleared:", "name, statement, checks, measurements, the graph's choices and the files added"], { ok: "Discard", danger: true })) return;
     remember(DRAFT, null); setDraft(null); setGen(g => g + 1);
   };
   const body = M === null ? html`<${Notice} tone="bad" what="The crafter did not load." why="Reload the page." />`

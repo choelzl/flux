@@ -127,8 +127,9 @@ export function Talk({ name, mine, canAsk, ask = null, askAt = 0, steer, steerOp
         <summary>Note to the loop</summary><p class="muted small">Notes join the loop’s next prompt.</p>${steer}</details>` : ""}
       ${ordered.length ? ordered.map((turns, i) => html`<${Thread} key=${turns[0].thread_id || turns[0].id} turns=${turns} folded=${folded(turns, i)} t=${t} open=${open} />`) : html`<${Card}><${Empty} text="No conversations yet." /><//>`}</div>
     ${canAsk ? html`<div class="ask-compose"><${Composer} id="ask-q" rows=${2} enter="mod" label="Message" placeholder="Ask about this loop…" taRef=${q} value=${draft} onInput=${setDraft}
-      send=${send} busy=${busy} sendCls="ask-send" sendTitle="Ctrl+Enter or ⌘+Enter to send" sendLabel=${busy ? "Answering…" : "Send"}
+      send=${send} busy=${busy} sendCls="ask-send" sendTitle=${busy ? "One ask at a time: the running one answers first" : "Ctrl+Enter or ⌘+Enter to send"}
       head=${html`<span class="ask-reply-context" title=${current?.question}>${current ? `Reply to: ${current.question}` : "New conversation"}</span>
+        ${busy ? html`<span class="muted small ask-one">One ask at a time</span>` : ""}
         ${current ? html`<button type="button" class="small ask-new" disabled=${sending} onClick=${() => { setReply(null); requestAnimationFrame(() => q.current?.focus()); }}>New chat</button>` : ""}`}
       actions=${html`<label class="ask-agent-picker">Agent<${AgentPick} id="ask-who" ask value=${replyAuthor} onPick=${setWho} /></label>`} /></div>` : ""}`;
 }

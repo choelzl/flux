@@ -50,6 +50,18 @@ export const notReached = (n, tests = []) => n.failed && tests.length && (n.kids
     every design said by its id (rules.js namer). */
 export const plain = (t, N) => { const at = String(t).lastIndexOf(" · "); return at > 0 && N.loopNamed(String(t).slice(at + 3)) ? String(t).slice(0, at) : N.shortAll(String(t)); };
 
+/** D1182: the engine's "attempt N" (counted in its run) is the tree's try (counted across the box's runs) --
+    the try's number when the tree drew it, never the engine's own count. */
+export const tryWhy = n => /^\s*attempt\s+\d+\s*$/i.test(String(n.why || "")) ? "" : String(n.why || "");
+/** D1182: a choice's columns -- the metric the decision named first ("the smallest time_ms"), then the goals,
+    then what was measured; only those some design has a number for, three at most. */
+export function chooseColumns(rows, goals, by = "") {
+  const seen = [...new Set(rows.flatMap(([, m]) => Object.keys(m)))], filled = k => rows.some(([, m]) => m[k] != null);
+  const named = seen.filter(k => new RegExp(`(^|[^\\w.])${k.replace(/[.]/g, "\\.")}(?![\\w.])`).test(String(by)))
+    .sort((a, b) => String(by).indexOf(a) - String(by).indexOf(b));
+  return [...new Set([...named, ...goals.map(g => g.metric), ...seen])].filter(filled).slice(0, 3);
+}
+
 /** One line of what a task gave: a check's failing count, a measurement's numbers, else nothing. */
 export function summaryOf(x) {
   const leaves = x.kids?.length ? x.kids.flatMap(k => k.kids?.length ? k.kids : [k]) : [x];

@@ -695,6 +695,19 @@ def _missing(doc: dict[str, Any], folder: Path, draft: bool) -> list[tuple[str, 
     return out
 
 
+def files_named(doc: dict[str, Any], folder: Path, draft: bool = False) -> dict[str, list[str]]:
+    """What the document names beside it, as the web's configurator and Direct edit say it (D1157): `named` every path,
+    `missing` those the check refuses for, `later` a golden model the folder lacks that the loop's model writes before
+    its first pass (outside a draft, D604) -- the check's own rules, so the pages and `flux task check` agree."""
+    named = named_files(doc)
+    missing = _missing(doc, folder, draft)
+    gone = {p for _k, p, _w in missing}
+    kids = [folder / s for s in doc.get("subtasks") or [] if isinstance(s, str)] if isinstance(doc.get("subtasks"), list) else []
+    later = [p for _k, p, kind in named if kind == "golden" and p not in gone and not _there(folder, p, kind)
+             and not (kids and all(_there(k, p, kind) for k in kids))]
+    return {"named": [p for _k, p, _w in named], "missing": [p for _k, p, _w in missing], "later": later}
+
+
 def _listing(folder: Path, sub: str = "") -> str:
     """What a folder holds, a short `ls` (folders with a /), without the author's own and the loop's record."""
     d = folder / sub if sub else folder

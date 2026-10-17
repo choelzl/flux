@@ -16,7 +16,7 @@ import { Talk } from "./Talk.js";
 import { Drawer } from "./Drawer.js";
 import { CheckButton, NotRun } from "./Cards.js";
 import { NoteComposer } from "./Notes.js";
-import { LoopHead } from "./Head.js";
+import { LoopHead, WRITING } from "./Head.js";
 import { Crumbs } from "../components/Crumbs.js";
 import { Tabs } from "../components/Tabs.js";
 import { Ask, AskLine } from "../components/Ask.js";
@@ -46,10 +46,11 @@ export function LoopPage({ name, owner, info, path }) {
   const qs = owner ? `?owner=${enc(owner)}` : "", q = owner ? `&owner=${enc(owner)}` : "", base = `/api/apps/${enc(name)}`;
   // D701: "owner", "edit" (shared to change and run it), "watch" (shared to see it), "admin"
   const perm = info.perm || (info.mine ? "owner" : "admin");
-  const mine = info.can_edit ?? (perm === "owner" || perm === "edit" || perm === "admin"), isOwner = perm === "owner";
-  const canRun = info.can_run ?? mine;
-  const canAsk = info.can_ask ?? (mine && canRun);                  // D991: a group member may ask, seen by them alone
-  const canLeave = info.can_leave ?? (perm === "edit" || perm === "watch");
+  const viewing = !!me.impersonator;                                // D812: an admin viewing as a user is read-only -- the server refuses every change
+  const mine = !viewing && (info.can_edit ?? (perm === "owner" || perm === "edit" || perm === "admin")), isOwner = perm === "owner";
+  const canRun = !viewing && (info.can_run ?? mine);
+  const canAsk = !viewing && (info.can_ask ?? (mine && canRun));    // D991: a group member may ask, seen by them alone
+  const canLeave = !viewing && (info.can_leave ?? (perm === "edit" || perm === "watch"));
   const first = useMemo(() => placeOf(path), []);
   const [st, setSt] = useState(info.state);
   const [question, setQuestion] = useState(info.state.question || null);
@@ -114,7 +115,7 @@ export function LoopPage({ name, owner, info, path }) {
     history.replaceState(null, "", `#/${owner ? `u/${enc(owner)}/` : ""}app/${enc(name)}${segs.length ? "/" + segs.join("/") : ""}`);
   }, [at.tab, at.sub, at.mode]);
 
-  const sub = curSubOf(at), subs = subsOf(at.tab), running = st.running && (canRun || isOwner), ran = st.running || st.last_active;
+  const sub = curSubOf(at), subs = subsOf(at.tab), running = st.running && (canRun || (isOwner && !viewing)), ran = st.running || st.last_active;
   const start = after => canRun ? async () => { if (await startLoop(name, owner)) { await ctx.refresh(); after?.(); } } : null;
   // D702: a shared loop, left by its guest
   const leave = async () => {
@@ -128,13 +129,14 @@ export function LoopPage({ name, owner, info, path }) {
     leave: canLeave ? leave : null };
   const mode = at.tab === "Settings" && sub === "problem" ? (modesOf(name).includes(at.mode) ? at.mode : "configurator") : "";
   const pickMode = k => setAt(a => ({ ...a, mode: k === "configurator" ? "" : k }));
-  const notRun = html`<${NotRun} info=${info} name=${name} mine=${mine} start=${start(() => ctx.goTab("Live"))} />`;
+  const writing = st.authoring ? WRITING : "";
+  const notRun = html`<${NotRun} info=${info} name=${name} mine=${mine} start=${start(() => ctx.goTab("Live"))} writing=${writing} />`;
   const body = () => {
     const k = `${at.tab}:${sub}:${at.n}`;
     switch (at.tab) {
       case "Overview": return html`<${OverviewBody} key=${k} tick=${tick} notRun=${ran ? "" : notRun} />`;
       case "Live": return ran ? html`<${LiveBody} key=${`Live:${at.n}`} store=${store} ready=${setLiveReady} />`
-        : html`<${NotRun} info=${info} name=${name} mine=${mine} start=${start()} />`;
+        : html`<${NotRun} info=${info} name=${name} mine=${mine} start=${start()} writing=${writing} />`;
       case "Results": return sub === "ideas" || sub === "library" ? html`<${IdeasBody} key=${k} library=${sub === "library"} />`
         : html`<${ResultsBody} key=${`Results:${at.n}`} view=${sub} cache=${results} n=${at.n} />`;
       case "Agents": return html`<${AgentsBody} key=${k} />`;

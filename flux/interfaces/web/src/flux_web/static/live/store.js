@@ -44,7 +44,7 @@ export function createStore(ctx) {
       pinPass(id); unfoldTo(id); s.reveal = locate;
       s.selected = id; s.revealDetails = true; now();
     },
-    showPass(p) { s.boxView = null; s.passView = p; s.following = false; now(); },
+    showPass(p) { s.boxView = null; s.passView = p; s.following = false; s.revealPass = true; now(); },   // D1182: its row in sight
     showBox(p, key) {
       s.boxView = { p, key }; s.passView = NO_PASS; s.following = false; s.choice = null;
       if (s.pass === "current") s.pass = p == null ? "all" : String(p);
@@ -103,7 +103,7 @@ export function createStore(ctx) {
     const passNotes = p => (ins.model.notes || []).filter(n => notePass(n, ins.model.marks) === p);
     const all = taskScope(ins.model, "all");
     const v = { model: ins.model, membership: all.membership, scope, scopeRows: scope.rows, rows: taskWindow(scope.rows, s.limit, selected), selected,
-      J: judge(ins.model, all.membership), N: namer(s.names), goals: s.goals, pass: s.pass, passView: s.passView, boxView: s.boxView,
+      J: judge(ins.model, all.membership), N: namer(s.names), goals: s.goals, pass: s.pass, passView: s.passView, passShown: s.passView !== NO_PASS, boxView: s.boxView,
       openBox: s.openBox, chainPass: s.chainPass, choice: s.choice && s.choice.ids.some(id => ins.model.nodes.has(id)) ? s.choice : null,
       notes: s.notes, problem: s.problem, tests: s.tests, record: s.record, opened: s.opened, allTries: s.allTries, located: s.located, width: s.width, drawn: s.drawn,
       passNotes, noteShort: (n, p) => noteShort(n, scopeOf(ins.model, all.membership, p)),

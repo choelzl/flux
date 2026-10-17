@@ -80,6 +80,11 @@ def flows(r):
         b.click("form.login button[type=submit]")
         b.wait("document.querySelector('#who') && document.querySelector('#who').textContent.includes('newbie')", timeout=20, what="newbie logged in")
         r.check("the link set the password and logged them in", True)
+        r.page(f"#/invite/{token}", "document.querySelector('.card.login .notice')", "the link once used")
+        said = b.js("const n = document.querySelector('.card.login .notice'); return [n.innerText.trim(), !!n.querySelector('a, button'), "
+                    "!!document.querySelector('.card.login > a.btn[href=\"#/login\"]')]")
+        r.check("a used link says so in sentences, Log in under it, not run into it", said == [
+            "This link has been used or has expired. Ask an admin for a new one.", False, True], str(said))
         r.clean("invitation")
         r.login("ada")
     r.step("invitation", invitation)

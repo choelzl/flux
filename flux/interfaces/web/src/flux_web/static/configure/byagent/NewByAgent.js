@@ -42,9 +42,9 @@ async function withFiles(url, fd, items) {
   return items.length ? sendWithProgress("Uploading", `${plural(items.length, "file")} for the agent`, p => apiUpload(url, fd, p), { say: false }) : apiUpload(url, fd);
 }
 
-/** The stages, each reachable once the draft is that far. */
-const StageBar = ({ stage, reach, go }) => html`<${Steps} cls="row ba-stages" label="Stage" at=${stage} go=${go}
-  items=${STAGES.map((s, i) => ({ key: i, title: s, disabled: !reach(i) }))} />`;
+/** The stages, each reachable once the draft is that far; `refused` Ready's check refused the draft (its step red). */
+const StageBar = ({ stage, reach, go, refused = false }) => html`<${Steps} cls="row ba-stages" label="Stage" at=${stage} go=${go}
+  items=${STAGES.map((s, i) => ({ key: i, title: i === 3 && refused ? "Not ready" : s, disabled: !reach(i), state: i === 3 && refused ? "bad" : "" }))} />`;
 
 /** What the author has besides the ask: the facts, no more. */
 function Uses() {
@@ -143,11 +143,14 @@ function checkSaid(out) {
   return lines.filter(l => /NOT ANSWERABLE|WILL SKIP|MISSING|NOT READY|not a task|does not exist|refused/i.test(l)).map(l => l.trim());   // REFUSED: D1155
 }
 
-/** 4. Ready. */
-function Ready({ name, back, made }) {
+/** 4. Ready: `flux task check` on the draft. Refused, it says so (red, what to fix) and leads to the configurator;
+    the loop can still be made as drafted, without a first pass. `onCheck(ok)` the verdict, for the stage bar. */
+function Ready({ name, back, made, onCheck = () => {} }) {
   const [res, setRes] = useState(null), [first, setFirst] = useState(true), [stage, setStage] = useState("");
   useEffect(() => {
-    loopApi(name).api("/check", { method: "POST" }).then(setRes, e => setRes({ ok: false, output: e.message }));
+    onCheck(null);
+    const got = r => { setRes(r); onCheck(!!r.ok); };
+    loopApi(name).api("/check", { method: "POST" }).then(got, e => got({ ok: false, output: e.message }));
     loopApi(name).api("/author/decisions").then(d => setStage(d.first_stage || ""), () => {});
   }, [name]);
   const said = res ? checkSaid(res.output) : [];
@@ -155,16 +158,19 @@ function Ready({ name, back, made }) {
     const r = await loopApi(name).api("/author/make", { method: "POST", body: { first_pass: pass } });
     toast(r.ok, "ok"); made(); location.hash = then;
   };
-  const check = html`<code>flux task check</code>`;
-  const lines = [!res ? ["run", "", html`${check} on the draft…`] : res.ok ? ["ok", "", html`${check} passed: document, files and tools ready.`]
-    : ["bad", "", html`${check} failed${said.length ? ":" : "."}`], ...said.map(l => [/WILL SKIP/.test(l) ? "warn" : "bad", "", html`<span class="mono">${l}</span>`])];
-  return html`<div class="ba-grid"><${Card} cls="ba-main"><${Checklist} cls="ba-check" items=${lines} />
+  const check = html`<code>flux task check</code>`, refused = !!res && !res.ok;
+  const lines = [!res ? ["run", "", html`${check} on the draft…`] : ["ok", "", html`${check} passed: document, files and tools ready.`]];
+  const main = refused ? html`<${Notice} tone="bad" what=${html`${check} refused the draft${said.length ? ":" : "."}`}>
+      ${said.length ? html`<${Checklist} cls="ba-check" items=${said.map(l => [/WILL SKIP/.test(l) ? "warn" : "bad", "", html`<span class="mono">${l}</span>`])} />` : ""}
+      <p class="small">Fix it in the configurator, or ask the agent for a change in Review.</p><//>`
+    : html`<${Checklist} cls="ba-check" items=${lines} />`;
+  return html`<div class="ba-grid"><${Card} cls="ba-main">${main}
       ${res ? html`<details><summary class="muted small">Output</summary><pre class="log small">${res.output}</pre></details>` : ""}
-      <${Check} id="ba-first-pass" checked=${first} onChange=${setFirst}>${`Run one cheap pass first${stage ? ` (${stage} only)` : ""}`}<//><//>
-    <${Notice} tone="none" cls="ba-side" what=${`Made as ${name}.`} why="Change anything later in the configurator." /></div>
+      ${refused ? "" : html`<${Check} id="ba-first-pass" checked=${first} onChange=${setFirst}>${`Run one cheap pass first${stage ? ` (${stage} only)` : ""}`}<//>`}<//>
+    <${Notice} tone="none" cls="ba-side" what=${`Made as ${name}.`} why=${refused ? "As drafted, check refused: nothing runs until it passes." : "Change anything later in the configurator."} /></div>
     <div class="form-actions ba-nav"><button type="button" onClick=${back}>Back</button><span class="grow" />
-      <${Act} onClick=${() => toConfigurator(name, made)}>Open in configurator<//>
-      <${Act} cls="primary" disabled=${!res} onClick=${() => make(first && res?.ok, `${appHref(null, name)}`)}>Make loop<//></div>`;
+      <${Act} cls=${refused ? "primary" : ""} onClick=${() => toConfigurator(name, made)}>Open in configurator<//>
+      <${Act} cls=${refused ? "" : "primary"} disabled=${!res} onClick=${() => make(first && res?.ok, `${appHref(null, name)}`)}>${refused ? "Make loop anyway" : "Make loop"}<//></div>`;
 }
 
 /** A new loop whose problem an agent drafts (D704, D1122). D912: the one draft -- its name and statement are what the
@@ -175,7 +181,7 @@ export function NewByAgent({ draft = null, onDraft = () => {}, done = () => {} }
   const [items, setItems] = useState(() => draft ? [...draft.staged].map(([path, x]) => ({ path, src: x, hidden: !!hiddenBy(path, draft.state?.hidden), file: x.file || new File([x.text], path.split("/").pop(), { type: "text/plain" }) })) : []);
   const [flow, setFlow] = useState(() => recallJson(flowKey(), null) || {}), [askMe, setAskMe] = useState(flow.askMe ?? true);
   const save = patch => setFlow(f => { const next = { ...f, ...patch }; remember(flowKey(), next.name ? next : null); return next; });
-  const [st, poll] = useAuthor(flow.name);
+  const [st, poll] = useAuthor(flow.name), [checked, setChecked] = useState(null);
   // the remembered draft gone (deleted, or made meanwhile): the flow starts again
   useEffect(() => {
     if (!flow.name) return;
@@ -213,8 +219,8 @@ export function NewByAgent({ draft = null, onDraft = () => {}, done = () => {} }
   const body = stage === 0 ? html`<${Ask} state=${state} items=${items} setItems=${keepItems} edit=${edit} who=${who} askMe=${askMe} setAskMe=${v => { setAskMe(v); }} draft=${start} />`
     : stage === 1 || !ready ? html`<${Drafting} name=${flow.name} st=${st} poll=${poll} review=${() => go(2)} made=${() => save({ name: null, stage: 0, kept: {} })} />`
     : stage === 2 ? html`<${Review} name=${flow.name} st=${st} poll=${poll} flow=${flow} save=${save} who=${flow.who || ""} askMe=${flow.askMe ?? true} check=${() => go(3)} />`
-    : html`<${Ready} name=${flow.name} back=${() => go(2)} made=${() => save({ name: null, stage: 0, kept: {} })} />`;
-  return html`<div class="ba-flow"><${StageBar} stage=${stage >= 2 && !ready ? 1 : stage} reach=${reach} go=${go} />
+    : html`<${Ready} name=${flow.name} back=${() => go(2)} made=${() => save({ name: null, stage: 0, kept: {} })} onCheck=${setChecked} />`;
+  return html`<div class="ba-flow"><${StageBar} stage=${stage >= 2 && !ready ? 1 : stage} reach=${reach} go=${go} refused=${stage === 3 && ready && checked === false} />
     ${flow.name ? html`<p class="muted small ba-draft-line">${"Draft "}<b class="mono">${flow.name}</b>${" · "}<button type="button" class="link" onClick=${discard}>Discard draft</button></p>` : ""}
     ${body}</div>`;
 }

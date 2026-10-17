@@ -4,8 +4,8 @@
 import { cx, Empty, html } from "../view.js";
 import { plural } from "../format.js";
 import { WORK_COLORS as COLORS } from "./work_style.js";
-import { currentTask, taskState as state } from "./model.js";
-import { flowBoxes, isDraft, passName, passShort, repaired, triesOf } from "./views.js";
+import { byPass, currentTask, taskState as state } from "./model.js";
+import { agentsOf, flowBoxes, isDraft, passName, passShort, repaired, triesOf } from "./views.js";
 import { CRIT, soleOf } from "./rules.js";
 import { lines } from "./rows.js";
 import { Lines } from "./Lines.js";
@@ -77,7 +77,7 @@ function Box({ b, i, y, BH, note, shown, v, a, task, isOpen, listed }) {
 }
 
 export function Graph({ v, a }) {
-  const passes = [...new Set(v.scopeRows.map(r => v.membership.get(r.node.id) ?? null))];
+  const passes = [...new Set(v.scopeRows.map(r => v.membership.get(r.node.id) ?? null))].sort(byPass);   // D1181: in pass order
   const selPass = v.membership.get(v.selected) ?? null;
   const shown = v.pass === "all" ? (passes.includes(v.chainPass) ? v.chainPass : passes.includes(selPass) ? selPass : passes.at(-1)) : passes.at(-1);
   const inPass = v.scopeRows.filter(r => (v.membership.get(r.node.id) ?? null) === shown);
@@ -99,7 +99,7 @@ export function Graph({ v, a }) {
     // D1075: a selection inside one of its tries opens the list, so it is in sight
     const holdsSel = v.selected != null && v.selected !== task?.id && own.some(r => r.node.id === v.selected);
     const isOpen = (v.openBox === `${shown}:${b.key}` || holdsSel) && listed > 1;
-    const note = v.notes[b.key] || "";
+    const note = (b.kind === "design" && agentsOf(b.runs).join(", ")) || v.notes[b.key] || "";   // D1181: who drafted, as the tries say
     const BH = note ? (b.steps ? 52 : 44) : 34;
     at[b.key] = y + BH / 2;
     g.push(html`<${Box} key=${b.key} b=${b} i=${i} y=${y} BH=${BH} note=${note} shown=${shown} v=${v} a=${a} task=${task} isOpen=${isOpen} listed=${listed} />`);

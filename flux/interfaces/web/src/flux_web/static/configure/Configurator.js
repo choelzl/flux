@@ -23,7 +23,7 @@ const NO_STORE = { subscribe: () => () => {} };
     `changes(yaml)` a promise of what a save changes (a loop that exists); `notes` what is kept as written, `direct` the
     address of Direct edit, where it is changed; `extra` the Extra step's last section; `store` the files (files.js); `calm` an untouched draft says what is to do, not errors. */
 export function Configurator({ M, state, step, onStep, touched = false, isNew = false, save, saveDraft, saveLabel = "Save", checked, changes, notes = [], direct = null,
-  extra = null, store, onChange, calm = false, nameLabel, namePlaceholder }) {
+  extra = null, store, onChange, calm = false, nameLabel, namePlaceholder, loadError = "", starter = false }) {
   const [, redraw] = useState(0), [at, setAt] = useState(() => stepId(M, step)), [status, setStatus] = useState({ kind: "", text: "" });
   const [agent, setAgent] = useState(() => agentOf(M, state)), [invalid, setInvalid] = useState("");
   const seen = useRef(new Set([stepId(M, step)])), dirty = useRef(touched), top = useRef(null);
@@ -42,13 +42,16 @@ export function Configurator({ M, state, step, onStep, touched = false, isNew = 
 
   const yaml = M.buildYaml(state), msgs = M.check(state), file = `${String(state.id || "").trim() || "my_problem"}/problem.yaml`;
   const quiet = calm && !dirty.current, errors = msgs.filter(m => m.level === "error");
-  const named = M.namedFiles(state), files = store ? store.missing(named) : null;
-  const ready = M.readiness(msgs, { named, files, checked: checked?.(), calm: quiet });
+  const files = store ? store.missing(M.namedFiles(state), M.goldenFiles(state)) : null, named = files?.named || M.namedFiles(state);
+  // D1146: Save's checklist and the rail's line under Save are one standing; a document the loader refuses is said first
+  // D825: the starter as it came is calm (what is left to fill in); edited, the loader's refusal is said again
+  const fresh = starter && quiet;
+  const standing = M.standing(msgs, { named, files, checked: checked?.(), calm: quiet, isNew, loadError: fresh ? "" : loadError, starter: fresh }), ready = standing.rows;
   const marks = Object.fromEntries(STEPS.map((s, i) => {
     const bad = errors.some(m => m.step === i), visited = seen.current.has(s.id) && s.id !== at && s.id !== "save";
     return [s.id, visited ? (bad ? (quiet ? "" : "bad") : "done") : ""];
   }));
-  const sum = sums(M, state, { files: store ? store.s.files.length : 0, missing: (files?.missing || []).length, errors: errors.length, calm: quiet, isNew });
+  const sum = sums(M, state, { files: store ? store.s.files.length : 0, missing: (files?.missing || []).length, save: standing.sum });
 
   const doSave = async () => {
     if (status.kind === "pending") return;
@@ -77,7 +80,7 @@ export function Configurator({ M, state, step, onStep, touched = false, isNew = 
     objective: () => html`<${ObjectiveStep} ...${p} />`,
     graph: () => html`<${GraphStep} ...${p} setAgent=${setAgent} go=${go} store=${store} />`,
     extra: () => html`<${ExtraStep} ...${p} extra=${extra} />`,
-    save: () => html`<${SaveStep} M=${M} msgs=${msgs} ready=${ready} calm=${quiet} go=${go} nav=${nav} changes=${changes} notes=${notes} yaml=${yaml} file=${file} />`,
+    save: () => html`<${SaveStep} M=${M} msgs=${msgs} ready=${ready} calm=${quiet} go=${go} nav=${nav} changes=${changes} notes=${notes} yaml=${yaml} file=${file} direct=${direct} />`,
   }[at];
   const wide = at === "graph" || at === "save";
   return html`<div class=${cx("cfg", wide && "wide")} ref=${top} data-step=${at}>

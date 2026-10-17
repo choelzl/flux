@@ -521,3 +521,163 @@ def test_a_preset_measurement_is_named_by_its_preset():
     out = json.loads(r.stdout)
     assert out["stages"] == [["custom-stage", "Synthesise and time (ASAP7)"], ["custom-stage", "Place and time (ASAP7)"]], out
     assert out["own"] == "command" and out["other"] == "rtl newthing", out
+
+
+STANDING_JS = r"""
+const c = require(process.argv[1]);
+c.setCatalog(JSON.parse(require("fs").readFileSync(process.argv[2], "utf8")));
+const s = c.base(); s.id = "x"; s.statement = "Anything."; s.language = "python";
+s.checks.push(c.newCheck(s, "custom")); s.checks[0].params.command = "{python} {home}/check.py {artifact}";
+s.stages.push(c.newStage(s, "custom-stage")); s.stages[0].params.command = "{python} {home}/bench.py {artifact}"; s.stages[0].metrics = "t";
+s.objectives = [c.newObjective("t", "min")];
+const msgs = c.check(s), named = c.namedFiles(s), all = {missing: [], later: []};
+const out = {
+  clean: c.standing(msgs, {named, files: all, checked: ["ok", "passed"]}),
+  fresh: c.standing(msgs, {named, files: all, checked: ["note", "not checked yet"], isNew: true}),
+  failed: c.standing(msgs, {named, files: all, checked: ["error", "failed on saved files"]}),
+  missing: c.standing(msgs, {named, files: {missing: ["bench.py"], later: []}, checked: ["ok", "passed"]}),
+  refused: c.standing(msgs, {named, files: all, checked: ["ok", "passed"], loadError: "flow.critique is a critic"}),
+  errors: c.standing(c.check(Object.assign(c.base(), {id: "y"})), {named: [], files: all, checked: ["ok", "passed"]}),
+};
+process.stdout.write(JSON.stringify(out));
+"""
+
+
+def test_saves_checklist_and_the_rails_line_are_one_standing():
+    """The rail's line under Save said "ready to save" while Save listed a failed check or a missing file. Both are
+    M.standing now: every ✗ in the checklist is in the line; a document the loader refuses is the first line; Ready to
+    run names what stands in the way, not always the check."""
+    r = subprocess.run(["node", "-e", STANDING_JS, str(ASSETS / "crafter-model.js"), str(ASSETS / "tools.json")],
+                       capture_output=True, text=True, timeout=60)
+    assert r.returncode == 0, r.stderr
+    out = json.loads(r.stdout)
+    rows = {k: {what: (kind, words) for kind, what, words in v["rows"]} for k, v in out.items()}
+    assert out["clean"]["sum"] == "ready to save" and rows["clean"]["Ready to run"] == ("ok", "yes")
+    assert out["fresh"]["sum"] == "ready to create" and rows["fresh"]["Ready to run"] == ("note", "after a Check passes")
+    assert out["failed"]["sum"] == "check failed" and rows["failed"]["Checked"][0] == "error"
+    assert out["missing"]["sum"] == "1 file missing" and rows["missing"]["Ready to run"] == ("note", "after 1 missing file is added")
+    assert out["refused"]["rows"][0] == ["error", "Loads", "no: the loader refuses it as saved"], out["refused"]
+    assert out["refused"]["sum"].startswith("does not load") and rows["refused"]["Ready to run"] == ("note", "after the document loads")
+    n = out["errors"]["sum"].split(" ")[0]
+    assert out["errors"]["sum"] == f"{n} things to fix" and rows["errors"]["Ready to run"] == ("note", f"after {n} things to fix"), out["errors"]
+    for k, v in out.items():                                   # a ✗ in the checklist is never "ready"
+        assert any(kind == "error" for kind, _w, _x in v["rows"]) == (not v["sum"].startswith("ready")), (k, v)
+
+
+APP_JS = r"""
+const c = require(process.argv[1]);
+c.setCatalog(JSON.parse(require("fs").readFileSync(process.argv[2], "utf8")));
+const v = JSON.parse(require("fs").readFileSync(0, "utf8"));
+const s = c.fromDoc(v.raw, v.normal).state;
+const gen = c.whoOptions("generate", s.flow.generate, "claude", c.paramOnly(s));
+process.stdout.write(JSON.stringify({search: c.parameterSearch(s), knobs: c.knobNames(s), budget: s.budget, named: c.namedFiles(s),
+  golden: c.goldenFiles(s), errors: c.check(s).filter(m => m.level === "error").map(m => m.text), yaml: c.buildYaml(s), kept: s.kept,
+  generate: gen.map(o => o.k), on: c.whoOn(gen, s.flow.generate)}));
+"""
+
+
+def _app(name: str) -> dict:
+    v = views(REPO / f"flux/applications/{name}/problem.yaml")
+    r = subprocess.run(["node", "-e", APP_JS, str(ASSETS / "crafter-model.js"), str(ASSETS / "tools.json")],
+                       input=json.dumps({"raw": v["raw"], "normal": v["normal"]}, default=str), capture_output=True, text=True, timeout=60)
+    assert r.returncode == 0, r.stderr
+    return json.loads(r.stdout)
+
+
+def test_a_space_kept_as_written_is_searched_all_the_same():
+    """macarray's space (a knob with `from:`) is kept as written; the configurator still read "no search" and refused
+    {pipeline} as "neither a setting to search nor one of Flux's own". Its knobs are the search's settings."""
+    out = _app("macarray")
+    assert "flow.dse.space" in out["kept"] and out["search"] is True, out["kept"]
+    assert {"multiplier", "reducer", "pipeline"} <= set(out["knobs"]), out["knobs"]
+    assert not [e for e in out["errors"] if "neither a setting" in e], out["errors"]
+
+
+def test_the_files_named_are_the_loops_own_checks():
+    """D1157: what the configurator calls named (and missing) is what `flux task check` names -- not what the loop
+    writes as it runs (macarray's `{home}/out/invented`), and a golden model apart (the loop's model writes it first)."""
+    mac = _app("macarray")
+    assert not [p for p in mac["named"] if p.startswith("out/")], mac["named"]
+    nlu = _app("nlu")
+    assert nlu["golden"] == ["golden.py"] and "golden.py" in nlu["named"], nlu["named"]
+
+
+def test_a_budget_kept_as_written_shows_its_values_and_is_not_written():
+    """nlu keeps its budget (it sets prototype_attempts...): the read-only knobs showed the defaults (Repairs 12 beside
+    `repair_attempts: 20`). The state holds what the document says; the save still leaves the budget to the merge."""
+    out = _app("nlu")
+    assert "budget" in out["kept"] and out["budget"]["steps"] == "24" and out["budget"]["repair_attempts"] == "20", out["budget"]
+    assert "\nbudget:" not in out["yaml"]
+
+
+def test_design_under_a_parameter_only_search_is_off():
+    """D911: a search with no script to make a point a design runs no Design; the Graph drew the box off while its
+    panel had "model" chosen. The panel's choice is off, a script or files."""
+    s = _app("primes")
+    assert s["generate"][:2] == ["model", "agent"], s["generate"]
+    js = r"""
+const c = require(process.argv[1]);
+const s = c.base(); s.flow.dse = "sweep"; s.space = [{knob: "block", choices: "16, 32"}];
+const o = c.whoOptions("generate", s.flow.generate, "claude", c.paramOnly(s));
+process.stdout.write(JSON.stringify({only: c.paramOnly(s), ks: o.map(x => x.k), on: c.whoOn(o, s.flow.generate), keeps: o[0].value()}));
+"""
+    r = subprocess.run(["node", "-e", js, str(ASSETS / "crafter-model.js")], capture_output=True, text=True, timeout=60)
+    assert r.returncode == 0, r.stderr
+    assert json.loads(r.stdout) == {"only": True, "ks": ["off", "command", "catalog"], "on": "off", "keeps": "model"}
+
+
+def test_the_starter_document_leaves_statement_and_contract_to_fill_in():
+    """New loop › Create without files writes the baseline (D825): its statement and contract were instruction text,
+    read back as real values. They are empty, the configurator's placeholders say what goes there; the loader says
+    what is to fill in first (a baseline to fill in does not load, D825)."""
+    from flux_cli.commands import baseline_files
+
+    text = dict(baseline_files("blank"))["problem.yaml"]
+    doc = yaml.safe_load(text)
+    assert doc["statement"] == "" and doc["contract"] == ""
+    # the starter as it came is said calmly -- what is left, not the loader's refusal -- told by its content alone
+    js = r"""
+const c = require(process.argv[1]);
+const doc = JSON.parse(require("fs").readFileSync(0, "utf8"));
+const s = c.fromDoc(doc, doc).state, msgs = c.check(s);
+const calm = c.standing(msgs, {named: [], files: {missing: [], later: []}, checked: ["note", "not checked yet"], calm: true, starter: true});
+process.stdout.write(JSON.stringify({starter: c.unfilled(doc), said: c.unfilled(Object.assign({}, doc, {statement: "x"})),
+  checked: c.unfilled(Object.assign({}, doc, {flow: {test: "{python} {home}/check.py {artifact}"}})), calm}));
+"""
+    r = subprocess.run(["node", "-e", js, str(ASSETS / "crafter-model.js")], input=json.dumps(doc), capture_output=True, text=True, timeout=60)
+    assert r.returncode == 0, r.stderr
+    out = json.loads(r.stdout)
+    assert out["starter"] is True and out["said"] is False and out["checked"] is False, out
+    assert out["calm"]["sum"] == "not filled in yet" and out["calm"]["rows"][0][:2] == ["todo", "Starter"], out["calm"]
+    assert not [row for row in out["calm"]["rows"] if row[0] == "error"], out["calm"]
+
+
+def test_the_files_a_parent_names_are_its_sub_loops(tmp_path, monkeypatch):
+    """The configurator said "Named but missing: golden.py" for nlu, whose `{home}/golden.py` is each operator's
+    (every ops/<op>/golden.py there); macarray's out/invented and a golden model the loop writes first were missing
+    too. /document/named is the loop's own check (flux_loop.author.files_named): the pages say what it says."""
+    from fastapi.testclient import TestClient
+
+    from flux_web import create_app
+    from flux_web.store import Store
+
+    H = {"X-Flux": "1"}
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "xdg"))
+    Store(tmp_path / "data").add_user("bob", "another long secret")
+    c = TestClient(create_app(tmp_path / "data", sandbox=False))
+    assert c.post("/api/login", json={"name": "bob", "password": "another long secret"}, headers=H).status_code == 200
+    for app in ("nlu", "macarray", "prefetcher"):
+        src = REPO / f"flux/applications/{app}"
+        files = [("files", (p.relative_to(src).as_posix(), p.read_bytes())) for p in sorted(src.rglob("*"))
+                 if p.is_file() and not ({"out", "workbench", "traces", ".nix-bin"} & set(p.relative_to(src).parts)) and not p.name.startswith("demo-")]
+        assert c.post("/api/apps", data={"name": app}, files=files, headers=H).status_code == 200, app
+    text = lambda app: (REPO / f"flux/applications/{app}/problem.yaml").read_text()
+    nlu = c.post("/api/apps/nlu/document/named", json={"text": text("nlu")}, headers=H).json()
+    assert "golden.py" in nlu["named"] and nlu["missing"] == [] and nlu["later"] == [], nlu
+    mac = c.post("/api/apps/macarray/document/named", json={"text": text("macarray")}, headers=H).json()
+    assert not [p for p in mac["named"] + mac["missing"] if p.startswith("out/")], mac
+    pre = c.post("/api/apps/prefetcher/document/named", json={"text": text("prefetcher")}, headers=H).json()
+    assert pre["missing"] == ["traces"], "the traces are not in git: really missing, as the check says"
+    gone = c.post("/api/apps/nlu/document/named", json={"text": "flow:\n  test: \"fluxpreset golden {artifact} --golden {home}/other.py\"\n"}, headers=H).json()
+    assert gone["missing"] == [] and gone["later"] == ["other.py"], "a golden model the folder lacks: the loop's model writes it first (D604)"
+    assert c.post("/api/apps/nlu/document/named", json={"text": "- not a mapping"}, headers=H).json() == {"named": [], "missing": [], "later": []}

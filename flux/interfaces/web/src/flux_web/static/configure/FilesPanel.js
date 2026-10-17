@@ -23,7 +23,7 @@ export function FilesBody({ store, more = null, hide = null }) {
   return html`<div class="files-panel">${files.length ? html`<ul class="files flist">${files.map(f => html`<li key=${f.path}>
         <button type="button" class="link file-link" onClick=${() => store.open(f)}><span class="ic">·</span>${f.path}</button>
         <small class="muted">${bytes(f.size)}${f.staged ? " · staged" : ""}</small>${more ? more(f) : ""}
-        <${Tool} icon="close" danger label=${`Delete ${f.path}`} onClick=${() => store.remove(f)} /></li>`)}</ul>` : html`<${Empty} text="No files." />`}
+        <${Tool} icon="close" danger label=${`Delete ${f.path}`} onClick=${() => store.remove(f)} /></li>`)}</ul>` : rows.length ? "" : html`<${Empty} text="No files." />`}
       ${missing.length ? html`<${Notice} key="missing" tone="bad" what="Named but missing:">
         ${" "}${missing.map((p, i) => html`${i ? ", " : ""}<button type="button" class="link" title="Write it here" onClick=${() => store.editor(p, "")}>${p}</button>`)}<//>` : ""}
       <div class="row"><button class="small" type="button" onClick=${() => store.editor("", "")}>New file</button></div>

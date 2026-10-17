@@ -302,6 +302,15 @@ class Authoring:
         d = app_dir / "runs"
         return {"log": d / "author.log", "state": d / "author.json"}
 
+    def running(self, app_dir: Path) -> bool:
+        """Whether an agent writes the loop's problem now -- the state's `running` alone, cheap enough for every poll
+        of a loop's state (its Start waits for it)."""
+        try:
+            st = json.loads(self.files(app_dir)["state"].read_text())
+        except (OSError, ValueError):
+            return False
+        return bool(st.get("ended") is None and _alive(st.get("pid")))
+
     def state(self, app_dir: Path, workspace: Any = None, name: str = "") -> dict[str, Any]:
         """The job: running or not, how it ended, the log's last lines."""
         from .confine import open_read

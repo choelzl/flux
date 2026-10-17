@@ -272,6 +272,7 @@ def test_a_loop_started_from_the_web_runs_stops_and_resumes(server, tmp_path):
     sm = bob.get("/api/apps").json()[0]["summary"]                  # D693: the list's line
     assert sm["designs"] == len(res["designs"]) > 0 and sm["accepted"] == res["counts"]["accepted"], sm
     assert 0 <= sm["this_run"] <= sm["designs"], "D837: the designs first measured since the latest start, of them all"
+    assert 0 <= sm["accepted_this_run"] <= min(sm["this_run"], sm["accepted"]), "the list's new accepted: this start's, of them"
     # D1001: a design invalidated by hand with why stops counting, is listed with it, and Restore undoes it
     gone = res["designs"][0]
     body = {"key": gone["key"], "name": gone["base"], "reason": "the bench was misconfigured"}

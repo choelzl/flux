@@ -156,9 +156,12 @@ def flows(r):
                 b.js("[...document.querySelectorAll('.ba-nav button')].find(x => x.textContent === 'Check').click(); return 1")
                 said = b.wait("document.querySelector('.ba-check .g-bad') && document.querySelector('.ba-check').textContent", what="the check")
                 r.check("Ready says what the check found missing", "MISSING: golden.py" in said, said)
-                r.check("one cheap pass is offered, at its first stage", "Run one cheap pass first (synth only)" in r.text())
+                refused = b.js("return {notice: !!document.querySelector('.ba-main .notice.t-bad .ba-check'), step: document.querySelector('.ba-stages .bad')?.textContent || '',"
+                               " primary: document.querySelector('.ba-nav button.primary')?.textContent, pass: !!document.querySelector('#ba-first-pass')}")
+                r.check("a refused draft is said as one (red, its step not Ready), the configurator first, no cheap pass offered",
+                        refused == {"notice": True, "step": "4Not ready", "primary": "Open in configurator", "pass": False}, str(refused))
                 r.clean("New loop › Agent")
-                b.js("[...document.querySelectorAll('.ba-nav button')].find(x => x.textContent === 'Make loop').click(); return 1")
+                b.js("[...document.querySelectorAll('.ba-nav button')].find(x => x.textContent === 'Make loop anyway').click(); return 1")
                 b.wait("window.__baSent.length === 2", what="made")
                 r.check("Make sends the cheap pass only on a check that passed", b.js("return window.__baSent[1]") == ["/author/make", {"first_pass": False}])
             finally:

@@ -532,6 +532,17 @@ def flows(r):
                     b.wait(f"window.__controlCalls.at(-1).action==={label.lower()!r} && window.__controlCalls.at(-1).now", what=f"list {label} now")
                 r.check("loop-list Stop and Restart: the first press after the pass, then red, the confirmed second now (D1006)",
                         b.js("return window.__controlCalls.length===8 && window.__controlCalls.slice(4).map(c=>!!c.now).join()==='false,true,false,true'"))
+                # review shell-4: Running chosen is the segment shown chosen and the rows it keeps, each a running loop
+                pick = "[...document.querySelectorAll('#main .choice button')].find(x => x.textContent.startsWith(arguments[0])).click(); return 1"
+                b.js(pick, "Running")
+                got = b.js("const rows = [...document.querySelectorAll('#main table.list tbody tr')], on = document.querySelector('#main .choice button[aria-pressed=true]');"
+                           " return [on.textContent, rows.length, rows.every(tr => !!tr.querySelector('.pill.t-run')), rows.some(tr => tr.textContent.includes(arguments[0]))]", name)
+                r.check("the Running filter is chosen and keeps only the running loops (review shell-4)",
+                        got[0].startswith("Running") and got[1] >= 1 and got[2] and got[3], str(got))
+                b.js(pick, "All")
+                r.check("the Designs column names its counts: new accepted / accepted / measured (review shell-1)",
+                        b.js("return document.querySelector('#main table.list th[data-label=Designs]')?.title || [...document.querySelectorAll('#main table.list th')].find(th => th.textContent.trim().startsWith('Designs'))?.title || ''")
+                        == "new accepted (this start) / accepted / measured")
                 r.login("ada")
                 b.js("Object.assign(window.__controlState,{stop_requested:false,restart_requested:false}); return 1")
                 r.page("#/admin", "document.querySelector('.ctl-grid') && document.querySelector('table.list tbody tr')", "admin loop controls")

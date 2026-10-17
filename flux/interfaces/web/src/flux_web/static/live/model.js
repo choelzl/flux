@@ -28,6 +28,9 @@ export function taskPass(node, marks) {
   return Number(first.n) - 1;
 }
 
+/** D1181: passes in their order -- Setup (null) first, then by number (R, half-way, between its two). */
+export const byPass = (a, b) => a == null ? (b == null ? 0 : -1) : b == null ? 1 : Number(a) - Number(b);
+
 export function taskScope(model, pass = "current") {
   const all = [...model.nodes.values()].sort((a, b) => a.t0 - b.t0 || Number(a.id) - Number(b.id));
   const membership = new Map(all.map(n => [n.id, taskPass(n, model.marks)]));

@@ -54,7 +54,7 @@ export function BestChart({ rows, obj, passes, styles, groups: given, scope: cho
         <title>${pointTitle(p, [`${obj.metric} ${num(p.v)} at ${p.stage}`, new Date(p.t * 1000).toLocaleString()])}</title><//>`)}
       ${pts.map((p, i) => p.decision ? html`<${Ring} x=${xi(i)} y=${y(p.v)} r=${3} />` : "")}
       ${path ? html`<path d=${path} class="best" />` : ""}
-      <text x=${(W + L - R) / 2} y=${H - 8} class="tick" text-anchor="middle">${`${plural(n, "design")}, in order`}</text>
+      <text x=${(W + L - R) / 2} y=${H - 8} class="tick" text-anchor="middle">${`${plural(n, "design")}${refs.length ? ` + ${refs.length > 1 ? "baselines" : "baseline"}` : ""}, in order`}</text>
       ${timeEnds(t0, t1).map((t, i) => t ? html`<text x=${i ? W - R : L} y=${H - 8} class="tick" text-anchor=${i ? "end" : null}>${t}</text>` : "")}
     </svg></figure>`;
 }

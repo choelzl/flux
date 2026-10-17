@@ -118,11 +118,14 @@ button.primary:hover, .btn.primary:hover { filter: brightness(1.06); }
 button.danger { color: var(--bad); }
 button.danger.solid { background: var(--bad); border-color: var(--bad); color: var(--on-tone); }
 button.small, .btn.small { padding: 3px 9px; font-size: var(--fs-ui); }
-button.wide { width: 100%; justify-content: center; }
+button.wide, a.btn.wide { width: 100%; justify-content: center; }
 button.link { border: none; background: none; color: var(--accent); padding: 0; font-weight: 500; }
 button:disabled { opacity: .55; cursor: default; }
 button.busy::after { content: ""; width: 12px; height: 12px; }     /* D1110: the small spinner -- the run tone's ring (.g.spin) */
-input, textarea, select { font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: var(--radius-md); padding: 6px 9px; }
+input, textarea, select { font: inherit; color: var(--ink); background: var(--panel); border: 1px solid color-mix(in srgb, var(--line) 70%, var(--muted)); border-radius: var(--radius-md); padding: 6px 9px; }
+/* a box to type in is the panel's colour, so it reads as editable; one that is not reads apart (the page's colour, muted) */
+input:disabled, textarea:disabled:not(.editor-input), select:disabled { background: var(--bg); color: var(--muted); cursor: not-allowed; }
+input[readonly], textarea[readonly]:not(.editor-input) { background: var(--bg); }
 input:focus, textarea:focus, select:focus { border-color: var(--accent); outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
 input.bad { border-color: var(--bad); }
 textarea { width: 100%; resize: vertical; }
@@ -498,6 +501,7 @@ table.designs td { white-space: nowrap; }
 .measurement-footer > .lim { white-space: nowrap; }
 .best-table-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 6px; }
 .best-table-head h3 { margin: 0; }
+.best-group + .best-group { margin-top: 14px; }   /* a loop of parts: the whole's best, then each part's */
 .result-table-surface .table-design-name,
 .result-table-surface .table-part { display: inline-block; max-width: 16ch;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: middle; }
@@ -522,7 +526,8 @@ table.designs td { white-space: nowrap; }
 .hl .tk-deco { color: var(--tk-deco); }
 .hl .tk-sub { color: var(--tk-sub); font-weight: 600; }
 .hl .tk-punc { color: var(--tk-punc); }
-.editor { position: relative; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--bg); }
+.editor { position: relative; border: 1px solid color-mix(in srgb, var(--line) 70%, var(--muted)); border-radius: var(--radius-md); background: var(--panel); }
+.editor:has(.editor-input[readonly]) { background: var(--bg); }
 .editor .editor-layer, .editor .editor-input { font-family: var(--mono); font-size: var(--fs-ui); line-height: 1.5; padding: 10px 12px; margin: 0;
   white-space: pre; tab-size: 4; letter-spacing: normal; word-spacing: normal; border: 0;
   font-weight: 400; font-style: normal; font-variant-ligatures: none; }
@@ -721,6 +726,7 @@ textarea.mono { font-family: var(--mono); font-size: var(--fs-ui); }
 .logview.virt .spacer { width: 1px; }
 .logview.virt .win { position: absolute; top: 0; left: 0; right: 0; will-change: transform; }
 .logview.virt:not(.wrap) .ln { height: 1.5em; overflow: hidden; }
+.logview.virt:not(.wrap) .ln .tx { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }   /* D1183: a line cut says so */
 .logview.virt:not(.wrap) .ln.marker { border-top: none; margin-top: 0; padding-top: 0; box-shadow: inset 0 1px 0 var(--line); }
 .logview.virt.wrap .win { position: static; }
 .grid-2.ov { align-items: start; }
@@ -863,6 +869,9 @@ ul.files li.ignored .file-link, ul.files li.ignored small { opacity: .55; }
 .qbox-free input { flex: 1; min-width: 0; width: auto; }
 /* D1158: an author's draft its check refused, in the question's place: the refusal scrolls, its own height at most */
 .aj-error { max-height: 14em; overflow: auto; background: none; border: 0; padding: 0; font-size: var(--fs-sm); }
+/* a refused draft (D1158) stands in the question's place in the failure's tone (D1102), as the line above it: pink is the agent's own */
+.qbox.aj-refused { border-color: color-mix(in srgb, var(--bad) 30%, var(--line)); background: color-mix(in srgb, var(--bad) 6%, var(--panel)); }
+.aj-refused .qbox-head b { color: var(--bad); }
 .talk-ask { min-width: 0; }
 .alt-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin: 0 0 12px; }
 .subrow .alt-controls { flex: 1; justify-content: flex-end; margin-left: auto; }
@@ -979,7 +988,7 @@ dialog.agent-dlg > .head { flex: none; }
 @media (max-width: 640px) {
   dialog.dlg.agent-dlg { width: 100vw; height: 100dvh; max-height: 100dvh; margin: 0; border: 0; border-radius: 0; padding: 10px 12px; }
 }
-.alt-tried { margin: 2px 0 10px; } .alt-tried b { font-size: var(--fs-xl); margin-right: 8px; } .alt-pass-heading.sel .alt-task-name { text-decoration: underline; }
+.alt-tried { margin: 2px 0 10px; } .alt-tried b { font-size: var(--fs-xl); margin-right: 8px; }
 .alt-task-name small { display: block; font-weight: normal; }
 .alt-task > .mono { flex-shrink: 0; }
 .alt-located { outline: 3px solid var(--accent); outline-offset: -3px; }

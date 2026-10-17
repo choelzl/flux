@@ -133,19 +133,24 @@ def flows(r):
             r.check("Decision retains every measurement column with readable shortened headers", b.js("const table = document.querySelector('.best-n'); return table.querySelectorAll('th.measurement-head').length === 6 && [...table.querySelectorAll('th.measurement-head')].some(th => th.title === 'another_long_measurement_for_throughput' && th.textContent.endsWith('throughput'))"))
             r.check("Decision shares relative preference and uses the complete measured population", b.js("return document.querySelector('.best-table-head .relative-values').getAttribute('aria-pressed') === 'true' && [...document.querySelectorAll('.best-n td.num')].some(td => td.textContent === '-22.5%' && td.title.includes('baseline (w-baseline'))"))
             b.shot(r.shots / "compact-decision.png", full=True)
+            got = b.js("return [...document.querySelectorAll('.best-group')].map(g => [g.querySelector('h3').textContent, g.querySelector('table.best-n').dataset.part || '',"
+                       " [...g.querySelectorAll('tbody tr')].map(tr => tr.querySelector('.table-design-name').textContent)])")
+            r.check("Best ranks the whole designs, the decision first, then each part's own best under its name (review results-23)",
+                    [x[:2] for x in got] == [["Best 3 · whole", ""], ["Best 2 · decoder", "decoder"], ["Best 2 · encoder", "encoder"]]
+                    and got[0][2][0].startswith("w-good") and all(not n.startswith(("dec", "enc")) for n in got[0][2]), str(got))
             r.check("Decision measurement cells use colors and contain no extra checkmarks", b.js("const good = document.querySelector('.best-n td.meets'), badge = document.querySelector('.best-n .verdict-badge.t-ok'); return getComputedStyle(good).color === getComputedStyle(badge).color && good.title.includes('meets the limit') && [...document.querySelectorAll('.best-n td.num, .num-cell')].every(td => !/[✓✗]/.test(td.textContent))"))
             r.page("#/app/sw/settings", "document.querySelector('.measurement-options')", "Decision measurement Preferences")
             b.click('.measurement-options input[data-metric="long_measurement_name_for_latency"]')
             r.page("#/app/sw", "document.querySelector('.best-n')", "Decision with an ignored column")
-            r.check("Decision can hide measurement columns while retaining its designs", b.js("return document.querySelectorAll('.best-n th.measurement-head').length === 5 && document.querySelectorAll('.best-n tbody tr').length === 3 && ![...document.querySelectorAll('.best-n th.measurement-head')].some(th => th.title === 'long_measurement_name_for_latency')"))
+            r.check("Decision can hide measurement columns while retaining its designs", b.js("return document.querySelectorAll('.best-n:not([data-part]) th.measurement-head').length === 5 && document.querySelectorAll('.best-n:not([data-part]) tbody tr').length === 3 && ![...document.querySelectorAll('.best-n:not([data-part]) th.measurement-head')].some(th => th.title === 'long_measurement_name_for_latency')"))
             r.page("#/app/sw/results", "document.querySelector('table.designs')", "measurement choices shared with Results")
             r.check("Decision's hidden measurements also apply to Results", b.js("return document.querySelectorAll('table.designs th.measurement-head').length === 5 && !document.querySelector('th[data-label=long_measurement_name_for_latency]') && document.querySelectorAll('table.designs tbody tr').length === 7"))
             b.click(".show-hidden-columns")
             r.page("#/app/sw", "document.querySelector('.best-n')", "the shared Hidden toggle")
-            r.check("the Hidden toggle is shared with Decision and keeps ignored columns dimmed", b.js("return document.querySelectorAll('.best-n th.measurement-head').length === 6 && document.querySelectorAll('.best-n th.hidden-measurement').length === 1 && document.querySelector('.show-hidden-columns').getAttribute('aria-pressed') === 'true'"))
+            r.check("the Hidden toggle is shared with Decision and keeps ignored columns dimmed", b.js("return document.querySelectorAll('.best-n:not([data-part]) th.measurement-head').length === 6 && document.querySelectorAll('.best-n:not([data-part]) th.hidden-measurement').length === 1 && document.querySelector('.show-hidden-columns').getAttribute('aria-pressed') === 'true'"))
             b.click(".show-hidden-columns")
             r.preferences()
-            r.check("Decision can hide ignored columns again without clearing their selection", b.js("return document.querySelectorAll('.best-n th.measurement-head').length === 5 && window.__savedResults.hiddenMetrics.includes('long_measurement_name_for_latency')"))
+            r.check("Decision can hide ignored columns again without clearing their selection", b.js("return document.querySelectorAll('.best-n:not([data-part]) th.measurement-head').length === 5 && window.__savedResults.hiddenMetrics.includes('long_measurement_name_for_latency')"))
             r.clean("compact tables")
         finally:
             b.cmd("WebDriver:SetWindowRect", {"width": 1280, "height": 900})

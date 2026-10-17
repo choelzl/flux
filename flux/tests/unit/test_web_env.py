@@ -232,6 +232,12 @@ def test_a_failed_start_says_why_in_its_logs_words(tmp_path, server):
     # D1094: as sentences -- a list's heading, its dashes and indents dropped
     log.write_text("── started x ──\n  gate: 0 of 1 admitted; 1 refused\nREFUSED (1)\n  - x=1: failed at ut: FAIL ut case 0\n")
     assert rm.failure({"log": str(log)}) == ["gate: 0 of 1 admitted; 1 refused", "x=1: failed at ut: FAIL ut case 0"]
+    # a refused list's items are why, though no word of theirs is a problem word: the heading was the only one, and
+    # a failed loop said nothing (popcount_live, review results-6)
+    log.write_text("── started x ──\n  p: no design -- nothing built in 5 tries: no `module <name>` in the source\n"
+                   "REFUSED (2)\n  - p (generate): nothing built in 5 tries: no `module <name>` in the source\n0 failing of 0\n"
+                   "  - p (generate): nothing built in 5 tries: no `module <name>` in the source\nanswer written to /x/answer.json\n")
+    assert rm.failure({"log": str(log)}) == ["nothing built in 5 tries: no `module <name>` in the source (2 times)"]
 
 
 def test_a_document_is_checked_before_it_is_saved(server):

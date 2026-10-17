@@ -14,7 +14,7 @@ import { PageHead } from "../components/PageHead.js";
 
 /** Create a loop from a starter document or uploaded files, a folder, or a single ZIP. */
 export function UploadForm() {
-  const [name, setName] = useState(""), [rows, setRows] = useState([]);
+  const [name, setName] = useState(""), [rows, setRows] = useState([]), [unnamed, setUnnamed] = useState(false);
   const take = next => {                                     // a loop folder dropped names the loop, when it has no name yet
     const loop = next.find(r => r.loop);
     if (loop && !name) setName(loop.folder.replace(/[^A-Za-z0-9_-]+/g, "_").slice(0, 60));
@@ -22,7 +22,7 @@ export function UploadForm() {
   };
   const create = async () => {
     const n = name.trim(), chosen = placedFiles(rows);
-    if (!n) { toast("Name the loop first.", "warn"); document.getElementById("up-name")?.focus(); return; }
+    if (!n) { setUnnamed(true); document.getElementById("up-name")?.focus(); return; }   // said under the box, not in a toast
     if (rows.some(r => r.dest === "custom" && !r.custom.trim())) { toast("Name the folder a file goes to, or choose another place.", "warn"); return; }
     if (!chosen.length) {
       const made = await api("/apps/new-empty", { method: "POST", body: { name: n } });
@@ -39,7 +39,9 @@ export function UploadForm() {
     toast(`${n} uploaded: ${plural(sent, "file")}`, "ok"); location.hash = `#/app/${enc(n)}`;
   };
   return html`<${Card}><div class="upload">
-    <label class="stack">Name<input placeholder="my_loop" pattern="[A-Za-z0-9_\\-]{1,60}" maxlength="60" class="full" id="up-name" autocomplete="off" ...${bound(name, setName)} /></label>
+    <label class="stack">Name<input placeholder="my_loop" pattern="[A-Za-z0-9_\\-]{1,60}" maxlength="60" class=${unnamed && !name.trim() ? "full bad" : "full"} id="up-name"
+      autocomplete="off" aria-invalid=${unnamed && !name.trim() ? "true" : null} aria-describedby=${unnamed && !name.trim() ? "up-name-why" : null} ...${bound(name, v => { setName(v); setUnnamed(false); })} />
+      ${unnamed && !name.trim() ? html`<small class="err" id="up-name-why">Name the loop first.</small>` : ""}</label>
     <${Uploader} rows=${rows} onChange=${take} hideable label="Drop a loop folder, files or a .zip" />
     ${rows.length ? "" : html`<p class="muted small">Without files: a starter problem.yaml, README and empty library/, opened in the configurator.</p>`}
     <div class="form-actions"><${Act} cls="primary" onClick=${create}>Create loop<//></div></div><//>`;

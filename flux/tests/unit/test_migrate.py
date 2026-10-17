@@ -116,6 +116,8 @@ def test_a_result_that_does_not_load_is_not_written(tmp_path):
     got = migrate_loop(d, write=True)["documents"][0]
     assert got["status"] == "failed" and got["why"].startswith("the result does not load")
     assert (d / "problem.yaml").read_text() == before
+    # Admin › Loops said the trial's temporary folder ("/tmp/…/flux-migrate-XXXX/bad/problem.yaml: …"): its file by name
+    assert "flux-migrate-" not in got["why"] and str(tmp_path) not in got["why"], got["why"]
 
 
 def test_the_command_line_says_and_writes_the_same(tmp_path, capsys):

@@ -22,10 +22,12 @@ function Changes({ M, changes, yaml }) {
     <div class="cfg-diff">${open ? got || html`<${Notice} tone="run" what="Reading the changes…" />` : ""}</div></details>`;
 }
 
-export function SaveStep({ M, msgs, ready, calm, go, nav, changes, notes, yaml, file }) {
+export function SaveStep({ M, msgs, ready, calm, go, nav, changes, notes, yaml, file, direct = null }) {
   const order = { error: 0, warning: 1, note: 2 };
   const todo = msgs.filter(m => !m.files).sort((a, b) => order[a.level] - order[b.level]);
-  return html`<${Checklist} cls="cfg-ready" items=${ready.map(([k, what, words]) => [TONE[k], what, words])} />
+  // a document the loader refuses: where it is fixed as written, beside its line
+  const fix = what => what === "Loads" && direct ? html`<a class="cfg-ready-act" href=${direct}>Direct edit</a>` : "";
+  return html`<${Checklist} cls="cfg-ready" items=${ready.map(([k, what, words]) => [TONE[k], what, words, fix(what)])} />
     ${todo.length ? html`<${Checklist} cls="cfg-todo" items=${todo.map(m => {
       const k = calm && m.level !== "note" ? "todo" : m.level, at = STEPS[m.step] || STEPS[0];
       return [TONE[k], "", m.text, html`<button type="button" class="link" onClick=${() => go(at.id, m.field)}>${at.title}</button>`];

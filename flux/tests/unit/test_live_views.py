@@ -197,6 +197,7 @@ def views(tmp_path, events, js):
     (tmp_path / "package.json").write_text('{"type": "module"}')
     (tmp_path / "run.js").write_text("""import * as LT from "./live/events.js"; import * as M from "./live/model.js";
 import * as V from "./live/views.js"; import * as R from "./live/rules.js"; import { lines } from "./live/rows.js";
+import * as W from "./live/work_style.js"; import * as LM from "./live/logmodel.js"; import * as P from "./live/inspector/parts.js";
 import { readFileSync } from "fs";
 const m = LT.model();
 for (const l of readFileSync(0, "utf8").split("\\n")) if (l.trim()) LT.apply(m, JSON.parse(l));
@@ -206,7 +207,7 @@ const v = { selected: null, model: m, membership: sc.membership, J: R.judge(m, s
   noteShort: n => n.name, scopeRows: sc.rows, tests: [] };
 const said = l => l.type !== "row" ? l.type : [l.name.map(s => typeof s === "string" ? s : s.b || s.text || "").join("").trim(),
   l.pills.map(p => p.text).join(","), l.act.task ? l.act.task.id : null];
-process.stdout.write(JSON.stringify((__BODY__)({ LT, M, V, R, lines, m, sc, v, said })));""".replace("__BODY__", js))
+process.stdout.write(JSON.stringify((__BODY__)({ LT, M, V, R, W, LM, P, lines, m, sc, v, said })));""".replace("__BODY__", js))
     r = subprocess.run(["node", str(tmp_path / "run.js")], input="".join(json.dumps(e) + "\n" for e in events),
                        capture_output=True, text=True, timeout=30)
     assert r.returncode == 0, r.stderr
@@ -266,3 +267,128 @@ def test_a_try_not_built_or_refused_is_no_tick(tmp_path, failed_flag):
     assert got == [["Design whole", "bad"], ["try 4 · not built", "warn"], ["try 3 #1 · build x: golden failed", "bad"],
                    ["try 2 · not built", "warn"], ["try 1 #1 · build x: golden failed", "bad"]], got
     assert not any(n.startswith("Check") for n, _t in got), "no check passed: none is the Check box's"
+
+
+# ---- the review of Oct 17 (D1181, D1182, D1183)
+_st = lambda i, t, name, why, parent=None, **params: {"ev": "start", "id": i, "t": t, "parent": parent, "name": name, "why": why, "params": params}  # noqa: E731
+_en = lambda i, t, failed=False, **output: {"ev": "end", "id": i, "t": t, "seconds": 1, "failed": failed, "output": output}  # noqa: E731
+_mk = lambda n, t: {"ev": "mark", "name": "pass", "t": t, "why": json.dumps({"n": n})}  # noqa: E731
+_TEXT = "(l => l.name.map(s => typeof s === 'string' ? s : s.b || s.text || '').join('').trim())"
+_TREE = f"""({{ lines, sc, v }}) => lines(sc.rows, v).tree().filter(l => l.type === "row")
+  .map(l => [{_TEXT}(l), typeof l.mark === "string" ? l.mark : l.mark.tone, l.depth])"""
+
+
+def _one_draft_run(n):
+    """A design run that is its one draft, the draft's one command a check that passed (the adder8 journal)."""
+    i = 10 * n
+    return [_st(i, i, "generation: x drafts", "each checked"), _st(i + 1, i + 0.1, "generation: agent:claude draft 1", f"x#{n}", i, turn="agent: claude"),
+            _st(i + 2, i + 1, "tool:check.py", f"test x#{n}", i + 1), _en(i + 2, i + 2), _en(i + 1, i + 3), _en(i, i + 3)]
+
+
+@pytest.mark.parametrize("scope", ["all", "1"])
+def test_a_run_that_is_its_one_draft_unfolds_without_failing(tmp_path, scope):
+    """Unfolding Pass 1 (or picking it in the Pass menu) threw `kids.get(...) is undefined`: the run merged with its
+    one draft (D1012) lists the draft's check, which was then taken from the draft's list -- which no longer exists."""
+    ev = [{"t": 0, "ev": "hello", "pid": 1}, _mk(1, 1), *_one_draft_run(1), _mk(2, 50), *_one_draft_run(6)]
+    got = views(tmp_path, ev, f"""({{ lines, M, m, v }}) => {{ const sc = M.taskScope(m, "{scope}");
+      return lines(sc.rows, {{ ...v, membership: sc.membership, pass: "{scope}", scopeRows: sc.rows }}).tree().filter(l => l.type === "row").map({_TEXT}); }}""")
+    assert [x for x in got if x.startswith(("Design", "Check"))][:2] == ["Design #1", "Check check.py"], got
+
+
+def test_passes_side_by_side_are_one_heading_each_in_pass_order(tmp_path):
+    """codec_parts: passes 4, 5 and 6 ran side by side, their tasks interleaved in time -- the tree said
+    "Pass 5, Pass 6, Pass 5, Pass 4 ..." (a heading per stretch) and the graph's chain ran 6, 4, 5, 7."""
+    ev = [json.loads(x) for x in (Path(__file__).parent / "fixtures/looptree/parallel.jsonl").read_text().splitlines() if x.strip()]
+    got = views(tmp_path, ev, f"""({{ lines, sc, v, M }}) => [lines(sc.rows, v).tree().filter(l => l.type === "row" && l.depth === 0).map({_TEXT}),
+      [...new Set(sc.rows.map(r => sc.membership.get(r.node.id) ?? null))].sort(M.byPass)]""")
+    assert got[0] == [f"Pass {n}" for n in range(1, 8)] and got[1] == list(range(1, 8)), got
+
+
+def test_a_search_whose_one_point_failed_shows_the_failed_design(tmp_path):
+    """broken_gen: the sweep's only generator exited 2; the tree merged it into its search -- "✓ Search algorithm=a ·
+    nope.py" -- while the inspector of the same line said "Design · algorithm=a ✗"."""
+    ev = [{"t": 0, "ev": "hello", "pid": 1}, _st(1, 1, "DSE: batch", "the points this pass tries"),
+          _st(2, 1.1, "tool:nope.py", "generate algorithm=a", 1), _en(2, 1.2, exit=2, stderr="can't open file"), _en(1, 1.3, candidates=0)]
+    got = views(tmp_path, ev, _TREE)
+    assert got == [["Pass 1", "bad", 0], ["Search algorithm=a", "ok", 1], ["Design algorithm=a · nope.py", "bad", 1]], got
+
+
+def _agent_runs(error=None):
+    """primes_agents: three runs, each its one draft of two agent turns that ended well, each run failed (no design)."""
+    ev = [{"t": 0, "ev": "hello", "pid": 1}]
+    for k, d in enumerate(["x#1", "x#1.2", "x#1.3"]):
+        i = 10 * k + 1
+        ev += [_st(i, i, "generation: x", "drafts, each checked"), _st(i + 1, i + 0.1, "generation: agent:codex draft 1", "x", i),
+               _st(i + 2, i + 0.2, "agent: codex", d, i + 1), _en(i + 2, i + 0.3, agent="codex codex 1.0", exit="0"),
+               _st(i + 3, i + 0.4, "agent: codex", d, i + 1), _en(i + 3, i + 0.5, agent="codex codex 1.0", exit="0"),
+               _en(i + 1, i + 0.6), _en(i, i + 0.7, True, **({"error": error} if error else {}))]
+    return ev
+
+
+@pytest.mark.parametrize("error", [None, "the agent wrote no file"])
+def test_a_try_of_a_run_that_failed_is_a_failed_try_counted_as_the_graph_counts(tmp_path, error):
+    """The Design line was ✗ (×6) over six ticked tries -- each agent turn a try -- while the graph said ×3 and
+    named the document's agent. A draft is a try, its turns its steps; a run that failed with no step of its
+    try failing failed that try (its reason, else "no design"); the graph names the agent its turns name."""
+    got = views(tmp_path, _agent_runs(error), f"""({{ lines, sc, v, V }}) => {{
+      const rows = sc.rows.filter(r => sc.membership.get(r.node.id) === 1), d = V.flowBoxes(rows, 1, false).find(b => b.key === "design");
+      return [lines(sc.rows, v).tree().filter(l => l.type === "row" && l.depth <= 4).map(l => [{_TEXT}(l), typeof l.mark === "string" ? l.mark : l.mark.tone]).slice(1, 5),
+              d.count, V.agentsOf(d.runs)]; }}""")
+    said = error or "no design"
+    assert got[0] == [["Design whole", "bad"], [f"try 3 · {said}", "bad"], ["codex", "ok"], ["turn 2", "ok"]], got
+    assert got[1] == 3 and got[2] == ["codex"]
+
+
+def test_a_check_the_model_ran_in_its_turn_is_its_trys_not_a_passing_check_box(tmp_path):
+    """popcount_live: the prototype's check, made inside the model's turn, was a green "Check" box after a Design
+    that failed 36 times; the inspector said "attempt 1" where the tree said "try"."""
+    ev = [{"t": 0, "ev": "hello", "pid": 1}, _st(1, 1, "generation: x", "drafts"), _st(2, 1.1, "generate: prototype x", "attempt 1", 1), _en(2, 2),
+          _st(3, 2.1, "test: prototype x", "attempt 1", 1), _en(3, 2.1, measured="inside the turn, by the model's own check call", verdict="PASSES, score 0"),
+          _st(4, 3, "repair: x", "attempt 2", 1), _en(4, 4), _en(1, 5, True)]
+    got = views(tmp_path, ev, f"""({{ lines, sc, v, V, m, P }}) => {{ const t = lines(sc.rows, v).tree();
+      return [t.filter(l => l.type === "row").map({_TEXT}), V.flowBoxes(sc.rows, 1, false).map(b => b.key), m.nodes.get(3).tryNo, P.tryWhy(m.nodes.get(3))]; }}""")
+    assert not any(x.startswith("Check") for x in got[0]) and "check" not in got[1], got
+    assert got[2] == 1 and got[3] == ""
+
+
+def test_a_choice_shows_the_metric_it_was_made_on_and_no_empty_column():
+    """codec_parts: "the smallest time_ms", its table fmax_mhz and area_um2 (the document's goals), both empty."""
+    got = run_inspector("""m => { const goals = [{metric: "fmax_mhz", direction: "maximize"}, {metric: "area_um2", direction: "minimize"}];
+      return [m.chooseColumns([["a", {time_ms: 3, cells: 4}], ["b", {time_ms: 4}]], goals, "the smallest time_ms"),
+              m.chooseColumns([["a", {}]], goals, "the least area_um2 at fmax_mhz >= 2000"),
+              m.chooseColumns([["a", {area_um2: 3, fmax_mhz: 2100, power_w: 1}]], goals, "the least area_um2 at fmax_mhz >= 2000")]; }""")
+    assert got == [["time_ms", "cells"], [], ["area_um2", "fmax_mhz", "power_w"]]
+
+
+def test_a_passs_time_adds_up_and_its_row_is_the_picked_one(tmp_path):
+    """codec_parts Pass 3: "4.3s" over a breakdown of 0.9s ("all under a second") -- the passes beside it ran
+    between its tasks; the time none of them ran is said. A pass shown is its row's pick, not the task's."""
+    ev = [{"t": 0, "ev": "hello", "pid": 1}, _st(1, 0, "DSE: batch", "", pass_=3), _en(1, 0.8),
+          _st(2, 4, "decide", "", None), _en(2, 4.3)]
+    ev[1]["params"] = {"pass": 3}; ev[3]["params"] = {"pass": 3}
+    got = views(tmp_path, ev, """({ lines, sc, v, W, m }) => { const t = W.passTime([...m.nodes.values()], n => n.t1);
+      const picked = lines(sc.rows, { ...v, selected: 2, passView: 3, passShown: true }).tree().filter(l => l.picked);
+      return [Math.round((t.t1 - t.t0) * 10), Math.round((Object.values(t.kinds).reduce((a, b) => a + b, 0) + t.idle) * 10), Math.round(t.idle * 10),
+              picked.map(l => [l.key, !!l.k, l.time])]; }""")
+    assert got == [43, 43, 32, [["pass:3", True, "4.3s"]]], got
+
+
+def test_a_log_line_of_a_failed_command_is_a_problem(tmp_path):
+    """broken_gen's only failure, "the generator exited 2", was not red, and "problems only" hid it."""
+    got = views(tmp_path, [], """({ LM }) => ["algorithm=a: the generator exited 2: can't open file", "  x: no design -- nothing built in 5 tries",
+      "exit code 1", "it exited 0", "exit 0 · 5 checks"].map(t => [LM.lineClass(t), LM.isProblem(t)])""")
+    assert got == [["bad", True], ["bad", True], ["bad", True], ["", False], ["", False]]
+
+
+def test_the_same_failure_twice_is_one_toast_counted():
+    """Nine identical "The page failed" toasts stacked over the inspector; one says it, ×9."""
+    stub = lambda js: "data:text/javascript;base64," + base64.b64encode(js.encode()).decode()  # noqa: E731
+    view = stub("export const html = () => null; export const Glyph = 0; export const useLayoutEffect = () => {}; export const useMemo = f => f();"
+                " export const useChanges = () => {}; export const changes = () => ({ emit() {} });")
+    src = (STATIC / "notices.js").read_text().replace('"./view.js"', json.dumps(view)).replace('"./components/Head.js"', json.dumps(stub("export const Close = 0;")))
+    src += "\nexport const _list = () => list;"
+    js = (f"globalThis.window = {{ addEventListener() {{}} }}; import({json.dumps(stub(src))}).then(m => {{ for (let i = 0; i < 9; i++) m.toast('The page failed: x', 'bad');"
+          " m.toast('other', 'bad'); process.stdout.write(JSON.stringify(m._list().map(t => [t.text, t.count || 1]))); process.exit(0); });")
+    r = subprocess.run(["node", "-e", js], capture_output=True, text=True, timeout=30)
+    assert r.returncode == 0, r.stderr
+    assert json.loads(r.stdout) == [["The page failed: x", 9], ["other", 1]]

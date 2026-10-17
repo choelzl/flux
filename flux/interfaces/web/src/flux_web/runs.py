@@ -671,9 +671,16 @@ class RunManager:
         at = max((i for i, ln in enumerate(tail) if "── started" in ln), default=-1)
         lines = [re.sub(r"^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d\.\d{3} ", "", ln).rstrip() for ln in tail[at + 1:]]
         lines = [ln for ln in lines if ln.strip() and not re.match(r"flux [a-z ]+: in the \w+ sandbox ", ln)]   # where it ran, not why
-        said = [ln for ln in lines if self._PROBLEM.search(ln)]
-        # D1094: as sentences -- a list's own heading ("REFUSED (1)") and its dashes and indents dropped
-        tidy = [re.sub(r"^\s*(?:[-*•]\s+)?", "", ln) for ln in (said or lines) if not re.fullmatch(r"\s*[A-Z][A-Z ]+\(\d+\):?\s*", ln)]
+        # D1094: as sentences -- a list's own heading ("REFUSED (1)") and its dashes and indents dropped; a
+        # problem list's items are said whatever their words ("nothing built in 5 tries"), else a failed start whose
+        # only problem word was the heading said nothing at all
+        heading, said, listed = re.compile(r"\s*[A-Z][A-Z ]+\(\d+\):?\s*"), [], False
+        for ln in lines:
+            if heading.fullmatch(ln):
+                listed = bool(self._PROBLEM.search(ln))
+            elif self._PROBLEM.search(ln) or (listed and re.match(r"\s+[-*•]\s", ln)):
+                said.append(ln)
+        tidy = [re.sub(r"^\s*(?:[-*•]\s+)?", "", ln) for ln in (said or lines) if not heading.fullmatch(ln)]
         # the engine's own names out ("loop (generate): ", "agent:python3"), and a line said again counted, not repeated
         tidy = [re.sub(r"\b(agent|tool|model):(\S)", r"\1 \2", re.sub(r"^\S+ \(\w+\):\s*", "", ln)) for ln in tidy]
         counted: dict[str, int] = {}

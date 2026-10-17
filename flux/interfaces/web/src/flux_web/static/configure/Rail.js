@@ -9,8 +9,8 @@ import { Steps } from "../components/Steps.js";
 import { STEPS } from "./model.js";
 import { agentWord, isAgent } from "./who.js";
 
-/** Each step's line: what it says now. */
-export function sums(M, state, { files = 0, missing = 0, errors = 0, calm = false, isNew = false }) {
+/** Each step's line: what it says now; Save's is `save`, from the points Save's checklist lists (M.standing). */
+export function sums(M, state, { files = 0, missing = 0, save = "" }) {
   const f = state.flow || {}, lang = M.language(state, true) || M.impliedLanguage(state);
   const r = M.resolve(state), words = M.describeObjectives(r.objectives), kept = at => (state.kept || []).includes(at);
   const knobs = M.knobNames(state), bp = state.baseline || {};
@@ -24,7 +24,7 @@ export function sums(M, state, { files = 0, missing = 0, errors = 0, calm = fals
     extra: [M.parameterSearch(state) ? `searches ${plural(knobs.length, "setting")}` : "no search",
       state.partsMode === "decompose" ? "parts as it decides" : M.hasParts(state) ? plural(M.list(state.parts).length, "part") : "one design",
       bp.mode && bp.mode !== "off" ? "baseline first" : ""].filter(Boolean).join(" · "),
-    save: errors ? `${plural(errors, "thing")} to ${calm ? "do" : "fix"}` : isNew ? "ready to create" : "ready to save",
+    save,                                       // the model's standing: Save's checklist said in one line
   };
 }
 

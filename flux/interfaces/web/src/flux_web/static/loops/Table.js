@@ -1,5 +1,5 @@
 // Flux web, loops (D693, D837, D926, D1006, D1095): loops as a table -- who (when not one's own), the loop, its
-// state, its last activity, its designs (this run / every run), the decision's main measurements; Start, Stop
+// state, its last activity, its designs (new accepted / accepted / measured, the last two as its Overview counts them), the decision's main measurements; Start, Stop
 // and Restart where one may -- and the list with its search and its state chips.
 
 import { Ago, Empty, html, useState } from "../view.js";
@@ -22,6 +22,7 @@ const redrawn = () => { document.activeElement?.blur?.(); pageRefresh?.().catch(
 /** What one may do with a loop from the list: Start (then its page), or Stop and Restart while it runs --
     D1006: the first press schedules it after the pass, the button turns red, a second (confirmed) abandons it. */
 function LoopActions({ l, name, owner, href }) {
+  if (me.impersonator) return null;                        // D812: viewing as a user is read-only
   const canRun = l.can_run ?? (owner ? l.perm === "edit" || me.role === "admin" : can("run_loops"));
   if (owner && !canRun) return html`<${Tag}>${l.perm === "edit" ? "can edit" : "watching"}<//>`;
   if (l.running) {
@@ -59,7 +60,9 @@ export function LoopsTable({ loops, who = false, memo = "flux-sort-loops" }) {
     { label: "Loop", key: l => l.name || l.app, asc: true },
     { label: "State", key: STATE_RANK },
     { label: "Activity", key: l => l.running ? [1, l.since || 0] : l.last_active ? [0, l.last_active] : null },
-    { label: "Designs", key: l => sm(l).designs ? [sm(l).this_run || 0, sm(l).designs] : null, num: true, title: "this run / all runs" },
+    // new accepted (this start) / accepted / measured -- the last two the loop's Overview counts (one source, results.designs)
+    { label: "Designs", key: l => sm(l).designs ? [sm(l).accepted_this_run || 0, sm(l).accepted || 0, sm(l).designs] : null, num: true,
+      title: "new accepted (this start) / accepted / measured" },
     { label: "Best", key: l => sm(l).best ? l.name || l.app : null, asc: true, title: "a decision first, by name" },
     { label: "" }];
   const row = l => {
@@ -68,8 +71,8 @@ export function LoopsTable({ loops, who = false, memo = "flux-sort-loops" }) {
     return html`<tr class="clickable" onClick=${e => { if (!e.target.closest("a, button")) location.hash = href; }}>
       ${who ? html`<td>${l.owner}</td>` : ""}<td><a href=${href} class="strong">${name}</a></td>
       <td><${StatePill} st=${l} />${l.question ? html`<${Pill} tone="warn">asks<//>` : ""}${(l.agents || []).map(a => html`<${Tag} k="var(--agent)" cls="loop-agent">${a}<//>`)}</td><td class="muted"><${Activity} l=${l} /></td>
-      <td class="num mono" title=${s.designs ? `${s.this_run || 0} this run, ${s.designs} in all, ${s.accepted} accepted` : null}>
-        ${s.designs ? html`${String(s.this_run || 0)}<span class="muted">${` / ${s.designs}`}</span>` : html`<span class="muted">—</span>`}</td>
+      <td class="num mono" title=${s.designs ? `${s.accepted_this_run || 0} accepted this start · ${s.accepted || 0} accepted of ${s.designs} measured in all` : null}>
+        ${s.designs ? html`${String(s.accepted_this_run || 0)}<span class="muted">${` / ${s.accepted || 0} / ${s.designs}`}</span>` : html`<span class="muted">—</span>`}</td>
       <td class="mono loop-main-measurements"><${Best} l=${l} name=${name} owner=${owner} /></td>
       <td class="right"><div class="actions end"><${LoopActions} l=${l} name=${name} owner=${owner} href=${href} /></div></td></tr>`;
   };

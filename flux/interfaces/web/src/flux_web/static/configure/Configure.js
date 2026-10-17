@@ -15,6 +15,7 @@ import { Advanced } from "../settings/Advanced.js";
 import { UploadForm } from "../loops/Create.js";
 import { filesStore } from "./files.js";
 import { Configurator } from "./Configurator.js";
+import { DraftLine } from "./DraftLine.js";
 import { stepOfHash, stepToHash, useModel } from "./model.js";
 import { CloneForm, DirectEdit, NewByAgent, ReviseByAgent, confirmDiff } from "./Views.js";
 import { Select } from "../components/Select.js";
@@ -59,10 +60,10 @@ const changesOf = (name, kept) => async yaml => {
 
 /** The configurator on an existing loop: its document read back into the form, saved with its diff. */
 function ConfigureLoop({ M, name, owner }) {
-  const [doc, setDoc] = useState(null), [problem, setProblem] = useState(null), [pre, setPre] = useState(null);
+  const [doc, setDoc] = useState(null), [problem, setProblem] = useState(null), [pre, setPre] = useState(null), [edited, setEdited] = useState(false);
   const ref = useRef({ got: null });
   const store = useMemo(() => filesStore(name, () => ref.current.got ? M.buildYaml(ref.current.got.state) : "",
-    { namedOf: () => ref.current.got ? M.namedFiles(ref.current.got.state) : [] }), [name]);
+    { keptOf: () => ref.current.got ? ref.current.got.kept : [] }), [name]);
   const readCheck = () => loopApi(name).api("/preflight").then(setPre, () => {});
   useEffect(() => {
     let live = true;
@@ -73,6 +74,8 @@ function ConfigureLoop({ M, name, owner }) {
       // D710: not YAML at all -- the form would read nothing and save over it
       if (v.raw == null) { setProblem(v.error); return; }
       ref.current.got = M.fromDoc(v.raw, v.normal || v.raw);
+      // D786: the folder's name is the id -- also when the loader refuses the document and says no id of its own
+      if (!String(ref.current.got.state.id || "").trim()) ref.current.got.state.id = name;
       setDoc(v);
       store.draw();
       readCheck();                                // D913b: Save's "Checked" is the loop's own check on its inputs as they are
@@ -89,13 +92,21 @@ function ConfigureLoop({ M, name, owner }) {
     if (p.before === p.after) { toast("No change.", "info"); return "No change."; }
     if (!await confirmDiff(p.document, p.before, p.after)) return "Not saved.";
     const r = await loopApi(name).api("/document", { method: "PUT", body: { text: yaml, kept: got.kept } });
+    setDoc(d => ({ ...d, error: r.error || "" }));      // the loader's word on what was saved
+    setEdited(true);                                       // saved: no longer the starter as it came
     toast(r.ok, r.error ? "warn" : "ok"); store.draw(); readCheck(); return r.ok;
   };
+  // D825: the starter as it came (its content says so) is calm -- what is left to fill in -- until it is edited
+  const starter = !!doc.error && M.unfilled(doc.raw), fresh = starter && !edited;
+  // D710: a document the loader refuses is said first, here and as Save's first line; the form is what could be read
   return html`<p class="muted small doc-line"><span class="mono">${doc.document}</span>${" · saving drops comments" + (got.kept.length ? "; the rest is kept as written" : "")}</p>
-    ${doc.error ? html`<${Notice} tone="bad" what="The document does not load:" why=${doc.error} />` : ""}
+    ${fresh ? html`<${Notice} tone="none" what=${M.WORDS.save.starterWhat} why=${M.WORDS.save.starterWhy} />`
+    : doc.error ? html`<${Notice} tone="bad" what="The document does not load:" why=${doc.error}>
+      <p class="small">Below is what could be read from it, not what runs. Fix it here and save, or in <a href=${`${appHref(owner, name)}/settings/problem/edit`}>Direct edit</a>.</p><//>` : ""}
     <${Configurator} M=${M} state=${got.state} step=${stepOfHash() || "prompt"} onStep=${stepToHash} notes=${got.notes} saveLabel=${"Save to " + doc.document}
+      loadError=${doc.error || ""} starter=${starter} calm=${starter}
       direct=${`${appHref(owner, name)}/settings/problem/edit`}
-      save=${save} checked=${() => checkedOf(pre)} changes=${changesOf(name, got.kept)} store=${store} onChange=${store.watch} />`;
+      save=${save} checked=${() => checkedOf(pre)} changes=${changesOf(name, got.kept)} store=${store} onChange=${() => { store.watch(); setEdited(true); }} />`;
 }
 
 /** The configurator on a new loop: the draft's form; Create makes the loop, sends its staged files and an admin's
@@ -103,7 +114,8 @@ function ConfigureLoop({ M, name, owner }) {
 function ConfigureNew({ M, draft, onDraft }) {
   const adv = useRef(null);
   draft.state = draft.state || M.base();                 // a draft discarded meanwhile has a state at once
-  const store = useMemo(() => filesStore(null, () => M.buildYaml(draft.state), { staged: draft.staged, namedOf: () => M.namedFiles(draft.state), onDraw: onDraft }), [draft]);
+  const store = useMemo(() => filesStore(null, () => M.buildYaml(draft.state), { staged: draft.staged, namedOf: () => M.namedFiles(draft.state),
+    goldenOf: () => M.goldenFiles(draft.state), onDraw: onDraft }), [draft]);
   useEffect(() => { store.draw(); }, [store]);
   // D697: an admin's advanced settings, applied once it exists -- D941: the Extra step's
   const extra = me.role === "admin" ? html`<${Advanced} e=${{ advanced: {}, advanced_said: { memory: "memory", cpus: "CPUs", pids: "processes", tmp_size: "scratch" },
@@ -130,14 +142,6 @@ function ConfigureNew({ M, draft, onDraft }) {
     nameLabel="Loop name" namePlaceholder="my_loop" />`;
 }
 
-/** D912: the draft said, kept across the ways, discarded only when asked. */
-function DraftLine({ draft, discard }) {
-  if (!draft || !draftUsed(draft)) return html`<div class="draft-line muted small" />`;
-  const s = draft.state || {};
-  return html`<div class="draft-line muted small">${`Draft: ${String(s.id || "").trim() || "unnamed"}`}${draft.staged.size ? ` · ${plural(draft.staged.size, "file")} staged` : ""} ·
-    <button type="button" class="link" onClick=${discard}>Discard draft</button></div>`;
-}
-
 /** The ways' tabs (`small`: as sub-tabs) and, on a phone, one compact menu (D913). */
 export const ModeTabs = ({ name, mode, pick, small = false }) => html`<${Tabs} cls=${(small ? "subtabs" : "tabs") + " config-modes"} on=${mode} pick=${pick}
     items=${modesOf(name).map(k => [k, MODES[k]])} />
@@ -157,5 +161,8 @@ export function Configure({ name, owner, mode, pick, tabs = true }) {
   const view = mode === "configurator" ? (name ? html`<${ConfigureLoop} key=${`of:${name}`} M=${M} name=${name} owner=${owner} />` : html`<${ConfigureNew} key=${`new:${gen}`} M=${M} draft=${draft} onDraft=${onDraft} />`)
     : mode === "upload" ? html`<${UploadForm} />` : mode === "edit" ? html`<${DirectEdit} name=${name} />` : mode === "clone" ? html`<${CloneForm} />`
     : name ? html`<${ReviseByAgent} name=${name} /> ` : html`<${NewByAgent} draft=${draft} onDraft=${onDraft} done=${() => draftDone(draft)} />`;
-  return html`${tabs ? html`<${ModeTabs} name=${name} mode=${mode} pick=${pick} />` : ""}<${DraftLine} draft=${mode === "agent" ? null : draft} discard=${discard} /><div>${view}</div>`;
+  // D912: the draft is the configurator's -- said on its tab (Create or upload and Clone do not use it; Agent says its own)
+  const line = mode === "configurator" && draft && draftUsed(draft) ? html`<${DraftLine} M=${M} state=${draft.state} staged=${draft.staged.size} discard=${discard} />`
+    : html`<div class="draft-line muted small" />`;
+  return html`${tabs ? html`<${ModeTabs} name=${name} mode=${mode} pick=${pick} />` : ""}${line}<div>${view}</div>`;
 }

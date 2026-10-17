@@ -5,7 +5,7 @@ import { html } from "../../view.js";
 import { bytes, dur } from "../../format.js";
 import { WORK_COLORS as COLORS, phaseKind } from "../work_style.js";
 import { Block, Fold, Pre, StepRow, Stream } from "./bits.js";
-import { bestOf, candidateOf, cell, colorOf, dictsOf, failingOf, fieldsOf, isTool, linesOf, meanOf, measured, metricsOf, notReached,
+import { bestOf, candidateOf, cell, chooseColumns, colorOf, dictsOf, failingOf, fieldsOf, isTool, linesOf, meanOf, measured, metricsOf, notReached,
   running, stdoutOf, taskLabel, tidyCommand, usualOf } from "./parts.js";
 import { Fact, Facts, Pill, Tag } from "../../components/Tone.js";
 import { Table } from "../../components/Table.js";
@@ -87,8 +87,6 @@ export function ChooseBody({ n, a, env }) {
   const said = all.find(f => f.decision) || {};
   const text = String(said.decision || "") || all.map(o => Object.values(o).map(v => typeof v === "string" ? v : JSON.stringify(v)).join(" ")).join(" ");
   const rows = [...measured(env.nodes).entries()], goals = (env.goals || []).filter(g => g.metric);
-  const seen = [...new Set(rows.flatMap(([, m]) => Object.keys(m)))];
-  const cols = [...new Set([...goals.map(g => g.metric), ...seen])].slice(0, 3);       // D1061: the goals first, three at most
   // D1068: a pick measured in a pass not loaded here is still its table's first row -- its numbers from the decision itself
   const dec0 = String(said.decision || "").trim();
   if (dec0 && !rows.some(([c]) => c === dec0)) {
@@ -102,8 +100,11 @@ export function ChooseBody({ n, a, env }) {
   for (const x of env.nodes.values()) if ((x.failed || x.rejected) && /^\s*critique\s*:\s*(decision|measurement)/i.test(String(x.name)))
     rejected.set(String(x.why || "").replace(/@\S*$/, ""), String(fieldsOf(x).verdict || "").replace(/^REJECTED:\s*/i, ""));
   const refused = chosen && rejected.has(chosen), by = String(said["decided by"] || "");
+  // D1061: three columns at most; D1182: the metric the decision named first, none empty for every design
+  const cols = chooseColumns(rows, goals, by);
   // D1055: a goal written as its name alone takes its direction from what the decision said ("the largest score")
-  const g0 = goals[0], dir = g0?.direction || (/\b(largest|highest|most)\b/i.test(by) ? "maximize" : /\b(smallest|lowest|least)\b/i.test(by) ? "minimize" : "");
+  const g0 = cols.length ? goals.find(g => g.metric === cols[0]) || { metric: cols[0] } : goals[0];
+  const dir = g0?.direction || (/\b(largest|highest|most)\b/i.test(by) ? "maximize" : /\b(smallest|lowest|least)\b/i.test(by) ? "minimize" : "");
   const sign = g0 && dir ? (/max/i.test(dir) ? -1 : 1) : 0, num = v => typeof v === "number" ? v : null;
   rows.sort((x, y) => (y[0] === chosen) - (x[0] === chosen) || (g0 && sign ? sign * ((num(x[1][g0.metric]) ?? Infinity * sign) - (num(y[1][g0.metric]) ?? Infinity * sign)) : 0));
   const id = c => env.N.shortAll(c);
@@ -112,7 +113,7 @@ export function ChooseBody({ n, a, env }) {
         <span class="muted">${`picked, then rejected by the critic${rejected.get(chosen) ? `: ${rejected.get(chosen)}` : ""}`}</span></div>`
       : chosen || said.decision ? html`<div class="alt-result ok" style=${`--k:${colorOf(n)}`}><span class="alt-big" title=${chosen || said.decision}>${`★ ${id(chosen || said.decision)}`}</span>
         ${by ? html`<span class="muted">${by}</span>` : ""}</div>` : ""}
-    ${rows.length ? html`<${Table} cls="list compact alt-metrics" thead=${html`<tr><th>design</th>${cols.map(k => { const g = goals.find(x => x.metric === k), d = g === g0 ? dir : g?.direction; return html`<th class="num">${k}${d ? ` ${/max/i.test(d) ? "↑" : "↓"}` : ""}</th>`; })}</tr>`}>
+    ${rows.length ? html`<${Table} cls="list compact alt-metrics" thead=${html`<tr><th>design</th>${cols.map(k => { const g = k === g0?.metric ? g0 : goals.find(x => x.metric === k), d = g === g0 ? dir : g?.direction; return html`<th class="num">${k}${d ? ` ${/max/i.test(d) ? "↑" : "↓"}` : ""}</th>`; })}</tr>`}>
       ${rows.map(([c, m, earlier]) => html`<tr class=${rejected.has(c) ? "alt-rejected" : c === chosen ? "alt-chosen" : ""} title=${rejected.has(c) ? `rejected by the critic: ${rejected.get(c)}` : ""}>
         <td title=${c}>${rejected.has(c) ? [`✗ ${id(c)}`, html`<${Tag} k=${COLORS.critic}>critic<//>`] : c === chosen ? `★ ${id(c)}` : id(c)}
           ${earlier ? html`<span class="muted small"> · an earlier pass</span>` : ""}</td>

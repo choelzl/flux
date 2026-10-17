@@ -8,6 +8,9 @@ import { PageHead } from "../components/PageHead.js";
 import { LastSaid, StatePill } from "../components/StatePill.js";
 import { Tag } from "../components/Tone.js";
 
+/** Why Start waits: an agent writes the problem (the server refuses a start meanwhile). */
+export const WRITING = "Agent still writing the problem";
+
 /** `acts`: {start, stop, restart, leave} -- what the page does, each null where one may not. D1006: a stop or a
     restart asked already is red, pressed again (confirmed) now. */
 export function LoopHead({ name, info, st, perm, mine, canRun, acts }) {
@@ -19,6 +22,6 @@ export function LoopHead({ name, info, st, perm, mine, canRun, acts }) {
       sub=${html`<span>${info.document ? html`<span class="mono">${info.document}</span>` : ""} · <${LastSaid} st=${st} />${st.container ? html`<span class="muted">${` · sandbox ${st.container}`}</span>` : ""}</span>`}>
     ${acts.stop ? html`<${Act} cls=${stopNow ? "danger solid" : ""} title=${stopNow ? "Stop scheduled: press again to abandon the pass." : "Stop after this pass"} onClick=${acts.stop}>Stop<//>` : ""}
     ${acts.restart ? html`<${Act} cls=${st.restart_requested ? "danger solid" : ""} title=${st.restart_requested ? "Restart scheduled: press again to abandon the pass." : "Restart after this pass"} onClick=${acts.restart}>Restart<//>` : ""}
-    ${acts.start ? html`<${Act} cls="primary" onClick=${acts.start}>Start<//>` : ""}
+    ${acts.start ? html`<${Act} cls="primary" disabled=${!!st.authoring} title=${st.authoring ? WRITING : null} onClick=${acts.start}>Start<//>` : ""}
     ${acts.leave ? html`<${Act} onClick=${acts.leave}>Leave<//>` : ""}<//>`;
 }

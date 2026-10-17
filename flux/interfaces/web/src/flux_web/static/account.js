@@ -22,7 +22,12 @@ function LoginRoute() {
 function InviteRoute({ token }) {
   const read = useLoad(() => api(`/invite/${enc(token)}`), token);
   if (!read.got) return null;
-  if (read.got.error) return html`<${LoginCard}><${Notice} tone="bad" what="This link does not work" why=${read.got.error} action=${html`<a class="btn small" href="#/login">Log in</a>`} /><//>`;
+  // the server's words ("this link has been used or has expired: ask an admin for a new one") as a sentence, Log in under it
+  if (read.got.error) {
+    const [what, why] = String(read.got.error).split(": ");
+    return html`<${LoginCard}><${Notice} tone="bad" role="alert" what=${`${what[0].toUpperCase()}${what.slice(1)}.`} why=${why ? `${why[0].toUpperCase()}${why.slice(1)}.` : ""} />
+      <a class="btn primary wide" href="#/login">Log in</a><//>`;
+  }
   const got = read.got.d, invite = got.kind === "invite";
   const submit = async f => {
     const pw = f.elements.pw.value;
