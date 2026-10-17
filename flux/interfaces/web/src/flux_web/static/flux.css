@@ -417,6 +417,8 @@ details.cfg-fold > summary { padding: 8px 0; font-weight: 600; }
 details.cfg-more > summary { width: max-content; cursor: pointer; font-size: var(--fs-ui); color: var(--muted); }
 details.cfg-more > summary:hover { color: var(--ink); }
 details.cfg-more[open] { padding-bottom: 10px; border-bottom: 1px solid var(--line); }
+/* a closed fold lays nothing out: Firefox keeps its content's boxes (content-visibility), under Talk at the page's end (D1140) */
+details.cfg-more:not([open]) > :not(summary) { display: none; }
 details.cfg-more[open] > summary { margin-bottom: 8px; }
 details.cfg-more .cfg-says code { overflow-wrap: anywhere; }
 .cfg-diff { padding-bottom: 8px; }
