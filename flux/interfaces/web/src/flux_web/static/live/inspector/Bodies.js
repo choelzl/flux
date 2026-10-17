@@ -109,7 +109,7 @@ export function ChooseBody({ n, a, env }) {
   const sign = g0 && dir ? (/max/i.test(dir) ? -1 : 1) : 0, num = v => typeof v === "number" ? v : null;
   rows.sort((x, y) => (y[0] === chosen) - (x[0] === chosen) || (g0 && sign ? sign * ((num(x[1][g0.metric]) ?? Infinity * sign) - (num(y[1][g0.metric]) ?? Infinity * sign)) : 0));
   const id = c => env.N.shortAll(c);
-  const shown = poolSaid(n.why, rows.length);
+  const shown = poolSaid(n.output?.pool != null ? `${n.output.pool} in the pool` : n.why, rows.length);   // D1235: the pool is the choice's field
   return html`<div class="task-inspector">
     ${refused ? html`<div class="alt-result bad" style="--k:var(--bad)"><span class="alt-big" title=${chosen}>${`✗ ${id(chosen)}`}</span>
         <span class="muted">${`picked, then rejected by the critic${rejected.get(chosen) ? `: ${rejected.get(chosen)}` : ""}`}</span></div>`

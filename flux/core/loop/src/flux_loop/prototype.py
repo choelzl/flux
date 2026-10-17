@@ -523,7 +523,7 @@ def _prototype_stage(problem: Problem, subgoal: str | None, state: LoopState,
             checked = Checked() if req.tools and agent is None else None   # what the turn's own checks measured (D505)
             t_attempt = time.monotonic()
             answer = None
-            with _phase(f"generate: prototype {tag}", why=f"attempt {attempt + 1}", absorb=True, step="prototype") as turn_out:
+            with _phase(f"generate: prototype {tag}", why=f"try {tried['try']}", absorb=True, step="prototype") as turn_out:
                 try:
                     if agent is not None:
                         reply = problem.prototype_agent_turn(agent, prompt, code, last_err, subgoal, state)
@@ -597,7 +597,9 @@ def _prototype_stage(problem: Problem, subgoal: str | None, state: LoopState,
                 last_err = _unrun("", "your reply carried no prototype")
                 continue
             bind_code(state, subgoal, code, _json(reply), previous=previous_code or "")
-            with _phase(f"test: prototype {tag}", why=f"attempt {attempt + 1}", box="check", step="prototype") as out:
+            # D1181: a check the model ran in its own turn is its try's step, the design's -- no pass of the Check box
+            inturn = checked is not None and checked.verdict_for(code) is not None
+            with _phase(f"test: prototype {tag}", why=f"try {tried['try']}", box="design" if inturn else "check", step="prototype") as out:
                 v = checked.verdict_for(code) if checked is not None else None     # measured in the turn already
                 if v is None:
                     v = check_for(proto, state, subgoal)(code)

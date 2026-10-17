@@ -85,7 +85,9 @@ function Body({ store }) {
   const switched = places.current.mode !== mode;
   if (switched && places.current.mode && panel.current) places.current.saved.set(places.current.mode, scrollState(panel.current));
   // the lines first: a try's number and how it ended are learned drawing them, and the inspector says them (D1084)
-  const treeLines = mode === "tree" && v.rows.length ? lines(v.rows, v).tree() : null;
+  // D1235: a pass at work with no task yet is a row of its own (live-32)
+  const starting = ctx.st.running && v.headerPass != null && !v.scopeRows.some(r => (v.membership.get(r.node.id) ?? null) === v.headerPass);
+  const treeLines = mode === "tree" && (v.rows.length || starting) ? lines(v.rows, v).tree() : null;
   // the inspector's panel, in its frame: Fullscreen shows it as it is, nothing drawn anew (D987)
   const sel = v.model.nodes.get(v.selected) || null;
   const detail = html`<div class="detail alt-detail" ref=${detailRef} data-task=${sel ? String(sel.id) : null} data-view=${sel ? `${sel.id}:inspector` : null} data-drawn=${String(s.drawn)}>
@@ -138,7 +140,7 @@ function Body({ store }) {
     e.preventDefault(); a.step(e.key === "ArrowUp" ? -1 : 1);
   };
   const content = s.loadMessage ? html`<${Empty} text=${s.loadMessage} />`
-    : !v.rows.length ? html`<${Empty} text=${s.startId === "current" && ctx.st.running ? "Waiting for tasks…" : "No tasks here."} />`
+    : !v.rows.length && !(mode === "tree" && starting) ? html`<${Empty} text=${s.startId === "current" && ctx.st.running ? "Waiting for tasks…" : "No tasks here."} />`
     : mode === "graph" ? html`<${Graph} v=${v} a=${a} />` : mode === "timeline" ? html`<${Timeline} v=${v} a=${a} />`
     : html`<div class="alt-tree" role="group" aria-label="Tasks as a tree"><${Lines} lines=${treeLines} a=${a} located=${v.located} /></div>`;
   const more = mode === "tree" && v.scopeRows.length > v.rows.length;

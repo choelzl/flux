@@ -148,9 +148,14 @@ def measure_many(problem: Problem, state: LoopState, cands: list[Candidate], sta
     # A stage nothing declares as modelled is treated as measured, as in the record.
     kind = "analytical" if stage in problem.analytic_stages() else "simulation"
     t0 = time.monotonic()
+    # (D1235) numbers every design has already (the cache): read back, nothing measured -- a note, not a task
+    try:
+        known = state.cache is not None and all(state.cache.holds(measurement_key(problem, state, c, stage)) for c in cands)
+    except Exception:  # noqa: BLE001 -- a key that cannot be made: measured as ever
+        known = False
     # D1094: the built-in gate stage of a loop with no measure stage counts the checks' failures -- the checks' work
     with _phase(f"{kind}: {stage}", why=f"{len(cands)} design{'' if len(cands) == 1 else 's'}", box="check" if stage == "gate" else "measure",
-                step=stage, design=cands[0].name if len(cands) == 1 else None) as out:
+                step=stage, design=cands[0].name if len(cands) == 1 else None, quiet=known, absorb=len(cands) == 1 and not known) as out:
         out["candidates"] = ", ".join(c.name for c in cands)
         hits, runs = state.cache_hits, state.tool_runs
         got = list(problem.measure_batch(list(cands), stage, state) or [])

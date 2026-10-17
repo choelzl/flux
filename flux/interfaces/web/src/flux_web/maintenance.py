@@ -62,6 +62,11 @@ TASKS: dict[str, Task] = {t.key: t for t in (
          "as gone).", 168, True),
     Task("runs", "Prune run history", "Each loop keeps its latest starts in the server's run list; older rows "
          "go (a running start never).", 24, True, {"keep": 200}),
+    # D????J4: a journal from before D1233 says nothing of what its tasks are -- brought up to date once (D811 for journals)
+    Task("formats", "Bring task journals up to date", "A loop's task journal written before the engine said what each "
+         "task is (D1233) is rewritten in today's format, once, by the rules Live read it by: each task's box, pass, design "
+         "and try, how each try ended, the bookkeeping as notes. The original is kept beside it (events.jsonl.orig.gz). "
+         "A running loop is left until it stops.", 24, True, per_loop=True),
     Task("journals", "Condense task journals", "A loop's task journal (the Live tree's history) over a size keeps "
          "its recent starts whole; older ones are gzipped beside it.", 24, True, {"max_mb": 20, "keep_mb": 4},
          per_loop=True),
@@ -479,6 +484,20 @@ class Maintenance:
                     n, freed = n + 1, freed + got
         return f"{plural(n, 'journal')} condensed, {_mb(freed)} freed", n > 0
 
+    def _formats(self, _p: dict[str, Any], loop: tuple[str, str] | None) -> tuple[str, bool]:
+        from flux_loop.journal_migrate import migrate_journal
+
+        from .admin import _key, cache_root
+
+        idle, busy = self._loops(loop)
+        n = 0
+        for u, a, d in idle:
+            tests = _document_checks(d)
+            for ev in sorted((cache_root() / _key(u, a)).glob("tmp/flux-traces/*/events.jsonl")):
+                if not ev.is_symlink() and migrate_journal(ev, tests):
+                    n += 1
+        return f"{plural(n, 'journal')} brought up to date{self._skipped(busy)}", n > 0
+
     def _transcripts(self, p: dict[str, Any], loop: tuple[str, str] | None) -> tuple[str, bool]:
         from .admin import _key, cache_root
 
@@ -821,6 +840,24 @@ def _thin_transcript(tr: Path, cutoff: float) -> int:
     os.chmod(tmp, tr.stat().st_mode & 0o777)
     os.replace(tmp, tr)
     return thinned
+
+
+def _document_checks(d: Path) -> list[str]:
+    """The loop's document's checks, in order (`flow.test` by name): what a journal's check stopped at never reached."""
+    import json
+
+    import yaml
+
+    try:
+        name = json.loads((d / ".flux-app.json").read_text()).get("document") or "problem.yaml"
+    except (OSError, ValueError):
+        name = "problem.yaml"
+    try:
+        doc = yaml.safe_load((d / name).read_text()) or {}
+    except (OSError, yaml.YAMLError):
+        return []
+    test = (doc.get("flow") or {}).get("test") if isinstance(doc, dict) else None
+    return [k for k in test if k != "critic"] if isinstance(test, dict) else []
 
 
 def _condense_journal(ev: Path, keep: int) -> int:

@@ -5,7 +5,8 @@ import { cx, Empty, html } from "../view.js";
 import { plural } from "../format.js";
 import { WORK_COLORS as COLORS } from "./work_style.js";
 import { byPass, currentTask, taskState as state } from "./model.js";
-import { agentsOf, flowBoxes, isDraft, passName, passShort, repaired, triesOf, waitWord } from "./views.js";
+import { agentsOf, flowBoxes, passName, passShort, repaired, triesCount, waitWord } from "./views.js";
+import { triesOf } from "./facts.js";
 import { CRIT, soleOf } from "./rules.js";
 import { lines } from "./rows.js";
 import { Lines } from "./Lines.js";
@@ -70,7 +71,7 @@ function Box({ b, i, y, BH, note, shown, v, a, task, isOpen, listed, wait }) {
     e.currentTarget.focus({ preventScroll: true });
     if (task) { a.openBox(v.openBox !== me ? me : null); a.select(task.id); } else a.showBox(shown, b.key);
   };
-  return html`<g class=${cx("alt-flow-box", picked && "sel", isOpen && "open", b.state === "wait" && "wait", here && "alt-located")}
+  return html`<g class=${cx("alt-flow-box", picked && "sel", isOpen && "open", b.state === "wait" && "wait", wait === "skipped" && "skipped", here && "alt-located")}
     data-kind=${b.kind} data-box=${b.key} aria-pressed=${String(picked)} tabindex="0" role="button"
     aria-label=${`${b.title} · ${task ? state(task) : b.done || b.notes?.length ? "done" : wait || "no task recorded"}`}
     data-task=${task ? String(task.id) : null} aria-expanded=${task ? String(!!isOpen) : null} data-open=${me}
@@ -89,10 +90,10 @@ export function Graph({ v, a }) {
     const own = inPass.filter(r => b.ids.has(r.node.id));
     // D1056; D1059; D1089: what its list would hold -- a design's tries, a check's or a measure's one run's steps, else its runs
     const oneSteps = b.kind !== "design" && b.runs.length === 1 && ["check", "measure"].includes(b.kind) ? (b.runs[0].kids || []).length : 0;
-    const listed = b.kind === "design" ? triesOf(b.runs) : oneSteps > 1 ? oneSteps : b.runs.length;
+    const listed = b.kind === "design" ? triesCount(b.runs, v.model) : oneSteps > 1 ? oneSteps : b.runs.length;
     // a box at work opens its current task; a finished one its latest run (D1066: its own work, not the critique of it)
     const lastRun = [...b.runs].reverse().find(n => !CRIT.test(String(n.name))) || b.runs.at(-1);
-    const lastDraft = b.kind === "design" && lastRun ? [...(lastRun.kids || [])].reverse().find(isDraft) : null;
+    const lastDraft = b.kind === "design" && lastRun ? triesOf(lastRun, v.model).filter(t => !t.run).at(-1)?.lead || null : null;   // its last try's draft
     const items = b.kind === "design" ? [] : b.runs;
     const chosen = own.some(r => r.node.t1 == null) ? currentTask(own) : lastDraft || (listed === 1 && items.length === 1 ? items[0] : lastRun || currentTask(own));
     const task = soleOf(chosen) || chosen;

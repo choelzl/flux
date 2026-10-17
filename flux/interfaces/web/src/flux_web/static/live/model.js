@@ -1,15 +1,24 @@
 // Pure task selection shared by the three Live representations.
-import { notePassOf, passOf } from "./facts.js";
+import { isAgent, isTurn, notePassOf, passOf } from "./facts.js";
+import { annotateTries } from "./legacy.js";
 
 /** D1052: a note with no task of its own (a scripted search's scope list) is the pass it was written in. */
 export const notePass = notePassOf;
 /** The pass a task is in (facts.js: as the engine says it, D1233). */
 export const taskPass = passOf;
 
+/** What the views read before they draw: a journal before D1233 has its tries numbered by the old rules. */
+export function ready(model) {
+  if (!(model.format >= 2)) annotateTries(model, n => passOf(n, model.marks));
+  return model;
+}
+
 /** D1181: passes in their order -- Setup (null) first, then by number (R, half-way, between its two). */
 export const byPass = (a, b) => a == null ? (b == null ? 0 : -1) : b == null ? 1 : Number(a) - Number(b);
 
-export function taskScope(model, pass = "current") {
+/** The tasks of a scope: `pass` "current" (the pass at work: `headerPass`, the one the page's head says -- D1235,
+    live-22 -- or the passes at work side by side, else the last), "all", or a pass. */
+export function taskScope(model, pass = "current", headerPass = null) {
   const all = [...model.nodes.values()].sort((a, b) => a.t0 - b.t0 || Number(a.id) - Number(b.id));
   const membership = new Map(all.map(n => [n.id, taskPass(n, model.marks)]));
   // D1041: a run of one pass is never marked -- a setup step after its work began (the mentor read
@@ -23,7 +32,7 @@ export function taskScope(model, pass = "current") {
     ...membership.values()].filter(n => n != null && Number.isFinite(n)))].sort((a, b) => a - b);
   const active = new Set(all.filter(n => n.t1 == null).map(n => membership.get(n.id)).filter(n => n != null));
   const last = model.marks.filter(m => m.name === "pass" && m.n != null).at(-1)?.n ?? passes.at(-1);
-  const current = active.size ? active : new Set(last == null ? [] : [Number(last)]);
+  const current = active.size > 1 ? active : headerPass != null ? new Set([Number(headerPass)]) : active.size ? active : new Set(last == null ? [] : [Number(last)]);
   const nodes = all.filter(n => pass === "all" || (pass === "current" ? !current.size || current.has(membership.get(n.id)) : membership.get(n.id) === Number(pass)));
   const included = new Set(nodes.map(n => n.id));
   const ordered = [], visit = node => { ordered.push(node); node.kids.filter(k => included.has(k.id)).forEach(visit); };
@@ -39,7 +48,7 @@ export function taskScope(model, pass = "current") {
 export function currentTask(rows) {
   const nodes = rows.map(r => r.node), active = nodes.filter(n => n.t1 == null);
   const latest = (items, ended = false) => items.reduce((best, n) => !best || (ended ? n.t1 ?? n.t0 : n.t0) >= (ended ? best.t1 ?? best.t0 : best.t0) ? n : best, null);
-  return latest(active.filter(n => /^agent:/i.test(n.name)))
+  return latest(active.filter(n => isTurn(n) && isAgent(n)))
     || latest(active.filter(n => !n.kids.some(k => k.t1 == null)))
     // D1067: done, the latest work -- a critique of it is not what Following opens
     || latest(active) || latest(nodes.filter(n => !n.kids.length && !/^\s*critique\s*:/i.test(String(n.name))), true) || latest(nodes.filter(n => !n.kids.length), true) || latest(nodes, true);

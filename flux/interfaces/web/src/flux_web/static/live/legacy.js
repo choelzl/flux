@@ -40,6 +40,8 @@ export function kindOf(name, why = "") {
 
 /** A task's box: its own name's, else its nearest ancestor's; under an agent with none, design. */
 export function boxOf(node) {
+  // D1181: a check the model ran inside its own turn is a step of its try, the design's
+  if (/^\s*test\s*:/i.test(String(node.name)) && /^inside the turn\b/i.test(String(node.output?.measured ?? ""))) return "design";
   let agent = false;
   for (let p = node; p; p = p.parent) {
     const k = kindOf(p.name, p.why);
@@ -104,4 +106,52 @@ export function takeIn(m, step, sibs) {
   const lastMark = m.marks.reduce((s, k) => k.name === "pass" ? Math.max(s, k.seq || 0) : s, 0);
   const inside = sibs.filter(k => k.t1 != null && k.t0 >= step.t0 - .002 && k.seq > lastMark);
   for (const k of inside) { sibs.splice(sibs.indexOf(k), 1); k.parent = step; step.kids.push(k); }
+}
+
+/** D1045, D1182: a journal's tries as Live numbered them -- a design run's drafts, each with the checks after it
+    (what ran before the first draft the first try's), numbered across the pass's runs of the part -- and how each
+    came out, as the engine says it since D1233 (a `try` note): `n.ltry` on every task of a try, `run.ltries[n]`
+    the try's outcome. `passOf(n)` the pass a task is in. The same rules as flux_loop.journal_migrate's `_tries`. */
+export function annotateTries(m, passOf) {
+  const nodes = [...m.nodes.values()];
+  const tool = n => /^\s*tool\s*:/i.test(String(n.name));
+  const isDraft = n => !tool(n) && ((boxOf(n) === "design" && !/^\s*(propose|template-fill|test)\b/i.test(String(n.name))) || !!workerOf(n));
+  const above = n => { const out = []; for (let p = n.parent; p; p = p.parent) out.push(p); return out; };
+  const under = n => [n, ...(n.kids || []).flatMap(under)];
+  const failed = n => !!n.failed, ended = n => n.t1 != null;
+  const runs = nodes.filter(n => boxOf(n) === "design" && !above(n).some(p => boxOf(p) === "measure" || boxOf(p) === "design")
+    && !/^\s*(propose|template-fill)\b/i.test(String(n.name))).sort((a, b) => a.t0 - b.t0);
+  const count = new Map();
+  for (const n of nodes) { delete n.ltry; delete n.ltries; }
+  for (const r of runs) {
+    const kids = [...(r.kids || [])].sort((a, b) => a.t0 - b.t0), drafts = kids.filter(isDraft);
+    let groups = [];
+    if (drafts.length) {
+      const before = [];
+      for (const k of kids) { if (drafts.includes(k)) groups.push({ lead: k, steps: [] }); else if (groups.length) groups.at(-1).steps.push(k); else before.push(k); }
+      groups[0].steps.unshift(...before);
+    } else groups = [{ lead: r, steps: [], run: true }];
+    const key = `${passOf(r)}|${r.params?.part || ""}`;
+    groups.forEach((g, gi) => {
+      const n = (count.get(key) || 0) + 1; count.set(key, n);
+      const members = g.run ? [r] : [g.lead, ...g.steps], all = members.flatMap(under);
+      for (const x of all) x.ltry = n;
+      if (!all.every(ended)) return;                                  // at work: how it ends is not known yet
+      const design = all.map(designOwn).find(Boolean) || "";
+      const bad = g.steps.find(s => failed(s) || s.rejected || under(s).some(failed));
+      const isCheck = k => boxOf(k) === "check", sib = kids, i = sib.indexOf(g.lead);
+      const j = sib.findIndex((c, k) => k > i && isDraft(c));
+      const unbuilt = !g.run && !sib.slice(i + 1, j < 0 ? undefined : j).some(isCheck) && sib.some(isCheck) && (j >= 0 || ended(r) && failed(r));
+      const o = g.lead.output || {}, last = gi === groups.length - 1;
+      let outcome = "passed", why = "";
+      if (bad) { const k = (bad.kids || []).find(failed), f = k?.output?.failing; const what = (k && stepOf(k)) || "a test"; outcome = "check failed"; why = f ? `${what} ${f} failing` : `${what} failed`; }
+      else if (unbuilt) outcome = "not built";
+      else if (o["timed out"] || g.lead.timedOut) outcome = "out of time";
+      else if (failed(g.lead) || last && ended(r) && failed(r)) { outcome = "no design"; why = String(r.output?.error || o.error || "").split("\n")[0]; }
+      else if (g.run && tool(r)) outcome = "drafted";
+      const at = g.run ? r.parent : r;
+      if (at) (at.ltries || (at.ltries = {}))[n] = { outcome, why, design };
+      else (m.ltries || (m.ltries = {}))[n] = { outcome, why, design };
+    });
+  }
 }

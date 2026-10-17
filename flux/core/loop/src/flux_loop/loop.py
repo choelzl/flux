@@ -11,7 +11,9 @@ from .measure import measure_many
 from . import ops
 from .provenance import trace_dir
 from .objective import Objectives
-from .observe import _phase, _publish, _publish_mentor
+from flux_profile import said
+
+from .observe import _one_command, _phase, _publish, _publish_mentor
 from .problem import Problem
 from .records import _record_trial, _reload, _reload_measured
 from .rejection import reject
@@ -247,7 +249,7 @@ def run_loop(problem: Problem, request: LoopRequest, *, proposer: Any | None = N
     state.drain()
 
     if state.fresh:          # something changed after the last climb (or nothing climbed yet)
-        with _phase("evaluation", why="measured designs through the stages", quiet=not state.scored, box="measure"):   # D1053: nothing measured, nothing to evaluate
+        with _climbing():         # (D1235) the climb is its stages' work, no task of its own   # D1053: nothing measured, nothing to evaluate
             _climb(problem, state, goals)
     from .boxes import flush_turns
 
@@ -262,6 +264,12 @@ def run_loop(problem: Problem, request: LoopRequest, *, proposer: Any | None = N
         _publish(problem, state, todo, goals, "evaluated", searching=hunting)
     _tidy_workdir(state)
     return out
+
+
+def _climbing():
+    """(D1235) The climb through the stages (D454): each stage's measurement a task of the Measure box, the climb
+    itself no task -- a span of the timing tree."""
+    return _phase("evaluation", why="measured designs through the stages", silent=True, box="measure")
 
 
 def _rig_agent(problem: Problem, state: LoopState) -> None:
@@ -428,7 +436,7 @@ def _run_steps(problem: Problem, state: LoopState, searching: "_SearchSession | 
                     state.stopped = state.stopped or "nothing left to do"
                     break
                 state.step = step + 1
-                with _phase("evaluation", why="measured designs through the stages", quiet=not state.scored, box="measure"):   # D1053: nothing measured, nothing to evaluate
+                with _climbing():   # D1053: nothing measured, nothing to evaluate
                     _climb(problem, state, goals)
                 step += 1
                 if state.depth == 0:
@@ -713,7 +721,7 @@ def _improve_step(problem: Problem, state: LoopState, item: Improve) -> list[Sco
     if not item.again:
         ps.sessions.clear()                 # D669: an improve is a new job, a new agent ...
     try:
-        with _phase(f"generation: improve {item.candidate.name}", why=item.stage, box="design", design=item.candidate.name) as out:
+        with _phase(f"generation: improve {item.candidate.name}", why=item.stage, box="design") as out:   # its design is the one it makes, not this one
             out["dse"] = pick
             out["hypothesis"] = why
             if item.scope:
@@ -741,7 +749,7 @@ def _improve_step(problem: Problem, state: LoopState, item: Improve) -> list[Sco
         _record_trial(state, item.candidate, item.subgoal, None, error=reason)
         return []
     reused = getattr(problem, "gate_ran", lambda c: False)(cand)     # D1060: its check passed on this text: no second run, a note
-    with _phase("test: gate", why=cand.name, quiet=reused, box="check", design=cand.name, step="gate") as out:
+    with _phase("test: gate", why=cand.name, quiet=reused, box="check", design=cand.name, step="gate", absorb=_one_command(problem)) as out:
         verdict = _judge(problem, built, cand, item.subgoal, state)
         out["failed"] = not verdict.ok                 # D1053: a gate that refused the design failed
     state.judged += 1
@@ -953,7 +961,8 @@ def _search_step(problem: Problem, state: LoopState, batch: list[Candidate]) -> 
     and the measured `state.scored`."""
     say = state.say
     admitted: list[Candidate] = []
-    with _phase("test: gate", why=_designs(len(batch)), box="check", step="gate", design=batch[0].name if len(batch) == 1 else None) as gate:
+    with _phase("test: gate", why=_designs(len(batch)), box="check", step="gate", design=batch[0].name if len(batch) == 1 else None,
+                absorb=len(batch) == 1 and _one_command(problem)) as gate:
         for cand in batch:
             sg = cand.subgoal
             try:
@@ -1118,7 +1127,7 @@ def _admit(problem: Problem, state: LoopState, todo: list, goals: list[str], sg:
         return
     state.fail_streak[key] = 0
     reused = getattr(problem, "gate_ran", lambda c: False)(cand)     # D1060: its check passed on this text: no second run, a note
-    with _phase(f"test: judge {tag}", why=cand.name, quiet=reused, box="check", design=cand.name, step="judge") as out:
+    with _phase(f"test: judge {tag}", why=cand.name, quiet=reused, box="check", design=cand.name, step="judge", absorb=_one_command(problem)) as out:
         verdict = _judge(problem, built, cand, sg, state)
         out["verdict"] = f"{'ADMITTED' if verdict.ok else 'refused'}, score {verdict.score:g}"
         if not verdict.ok:
@@ -1472,8 +1481,11 @@ def _conclude(problem: Problem, state: LoopState, goals: list[str]) -> LoopResul
             return _result(problem, state, None, "every measured design was rejected", [], [])
     with _phase("frontier", why=f"{len(pool)} on {reached}", quiet=True, box="choose", step="frontier"):
         front = list(problem.frontier(pool, state))
-    with _phase("decide", why=f"{len(pool)} in the pool" + (f", {len(rejected)} rejected" if rejected else ""), box="choose") as out:   # D1094: the rows it shows
+    # (D1235) the choice is the decide task around it: what it picked, from how many, its fields -- no decide inside a decide
+    out: dict[str, Any] = {"pool": len(pool), **({"rejected before": len(rejected)} if rejected else {})}   # D1094: the rows it shows
+    with _phase("decide", silent=True):
         pick, decided_by, closest, unmet, standing, ranked_by = _decide(problem, state, pool, stages, out)
+    said(**out)
     rounds = _rounds(problem, request, "decision")
     while pick is not None and rounds > 0:
         rounds -= 1
@@ -1492,8 +1504,10 @@ def _conclude(problem: Problem, state: LoopState, goals: list[str]) -> LoopResul
         if not pool:
             pick, decided_by, closest, unmet = None, "every measured design was rejected", None, []
             break
-        with _phase("decide", why=f"again, without {pick.name}", box="choose") as out:
+        out = {"pool": len(pool), "again without": pick.name}
+        with _phase("decide", silent=True):
             pick, decided_by, closest, unmet, standing, ranked_by = _decide(problem, state, pool, stages, out)
+        said(**out)
         if rounds == 0 and pick is not None:
             _note_once(state, f"the critic's rounds ran out: {pick.name} stands without its review")
     if closest is not None:

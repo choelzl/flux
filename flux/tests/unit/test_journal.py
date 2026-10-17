@@ -366,3 +366,35 @@ def test_every_task_of_a_run_says_its_box_and_its_pass(tmp_path, monkeypatch):
     assert all(e["tags"].get("pass") in (1, 2) for e in tasks)
     drafts = [e for e in tasks if e["name"].split(":")[0] in ("generate", "repair")]
     assert drafts and all(isinstance(e["tags"].get("try"), int) for e in drafts)
+
+
+def test_a_runs_journal_holds_its_work_and_how_each_try_came_out(tmp_path, monkeypatch):
+    """(D1235) The right tasks: no `evaluation` around the stages, no decide inside a decide; a try's outcome is a
+    `try` note on its run, one per try the drafts say; a check of one command is one task, the command its own."""
+    from flux_cli.main import main
+
+    monkeypatch.setenv("FLUX_TRACE_ROOT", str(tmp_path / "traces"))
+    digits = Path(__file__).resolve().parents[2] / "core/loop/examples/digits/problem.json"
+    good = "\n".join(str(i) for i in range(10)) + "\n"
+    replies = tmp_path / "replies.json"
+    replies.write_text(json.dumps([json.dumps({"artifact": "0\n1\n"}), json.dumps({"artifact": good})]))
+    try:
+        assert main(["task", "run", str(digits), "--db", str(tmp_path / "d.db"), "--replies", str(replies), "--passes", "1"]) == 0
+    finally:
+        from flux_loop import journal as J
+
+        for lis in list(J._ATTACHED.values()):
+            flux_profile.remove_listener(lis)
+        J._ATTACHED.clear()
+    events, _ = read_events(str(next((tmp_path / "traces").rglob("events.jsonl"))))
+    starts = {e["id"]: e for e in events if e["ev"] == "start"}
+    assert not any(e["name"] == "evaluation" for e in starts.values())
+    decides = [e for e in starts.values() if e["name"] == "decide"]
+    assert all(starts.get(e["parent"], {}).get("name") != "decide" for e in decides)
+    tries = {e["tags"]["try"] for e in starts.values() if e.get("tags", {}).get("try") is not None}
+    notes = [e for e in events if e["ev"] == "note" and e["name"] == "try"]
+    assert tries and {n["tags"]["try"] for n in notes} == tries
+    assert {n["tags"]["outcome"] for n in notes} <= {"passed", "check failed", "not built", "no design", "drafted", "out of time"}
+    assert notes[-1]["tags"]["outcome"] == "passed"
+    assert all(starts[e["parent"]]["name"].split(":")[0] != "test" for e in starts.values()
+               if e["name"].startswith("tool:") and e["parent"] in starts), "a check's one command is the check's own task"

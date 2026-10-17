@@ -182,17 +182,18 @@ def views(tmp_path, events, js):
     (tmp_path / "package.json").write_text('{"type": "module"}')
     (tmp_path / "run.js").write_text("""import * as LT from "./live/events.js"; import * as M from "./live/model.js";
 import * as V from "./live/views.js"; import * as R from "./live/rules.js"; import { lines } from "./live/rows.js";
-import * as W from "./live/work_style.js"; import * as LM from "./live/logmodel.js"; import * as P from "./live/inspector/parts.js";
+import * as W from "./live/work_style.js"; import * as LM from "./live/logmodel.js"; import * as P from "./live/inspector/parts.js"; import * as F from "./live/facts.js";
 import { readFileSync } from "fs";
 const m = LT.model();
 for (const l of readFileSync(0, "utf8").split("\\n")) if (l.trim()) LT.apply(m, JSON.parse(l));
+M.ready(m);
 const sc = M.taskScope(m, "all");
 const v = { selected: null, model: m, membership: sc.membership, J: R.judge(m, sc.membership), N: R.namer(["x"]), goals: [],
   isFolded: () => false, opened: new Set(), allTries: new Set(), pass: "all", passView: null, passNotes: () => [],
   noteShort: n => n.name, scopeRows: sc.rows, tests: [] };
 const said = l => l.type !== "row" ? l.type : [l.name.map(s => typeof s === "string" ? s : s.b || s.text || "").join("").trim(),
   l.pills.map(p => p.text).join(","), l.act.task ? l.act.task.id : null];
-process.stdout.write(JSON.stringify((__BODY__)({ LT, M, V, R, W, LM, P, lines, m, sc, v, said })));""".replace("__BODY__", js))
+process.stdout.write(JSON.stringify((__BODY__)({ LT, M, V, R, W, LM, P, F, lines, m, sc, v, said })));""".replace("__BODY__", js))
     r = subprocess.run(["node", str(tmp_path / "run.js")], input="".join(json.dumps(e) + "\n" for e in events),
                        capture_output=True, text=True, timeout=30)
     assert r.returncode == 0, r.stderr
@@ -331,9 +332,9 @@ def test_a_check_the_model_ran_in_its_turn_is_its_trys_not_a_passing_check_box(t
           _st(3, 2.1, "test: prototype x", "attempt 1", 1), _en(3, 2.1, measured="inside the turn, by the model's own check call", verdict="PASSES, score 0"),
           _st(4, 3, "repair: x", "attempt 2", 1), _en(4, 4), _en(1, 5, True)]
     got = views(tmp_path, ev, f"""({{ lines, sc, v, V, m, P }}) => {{ const t = lines(sc.rows, v).tree();
-      return [t.filter(l => l.type === "row").map({_TEXT}), V.flowBoxes(sc.rows, 1, false).map(b => b.key), m.nodes.get(3).tryNo, P.tryWhy(m.nodes.get(3))]; }}""")
+      return [t.filter(l => l.type === "row").map({_TEXT}), V.flowBoxes(sc.rows, 1, false).map(b => b.key), F.tryOf(m.nodes.get(3))]; }}""")
     assert not any(x.startswith("Check") for x in got[0]) and "check" not in got[1], got
-    assert got[2] == 1 and got[3] == ""
+    assert got[2] == 1, "its try, as the tree numbers it (D1233: the engine says it)"
 
 
 def test_a_choice_shows_the_metric_it_was_made_on_and_no_empty_column():
@@ -408,9 +409,10 @@ def test_a_choice_says_when_its_table_is_not_the_pool():
 
 def test_a_box_not_run_is_waiting_or_not_recorded_alike_everywhere(tmp_path):
     """adder8: Design at work, Search before it never ran -- the tree and the graph drew both as a bare circle, the
-    inspector said "waiting". Each says the inspector's word: "not recorded" (a later box ran), else "waiting"."""
+    inspector said "waiting". Each says the inspector's word: "skipped" (the pass went past it, live-28), else "waiting";
+    the tree lists them in the flow's order, between the boxes that ran (live-10)."""
     ev = [{"t": 0, "ev": "hello", "pid": 1}, {**_st(1, 1, "generation: x", "drafts"), "params": {"pass": 2}}]
     got = views(tmp_path, ev, """({ lines, sc, v, V }) => {
       const boxes = V.flowBoxes(sc.rows, 2, true), word = k => V.waitWord(boxes, boxes.find(b => b.key === k));
       return [word("search"), word("check"), lines(sc.rows, v).tree().filter(l => l.type === "wait").map(l => [l.title, l.said])]; }""")
-    assert got == ["not recorded", "waiting", [["Search", "not recorded"], ["Check", "waiting"], ["Measure", "waiting"], ["Choose", "waiting"]]], got
+    assert got == ["skipped", "waiting", [["Search", "skipped"], ["Check", "waiting"], ["Measure", "waiting"], ["Choose", "waiting"]]], got

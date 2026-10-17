@@ -5,6 +5,7 @@
 import { cx, html } from "../view.js";
 import { Close } from "../components/Head.js";
 import { dur } from "../format.js";
+import { triesOf, tryOf } from "./facts.js";
 import { WORK_COLORS as COLORS, AGENT_COLOR, aiWorking, ownSpans, boxOf, tickText, workLabel } from "./work_style.js";
 import { taskState as state } from "./model.js";
 import { passShort, taskLabel } from "./views.js";
@@ -22,8 +23,20 @@ function Choice({ v, a }) {
 export function Timeline({ v, a }) {
   const rows = v.scopeRows, now = Date.now() / 1000, end = n => n.t1 ?? now;
   const t0 = Math.min(...rows.map(r => r.node.t0)), t1 = Math.max(t0 + .001, ...rows.map(r => end(r.node)));
-  const segs = rows.flatMap(({ node: n, depth }) => ownSpans(n, end).filter(([x, y]) => y > x || n.t1 == null || !n.kids.length)
+  const raw = rows.flatMap(({ node: n, depth }) => ownSpans(n, end).filter(([x, y]) => y > x || n.t1 == null || !n.kids.length)
     .map(([s0, s1]) => ({ n, depth, t0: s0, t1: s1, kind: boxOf(n) })));
+  // D1235 (live-20): a design run's tries are one bar in the Design lane, from its first try's start to its last's end,
+  // its count on it -- not a comb of slivers; a try's checks stay in their own lane
+  const runOf = n => { if (tryOf(n) == null) return null; let r = n.parent; while (r && tryOf(r) != null) r = r.parent; return r && boxOf(r) === "design" ? r : null; };
+  const folded = new Map(), segs = [];
+  for (const x of raw) {
+    const r = x.kind !== "design" ? null : runOf(x.n) || (tryOf(x.n) == null && triesOf(x.n, v.model).some(t => !t.run) ? x.n : null);
+    if (!r) { segs.push(x); continue; }
+    const f = folded.get(r.id);
+    if (f) { f.t0 = Math.min(f.t0, x.t0); f.t1 = Math.max(f.t1, x.t1); f.depth = Math.min(f.depth, x.depth); if (x.n.t0 >= f.last.t0) f.last = x.n; continue; }
+    const y = { n: r, depth: x.depth, t0: x.t0, t1: x.t1, kind: "design", tries: triesOf(r, v.model).length, last: x.n };   // its bar says how its latest work ended
+    folded.set(r.id, y); segs.push(y);
+  }
   // D985: narrow (one pass, in the column) the chart fits the column: a shorter margin, three ticks
   const narrow = (v.width || 380) < 500;
   const W = narrow ? Math.max(200, v.width - 4) : Math.max(300, v.width || 380), L = narrow ? 62 : 90, R = narrow ? 18 : 12, T = 18, B = 26, lane = 22;
@@ -32,7 +45,7 @@ export function Timeline({ v, a }) {
   const H = T + lanes.length * lane + B, X = t => L + (W - L - R) * (t - t0) / (t1 - t0);
   // the selected task painted last, so it stays visible where work ran side by side
   const order = segs.slice().sort((x, y) => (x.n.id === v.selected) - (y.n.id === v.selected) || (y.t1 - y.t0) - (x.t1 - x.t0));
-  const agents = segs.filter(x => aiWorking(x.n));
+  const agents = raw.filter(x => aiWorking(x.n));
   // D977: a task that holds other kinds of work (a search over its designs) is drawn by its own time; a thin line
   // in its lane says the span it wraps, as the tree's time for it does
   const wraps = rows.map(r => r.node).filter(n => n.kids.some(k => boxOf(k) !== boxOf(n)) && lanes.includes(boxOf(n)))
@@ -68,10 +81,11 @@ export function Timeline({ v, a }) {
         <text x=${(X(s0) + X(s1)) / 2} y="12" class="tick alt-band-label" text-anchor="middle">${passShort(p)}</text>`) : ""}
       ${wraps.map(({ n, kind, t0: s0, t1: s1 }) => html`<rect key=${`w${n.id}`} x=${X(s0)} y=${T + lanes.indexOf(kind) * lane + lane / 2 - 1} width=${Math.max(1, X(s1) - X(s0))} height="2"
         class="alt-wrap" style=${`fill:${COLORS[kind]}`} pointer-events="none" />`)}
-      ${order.map(({ n, kind, t0: s0, t1: s1 }) => html`<g class=${cx("alt-time-task", n.id === v.selected && "sel")} data-kind=${kind} aria-pressed=${String(n.id === v.selected)}
+      ${order.map(({ n, kind, t0: s0, t1: s1, tries, last }) => html`<g class=${cx("alt-time-task", n.id === v.selected && "sel")} data-kind=${kind} aria-pressed=${String(n.id === v.selected)}
           data-task=${String(n.id)} tabindex="0" role="button" aria-label=${`${n.name} · ${state(n)}`} onClick=${e => press(e, n, kind)} onKeyDown=${e => key(e, n)}>
-        <title>${`${taskLabel(n)} · ${dur(n.seconds ?? now - n.t0)}${n.t1 == null ? " so far" : n.failed ? " · failed" : ""}${own(n)}`}</title>
-        <rect x=${X(s0)} y=${T + lanes.indexOf(kind) * lane + 3} width=${Math.max(3, X(s1) - X(s0))} height=${lane - 6} rx="2" style=${`fill:${COLORS[kind]}`} class=${`bar ${state(n)}`} /></g>`)}
+        <title>${`${taskLabel(n)}${tries > 1 ? ` · ${tries} tries` : ""} · ${dur(n.seconds ?? now - n.t0)}${n.t1 == null ? " so far" : n.failed ? " · failed" : ""}${tries ? "" : own(n)}`}</title>
+        <rect x=${X(s0)} y=${T + lanes.indexOf(kind) * lane + 3} width=${Math.max(3, X(s1) - X(s0))} height=${lane - 6} rx="2" style=${`fill:${COLORS[kind]}`} class=${`bar ${state(last && n.t1 != null ? last : n)}`} />
+        ${tries > 1 && X(s1) - X(s0) > 24 ? html`<text x=${X(s0) + 4} y=${T + lanes.indexOf(kind) * lane + lane / 2 + 4} class="tick alt-bar-count" pointer-events="none">${`×${tries}`}</text>` : ""}</g>`)}
       ${order.filter(x => x.n.id === v.selected).map(({ kind, t0: s0, t1: s1 }) => html`<rect x=${X(s0) - 2.5} y=${T + lanes.indexOf(kind) * lane + .5}
         width=${Math.max(3, X(s1) - X(s0)) + 5} height=${lane - 1} rx="3" class="alt-time-ring" style=${`stroke:${COLORS[kind]}`} pointer-events="none" />`)}
       ${cuts.map(([kind, t]) => html`<rect x=${X(t) - .75} y=${T + lanes.indexOf(kind) * lane + 3} width="1.5" height=${lane - 6} class="alt-cut" pointer-events="none" />`)}

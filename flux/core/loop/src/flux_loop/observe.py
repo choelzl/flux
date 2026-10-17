@@ -18,6 +18,16 @@ def _phase(name: str, why: str = "", quiet: bool = False, **params: Any):
     return phase(name, why=why, quiet=quiet, **params)
 
 
+def _one_command(problem: Any) -> bool:
+    """(D1235) A check runs one command: the document's gate has at most one check -- the step that runs it
+    takes it in (`absorb`), one task, not a step holding its command."""
+    gate = getattr(getattr(problem, "task", None), "gate", None)
+    try:
+        return gate is not None and len(gate) <= 1
+    except TypeError:
+        return False
+
+
 @contextmanager
 def _try(state: LoopState, subgoal: str | None, design: str = "") -> Iterator[dict[str, Any]]:
     """(D1233) One try at a part's design: its draft and the checks after it, numbered across the pass's
@@ -35,9 +45,17 @@ def _try(state: LoopState, subgoal: str | None, design: str = "") -> Iterator[di
         except AttributeError:
             pass
     n = tries[key] = tries.get(key, 0) + 1
-    out: dict[str, Any] = {}
-    with tagged(**{"try": n, "box": "design", **({"design": design} if design else {})}):
-        yield out
+    out: dict[str, Any] = {"try": n}        # its number, for the words of its steps ("try 3")
+    try:
+        with tagged(**{"try": n, "box": "design", **({"design": design} if design else {})}):
+            yield out
+    finally:
+        # (D1235) how the try came out, a note on the run it was in: a try that said nothing was refused before
+        # it was built (or cut short)
+        out.pop("try", None)
+        made = out.pop("design", "") or design
+        with _phase("try", why=f"try {n}", quiet=True, box="design", **{"try": n}, design=made or None) as said:
+            said.update({"outcome": "not built", **out})
 
 
 def _publish_mentor(problem: Problem, state: LoopState) -> None:

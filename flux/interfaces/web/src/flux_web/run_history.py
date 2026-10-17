@@ -112,7 +112,9 @@ def empty_start(run: dict[str, Any], runs: Any) -> bool:
                 continue
             if e.get("ev") == "mark" and e.get("name") == "pass":
                 return False                       # a pass began after the first: work was done
-            if e.get("ev") == "start" and e.get("parent") is None and not str(e.get("name", "")).lower().startswith(_SETUP_HEADS):
+            # D1233: a task says its box; a journal before it, its name
+            box = (e.get("tags") or {}).get("box") if e.get("ev") == "start" else None
+            if e.get("ev") == "start" and e.get("parent") is None and (box != "setup" if box else not str(e.get("name", "")).lower().startswith(_SETUP_HEADS)):
                 return False
     return True
 

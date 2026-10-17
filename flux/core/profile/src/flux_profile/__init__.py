@@ -332,7 +332,7 @@ def _absorbing() -> list[dict]:
 
 
 @contextmanager
-def phase(name: str, why: str = "", quiet: bool = False, absorb: bool = False, inline: bool = False, **params):
+def phase(name: str, why: str = "", quiet: bool = False, absorb: bool = False, inline: bool = False, silent: bool = False, **params):
     """Time a block into `name`. Records even when the block raises, so a slow failure is
     not free.
 
@@ -349,6 +349,9 @@ def phase(name: str, why: str = "", quiet: bool = False, absorb: bool = False, i
     `inline` -- that turn. The wrapper's first inline turn opens no task of its own: its inputs join
     the wrapper's (`phase_params`), its live updates and its output are the wrapper's -- one task,
     named as the wrapper, showing the agent. A second turn in the same wrapper is a task as ever."""
+    if silent:
+        yield from _silent(name, params)
+        return
     frames = _absorbing()
     with _LOCK:
         top = _stack()[-1] if _stack() else None
@@ -391,6 +394,7 @@ def phase(name: str, why: str = "", quiet: bool = False, absorb: bool = False, i
         yield output
         failed = bool(output.pop("failed", False))     # D1046: a phase that ended but failed (a check that found failures)
     finally:
+        work = bool(output.pop("_task", False))        # (D1235) a quiet step that did real work: a task, however fast
         if outs and outs[-1] is output:
             outs.pop()
         if own:
@@ -411,13 +415,38 @@ def phase(name: str, why: str = "", quiet: bool = False, absorb: bool = False, i
             try:
                 if not quiet:
                     lis.phase_end(token, name, secs, failed, output)
-                elif failed or secs >= QUIET_S:
+                elif failed or secs >= QUIET_S or work:
                     _open_quiet(lis)       # D1143: the quiet steps it ran in, a task when it is one
                     _call(lis, "phase_after", name, why, params, secs, failed, output)
                 else:
                     _call(lis, "phase_note", name, why, params, output)
             except Exception:  # noqa: BLE001
                 pass
+
+
+def _silent(name: str, params: dict):
+    """(D1235) A span the timing tree keeps (where the time went) that is no task: its listener hears nothing, what
+    starts in it is the task around it's -- the climb through the stages, the choice inside a decision."""
+    own = {k: params[k] for k in TAG_KEYS if k in params and params[k] not in (None, "")}
+    before = getattr(_TAGS, "tags", None)
+    if own:
+        _TAGS.tags = {**(before or {}), **own}
+    t0 = time.perf_counter()
+    with _LOCK:
+        stack = _stack()
+        stack.append((name, t0, stack[-1][2] if stack else None))     # the task around it stays the one its own work is under
+        path = tuple(n for n, _t, _k in stack)
+    output: dict = {}
+    try:
+        yield output
+    finally:
+        if own:
+            _TAGS.tags = before
+        with _LOCK:
+            stack = _stack()
+            if stack and stack[-1][0] == name:
+                stack.pop()
+        record(name, time.perf_counter() - t0, path)
 
 
 def _inline(host: dict, name: str, why: str, params: dict):
@@ -452,7 +481,8 @@ def _inline(host: dict, name: str, why: str, params: dict):
             if stack and stack[-1][0] == name:
                 stack.pop()
         record(name, time.perf_counter() - t0, path)
-        output.pop("failed", None)
+        if output.pop("failed", None) and name.startswith("tool:"):   # (D1235) a command it took in failed: so did it
+            host["output"]["failed"] = True
         host["output"].update(output)            # the wrapper's end carries the turn's output
 
 
@@ -494,7 +524,7 @@ _ROLE_WORDS = {
                      "decompose"),
     "generator": ("sub", "generation", "generate", "generate-loop", "llm-gen", "patch",
                   "repair", "rewrite", "design", "template", "template-fill", "oracle",
-                  "invent", "prototype", "patched", "compute"),
+                  "invent", "prototype", "patched", "compute", "try"),
     "evaluator": ("build", "test", "judge", "llm-judge", "prove", "measure", "screen",
                   "confirm", "sanity", "analytical", "simulation", "physical", "calibrate",
                   "critique", "tool", "verify", "check", "admitted"),

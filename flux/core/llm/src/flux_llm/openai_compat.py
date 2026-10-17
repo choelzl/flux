@@ -46,6 +46,20 @@ _REMOTE_MODEL = "deepseek/deepseek-chat-v3-0324:free"
 _THINK_OVERRIDE: bool | None = None
 
 
+def _called(tools: list, call: dict, budget: ToolBudget):
+    """(D1235) A tool the model called in its turn (a check, a computation) is work of its own: a task under the
+    turn, named by the tool, what it was asked its why."""
+    from flux_profile import phase
+
+    from .tools import run_call
+
+    fn = call.get("function") or {}
+    with phase(f"tool call: {fn.get('name') or 'tool'}", why=str(fn.get("arguments") or "")[:200], step=str(fn.get("name") or "")) as out:
+        hop = run_call(tools, call, max_result_chars=budget.result_chars)
+        out["result"] = hop.line(600)
+    return hop
+
+
 def set_think_override(value: bool | None) -> None:
     global _THINK_OVERRIDE
     _THINK_OVERRIDE = value
@@ -485,7 +499,7 @@ class OpenAIChatProposer:
         back as a `tool` message, and the last round goes out without tools (and with the
         schema, if any) so the turn ends in an answer. Hops are kept on `reply.hops`. A round
         that runs away is asked again with thinking off."""
-        from .tools import Hop, ToolBudget, prompted_calls, run_call, text_tool_calls, tools_prompt
+        from .tools import Hop, ToolBudget, prompted_calls, text_tool_calls, tools_prompt
 
         budget = budget or ToolBudget()
         messages: list[dict] = [{"role": "user", "content": prompt}]
@@ -515,8 +529,10 @@ class OpenAIChatProposer:
                 if round_ and self._crowded(messages, budget.compact_share):
                     self._compact_rounds(messages, budget, out, notes)
                 # one name for every round, so the timing tab sums a turn into one row
+                # (D1235) a round is the turn's: a note on it, a task when it failed or took its time
                 with phase("llm: round", why=f"hop {round_ + 1} of {budget.hops + 1}"
-                           + (", the answer, no tools" if last else "") + f", {len(messages)} {'message' if len(messages) == 1 else 'messages'}") as inner:
+                           + (", the answer, no tools" if last else "") + f", {len(messages)} {'message' if len(messages) == 1 else 'messages'}",
+                           quiet=True) as inner:
                     try:
                         message = self._exchange(messages, schema if last else None, think, inner,
                                                  tools=None if last or prompted else tools, hop_share=budget.hop_share,
@@ -594,7 +610,7 @@ class OpenAIChatProposer:
                     messages.append({"role": "assistant", "content": message.get("content") or ""})
                     results = []
                     for call in calls:
-                        hop = run_call(tools, call, max_result_chars=budget.result_chars)
+                        hop = _called(tools, call, budget)
                         hops.append(hop)
                         out[f"hop {len(hops)}"] = hop.line(600)
                         results.append(f"RESULT of {(call.get('function') or {}).get('name')} {(call.get('function') or {}).get('arguments')}:\n{hop.result}")
@@ -602,7 +618,7 @@ class OpenAIChatProposer:
                     continue
                 messages.append(_assistant_turn(message))
                 for n, call in enumerate(calls):
-                    hop = run_call(tools, call, max_result_chars=budget.result_chars)
+                    hop = _called(tools, call, budget)
                     hops.append(hop)
                     out[f"hop {len(hops)}"] = hop.line(600)
                     messages.append({"role": "tool", "tool_call_id": call.get("id") or f"call_{len(hops)}",

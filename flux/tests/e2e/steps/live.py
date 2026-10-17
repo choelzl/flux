@@ -109,8 +109,13 @@ def flows(r):
         r.check("stopped", True)
         # the drawing below reads the last start: one whole pass of it, ended on its own (a run stopped
         # at rest has a last pass that built nothing)
+        for _ in range(120):                    # the page says stopped as the stop is asked; the process may still be ending its pass
+            if not json.loads(r.api("/apps/sw/state")["body"]).get("running"):
+                break
+            time.sleep(0.5)
         asked = time.time()
-        r.check("a pass started again", r.api("/apps/sw/start", "POST", {"passes": 1, "screen_only": False})["status"] == 200)
+        got = r.api("/apps/sw/start", "POST", {"passes": 1, "screen_only": False})
+        r.check("a pass started again", got["status"] == 200, str(got)[:300])
         # its end on record, not its being seen running: a fast pass can end before the page polls
         for _ in range(240):
             st = json.loads(r.api("/apps/sw/state")["body"])
@@ -496,13 +501,14 @@ def flows(r):
                 r.check("D978: a finished pass is folded to its line, the pass at work open, a running task spins", b.js("return !document.querySelector('.alt-tree [data-task=\"2\"]') && !!document.querySelector('.alt-tree [data-task=\"4\"] .g.spin') && document.querySelector('.alt-tree [data-fold=\"pass:1\"]').getAttribute('aria-expanded')==='false'"))
                 r.check("D978: tasks are named in the timeline's words, the engine's name kept for the inspector", b.js("const t=n=>document.querySelector('.alt-tree [data-task=\"'+n+'\"] .alt-task-name')?.textContent;return t(4)==='Design current' && !document.querySelector('.alt-tree [data-task=\"3\"]') && document.querySelector('.alt-tree [data-task=\"4\"]').title.startsWith('agent: claude')"))
                 b.click('.alt-tree [data-fold="pass:1"]')
-                # D1034: a task whose one child is its command is one line, the program its note
-                r.check("a task and its one command are one line in the tree", b.js("const t=document.querySelector('.alt-tree [data-task=\"1\"]');return !!t && t.textContent.includes('python3') && !document.querySelector('.alt-tree [data-task=\"2\"]') && !document.querySelector('.alt-tree [data-fold=\"1\"]')"))
+                # D1235: a check's or a stage's one command is the engine's to fold into it; a run's command is a line under the run
+                b.click('.alt-tree [data-fold="box:1"]')
+                r.check("a run's command is a line of its own under it", b.js("const t=document.querySelector('.alt-tree [data-task=\"1\"]'), c=document.querySelector('.alt-tree [data-task=\"2\"]');return !!t && !!c && c.textContent.includes('python3')"))
                 r.check("Live removes task filters and duplicate follow text", b.js("return !document.querySelector('.alt-task-tools, .alt-status, [aria-label=\"Find Live tasks\"], [aria-label=\"Live task status\"]') && document.querySelector('.alt-controls button').textContent==='Following'"))
                 r.check("task inspection gets most of the desktop width", b.js("return document.querySelector('.alt-inspector-card').clientWidth > document.querySelector('.alt-visual-card').clientWidth * 1.7"))
                 b.click('.alt-tree .alt-pass-heading[data-pass="1"]')
                 r.check("D982: a pass's row shows the pass in the inspector: its steps and where its time went", b.js("const d=document.querySelector('.alt-pass-detail');return !!d && d.querySelector('h2').textContent==='Pass 1' && !!d.querySelector('.meter.stacked.tall') && [...d.querySelectorAll('.alt-step-row .alt-task-name')].some(n=>n.textContent.startsWith('Design · first'))"))
-                b.click('.alt-tree [data-task="1"]')     # D1055: a task and its one command -- its panel is the command's
+                b.click('.alt-tree [data-task="2"]')     # the command's panel
                 r.check("a tool inspector shows command, stdin, stdout and neutral debug stderr together", b.js("const d=document.querySelector('.alt-detail');return ['python3 check.py','case one','CHECK OK','DEBUG diagnostic'].every(t=>d.textContent.includes(t)) && !d.querySelector('.err')"))
                 b.js("document.querySelector('.alt-detail details[data-fold=stdout] summary').click(); return 1")
                 b.wait("(p => !!p.querySelector('.stream-earlier') && p.scrollHeight - p.scrollTop - p.clientHeight < 30)(document.querySelector('.alt-detail pre[data-k=stdout]'))",
@@ -521,7 +527,7 @@ def flows(r):
                 b.wait("document.querySelector('.alt-flow-box[data-box=design]')", what="the pass's flow")
                 r.check("graph shows the chain of passes and the selected task's pass as a flow", b.js("return [...document.querySelectorAll('.alt-chip')].map(c=>c.textContent).join(',')==='0,1,2' && document.querySelector('.alt-chip.sel').textContent==='1' && document.querySelectorAll('.alt-flow-box').length===1 && !document.querySelector('.alt-phase, .alt-graph .run-graph') && document.querySelector('.alt-flow-box[data-box=design] .alt-box-title').textContent==='Design' && !!document.querySelector('.alt-flow-box[data-box=design] .alt-done.ok')"))
                 r.check("graph work colours are shared with the tree and the timeline (palette A4)", b.js("return getComputedStyle(document.querySelector('.alt-flow-box[data-box=design] .alt-box')).getPropertyValue('--k').trim().toLowerCase()==='#5b6ee8'"))   # D1065: a selected box's outline is the accent
-                r.check("changing representation keeps pass and pinned task", b.js("return document.querySelector('[aria-label=\"Live pass\"]').value==='all' && document.querySelector('.alt-detail').dataset.task==='1'"))
+                r.check("changing representation keeps pass and pinned task", b.js("return document.querySelector('[aria-label=\"Live pass\"]').value==='all' && document.querySelector('.alt-detail').dataset.task==='2'"))
                 b.click('.alt-chip[data-chain="2"]')
                 b.wait("document.querySelector('.alt-chip.sel')?.textContent==='2'", what="pass 2's flow")
                 r.check("a running pass shows the boxes still to come as waiting, an agent's box with its pill", b.js("return !!document.querySelector('.alt-flow-box[data-box=design] .alt-glow') && [...document.querySelectorAll('.alt-flow-box[data-box=design] .svg-pill.ai text')].some(t=>t.textContent==='AI') && !!document.querySelector('.alt-flow-box[data-box=check] .alt-box.wait') && !!document.querySelector('.alt-flow-box[data-box=measure] .alt-box.wait')"))
@@ -536,7 +542,7 @@ def flows(r):
                 choose("Live pass", "current")
                 b.click('.alt-flow-box[data-box="search"] .alt-box')
                 r.check("Search without a task opens its policy and pins the current pass", b.js("""const d=document.querySelector('.alt-box-detail');
-                  return d.dataset.box==='search' && d.dataset.pass==='2' && d.textContent.includes('Nothing recorded')
+                  return d.dataset.box==='search' && d.dataset.pass==='2' && d.textContent.includes('Skipped')
                     && d.querySelector('[data-k=configuration]').textContent.includes('sweep')
                     && document.querySelector('[aria-label="Live pass"]').value==='2'
                     && document.querySelector('.alt-flow-box[data-box=search]').getAttribute('aria-pressed')==='true';"""))
@@ -599,8 +605,9 @@ def flows(r):
                 r.button("Timeline", ".subrow .subtabs")
                 b.wait("document.querySelector('.alt-timeline')", what="alternate timeline")
                 r.check("the timeline takes the full width, the inspector under it (D976)", b.js("const v=document.querySelector('.alt-visual-card').getBoundingClientRect(), i=document.querySelector('.alt-inspector-card').getBoundingClientRect();return v.width>900 && i.top>=v.bottom"))
-                r.check("Live timeline groups work and uses the existing work colours with an agent overlay", b.js("const svg=document.querySelector('.alt-timeline');return [...svg.querySelectorAll('text')].some(n=>n.textContent==='Design') && svg.querySelector('[data-task=\"10\"] .bar').style.fill==='var(--work-check)' && svg.querySelector('[data-task=\"4\"] .bar').style.fill==='var(--work-design)' && svg.querySelector('.agent-time').style.fill==='var(--agent)' && !svg.querySelector('.pass-line') && [...svg.querySelectorAll('.alt-band-label')].map(t=>t.textContent).join(',')==='0,1,2'"))
-                r.check("timeline has one lane per category like Live", b.js("return document.querySelector('.alt-timeline [data-task=\"3\"] .bar').getAttribute('y')===document.querySelector('.alt-timeline [data-task=\"4\"] .bar').getAttribute('y') && !document.querySelector('.alt-bar-label') && document.querySelector('.alt-timeline').getBoundingClientRect().height<120"))
+                r.check("Live timeline groups work and uses the existing work colours with an agent overlay", b.js("const svg=document.querySelector('.alt-timeline');return [...svg.querySelectorAll('text')].some(n=>n.textContent==='Design') && svg.querySelector('[data-task=\"10\"] .bar').style.fill==='var(--work-check)' && svg.querySelector('[data-task=\"3\"] .bar').style.fill==='var(--work-design)' && svg.querySelector('.agent-time').style.fill==='var(--agent)' && !svg.querySelector('.pass-line') && [...svg.querySelectorAll('.alt-band-label')].map(t=>t.textContent).join(',')==='0,1,2'"))
+                # D1235 (live-20): a design run's tries are one bar -- the run's -- in the Design lane, the agent's time over it
+                r.check("timeline has one lane per category like Live, a run's tries one bar", b.js("return !!document.querySelector('.alt-timeline [data-task=\"3\"] .bar') && !document.querySelector('.alt-timeline [data-task=\"4\"] .bar') && !document.querySelector('.alt-bar-label') && document.querySelector('.alt-timeline').getBoundingClientRect().height<120"))
                 if os.environ.get("FLUX_E2E_SHOTS"):
                     b.shot(Path(os.environ["FLUX_E2E_SHOTS"]) / "live-alt-timeline.png")
                 # D977: bars are a task's own time, as in Live; only work side by side overlaps -- a sibling of task 2
@@ -642,7 +649,8 @@ def flows(r):
                     stream.emit('events',{ev:'end',id:1000+i,t:t+i*.002+.001,seconds:.001,output:{exit:0}});
                   } return 1;""")
                 b.wait("document.querySelector('.alt-summary').textContent.includes('207 tasks')", what="long task journal (208, the agent at work inside its draft counted once)")
-                r.check("long journals keep the timeline compact and include every task", b.js("return new Set([...document.querySelectorAll('.alt-timeline [data-task]')].map(e => e.dataset.task)).size===208 && document.querySelector('.alt-timeline').getBoundingClientRect().height<120 && document.querySelector('.alt-detail').dataset.task==='4'"))
+                # D1235 (live-20): the commands a try ran are its run's one bar, not 205 slivers
+                r.check("long journals keep the timeline compact, a run's tries one bar", b.js("return !!document.querySelector('.alt-timeline [data-task=\"3\"]') && !document.querySelector('.alt-timeline [data-task=\"1100\"]') && document.querySelector('.alt-timeline').getBoundingClientRect().height<120 && document.querySelector('.alt-detail').dataset.task==='4'"))
                 r.button("Tree", ".subrow .subtabs")
                 r.check("long trees keep the active agent and its ancestor visible", b.js("return document.querySelector('.alt-detail').dataset.task==='4' && !!document.querySelector('.alt-tree [data-task=\"4\"]') && !document.querySelector('.alt-tree [data-task=\"1000\"]') && !!document.querySelector('.alt-more')"))
                 b.js("document.querySelector('.alt-visual').dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowDown',bubbles:true}));return 1")
@@ -719,7 +727,7 @@ def flows(r):
                 b.js("document.querySelector('.alt-visual').dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowDown',bubbles:true}));return 1")
                 r.check("navigation ends at the last task", b.js("return document.querySelector('.alt-detail').dataset.task===window.__altLast"))
                 r.button("Timeline", ".subrow .subtabs")
-                r.check("timeline retains both failed and interrupted work", b.js("return !!document.querySelector('.alt-timeline [data-task=\"53\"] .bar.interrupted') && !!document.querySelector('.alt-timeline [data-task=\"52\"] .bar.failed')"))
+                r.check("timeline retains interrupted work: a run's bar says how its latest try ended", b.js("return !!document.querySelector('.alt-timeline [data-task=\"51\"] .bar.interrupted')"))
                 choose("Live start", "21")
                 b.wait("document.querySelector('.alt-detail')?.textContent.includes('Retained answer')", what="return to complete retained start")
                 b.cmd("WebDriver:SetWindowRect", {"width": 390, "height": 900})

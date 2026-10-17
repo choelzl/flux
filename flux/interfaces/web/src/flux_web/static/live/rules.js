@@ -2,7 +2,8 @@
 // the graph's boxes, the chain's chips), in one place. Plain functions of the task model, no page.
 
 import { boxOf } from "./facts.js";
-import { designOf, flowBoxes, taskLabel } from "./views.js";
+import { designOf, flowBoxes, stepOf, taskLabel } from "./views.js";
+import { isTool } from "./inspector/parts.js";
 
 export const CRIT = /^\s*critique\s*:/i;
 export const STAGE = /^\s*(simulation|analytical)\s*:/i;
@@ -62,7 +63,11 @@ export const rest = n => { const l = taskLabel(n), at = l.indexOf(" · "); retur
 export const checkWord = n => /^\s*test\s*:\s*(?:fast )?check\b/i.test(String(n.name)) ? "check" : rest(n).split(" · ")[0] || "check";
 /** D1063: which of a check's tests failed first, and how many failing. */
 export const firstFailing = n => {
-  const bad = (n.kids || []).find(k => k.failed); if (!bad) return "";
+  const bad = (n.kids || []).find(k => k.failed);
+  if (!bad) {     // D1235: a check that took its one command in -- the check it stopped at, as the engine says it
+    if (!n.failed || !isTool(n)) return "";
+    const f = n.output?.failing; return `${n.tags?.["failed at"] || stepOf(n) || "a test"}${f ? ` ${f} failing` : " failed"}`;
+  }
   const f = bad.output?.failing; return `${rest(bad).split(" · ")[0] || "a test"}${f ? ` ${f} failing` : " failed"}`;
 };
 /** D1046: what a stage measured, as it said it -- its first numbers, the goals' first (D1068). */

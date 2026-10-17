@@ -54,7 +54,8 @@ def tool_slot(home: str | Path, n: int, what: str) -> Iterator[None]:
     if fd is None:
         from flux_profile import phase
 
-        with phase("wait: a check or measurement slot", why=f"{n} at once (budget.tools_at_once): {what}"[:200]):
+        # (D1235) a short wait is a note on the task that waited; a long one a task of its own, after the fact
+        with phase("wait: a check or measurement slot", why=f"{n} at once (budget.tools_at_once): {what}"[:200], quiet=True):
             while fd is None:
                 time.sleep(0.2)
                 fd = _take(folder, n)

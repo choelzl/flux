@@ -3,17 +3,22 @@
 
 import { AGENT_COLOR, WORK_COLORS as COLORS, boxOf } from "../work_style.js";
 import { designOf, stepOf, taskLabel } from "../views.js";
-import { isAgent, isModel, notReachedOf } from "../facts.js";
+import { isAgent, isModel, leadNote, notReachedOf } from "../facts.js";
 import { num, plural } from "../../format.js";
 
 export { isAgent, isModel };
-export const isTool = n => /^\s*tool\s*:/i.test(String(n.name));
+/** A command's task -- or a check's or a stage's that took its one command in (D1235: its `turn`). */
+export const isTool = n => /^\s*tool\s*:/i.test(String(n.name)) || /^\s*tool\s*:/i.test(String(n.params?.turn || ""));
+/** The program a command ran ("gen.py"), "" for a task that ran none. */
+export const programOf = n => (/^\s*tool\s*:\s*(.+)$/i.exec(String(n.params?.turn || n.name)) || [])[1]?.trim().replace(/^fluxpreset\s+/, "") || "";
 export const headOf = n => String(n.name).toLowerCase().split(":")[0].trim();
 export const colorOf = n => isAgent(n) ? AGENT_COLOR : COLORS[boxOf(n)] || COLORS.setup;
 export const running = n => n.t1 == null;
 /** A task's pill: its tone and its word -- D1075: a try whose check failed is a failed try. */
-export const stateOf = n => running(n) ? ["run", "running"] : n.interrupted ? ["warn", "interrupted"] : n.failed ? ["bad", "failed"] : n.timedOut ? ["warn", "time limit"]
-  : n.tryFailed ? ["bad", `failed · ${n.tryFailed}`] : n.rejected ? ["warn", "rejected"] : ["ok", "done"];
+export const stateOf = n => { const t = leadNote(n), o = t?.outcome;
+  return running(n) ? ["run", "running"] : n.interrupted ? ["warn", "interrupted"] : n.failed ? ["bad", "failed"] : n.timedOut ? ["warn", "time limit"]
+    : o === "check failed" || o === "no design" ? ["bad", `failed · ${t.why || (o === "no design" ? "no design" : "its check failed")}`]
+    : o === "not built" ? ["warn", "not built"] : n.rejected ? ["warn", "rejected"] : ["ok", "done"]; };
 /** What it gave so far: its live fields, and once it ended its output over them (D1083: the last word). */
 export const fieldsOf = n => ({ ...(n.fields || {}), ...(running(n) ? {} : (n.output || {})) });
 export const stdoutOf = n => { const f = fieldsOf(n); return String(f.stdout ?? f["stdout (live tail)"] ?? ""); };
@@ -48,9 +53,6 @@ export const notReached = notReachedOf;
     every design said by its id (rules.js namer). */
 export const plain = (t, N) => { const at = String(t).lastIndexOf(" · "); return at > 0 && N.loopNamed(String(t).slice(at + 3)) ? String(t).slice(0, at) : N.shortAll(String(t)); };
 
-/** D1182: the engine's "attempt N" (counted in its run) is the tree's try (counted across the box's runs) --
-    the try's number when the tree drew it, never the engine's own count. */
-export const tryWhy = n => /^\s*attempt\s+\d+\s*$/i.test(String(n.why || "")) ? "" : String(n.why || "");
 /** D1182: a choice's columns -- the metric the decision named first ("the smallest time_ms"), then the goals,
     then what was measured; only those some design has a number for, three at most. */
 export function chooseColumns(rows, goals, by = "") {

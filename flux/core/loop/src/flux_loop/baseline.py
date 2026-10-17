@@ -55,7 +55,7 @@ def _provided_metrics(problem, state):
     for stage in problem.stages():
         if stage not in stages:
             continue
-        with _phase(f"measure: {stage}", why="provided baseline values; no tool run", box="measure", step=stage) as out:
+        with _phase(f"measure: {stage}", why="provided baseline values; no tool run", box="measure", step=stage, quiet=True) as out:   # (D1235) nothing ran: a note
             metrics = stages[stage]
             state.scored.append(Scored(cand, stage, metrics, {"supplied": True}))
             if state.records is not None:
@@ -98,7 +98,7 @@ def run_baseline(problem, state):
         state.say(f"  {line}")
         state.lessons.append(line)
         _merge_decision_history(problem, state)
-        with _phase("knowledge: baseline reused", why="unchanged inputs; checks and measurements skipped", box="setup", step="baseline reused"):
+        with _phase("knowledge: baseline reused", why="unchanged inputs; checks and measurements skipped", box="setup", step="baseline reused", quiet=True):
             result = outcome()
         result.provenance["baseline_reused"] = True
         if state.depth == 0:

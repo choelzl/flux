@@ -1,7 +1,7 @@
 // D978: what Live's three views say about the tasks -- a task's name in the timeline's words,
 // the flow a pass went through, and what each box is set to (from the document as written).
 import { workLabel } from "./work_style.js";
-import { boxOf, designOf, isAI, isAgent, isModel, noteBox, stepOf, workerOf } from "./facts.js";
+import { boxOf, designOf, isAgent, isModel, noteBox, stepOf, tryNote, tryOf, triesOf, workerOf } from "./facts.js";
 export { designOf, stepOf };
 import { taskState as state } from "./model.js";
 
@@ -11,9 +11,9 @@ const SETUP_SAYS = { "gate: tools": "tools ready", "gate: the problem": "problem
     says it, the stage, the candidate; the engine's own name stays in the inspector. */
 /** D1037: a command's program, said beside the check or stage it runs; "" for anything else. */
 export function taskNote(n) {
-  const name = String(n.name || ""), at = name.indexOf(":");
-  if (!/^\s*tool\s*:/i.test(name) || !(stepOf(n) || boxOf(n) === "design" && designOf(n))) return "";   // D1063: a generator's program too
-  return name.slice(at + 1).trim().replace(/^fluxpreset\s+/, "");
+  const prog = (/^\s*tool\s*:\s*(.+)$/i.exec(String(n.params?.turn || n.name)) || [])[1];
+  if (!prog || !(stepOf(n) || boxOf(n) === "design" && designOf(n))) return "";   // D1063: a generator's program too
+  return prog.trim().replace(/^fluxpreset\s+/, "");
 }
 export function taskLabel(n) {
   const name = String(n.name || "").trim(), low = name.toLowerCase(), at = name.indexOf(":");
@@ -75,23 +75,20 @@ const SETUP_BOXES = [["Document", n => /^(validate|gate)\b/i.test(n.name)], ["Pa
   ["Papers", n => /digest|paper/i.test(n.name)], ["Plan", n => /^plan\b/i.test(n.name)]];
 const PASS_KINDS = ["plan", "search", "design", "check", "measure", "choose"];   // D1054: a pass that planned (its part) shows it      // D1034: a critique is in the box it judges
 
-/** A draft: an agent's or a model's turn, or a design step of its own -- never a command it ran, a brief or a composition. */
-export const isDraft = c => !/^\s*tool\s*:/i.test(String(c.name)) && ((boxOf(c) === "design" && !/^\s*(propose|template-fill)\b/i.test(String(c.name)))
-  || isAI(c));
 /** D1181: the agents that drafted a box's runs, as their turns name them ("codex") -- not the document's say. */
 export const agentsOf = runs => [...new Set(runs.flatMap(function all(n) { return [n, ...(n.kids || []).flatMap(all)]; })
   .map(n => isAgent(n) ? workerOf(n).slice(6) : "").filter(Boolean))];
-/** D1054: a design box's tries -- its drafts, or each run that drafted nothing of its own (a generator command) -- as the tree numbers them. */
-export const triesOf = runs => runs.reduce((t, n) => t + Math.max(1, (n.kids || []).filter(isDraft).length), 0);
-/** D1054: the box a task is drawn in. A check is the Check box's -- but a check that failed inside a
-    design sent it back: it is that design's try, and so is everything under it. */
+/** D1054: a design box's tries, as the engine numbered them (D1233). */
+export const triesCount = (runs, model) => runs.reduce((t, n) => t + Math.max(1, triesOf(n, model).length), 0);
+/** D1054: the box a task is drawn in. A check is the Check box's -- but a check in a try that did not pass sent
+    the design back: it is that try's, the Design box's (a check failing in a try at work too). */
 export function boxKind(n) {
-  const k = boxOf(n);
-  if (k !== "check") return k;
-  // D1181: a check the model ran inside its own turn is a step of that try -- no pass of the Check box
-  if (/^inside the turn\b/i.test(String(n.output?.measured ?? "")) && n.parent && boxOf(n.parent) === "design") return "design";
-  for (let p = n; p; p = p.parent) if (p.failed && p.parent && boxOf(p) === "check" && boxOf(p.parent) === "design") return "design";
-  return k;
+  const k = boxOf(n), t = tryOf(n);
+  if (k !== "check" || t == null) return k;
+  let run = n.parent;
+  while (run && (tryOf(run) != null || boxOf(run) !== "design")) run = run.parent;
+  const o = tryNote(run, t)?.outcome;
+  return o ? (["passed", "drafted"].includes(o) ? "check" : "design") : n.failed ? "design" : "check";
 }
 /** D1094: when a design's run handed its design on -- the time its first check or measurement began, the
     run itself holding them (the generation runs its gate) -- with no work of its own after it; else null. */
@@ -138,9 +135,9 @@ function who(runs) {
   return all.some(isAgent) || all.some(isModel) ? "AI" : "";              // D1044: an agent or a model, one pill
 }
 
-/** A box with nothing run yet, in words -- the same in the tree, the graph and the inspector: "not recorded" when a
-    box after it ran (BoxPanel's rule), else "waiting". */
-export const waitWord = (boxes, b) => boxes.slice(boxes.indexOf(b) + 1).some(x => x.runs.length) ? "not recorded" : "waiting";
+/** A box with nothing run yet, in words -- the same in the tree, the graph and the inspector: "skipped" when the
+    pass went past it (a box after it ran, live-28), else "waiting". */
+export const waitWord = (boxes, b) => boxes.slice(boxes.indexOf(b) + 1).some(x => x.runs.length) ? "skipped" : "waiting";
 
 /** The boxes of a pass's flow: [{key, title, kind, state, runs, steps, who, count}]. */
 export function flowBoxes(rows, p, running, notes = []) {
@@ -163,6 +160,7 @@ export function flowBoxes(rows, p, running, notes = []) {
     .map(k => ({ key: k, title: workLabel(k), kind: k,
       runs: runsOf(rows, n => boxKind(n) === k && (k !== "design" || !inMeasure(n))), notes: noted(k) }));
   // D1059: an evaluation is the loop taking designs through the stages -- its measurements are the box's own runs
+  // (a journal before D1235: the engine no longer writes an evaluation around them)
   for (const b of boxes) if (b.kind === "measure") {
     const inBox = b.runs.inBox;
     b.runs = b.runs.flatMap(n => /^\s*evaluation\s*$/i.test(String(n.name)) && (n.kids || []).length ? n.kids : [n]);
@@ -176,7 +174,7 @@ export function flowBoxes(rows, p, running, notes = []) {
   if (setup.length) boxes.unshift({ key: "setup", title: workLabel("setup"), kind: "setup", runs: setup, notes: [] });
   const times = stretches(rows);
   // D1054: a design counts its tries, as its list and the tree do; another box, its stretches of work
-  return boxes.map(b => ({ ...finish(b), ...(b.kind === "design" ? { count: triesOf(b.runs) } : times[b.key] ? { count: times[b.key] } : {}) }));
+  return boxes.map(b => ({ ...finish(b), ...(b.kind === "design" ? { count: triesCount(b.runs) } : times[b.key] ? { count: times[b.key] } : {}) }));
 }
 /** D1038: how many times each box's work happened in the pass -- a stretch of its own work in time,
     broken only by another box's design, check or measure work: a gate's four tests are one Check, two

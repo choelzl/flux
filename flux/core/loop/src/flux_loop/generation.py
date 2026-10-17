@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any
 from .gradient import Gradient, gate_score
 from .novelty import twin, twin_said
 from .model import _ask, _compose
-from .observe import _phase, _try
+from .observe import _one_command, _phase, _try
 from .patch import apply_patch, parse_patch
 from .prototype import _prototype_stage
 from .types import BuildError, Candidate, LoopState
@@ -97,7 +97,7 @@ def _generate_with_model(problem: Problem, subgoal: str | None, method: str,
                 out["error"] = str(exc)[:600]
                 cand = None
         if cand is not None:
-            with _phase(f"test: build {tag}", why=cand.name, box="check", design=cand.name, step="build") as out:
+            with _phase(f"test: build {tag}", why=cand.name, box="check", design=cand.name, step="build", absorb=_one_command(problem)) as out:
                 try:
                     built = problem.build(cand, subgoal, state)
                     out["built"] = "ok"
@@ -153,7 +153,7 @@ def _generate_with_model(problem: Problem, subgoal: str | None, method: str,
         with _try(state, subgoal) as tried:
             tools = problem.tools(subgoal, state, "generate") if req.tools else None
             if mode == "patch" and cand is not None and req.patching:
-                with _phase(f"repair: {tag}", why=f"attempt {attempt + 1}"):
+                with _phase(f"repair: {tag}", why=f"try {tried['try']}"):
                     try:
                         p, sch = wrap(problem.patch_prompt(subgoal, _shown(cand), last_err, state))
                         if state.part(subgoal).dse not in ("refine", "finetune"):
@@ -197,7 +197,7 @@ def _generate_with_model(problem: Problem, subgoal: str | None, method: str,
                 if tnote:
                     last_err = tnote
             else:
-                with _phase(f"generate: {tag}", why=f"attempt {attempt + 1}", absorb=True,
+                with _phase(f"generate: {tag}", why=f"try {tried['try']}", absorb=True,
                             structured=req.structured) as out:
                     try:
                         reply = _ask(state, prompt, schema, tools=tools).text
@@ -234,7 +234,7 @@ def _generate_with_model(problem: Problem, subgoal: str | None, method: str,
                 prompt, schema = wrap(problem.rewrite_prompt(subgoal, _shown(cand), last_err, state))
                 continue
             built = None
-            with _phase(f"test: build {tag}", why=cand.name, box="check", design=cand.name, step="build") as out:
+            with _phase(f"test: build {tag}", why=cand.name, box="check", design=cand.name, step="build", absorb=_one_command(problem)) as out:
                 try:
                     built = problem.build(cand, subgoal, state)
                     out["built"] = "ok"

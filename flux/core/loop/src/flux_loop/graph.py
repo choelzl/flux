@@ -37,6 +37,7 @@ NODES: dict[str, Node] = {n.name: n for n in (
     Node("generate", "generator", True, "a candidate: prototype, then target code"),
     Node("template-fill", "generator", False, "code the framework writes: tables, wrappers, composition"),
     Node("repair", "generator", True, "edits driven by a failure, on the text that exists"),
+    Node("try", "generator", False, "how a try at a design came out: a note on its run (D1235)"),
     Node("test", "evaluator", False, "correctness: build, fast vectors, the exhaustive judge"),
     Node("critique", "evaluator", True, "the adversary: a critique of a candidate, a plan or a decision"),
     Node("estimate", "evaluator", False, "a stage's estimate before its tool: skips what cannot pass (D665)"),

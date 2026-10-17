@@ -11,7 +11,8 @@ import { passName, taskNote } from "../views.js";
 import { Block, Fold, StepRow, TaskPill, memoryOf } from "./bits.js";
 import { AgentChat, ModelChat } from "./Chat.js";
 import { ChooseBody, CriticBody, NotesFold, SearchBody, StepsBody, ToolBody } from "./Bodies.js";
-import { designOf, colorOf, has, headOf, isAgent, isModel, isTool, metricsOf, plain, running, stdoutOf, taskLabel, tidyWords, tryWhy } from "./parts.js";
+import { designOf, colorOf, has, headOf, isAgent, isModel, isTool, metricsOf, plain, programOf, running, stdoutOf, taskLabel, tidyWords } from "./parts.js";
+import { tryOf, workerOf } from "../facts.js";
 import { Pill, Tag } from "../../components/Tone.js";
 import { Head, Tool } from "../../components/Head.js";
 import { Meter } from "../../components/Stat.js";
@@ -19,8 +20,8 @@ import { Meter } from "../../components/Stat.js";
 /** D1094: who did the work, in words -- the program a command ran, the agent or model that answered, its try
     (D1075: the tree's); an engine's own step name says nothing the title does not (it is the tooltip). */
 function runner(n, title = "") {
-  const name = String(n.name || ""), tool = /^\s*tool\s*:\s*(.+)$/i.exec(name), ai = /^\s*(agent|llm|model)\s*:?\s*(\S+)?/i.exec(name);
-  const said = [tool && !title.endsWith(` · ${tool[1].trim()}`) ? `runs ${tool[1].trim()}` : ai ? `${/^agent/i.test(ai[1]) ? "agent" : "model"}${ai[2] ? " " + ai[2] : ""}` : "", n.tryNo ? `try ${n.tryNo}` : ""].filter(Boolean).join(" · ");   // D1182: any try's step
+  const name = String(n.name || ""), prog = programOf(n), [who, as] = workerOf(n).split(":"), t = tryOf(n);
+  const said = [prog && !title.endsWith(` · ${prog}`) ? `runs ${prog}` : who ? `${who}${as ? " " + as : ""}` : "", t != null ? `try ${t}` : ""].filter(Boolean).join(" · ");   // D1182: any try's step
   return said ? html`<span title=${name}>${said}</span>` : "";
 }
 
@@ -31,9 +32,9 @@ function TaskHead({ n, env, a }) {
   // agent turn is "Design · x#2" (D1056)
   const N = env.N, label = plain(taskLabel(n), N), prog = isTool(n) && boxOf(n) === "design" ? taskNote(n) : "";
   const title = prog && !label.includes(prog) ? `${label} · ${prog}` : label, parents = [];
-  for (let p = n.parent; p; p = p.parent) { const l = plain(taskLabel(p), N); if (l !== title && l.includes(" · ") && !/·\s*evaluation$/i.test(l)) parents.unshift(p); }
+  for (let p = n.parent; p; p = p.parent) { const l = plain(taskLabel(p), N); if (l !== title && l.includes(" · ")) parents.unshift(p); }
   // D1066: a reason that is the loop's own name says nothing; D1094: nor one that is only the engine's source name
-  const w = tryWhy(n), why = w && !N.loopNamed(w.trim()) && !/^\s*(agent|tool|model|llm)\s*:\s*\S+\s*$/i.test(w) ? tidyWords(N.shortAll(w)) : "";   // D1182: its try, not the engine's attempt
+  const w = String(n.why || ""), why = w && !N.loopNamed(w.trim()) && !/^\s*(agent|tool|model|llm)\s*:\s*\S+\s*$/i.test(w) ? tidyWords(N.shortAll(w)) : "";   // D1182: its try, not the engine's attempt
   const raw = () => showRaw(JSON.stringify({ name: n.name, input: n.params, fields: n.fields, output: n.output }, null, 2), `${n.name} · raw`);
   return html`<${Head} cls="alt-ihead" stripe=${colorOf(n)} title=${title} hint=${taskLabel(n)} tools=${html`<${Tool} icon="raw" label="Raw" cls="raw-view" onClick=${raw} />
       <${Tool} icon="fullscreen" label="Fullscreen" big cls="fullscreen-button" onClick=${() => a.fullscreen(n.name)} />`}>
@@ -48,13 +49,13 @@ function Body({ n, env, a, mem }) {
   if (isAgent(n)) return html`<div class="task-inspector agent-turn"><${AgentChat} n=${n} env=${env} mem=${mem} /></div>`;
   if (isModel(n)) return html`<div class="task-inspector agent-turn"><${ModelChat} n=${n} env=${env} mem=${mem} /></div>`;
   if (isTool(n)) return html`<${ToolBody} n=${n} env=${env} mem=${mem} />`;
-  if (n.kids.length === 1 && isTool(n.kids[0]) && !(n.kids[0].kids || []).length) return html`<${ToolBody} n=${n.kids[0]} env=${env} mem=${mem} />`;
   // D1148: a setup step that is only its agent's or model's turn (the workbench's digest) shows that turn
   const turn = n.kids.length === 1 && !(n.kids[0].kids || []).length && (isAgent(n.kids[0]) || isModel(n.kids[0])) && boxOf(n) === "setup" ? n.kids[0] : null;
   if (turn) return html`<${Body} n=${turn} env=${env} a=${a} mem=${memoryOf(turn.id)} />`;
   const hd = headOf(n);
   if (hd === "dse") return html`<${SearchBody} n=${n} a=${a} env=${env} />`;
-  if (["decide", "frontier", "decision", "select"].includes(hd) || /^propose:\s*what next/i.test(n.name)) return html`<${ChooseBody} n=${n} a=${a} env=${env} />`;
+  if (hd === "critique") return html`<${CriticBody} n=${n} />`;
+  if (boxOf(n) === "choose") return html`<${ChooseBody} n=${n} a=${a} env=${env} />`;
   if (hd === "critique") return html`<${CriticBody} n=${n} />`;
   return html`<${StepsBody} n=${n} a=${a} env=${env} />`;
 }

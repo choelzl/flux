@@ -14,7 +14,7 @@ const said = v => typeof v === "object" ? JSON.stringify(v) : String(v);
 /** D1059: a box of a pass -- its state as its box says it, its runs to open, or its notes, or what the
     document sets it to (as YAML, D1094) while it has not run. */
 export function BoxPanel({ v, a, box }) {
-  const { b, boxes, config, took } = box, later = b && waitWord(boxes, b) === "not recorded";
+  const { b, boxes, config, took } = box, later = b && waitWord(boxes, b) === "skipped";
   const [tone, said] = b?.done ? ["ok", "done"] : b?.runs.length || b?.notes?.length ? { ok: ["ok", "done"], bad: ["bad", "failed"], part: ["warn", "partly failed"], run: ["run", "running"] }[b.state] || ["ok", "done"]
     : ["none", b ? waitWord(boxes, b) : "waiting"];
   return html`<div class="detail alt-detail alt-box-detail" data-box=${v.boxView.key} data-pass=${String(v.boxView.p ?? "setup")} data-drawn=${v.drawn}>
@@ -25,7 +25,7 @@ export function BoxPanel({ v, a, box }) {
           <${Facts} list=${Object.entries(b.notes[0].output || {}).filter(([k]) => k !== "scopes").map(([k, x]) => [k, said(x)])} /></div>`
       : b?.notes?.length ? html`<div class="alt-steps">${b.notes.map(n => html`<div class="alt-step-row note"><span>${noteName(n)}</span>
           ${Object.keys(n.output || {}).length ? html`<span class="mono muted small">${Object.entries(n.output).map(([k, x]) => `${k} ${said(x)}`).join(" · ")}</span>` : ""}</div>`)}</div>`
-      : html`<p class="muted">${b?.done ? "Baseline stored as a reference." : later ? "Nothing recorded in this pass." : "Not started yet."}</p>`}
+      : html`<p class="muted">${b?.done ? "Baseline stored as a reference." : later ? "Skipped: the pass went past it." : "Not started yet."}</p>`}
     ${v.boxView.key === "record" && b?.done ? html`<${PassSummary} p=${v.boxView.p} nodes=${box.nodes} a=${a} N=${v.N} head=${false} />` : ""}
     ${config != null && !b?.runs.length && !b?.notes?.length ? html`<section><div class="alt-label">${`Set to · ${v.problem?.document || "problem.yaml"}`}</div>
         <pre class="val tall" data-k="configuration">${typeof config === "string" ? config : asYaml(config)}</pre></section>`

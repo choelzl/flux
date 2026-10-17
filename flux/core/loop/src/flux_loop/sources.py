@@ -22,7 +22,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Protocol, Sequence, runtime_checkable
 
-from .observe import _phase, _try
+from .observe import _one_command, _phase, _try
 from .types import BuildError, Candidate, LoopState
 from .words import plural
 
@@ -175,7 +175,7 @@ def iterate(problem: Any, source: Source, subgoal: str | None, state: LoopState,
                     say(f"  {source.name}: {cand.name} is {again.candidate.name} again, already measured; asking for a different one")
                     continue
             # D1046: the build and the check are one task -- the checks it ran under it, failing when they failed
-            with _phase(f"test: check {cand.name}", why=source.name, box="check", design=cand.name, step="check") as checked:
+            with _phase(f"test: check {cand.name}", why=source.name, box="check", design=cand.name, step="check", absorb=_one_command(problem)) as checked:
                 try:
                     built = problem.build(cand, subgoal, state)
                 except BuildError as exc:

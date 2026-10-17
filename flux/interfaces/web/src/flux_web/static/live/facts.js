@@ -35,8 +35,36 @@ export const isAI = n => !!workerOf(n);
 /** D978: an agent or the model works in this task or one it is under (the timeline's overlay). */
 export const aiWorking = n => { for (let p = n; p; p = p.parent) if (isAI(p)) return true; return false; };
 /** A part's try this task belongs to (D1233), or null. */
-export const tryOf = n => said(n) ? up(n, "try") : null;
+export const tryOf = n => { if (said(n)) return up(n, "try"); for (let p = n; p; p = p.parent) if (p.ltry != null) return p.ltry; return null; };
+/** How try `n` of a design run came out -- {outcome, why, design} -- as the engine said it (a `try` note on the run;
+    a run that is its own try, on the run's parent); null while it is at work. */
+export function tryNote(at, n, model) {
+  if (!at) return model?.ltries?.[n] || (model?.notes || []).filter(x => x.name === "try" && x.tags?.try === n).map(said1).at(-1) || null;
+  if (!said(at)) return at.ltries?.[n] || null;
+  const x = (at.notes || []).filter(x => x.name === "try" && x.tags?.try === n).at(-1);
+  return x ? said1(x) : null;
+}
+const said1 = x => ({ outcome: x.tags?.outcome || "", why: x.output?.why || "", design: x.tags?.design || "" });
+/** A design run's tries: [{n, lead, steps, members, note, run}] in order -- its tasks by the try they say; a run that
+    is its own try (a generator's command) one. */
+export function triesOf(run, model) {
+  const kids = [...(run.kids || [])].sort((a, b) => a.t0 - b.t0), by = new Map();
+  for (const k of kids) { const t = tryOf(k); if (t != null && t !== tryOf(run)) (by.get(t) || by.set(t, []).get(t)).push(k); }
+  if (!by.size) { const t = tryOf(run); return t == null ? [] : [{ n: t, lead: run, steps: [], members: [run], note: tryNote(run.parent, t, model), run: true }]; }
+  return [...by.entries()].map(([t, members]) => ({ n: t, lead: members[0], steps: members.slice(1), members, note: tryNote(run, t, model) }));
+}
 /** D1065: the checks a failed check never reached -- as the engine said it, or from the document's checks. */
 export const notReachedOf = (n, tests = []) => said(n) ? (n.failed && Array.isArray(n.tags?.["not reached"]) ? n.tags["not reached"] : []) : L.notReached(n, tests);
 /** A task that is a turn itself (an agent's, a model's), not a step that took one in. */
 export const isTurn = n => /^\s*(agent|llm|model)\b/i.test(String(n.name));
+/** How the try a task leads came out (its draft: the first of the try's tasks), or null -- the inspector says it
+    of the task the try's line opens (D1075). */
+export function leadNote(n) {
+  const t = tryOf(n);
+  if (t == null || !n.parent) return null;
+  let run = n.parent;
+  while (run && tryOf(run) === t) run = run.parent;
+  if (!run) return null;
+  const first = [...(run.kids || [])].filter(k => tryOf(k) === t).sort((a, b) => a.t0 - b.t0)[0];
+  return first === n || (first && first.kids?.length === 1 && first.kids[0] === n) ? tryNote(run, t) : null;
+}
