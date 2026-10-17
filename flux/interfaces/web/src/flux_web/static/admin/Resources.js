@@ -6,7 +6,7 @@ import { Ago, Card, Empty, Notice, Skeleton, cx, html, useState } from "../view.
 import { api, appHref, confirmDialog, enc, toast } from "../ui.js";
 import { bytes, dur } from "../format.js";
 import { stopLoop } from "../loops.js";
-import { TimeChart } from "../charts/TimeChart.js";
+import { TimeChart, niceTop } from "../charts/TimeChart.js";
 import { Act } from "../components/Act.js";
 import { Meter, Stat } from "../components/Stat.js";
 import { SortableTable } from "../components/SortableTable.js";
@@ -88,10 +88,15 @@ function OverTime({ n }) {
   const [hours, setHours] = useState(historyHours);
   // another range, or the machine read again: what was shown stays until the next answer (and when it fails)
   const got = useLoad(() => Promise.all([api(`/admin/history?hours=${hours}`).catch(() => null), api(`/admin/token-rate?hours=${hours}`).catch(() => null)])
-    .then(([hx, tr]) => { if (!hx) throw new Error("no history"); return { hx, tr }; }), "history", `${hours}:${n}`).got?.d;
+    .then(([hx, tr]) => { if (!hx) throw new Error("no history"); return { hx, tr, at: Date.now() / 1000 }; }), "history", `${hours}:${n}`).got?.d;
   const chips = html`<${Choice} small label="Range" value=${hours} onChange=${hrs => { historyHours = hrs; setHours(hrs); }} options=${RANGES} />`;
   if (!got) return html`<${Card} title="Over time" actions=${chips}><${Skeleton} lines=${4} /><//>`;
   const { hx, tr } = got, ts = tr ? tr.samples : [], ss = hx.samples, last = ss.at(-1), cpus = last ? last.cpus : null;
+  // every chart over one window: from the earliest of any chart's samples (the token rates' cover the range asked for,
+  // the machine's start at its first sample) to the latest -- not each its own ("09:15 AM … 09:15 AM" beside "10:56 PM …")
+  const all = [...ss, ...ts], to = all.length ? Math.max(...all.map(s => s.t)) : got.at;
+  const win = { from: Math.max(to - hours * 3600, Math.min(to, ...all.map(s => s.start_t ?? s.t))), to };
+  const cpuMost = Math.max(0, ...ss.map(s => s.cpu || 0)), cpuTop = Math.min(Math.max(100, niceTop(cpuMost)), Math.max(100, (cpus || 1) * 100));
   // a rate keeps its own precision (one decimal under 10, "0.004" never rounded to zero): not a measured number
   const rate = v => v >= 1000 ? `${(v / 1000).toFixed(1)}k/s` : `${v > 0 && v < 1 ? Number(v.toPrecision(2)) : v >= 10 ? Math.round(v) : v.toFixed(1)}/s`;
   const sum = (s, d) => s[`${d}_agent`] + s[`${d}_model`], pct = v => `${Math.round(v * 100)}%`;
@@ -100,14 +105,14 @@ function OverTime({ n }) {
     ${hx.sampling ? "" : html`<p class="muted small">Not sampling here: older samples.</p>`}
     ${tr ? html`<p class="muted small token-rate-note">${`Token rates: ${dur(tr.bucket_seconds)} averages, cached inputs included. Agents that report live count as they go; others when a turn ends, spread over it.`}</p>` : ""}
     <div class="tcharts">
-      <${TimeChart} samples=${ts} series=${tokens("in")} title="Tokens in /s" fmt=${rate} intervals />
-      <${TimeChart} samples=${ts} series=${tokens("out")} title="Tokens out /s" fmt=${rate} intervals />
-      <${TimeChart} samples=${ss} series=${[{ label: "load", get: s => s.load1 }]} title="Load" level=${cpus} levelLabel=${cpus ? `${cpus} CPUs` : ""} fmt=${v => v.toFixed(1)} />
-      <${TimeChart} samples=${ss} series=${[{ label: "used", get: s => s.mem_total ? s.mem_used / s.mem_total : null }]} title="Memory" top=${1} fmt=${pct} />
-      <${TimeChart} samples=${ss} series=${Object.keys(last?.disks || {}).map(k => ({ label: k, get: s => (s.disks || {})[k] }))} title="Disks" top=${1} fmt=${pct} />
-      <${TimeChart} samples=${ss} series=${[{ label: "CPU", get: s => s.cpu }]} title="Container CPU (100% = 1 core)" top=${Math.max(100, ...ss.map(s => s.cpu || 0)) * 1.05} fmt=${v => `${Math.round(v)}%`} />
-      <${TimeChart} samples=${ss} series=${[{ label: "memory", get: s => s.cmem }]} title="Container memory" fmt=${v => bytes(Math.round(v))} />
-      <${TimeChart} samples=${ss} series=${[{ label: "loops", get: s => s.loops }, { label: "containers", get: s => s.containers }]} title="Running"
+      <${TimeChart} ...${win} samples=${ts} series=${tokens("in")} title="Tokens in /s" fmt=${rate} intervals />
+      <${TimeChart} ...${win} samples=${ts} series=${tokens("out")} title="Tokens out /s" fmt=${rate} intervals />
+      <${TimeChart} ...${win} samples=${ss} series=${[{ label: "load", get: s => s.load1 }]} title="Load" level=${cpus} levelLabel=${cpus ? `${cpus} CPUs` : ""} fmt=${v => v.toFixed(1)} />
+      <${TimeChart} ...${win} samples=${ss} series=${[{ label: "used", get: s => s.mem_total ? s.mem_used / s.mem_total : null }]} title="Memory" top=${1} fmt=${pct} />
+      <${TimeChart} ...${win} samples=${ss} series=${Object.keys(last?.disks || {}).map(k => ({ label: k, get: s => (s.disks || {})[k] }))} title="Disks" top=${1} fmt=${pct} />
+      <${TimeChart} ...${win} samples=${ss} series=${[{ label: "CPU", get: s => s.cpu }]} title="Container CPU (100% = 1 core)" top=${cpuTop} fmt=${v => `${Math.round(v)}%`} />
+      <${TimeChart} ...${win} samples=${ss} series=${[{ label: "memory", get: s => s.cmem }]} title="Container memory" base=${1024} fmt=${v => bytes(Math.round(v))} />
+      <${TimeChart} ...${win} samples=${ss} series=${[{ label: "loops", get: s => s.loops }, { label: "containers", get: s => s.containers }]} title="Running"
         top=${2 * Math.ceil((Math.max(1, ...ss.map(s => Math.max(s.loops || 0, s.containers || 0))) + 1) / 2)} fmt=${v => String(Math.round(v))} /></div><//>`;
 }
 

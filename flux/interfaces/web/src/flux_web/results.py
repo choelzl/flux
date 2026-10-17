@@ -68,8 +68,10 @@ def measurement_summary(result: dict[str, Any], decision: dict[str, Any]) -> dic
                 reference = {"kind": "P10" if q == .1 else "P90", "count": len(values),
                              "value": values[lo] * (1 - (pos - lo)) + values[hi] * (pos - lo)}
         percent = (value - reference["value"]) / abs(reference["value"]) * 100 if finite(value) and reference and reference["value"] != 0 else None
+        limit = next((o for o in result.get("limits", []) if o["metric"] == metric and o.get("goal") is not None), None)
         out[metric] = {"value": value if finite(value) else None, "meets": decision.get("meets", {}).get(metric),
-                       "percent": percent if finite(percent) else None, "reference": reference}
+                       "percent": percent if finite(percent) else None, "reference": reference,
+                       **({"goal": limit["goal"], "direction": limit["direction"]} if limit else {})}   # shell-11: what it is coloured against
     return out
 
 
@@ -490,6 +492,12 @@ def _designs(db: str, stages: list[dict[str, Any]], decision: str | None, limit:
             if st == shown and v is not None:
                 ok = v >= o.goal if o.direction == "maximize" else v <= o.goal
                 meets[o.metric] = meets.get(o.metric, True) and ok
+        for o in objectives:            # results-10: a number under a goal is coloured against it, whichever stage judges
+            v = d["numbers"].get(o.metric)  # it -- never red beside the ✓ of a design another stage accepted (results-7)
+            if o.metric not in meets and v is not None:
+                ok = v >= o.goal if o.direction == "maximize" else v <= o.goal
+                if ok or not judged.eligible:
+                    meets[o.metric] = ok
         d["eligible"], d["pending"], d["reasons"] = judged.eligible, judged.pending, list(judged.reasons)
         d["verdict"] = "accepted" if judged.eligible else "pending" if judged.pending else "failed"
         d["why"] = misses + list(judged.reasons)

@@ -173,6 +173,18 @@ def default_model() -> str:
     return remote_model() if remote_enabled() else default_local_model()
 
 
+
+#: How a reply ended, in words; one that ended by itself ("stop") says nothing.
+_FINISHED = {"stop": "", "length": "cut at its length limit", "tool_calls": "asked for tools", "content_filter": "filtered"}
+
+
+def tokens_said(usage: dict, finish: object) -> str:
+    """A call's tokens as the task pane says them: "7,405 in · 181 out", how it finished only when it did
+    not end by itself ("· cut at its length limit")."""
+    n = lambda v: f"{v:,}" if isinstance(v, int) else "—"  # noqa: E731
+    fin = _FINISHED.get(str(finish), str(finish)) if finish else ""
+    return " · ".join(x for x in (f"{n(usage.get('prompt_tokens'))} in", f"{n(usage.get('completion_tokens'))} out", fin) if x)
+
 class OpenAIChatProposer:
     """`propose(prompt, *, schema, tools, budget) -> Reply` against `<base>/chat/completions`.
 
@@ -721,8 +733,7 @@ class OpenAIChatProposer:
                 self.chars_per_token = (0.5 * self.chars_per_token + 0.5 * measured
                                         if self.chars_per_token != 2.0 else measured)
         # for the task pane, beside what was asked
-        out["tokens"] = (f"{usage.get('prompt_tokens')} in, "
-                         f"{usage.get('completion_tokens')} out, finish_reason={finish}")
+        out["tokens"] = tokens_said(usage, finish)
         if notes["schema"]:
             out["schema"] = notes["schema"]
         text = message.get("content") or ""

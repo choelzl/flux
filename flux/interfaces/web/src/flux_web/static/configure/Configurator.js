@@ -23,13 +23,15 @@ const NO_STORE = { subscribe: () => () => {} };
     `changes(yaml)` a promise of what a save changes (a loop that exists); `notes` what is kept as written, `direct` the
     address of Direct edit, where it is changed; `extra` the Extra step's last section; `store` the files (files.js); `calm` an untouched draft says what is to do, not errors. */
 export function Configurator({ M, state, step, onStep, touched = false, isNew = false, save, saveDraft, saveLabel = "Save", checked, changes, notes = [], direct = null,
-  extra = null, store, onChange, calm = false, nameLabel, namePlaceholder, loadError = "", starter = false }) {
+  extra = null, store, onChange, calm = false, loadError = "", starter = false }) {
   const [, redraw] = useState(0), [at, setAt] = useState(() => stepId(M, step)), [status, setStatus] = useState({ kind: "", text: "" });
   const [agent, setAgent] = useState(() => agentOf(M, state)), [invalid, setInvalid] = useState("");
   const seen = useRef(new Set([stepId(M, step)])), dirty = useRef(touched), top = useRef(null);
   useChanges(store || NO_STORE);
   const edit = fn => { fn(); dirty.current = true; setInvalid(""); redraw(n => n + 1); onChange?.(state); };
-  const go = (id, field) => {
+  const [box, setBox] = useState("generate");          // the Graph's box opened (another step may open one: Check's critic)
+  const go = (id, field, opens) => {
+    if (opens) setBox(opens);
     seen.current.add(at); seen.current.add(id);
     setAt(id); onStep?.(id);
     if (field) setInvalid(field);
@@ -40,7 +42,7 @@ export function Configurator({ M, state, step, onStep, touched = false, isNew = 
   }, [invalid, at]);
   useEffect(() => { onStep?.(at); }, []);
 
-  const yaml = M.buildYaml(state), msgs = M.check(state), file = `${String(state.id || "").trim() || "my_problem"}/problem.yaml`;
+  const yaml = M.buildYaml(state), msgs = M.check(state), file = `${String(state.id || "").trim() || M.WORDS.prompt.namePlaceholder}/problem.yaml`;
   const quiet = calm && !dirty.current, errors = msgs.filter(m => m.level === "error");
   const files = store ? store.missing(M.namedFiles(state), M.goldenFiles(state)) : null, named = files?.named || M.namedFiles(state);
   // D1146: Save's checklist and the rail's line under Save are one standing; a document the loader refuses is said first
@@ -75,10 +77,10 @@ export function Configurator({ M, state, step, onStep, touched = false, isNew = 
 
   const p = { M, state, edit, invalid, agent, direct };
   const body = {
-    prompt: () => html`<${PromptStep} ...${p} store=${store} opts=${{ nameLabel, namePlaceholder }} />`,
-    checks: () => html`<${ChecksStep} ...${p} />`,
+    prompt: () => html`<${PromptStep} ...${p} store=${store} />`,
+    checks: () => html`<${ChecksStep} ...${p} go=${go} />`,
     objective: () => html`<${ObjectiveStep} ...${p} />`,
-    graph: () => html`<${GraphStep} ...${p} setAgent=${setAgent} go=${go} store=${store} />`,
+    graph: () => html`<${GraphStep} ...${p} setAgent=${setAgent} go=${go} store=${store} open=${box} />`,
     extra: () => html`<${ExtraStep} ...${p} extra=${extra} />`,
     save: () => html`<${SaveStep} M=${M} msgs=${msgs} ready=${ready} calm=${quiet} go=${go} nav=${nav} changes=${changes} notes=${notes} yaml=${yaml} file=${file} direct=${direct} />`,
   }[at];

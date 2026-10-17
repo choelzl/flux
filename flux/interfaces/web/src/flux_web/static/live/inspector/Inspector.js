@@ -7,37 +7,40 @@ import { dur, num } from "../../format.js";
 import { showRaw } from "../../viewer.js";
 import { restoreScroll, scrollState } from "../../scroll.js";
 import { WORK_COLORS as COLORS, passTime, phaseKind, workLabel } from "../work_style.js";
-import { passName } from "../views.js";
+import { passName, taskNote } from "../views.js";
 import { Block, Fold, StepRow, TaskPill, memoryOf } from "./bits.js";
 import { AgentChat, ModelChat } from "./Chat.js";
 import { ChooseBody, CriticBody, NotesFold, SearchBody, StepsBody, ToolBody } from "./Bodies.js";
-import { candidateOf, colorOf, has, headOf, isAgent, isModel, isTool, metricsOf, plain, running, stdoutOf, taskLabel, tryWhy } from "./parts.js";
+import { candidateOf, colorOf, has, headOf, isAgent, isModel, isTool, metricsOf, plain, running, stdoutOf, taskLabel, tidyWords, tryWhy } from "./parts.js";
 import { Pill, Tag } from "../../components/Tone.js";
 import { Head, Tool } from "../../components/Head.js";
 import { Meter } from "../../components/Stat.js";
 
 /** D1094: who did the work, in words -- the program a command ran, the agent or model that answered, its try
     (D1075: the tree's); an engine's own step name says nothing the title does not (it is the tooltip). */
-function runner(n) {
+function runner(n, title = "") {
   const name = String(n.name || ""), tool = /^\s*tool\s*:\s*(.+)$/i.exec(name), ai = /^\s*(agent|llm|model)\s*:?\s*(\S+)?/i.exec(name);
-  const said = [tool ? `runs ${tool[1].trim()}` : ai ? `${/^agent/i.test(ai[1]) ? "agent" : "model"}${ai[2] ? " " + ai[2] : ""}` : "", n.tryNo ? `try ${n.tryNo}` : ""].filter(Boolean).join(" · ");   // D1182: any try's step
+  const said = [tool && !title.endsWith(` · ${tool[1].trim()}`) ? `runs ${tool[1].trim()}` : ai ? `${/^agent/i.test(ai[1]) ? "agent" : "model"}${ai[2] ? " " + ai[2] : ""}` : "", n.tryNo ? `try ${n.tryNo}` : ""].filter(Boolean).join(" · ");   // D1182: any try's step
   return said ? html`<span title=${name}>${said}</span>` : "";
 }
 
 /** The head (P1): the task as the tree names it, its kind's stripe, state, time, Raw and Fullscreen; the
     parents as chips that open them (D1067: a crumb that says something); the purpose and who did it. */
 function TaskHead({ n, env, a }) {
-  const N = env.N, title = plain(taskLabel(n), N), parents = [];
+  // a design's generator says the program it ran, as its tree line does ("Design · x#2 · gen.py") -- the draft's
+  // agent turn is "Design · x#2" (D1056)
+  const N = env.N, label = plain(taskLabel(n), N), prog = isTool(n) && phaseKind(n) === "design" ? taskNote(n) : "";
+  const title = prog && !label.includes(prog) ? `${label} · ${prog}` : label, parents = [];
   for (let p = n.parent; p; p = p.parent) { const l = plain(taskLabel(p), N); if (l !== title && l.includes(" · ") && !/·\s*evaluation$/i.test(l)) parents.unshift(p); }
   // D1066: a reason that is the loop's own name says nothing; D1094: nor one that is only the engine's source name
-  const w = tryWhy(n), why = w && !N.loopNamed(w.trim()) && !/^\s*(agent|tool|model|llm)\s*:\s*\S+\s*$/i.test(w) ? N.shortAll(w) : "";   // D1182: its try, not the engine's attempt
+  const w = tryWhy(n), why = w && !N.loopNamed(w.trim()) && !/^\s*(agent|tool|model|llm)\s*:\s*\S+\s*$/i.test(w) ? tidyWords(N.shortAll(w)) : "";   // D1182: its try, not the engine's attempt
   const raw = () => showRaw(JSON.stringify({ name: n.name, input: n.params, fields: n.fields, output: n.output }, null, 2), `${n.name} · raw`);
   return html`<${Head} cls="alt-ihead" stripe=${colorOf(n)} title=${title} hint=${taskLabel(n)} tools=${html`<${Tool} icon="raw" label="Raw" cls="raw-view" onClick=${raw} />
       <${Tool} icon="fullscreen" label="Fullscreen" big cls="fullscreen-button" onClick=${() => a.fullscreen(n.name)} />`}>
       <${TaskPill} n=${n} /><span class="muted">${dur(running(n) ? env.now - n.t0 : n.seconds)}</span><//>
     ${parents.length ? html`<div class="alt-crumbs">${parents.map((p, i) => [i ? html`<span class="muted">›</span>` : "",
       html`<${Tag} k=${colorOf(p)} title=${taskLabel(p)} onClick=${() => a.select(p.id)}>${plain(taskLabel(p), N)}<//>`])}</div>` : ""}
-    <p class="alt-meta muted">${[why, runner(n)].filter(Boolean).flatMap((x, i) => [i ? " · " : "", x])}</p>`;
+    <p class="alt-meta muted">${[why, runner(n, title)].filter(Boolean).flatMap((x, i) => [i ? " · " : "", x])}</p>`;
 }
 
 /** What a task gave, by its kind (D1055: a stage or check whose one child is its command is the command's). */
@@ -90,7 +93,7 @@ export function PassSummary({ p, nodes, a, N, head = true }) {
   const cand = nodes.map(candidateOf).find(Boolean) || "";
   const meas = nodes.filter(n => isTool(n) && phaseKind(n) === "measure").map(n => metricsOf(stdoutOf(n))).find(m => Object.keys(m).length) || {};
   const steps = top.filter(n => phaseKind(n) !== "setup");
-  return html`${head ? html`<${Head} cls="alt-ihead" title=${passName(p)}>
+  return html`${head ? html`<${Head} cls="alt-ihead" stripe=${COLORS.setup} title=${passName(p)}>
       <${Pill} tone=${live ? "run" : failed ? "bad" : "ok"}>${live ? "running" : failed ? "failed" : "done"}<//>
       <span class="muted">${dur(t1 - t0)}</span><//>` : ""}
     ${cand ? html`<div key="tried" class="alt-tried"><div class="alt-label">Tried</div><b>${cand}</b><span class="mono muted small">${Object.entries(meas).slice(0, 3).map(([k, v]) => `${k} ${num(v)}`).join(" · ")}</span></div>` : ""}

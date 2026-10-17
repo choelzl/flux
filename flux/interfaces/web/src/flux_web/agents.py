@@ -230,7 +230,7 @@ def run_timeout(agent: Agent, server: dict[str, str], mine: dict[str, str]) -> s
 
 
 #: D922/D925: a layer's word -- what the Account and Admin pages show as a field's source.
-FROM_SERVER = "From Server"
+FROM_SERVER = "from server"
 
 
 def agent_layers(agent: Agent, *, machine: dict[str, str], server: dict[str, str], mine: dict[str, str],
@@ -243,8 +243,8 @@ def agent_layers(agent: Agent, *, machine: dict[str, str], server: dict[str, str
     agent without settings of its own runs on its own configuration."""
     names = (*agent.keys()["public"][:2], *agent.keys()["secret"])
     token = f"FLUX_{agent.up}_OAUTH_TOKEN"
-    # D945: the server's settings are just "From Server"; its machine environment (flux.env, the shell)
-    # is said apart, as it is set outside the web
+    # D945: the server's settings are just "from server" (lower case, as every page says it: review of Oct 17);
+    # its machine environment (flux.env, the shell) is said apart, as it is set outside the web
     out = [(f"{FROM_SERVER} (environment)", dict(machine)),
            (FROM_SERVER, {**server_vars, **{n: server[n] for n in names if server.get(n) and n != token}}),
            ("yours", {**my_vars, **{n: mine[n] for n in names if mine.get(n)}})]

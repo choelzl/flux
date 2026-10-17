@@ -15,6 +15,8 @@ import { Ask, asks } from "./Ask.js";
 import { AgentTurn } from "../live/inspector/Chat.js";
 import { Diff } from "./Diff.js";
 import { Tag } from "./Tone.js";
+import { More } from "./More.js";
+import { Inline } from "./Markdown.js";
 import { HiddenMark } from "../files/hidden.js";
 
 /** An author that ended without a document, said alike wherever its job is drawn: [what, why]. */
@@ -48,19 +50,21 @@ const VERB = { read: "read", write: "wrote", run: "ran", list: "listed", search:
 /** One line of the author's work, as words. */
 function said(row) {
   return row.k in VERB ? html`${VERB[row.k]} <span class="mono">${row.text}</span>`
-    : row.k === "ask" ? `asked: ${asks(row.text)}`
+    : row.k === "ask" ? `asked: ${asks(row.text)}${row.answer ? ` · ${said(row.answer)}` : ""}`
     : row.k === "answer" ? (row.by === "you" ? `you answered: ${row.text}` : row.text)
-    : row.text;
+    : html`<${Inline} t=${String(row.text ?? "")} />`;      // a check's words name paths in `code`
 }
 const plainSaid = row => row.k in VERB ? `${VERB[row.k]} ${row.text}` : row.k === "ask" ? `asked: ${asks(row.text)}` : row.text;
 
-/** Its work, a line each -- repeats in a row said once, the open question left to its card -- and what it does now. */
+/** Its work, a line each -- repeats in a row said once, the open question left to its card, a question past and its
+    answer one line ("asked: …? · you answered: …"), done -- and what it does now. */
 function linesOf(st) {
   const rows = [];
   for (const r of st?.activity || []) {
     const last = rows[rows.length - 1];
     if ((last && last.k === r.k && last.text === r.text) || (r.k === "ask" && st.question && r.t === st.question.asked)) continue;
-    rows.push(r);
+    if (r.k === "answer" && last?.k === "ask" && !last.answer) { rows[rows.length - 1] = { ...last, answer: r, tone: r.tone || "ok" }; continue; }
+    rows.push(r.k === "ask" ? { ...r, tone: r.tone || "ok" } : r);   // shown, it is no longer open: it was answered, or decided
   }
   return rows;
 }
@@ -69,7 +73,7 @@ function linesOf(st) {
 function Lines({ st, rows }) {
   const [all, setAll] = useState(false), shown = all ? rows : rows.slice(-12);
   return html`<ul class="aj-lines" aria-live="polite">
-    ${shown.length < rows.length ? html`<li class="aj-line"><button type="button" class="link small" onClick=${() => setAll(true)}>${plural(rows.length - shown.length, "earlier line")}</button></li>` : ""}
+    ${shown.length < rows.length ? html`<li class="aj-line"><${More} onClick=${() => setAll(true)}>${`▸ ${plural(rows.length - shown.length, "earlier line")}`}<//></li>` : ""}
     ${shown.map((r, i) => html`<li key=${i} class=${`aj-line k-${r.k}`}><${Glyph} tone=${r.tone || (r.k in VERB || r.k === "answer" ? "ok" : "none")} /><span>${said(r)}</span></li>`)}
     ${st.running ? html`<li class="aj-line now"><${Glyph} tone="run" /><span>${st.now || "working"}…</span></li>` : ""}</ul>`;
 }
@@ -83,14 +87,13 @@ function Refused({ st, retry, openConfig }) {
     await retry(text.trim());
     setText("");
   };
-  return html`<div class="qbox aj-refused" role="group" aria-label="Check refused">
-    <div class="qbox-head"><b>Check refused</b><small class="muted">${` · ${st.rounds > 1 ? `round ${st.rounds}, ` : ""}draft kept`}</small></div>
-    ${st.error ? html`<pre class="qbox-text aj-error mono small">${st.error}</pre>` : html`<p class="qbox-text">${AUTHOR_FAILED[1]}</p>`}
+  return html`<${Notice} tone="bad" cls="aj-refused" role="group" aria-label="Check refused" what="Check refused" why=${`${st.rounds > 1 ? `round ${st.rounds}, ` : ""}draft kept`}>
+    ${st.error ? html`<pre class="aj-error mono small">${st.error}</pre>` : html`<p>${AUTHOR_FAILED[1]}</p>`}
     <div class="qbox-choices"><${Act} cls="small primary" onClick=${() => retry("")}>Try again<//>
       ${openConfig && st.document ? html`<${Act} cls="small" onClick=${openConfig}>Open in configurator<//>` : ""}</div>
     <div class="qbox-free"><input class="grow qbox-in" aria-label="Note to agent" placeholder="Or tell agent what to do" value=${text}
         onInput=${e => setText(e.currentTarget.value)} onKeyDown=${e => { if (e.key === "Enter" && !e.isComposing) { e.preventDefault(); tell().catch(x => toast(x.message, "bad")); } }} />
-      <${Act} cls="small" onClick=${tell}>Send<//></div></div>`;
+      <${Act} cls="small" onClick=${tell}>Send<//></div><//>`;
 }
 
 /** The job: `st` what /author said; `onStop` for whoever may stop it; `answer(text)` for whoever may answer its

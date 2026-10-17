@@ -1,13 +1,15 @@
 // Flux web, results (D1042, D1095): the loop's ideas and the trials that evaluated them -- all text literal.
 
-import { Empty, html, useState } from "../view.js";
+import { Ago, Empty, html, useState } from "../view.js";
 import { plural } from "../format.js";
 import { enc, loopApi, toast } from "../ui.js";
 import { useLoop } from "../loop/context.js";
 import { Act } from "../components/Act.js";
 import { Tag } from "../components/Tone.js";
+import { Status } from "../components/Status.js";
 import { RefreshCard } from "../components/RefreshCard.js";
 import { Table } from "../components/Table.js";
+import { shortName } from "./names.js";
 
 /** D1042: an evaluation's numbers as chips that wrap (the first six, the rest on demand) -- a long reading
     neither widens the table nor leaves a tall gap between rows. */
@@ -21,10 +23,14 @@ function Failure({ text }) {
   const [first, ...rest] = String(text).split("\n");
   return rest.some(x => x.trim()) ? html`<details class="idea-error"><summary>${first}</summary><pre>${rest.join("\n")}</pre></details>` : html`<div class="idea-error">${first}</div>`;
 }
-/** D1145: an idea's evaluations, the whole table's width, in a row of their own under the idea's. */
-const Evaluations = ({ rows }) => html`<${Table} heads=${["Pass", "Design", "Stage", "Outcome", "Measurements / feedback"]} cls="idea-evaluations">${rows.map(r => html`<tr key=${`${r.pass}|${r.design}|${r.stage}`}>
-    <td>${r.pass ?? "—"}</td><td>${r.design}</td><td>${r.stage || "—"}</td><td>${r.status}</td>
-    <td><${Metrics} m=${r.metrics} />${r.error ? html`<${Failure} text=${r.error} />` : ""}<small class="muted">${r.at || ""}</small></td></tr>`)}<//>`;
+/** D1145: an idea's evaluations, the whole table's width, in a row of their own under the idea's. results-5, -8, -29: a
+    design as the table says it ("#3", on one line), a Pass column only when some evaluation has one, when as "10 h ago". */
+function Evaluations({ rows }) {
+  const ctx = useLoop(), passes = rows.some(r => r.pass != null);
+  return html`<${Table} heads=${[...(passes ? ["Pass"] : []), "Design", "Stage", "Outcome", "Measurements / feedback"]} cls=${`idea-evaluations${passes ? "" : " no-pass"}`}>${rows.map(r => html`<tr key=${`${r.pass}|${r.design}|${r.stage}`}>
+    ${passes ? html`<td>${r.pass ?? "—"}</td>` : ""}<td class="mono idea-design" title=${r.design}>${shortName(ctx.name, r.design)}</td><td>${r.stage || "—"}</td><td>${r.status ? html`<${Status} small status=${r.status} />` : "—"}</td>
+    <td><${Metrics} m=${r.metrics} />${r.error ? html`<${Failure} text=${r.error} />` : ""}${r.at && Date.parse(r.at) ? html`<small class="muted"><${Ago} t=${Date.parse(r.at) / 1000} /></small>` : ""}</td></tr>`)}<//>`;
+}
 
 /** D1112: queue an idea for testing -- the next passes each build a design that follows the oldest queued idea, until it
     has an evaluation -- or take it off the queue. */
@@ -57,10 +63,15 @@ function IdeaRows({ idea, refresh }) {
   return html`<tr class=${open ? "idea-open" : ""}>
       <td><strong>${idea.title}</strong><small class="muted">${idea.id}</small>${idea.part ? html`<small class="muted">${`Part: ${idea.part}`}</small>` : ""}</td>
       <td><p>${idea.hypothesis}</p>${idea.test ? html`<p class="muted">${`Test: ${idea.test}`}</p>` : ""}</td>
-      <td>${idea.status}</td><td>${n ? html`<button type="button" class="link idea-evidence" aria-expanded=${open} onClick=${() => setOpen(!open)}>${`${open ? "▾" : "▸"} ${plural(n, "evaluation")}`}</button>` : "Not tested yet"}<${Queue} idea=${idea} refresh=${refresh} /></td></tr>
+      <td><${Status} small status=${idea.status || "proposed"} title=${STATE_SAID[idea.status]} /></td><td>${n ? html`<button type="button" class="link idea-evidence" aria-expanded=${open} onClick=${() => setOpen(!open)}>${`${open ? "▾" : "▸"} ${plural(n, "evaluation")}`}</button>` : "Not tested yet"}<${Queue} idea=${idea} refresh=${refresh} /></td></tr>
     ${open ? html`<tr class="idea-evals-row"><td colspan="4"><${Evaluations} rows=${idea.evaluations} /></td></tr>` : ""}`;
 }
 
-export const Ideas = ({ data, refresh }) => html`<${RefreshCard} title="Ideas" rawTitle="Ideas notebook" said="Measured: there is evidence, not that it helped." refresh=${refresh} raw=${data} cls="ideas-view">
-  ${data.ideas.length ? html`<${QueueAll} data=${data} refresh=${refresh} /><${Table} heads=${["Idea", "Hypothesis", "State", "Evidence"]} cls="ideas-table">${data.ideas.map(idea => html`<${IdeaRows} key=${idea.id} idea=${idea} refresh=${refresh} />`)}<//>`
+/** results-31: what a state means, on hover. */
+const STATE_SAID = { measured: "There is evidence, not that it helped." };
+
+export const Ideas = ({ data, refresh }) => html`<${RefreshCard} rawTitle="Ideas notebook" refresh=${refresh} raw=${data} cls="ideas-view"
+    lead=${data.ideas.length ? html`<${QueueAll} data=${data} refresh=${refresh} />` : null}>
+  ${data.ideas.length ? html`<${Table} heads=${["Idea", "Hypothesis", "State", "Evidence"]} cls="list compact ideas-table">
+      ${data.ideas.map(idea => html`<${IdeaRows} key=${idea.id} idea=${idea} refresh=${refresh} />`)}<//>`
     : html`<${Empty} text="No ideas yet." />`}<//>`;

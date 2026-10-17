@@ -96,9 +96,9 @@ def flows(r):
                 r.check("loop views have no overview layout setup button", b.js("return !document.querySelector('.overview-layout-toolbar') && ![...document.querySelectorAll('#main button')].some(b => b.textContent === 'Layout')"))
                 open_editor()
                 b.wait("document.querySelector('dialog.overview-layout-dialog[open]')", what="layout editor")
-                r.check("configuration sections have counts, numbered rows and stacked full-width columns", b.js("const e=document.querySelector('.overview-layout-editor'); return e.querySelectorAll(':scope > .overview-layout-section').length===2 && e.querySelectorAll('.overview-layout-column').length===2 && e.querySelector('.overview-layout-count').textContent==='5 / 5' && e.querySelectorAll('[data-layout-list=stats] .overview-layout-index').length===5 && [...e.querySelectorAll('.overview-layout-column select')].every(s => s.getBoundingClientRect().width>=120)"))
+                r.check("configuration sections have counts, numbered rows and stacked full-width columns", b.js("const e=document.querySelector('.overview-layout-editor'); return e.querySelectorAll(':scope > .overview-layout-section').length===2 && e.querySelectorAll('.overview-layout-column').length===2 && e.querySelector('.overview-layout-count').textContent==='5 cards' && e.querySelectorAll('[data-layout-list=stats] .overview-layout-index').length===5 && [...e.querySelectorAll('.overview-layout-column select')].every(s => s.getBoundingClientRect().width>=120)"))
                 r.check("the editor explains its account-wide scope", b.js("return document.querySelector('dialog').textContent.includes('all loops, in every browser')"))
-                r.check("the editor previews real cards and charts with clearly marked mock data", b.js("const d=document.querySelector('dialog'); return d.textContent.includes('Mock Data') && d.querySelectorAll('.overview-layout-preview .ov-stats > .fact').length===5 && d.querySelector('.overview-layout-preview .decision-nums') && d.querySelector('.overview-layout-preview svg.best-chart') && d.querySelector('.overview-layout-preview [data-overview-card=notes]') && d.querySelector('.overview-layout-preview [data-overview-card=workbench]')"))
+                r.check("the editor previews real cards and charts with clearly marked mock data", b.js("const d=document.querySelector('dialog'); return d.textContent.includes('mock data') && d.querySelectorAll('.overview-layout-preview .ov-stats > .fact').length===5 && d.querySelector('.overview-layout-preview .decision-nums') && d.querySelector('.overview-layout-preview svg.best-chart') && d.querySelector('.overview-layout-preview [data-overview-card=notes]') && d.querySelector('.overview-layout-preview [data-overview-card=workbench]')"))
                 for card, value in (("primary_metric", "7.6"), ("reference_change", "-24%"), ("acceptance", "100%"),
                                     ("runtime", None), ("model_time", None), ("goals", "1 / 1"), ("ideas", "3")):
                     b.js("const s=document.querySelector('[data-layout-list=stats] li select'); s.value=arguments[0]; s.dispatchEvent(new Event('change')); return 1", card)
@@ -144,7 +144,7 @@ def flows(r):
                     Path(shots).mkdir(parents=True, exist_ok=True)
                     b.shot(Path(shots) / "overview-layout-preview.png")
                 action("Remove Objective")
-                action("Remove Models and agents")
+                action("Remove Agents")
                 r.check("small cards cannot fall below three", b.js("return document.querySelector('[data-layout-list=stats] [aria-label=\"Remove State\"]').disabled"))
                 action("Move Passes up")
                 action("Move Passes up")
@@ -158,7 +158,7 @@ def flows(r):
                 open_editor()
                 b.wait("document.querySelector('dialog.overview-layout-dialog[open]')")
                 action("Remove Objective")
-                action("Remove Models and agents")
+                action("Remove Agents")
                 action("Move Passes up")
                 action("Move Passes up")
                 b.js("const select=document.querySelector('[data-layout-list=stats] li select'); select.value='tokens_out'; select.dispatchEvent(new Event('change')); return 1")
@@ -166,10 +166,10 @@ def flows(r):
                 action("Move Decision up")
                 action("Move Decision up")
                 action("Remove Latest notes")
-                action("Remove Agents' workbench")
+                action("Remove Workbench")
                 b.js("const s=document.querySelector('[data-layout-list=\"0\"] > .overview-layout-row select'); s.value='usage'; s.dispatchEvent(new Event('change')); return 1")
                 action("Add card to column 1")
-                r.check("the preview reflects moved and hidden larger cards", b.js("return [...document.querySelectorAll('dialog .overview-layout-preview .grid-2.ov > .col')].map(col=>[...col.children].map(el=>el.dataset.overviewCard).join()).join('|')==='usage|decision,best,last_pass'"))
+                r.check("the preview reflects moved and hidden larger cards", b.js("return [...document.querySelectorAll('dialog .overview-layout-preview .grid-2.ov > .col')].map(col=>[...col.children].map(el=>el.dataset.overviewCard).join()).join('|')==='usage|decision,best'"))       # results-20: the last pass in the Decision card, not again
                 expected = {"stats": ["tokens_out", "state", "designs"], "columns": [["usage"], ["decision", "best", "last_pass"]]}
                 b.js("window.__overviewSaveFails=true; return 1")
                 r.dialog_button("Save")
@@ -179,15 +179,16 @@ def flows(r):
                 r.dialog_button("Save")
                 b.wait("!document.querySelector('dialog.overview-layout-dialog')", what="saved custom Overview")
                 page()
-                r.check("Save applies selected cards in their chosen columns and order", layout() == expected)
+                drawn = {**expected, "columns": [["usage"], ["decision", "best"]]}     # results-20: the last pass said in the Decision card, its own card not again
+                r.check("Save applies selected cards in their chosen columns and order", layout() == drawn, str(layout()))
                 r.check("hiding and moving cards keeps failure notices visible", b.js("return document.querySelector('.why-failed')?.textContent.includes('Fixture failure notice')"))
                 page(other)
-                r.check("a second loop uses the same account layout", layout() == expected)
+                r.check("a second loop uses the same account layout", layout() == drawn)
                 b.cmd("WebDriver:Refresh", {})
                 b.wait("document.querySelector('.ov-stats')", what="reloaded Overview")
                 b.js(stub, [name, other])
                 page(other)
-                r.check("layout persists after a browser reload", layout() == expected)
+                r.check("layout persists after a browser reload", layout() == drawn)
                 r.api(path, "PUT", {**expected, "columns": [[], []]})
                 b.js("window.__overviewQuestion=true; return 1")
                 page()
@@ -391,6 +392,11 @@ def flows(r):
                 b.cmd("WebDriver:SetWindowRect", {"width": 390, "height": 900})
                 page("settings", "document.querySelector('.measurement-options')")
                 r.check("measurement preferences fit phone screens", b.js("return document.documentElement.scrollWidth <= innerWidth + 1 && document.querySelector('.measurement-options').scrollWidth <= document.querySelector('.measurement-options').clientWidth + 1"))
+                phone = b.js("""const t = document.querySelector('.measurement-options'), share = document.querySelector('#share-user'), mt = document.querySelector('table.loop-mt tbody tr');
+                  return [getComputedStyle(t).display, t.querySelector('thead').getBoundingClientRect().height, innerWidth,
+                    share ? share.getBoundingClientRect().width : null, mt ? mt.getBoundingClientRect().height : null]""")
+                r.check("on a phone the metric matrix keeps its columns, a clean-up task is one row, the user to share with a row of its own (review loopwork-26)",
+                        phone[0] == "table" and phone[1] > 0 and (phone[3] is None or phone[3] > phone[2] * 0.6) and (phone[4] is None or phone[4] < 90), str(phone))
                 r.clean("main measurements")
             finally:
                 b.cmd("WebDriver:SetWindowRect", {"width": 1280, "height": 900})
@@ -453,7 +459,7 @@ objectives: [{metric: timings.fast, goal: 15, direction: minimize},
                 if os.environ.get("FLUX_E2E_SHOTS"):
                     Path(os.environ["FLUX_E2E_SHOTS"]).mkdir(parents=True, exist_ok=True)
                     b.shot(Path(os.environ["FLUX_E2E_SHOTS"]) / "dict-table.png")
-                r.check("missing dictionary tests remain empty", b.js("return [...document.querySelectorAll('table.designs td.num[data-label=\"timings.never\"]')].every(td => td.textContent === '')"))
+                r.check("missing dictionary tests say none, a dash (results-18)", b.js("return [...document.querySelectorAll('table.designs td.num[data-label=\"timings.never\"]')].every(td => td.textContent === '—')"))
                 r.check("All unrolls grouped subcolumns and keeps unavailable tests", b.js("return document.querySelectorAll('table.designs th.measurement-head').length === 5 && document.querySelector('th[scope=colgroup][title=timings]').colSpan === 4 && document.querySelector('.dictionary-expand').getAttribute('aria-pressed') === 'true' && [...document.querySelectorAll('table.designs tbody tr')].every(tr => tr.cells.length === 8)"))
                 b.wait("[...document.querySelectorAll('table.designs tbody tr')].every(tr => tr.querySelector('td.num').dataset.label === 'timings')", what="grouped table column labels: the aggregate first (D1014)")
                 page("", "document.querySelector('.best-n')")

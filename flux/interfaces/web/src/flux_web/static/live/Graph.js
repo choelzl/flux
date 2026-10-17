@@ -5,7 +5,7 @@ import { cx, Empty, html } from "../view.js";
 import { plural } from "../format.js";
 import { WORK_COLORS as COLORS } from "./work_style.js";
 import { byPass, currentTask, taskState as state } from "./model.js";
-import { agentsOf, flowBoxes, isDraft, passName, passShort, repaired, triesOf } from "./views.js";
+import { agentsOf, flowBoxes, isDraft, passName, passShort, repaired, triesOf, waitWord } from "./views.js";
 import { CRIT, soleOf } from "./rules.js";
 import { lines } from "./rows.js";
 import { Lines } from "./Lines.js";
@@ -36,7 +36,7 @@ function Chain({ v, a, passes, shown }) {
 }
 
 /** One box of the flow: its title, note, pills, steps' bars, its mark; pressing it opens its task or its list. */
-function Box({ b, i, y, BH, note, shown, v, a, task, isOpen, listed }) {
+function Box({ b, i, y, BH, note, shown, v, a, task, isOpen, listed, wait }) {
   const c = COLORS[b.kind] || COLORS.setup, kids = [];
   if (note) kids.push(html`<title>${`${b.title}: ${note}`}</title>`);
   if (b.state === "run") kids.push(html`<rect x=${X - 5} y=${y - 5} width=${BW + 10} height=${BH + 10} rx="10" style=${`fill:${c}`} class="alt-glow" />`);
@@ -45,6 +45,7 @@ function Box({ b, i, y, BH, note, shown, v, a, task, isOpen, listed }) {
     html`<text x=${X + 14} y=${y + (note || b.steps ? 15 : BH / 2 + 4)} class="alt-box-title">${b.title}</text>`);
   let right = X + BW - 10;
   const pill = (text, kind) => { const w = pillWidth(text); right -= w; kids.push(html`<${SvgPill} x=${right} y=${y + 6} w=${w} text=${text} kind=${kind} />`); right -= 6; };
+  if (wait) { kids.push(html`<text x=${right} y=${y + (note || b.steps ? 15 : BH / 2 + 4)} class="alt-box-wait">${wait}</text>`); right -= wait.length * 6 + 6; }   // as the tree and the inspector say it
   if (b.who) pill(b.who, "ai");
   if (b.critic) pill("critic", "critic");                   // D1034: a critic judged this box's work -- no box of its own
   if (b.count > 1) pill(`×${b.count}`, "count");
@@ -71,7 +72,7 @@ function Box({ b, i, y, BH, note, shown, v, a, task, isOpen, listed }) {
   };
   return html`<g class=${cx("alt-flow-box", picked && "sel", isOpen && "open", b.state === "wait" && "wait", here && "alt-located")}
     data-kind=${b.kind} data-box=${b.key} aria-pressed=${String(picked)} tabindex="0" role="button"
-    aria-label=${`${b.title} · ${task ? state(task) : b.done || b.notes?.length ? "done" : "no task recorded"}`}
+    aria-label=${`${b.title} · ${task ? state(task) : b.done || b.notes?.length ? "done" : wait || "no task recorded"}`}
     data-task=${task ? String(task.id) : null} aria-expanded=${task ? String(!!isOpen) : null} data-open=${me}
     onClick=${activate} onKeyDown=${e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); activate(e); } }}>${kids}</g>`;
 }
@@ -102,7 +103,8 @@ export function Graph({ v, a }) {
     const note = (b.kind === "design" && agentsOf(b.runs).join(", ")) || v.notes[b.key] || "";   // D1181: who drafted, as the tries say
     const BH = note ? (b.steps ? 52 : 44) : 34;
     at[b.key] = y + BH / 2;
-    g.push(html`<${Box} key=${b.key} b=${b} i=${i} y=${y} BH=${BH} note=${note} shown=${shown} v=${v} a=${a} task=${task} isOpen=${isOpen} listed=${listed} />`);
+    g.push(html`<${Box} key=${b.key} b=${b} i=${i} y=${y} BH=${BH} note=${note} shown=${shown} v=${v} a=${a} task=${task} isOpen=${isOpen} listed=${listed}
+      wait=${b.state === "wait" && !b.runs.length && !b.done && !b.notes?.length ? waitWord(boxes, b) : ""} />`);
     y += BH;
     // D1044 (G1): a box opens on its list, attached under it in its colour
     if (isOpen) {

@@ -139,6 +139,7 @@ def test_the_readiness_card_says_not_configured_without_its_own(clean):
     store.set_server_setting("FLUX_OPENCODE_API_KEY", "synthetic-oc")
     got = card()["connection"]
     assert got["mechanism"] == "provider" and got["said"] == "a provider in ~/.config/opencode/opencode.json with a key (FLUX_AGENT_API_KEY)", got
+    assert card()["fields"]["key"]["source"] == "from server", "said in lower case, as every page says it (review of Oct 17)"
 
 
 def _raw(store: Store) -> dict:

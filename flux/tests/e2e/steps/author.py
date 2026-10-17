@@ -197,7 +197,7 @@ def flows(r):
               localStorage.setItem('flux-byagent:bob', JSON.stringify({name: arguments[0], stage: 1, kept: {}, who: 'claude', askMe: true})); return 1;""", name, state)
             try:
                 r.page("#/configure/agent", "document.querySelector('.aj .aj-refused')", "a refused draft")
-                card = b.js("const c=document.querySelector('.aj .aj-refused'); return {head: c.querySelector('.qbox-head').textContent, error: c.querySelector('.aj-error').textContent,"
+                card = b.js("const c=document.querySelector('.aj .aj-refused'); return {head: c.querySelector('.notice-text').textContent, error: c.querySelector('.aj-error').textContent,"
                             " buttons: [...c.querySelectorAll('button')].map(x=>x.textContent), place: c.querySelector('input').placeholder}")
                 r.check("the refusal is where a question would be: what is missing, its key, what the folder holds",
                         card["head"].startswith("Check refused") and "check.py  (named by flow.test)" in card["error"] and "The loop folder holds" in card["error"], card)
@@ -216,7 +216,9 @@ def flows(r):
                     b.js("delete document.documentElement.dataset.theme; return 1")
                     b.cmd("WebDriver:SetWindowRect", {"width": 1280, "height": 900})
                 b.cmd("WebDriver:SetWindowRect", {"width": 390, "height": 900})
-                r.check("the refused draft fits a phone", b.js("return document.documentElement.scrollWidth<=innerWidth+1"))
+                wide = b.js("const w = innerWidth, x = [...document.querySelectorAll('body *')].filter(e => e.getBoundingClientRect().right > w + 1).map(e => e.tagName + '.' + e.className + ':' + Math.round(e.getBoundingClientRect().width)).slice(-6);"
+                            " return [document.documentElement.scrollWidth, w, x]")
+                r.check("the refused draft fits a phone", wide[0] <= wide[1] + 1, wide)
                 b.cmd("WebDriver:SetWindowRect", {"width": 1280, "height": 900})
                 b.js("[...document.querySelectorAll('.aj-refused button')].find(x => x.textContent === 'Try again').click(); return 1")
                 b.wait("window.__arSent.length === 1", what="Try again sent")

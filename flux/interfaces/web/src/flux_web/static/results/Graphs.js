@@ -13,6 +13,7 @@ import { useLoop } from "../loop/context.js";
 import { Choice } from "../components/Tabs.js";
 
 
+/** `detail` the picked design's card, null until one is picked. */
 export function Graphs({ r, directions, onPick, detail }) {
   const ctx = useLoop();
   const prefs = resultPreferences(ctx), groups = groupList(r.designs), styles = groupStyles(groups);   // D915: one colour map, built once
@@ -45,18 +46,17 @@ export function Graphs({ r, directions, onPick, detail }) {
   return html`<div class="graphs">
     <${Card} cls="graphs-ctl"><div>${groups.length ? html`<div class="bar scope"><span class="muted">Compare within</span>
         <${Choice} small label="Scope" value=${g.scope} onChange=${k => set({ scope: k })} options=${scopesOf(groups)} /></div>` : ""}</div>
-      <p class="muted small graphs-note">${`${r.designs.filter(d => !d.baseline).length} search designs; gray lines are baselines. `}
+      <p class="muted small graphs-note">${`${r.designs.filter(d => !d.baseline).length} search designs. `}
         Best so far and the front count only designs meeting all requirements${groups.length ? ", within the scope" : ""}.</p>
-      <${Legend} S=${styles} front rejected=${r.designs.some(d => d.verdict === "rejected")} pending=${r.designs.some(d => d.verdict === "pending")} baseline=${r.designs.some(d => d.baseline)} /><//>
-    <div class="grid-2 charts">
-      <${Card} title="Pareto front"><div><div class="chart-ctl">
+      <${Legend} S=${styles} front=${nums.length >= 2} passes=${(r.passes || []).length > 0} rejected=${r.designs.some(d => d.verdict === "rejected")} pending=${r.designs.some(d => d.verdict === "pending")} baseline=${r.designs.some(d => d.baseline)} /><//>
+    <div class=${cx("charts", nums.length >= 2 && "grid-2")}>
+      ${nums.length < 2 ? "" : html`<${Card} title="Pareto front"><div><div class="chart-ctl">
           <label>x ${metricSelect(g.x, v => set({ x: v }))}</label><label>y ${metricSelect(g.y, v => set({ y: v }))}</label>
           <label>stage <${Select} options=${stageOpts} value=${g.paretoStage} onChange=${v => set({ paretoStage: v })} /></label>
-          <button type="button" class=${cx("small chip pareto-focus", g.paretoFocus && "on")} aria-pressed=${String(g.paretoFocus)} disabled=${nums.length < 2}
+          <button type="button" class=${cx("small chip pareto-focus", g.paretoFocus && "on")} aria-pressed=${String(g.paretoFocus)} 
             title=${g.paretoFocus ? "Full range" : "Fit axes to the feasible front"}
             onClick=${() => set({ paretoFocus: !g.paretoFocus })}>Focus</button></div>
-        ${nums.length < 2 ? html`<${Empty} text="Needs two measured metrics." />`
-          : html`<${ParetoChart} designs=${r.designs} xm=${g.x} ym=${g.y} stage=${g.paretoStage} objectives=${directions} onPick=${onPick} styles=${styles} scope=${g.scope} legend=${false} focus=${g.paretoFocus} />`}</div><//>
+        <${ParetoChart} designs=${r.designs} xm=${g.x} ym=${g.y} stage=${g.paretoStage} objectives=${directions} onPick=${onPick} styles=${styles} scope=${g.scope} legend=${false} focus=${g.paretoFocus} /></div><//>`}
       <${Card} title="Improvement by design"><div><div class="chart-ctl">
           <div class="chips">${folded(nums).map(([k, ms]) => {
             // D1014: one chip per dictionary; charted, a switch between its aggregate and one small chart per test
@@ -76,5 +76,5 @@ export function Graphs({ r, directions, onPick, detail }) {
             return each ? html`<div class="small-multiples" data-dict=${k}><div class="muted small">${`${k} · per test`}</div>${tests.map(m => best(m, true))}</div>`
               : best(ms.includes(k) ? k : ms[0]); })}</div>` : html`<${Empty} text="Pick a metric to chart." />`}</div><//>
     </div>
-    <${Card} cls="detail-card">${detail}<//></div>`;
+    ${detail ? html`<${Card} cls="detail-card">${detail}<//>` : ""}</div>`;     // results-14: a design's card once one is picked
 }

@@ -10,6 +10,7 @@ import { plural } from "../format.js";
 import { WORK_COLORS } from "../live/work_style.js";
 import { agentWord, isAgent } from "./who.js";
 import { SvgPill, pillWidth } from "../components/SvgPill.js";
+import { Tag } from "../components/Tone.js";
 
 const CX = 450, CY = 192, R = 150;
 const RING = [["orchestrate", -162], ["generate", -90], ["test", -18], ["measure", 54], ["select", 126]];
@@ -49,7 +50,7 @@ function workerOf(M, state, box, agent) {
     return ["", lib || wb || isAgent(f.lessons) ? "ai" : ""];
   }
   const o = who(box);
-  return [o.cls === "agent" ? cut(o.label) : cut(o.label || String(f[box])), o.cls === "off" ? "off" : AI.includes(o.cls) ? "ai" : ""];
+  return [o.cls === "agent" ? cut(o.name || o.label) : cut(o.label || String(f[box])), o.cls === "off" ? "off" : AI.includes(o.cls) ? "ai" : ""];
 }
 
 /** `sel` the box opened; `pick(box)`. */
@@ -59,16 +60,21 @@ export function Cycle({ M, state, agent, sel, pick }) {
   const node = (k, cx0, cy0, { w = BIG, small = false, title = M.BOXES[k]?.title || k } = {}) => {
     const [word, how] = workerOf(M, state, k, agent), h = small ? 30 : 40, x = cx0 - w / 2, y = cy0 - h / 2;
     const c = ["orchestrate", "test", "select", "measure"].includes(k) && crit[k] && crit[k] !== "off" ? crit[k] : null;
-    const pills = [how === "ai" ? ["AI", "ai"] : null, c ? ["critic", "critic"] : null].filter(Boolean);
     const key = e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pick(k); } };
-    const shown = small ? "" : word;
-    let px = x + w - 6;
+    // D1203: AI beside the name (a step's name is short), critic on the second line beside the word (cut to the room
+    // left), so neither the name nor the word is covered
+    const pill = (t, cls, right, top) => html`<${SvgPill} x=${right - pillWidth(t)} y=${top} text=${t} kind=${cls} />`;
+    const room = c && !small ? pillWidth("critic") + 3 : 0;
+    const shown = small ? "" : cut(word, Math.max(4, Math.floor((w - 20 - room) / 5.2)));
+    const top = small ? cy0 - 7 : y + 5, low = small ? cy0 - 7 : cy0 + 1;
+    const ai = how === "ai" ? pill("AI", "ai", x + w - 6, top) : "";
+    const critic = c ? pill("critic", "critic", small || !ai ? x + w - 6 - (small && ai ? pillWidth("AI") + 3 : 0) : x + w - 6, small ? top : low) : "";
     return html`<g class=${cx("hit", sel === k && "sel")} data-node=${k} tabindex="0" role="button" aria-pressed=${String(sel === k)}
         aria-label=${`${title}${word ? `: ${word}` : ""}${how === "ai" ? ", AI" : ""}${c ? ", critic" : ""}`} onClick=${() => pick(k)} onKeyDown=${key}>
       <rect class=${cx("bx", how === "off" && "off")} style=${`--k:${WORK_COLORS[KIND[k]] || "var(--muted)"}`} x=${x} y=${y} width=${w} height=${h} rx="8" />
       <text class="t" x=${x + 10} y=${cy0 + (shown ? -3 : 4)}>${title}</text>
       ${shown ? html`<text class=${cx("w", how)} x=${x + 10} y=${cy0 + 12}>${shown}</text>` : ""}
-      ${pills.map(([t, cls]) => { px -= pillWidth(t); const at = px; px -= 3; return html`<${SvgPill} x=${at} y=${small ? cy0 - 7 : y + 5} text=${t} kind=${cls} />`; })}</g>`;
+      ${ai}${critic}</g>`;
   };
   // the circle: one line behind the steps (their fill hides it), an arrowhead half way between each two (D1139)
   const heads = RING.map(([, deg], i) => {
@@ -87,4 +93,21 @@ export function Cycle({ M, state, agent, sel, pick }) {
     ${across(gx + gw, O[0] - BIG / 2, O[1], true)}
     ${node("records", COL, Ch[1], { w: SMALL, small: true })}${across(Ch[0] - BIG / 2, COL + SMALL / 2, Ch[1])}
     ${RING.map(([k]) => node(k, P[k][0], P[k][1]))}</svg>`;
+}
+
+/** D1205: the loop on a phone -- the same boxes as a list, as Live's tree is (the drawing shrinks past reading there):
+    Setup's four, the five steps in turn, the record; each its kind's colour, its word, its AI and critic tags. */
+const LIST = [["setup", ["validate", "plan", "knowledge", "feedback"]], ["loop", ["orchestrate", "generate", "test", "measure", "select"]], ["", ["records"]]];
+export function CycleList({ M, state, agent, sel, pick }) {
+  const crit = M.criticsOf(state);
+  const row = k => {
+    const [word, how] = workerOf(M, state, k, agent), title = M.BOXES[k]?.title || k;
+    const c = ["orchestrate", "test", "select", "measure"].includes(k) && crit[k] && crit[k] !== "off";
+    return html`<li key=${k}><button type="button" class=${cx("cfg-lrow", sel === k && "sel", how === "off" && "off")} data-node=${k} aria-pressed=${String(sel === k)}
+        style=${`--k:${WORK_COLORS[KIND[k]] || "var(--muted)"}`} onClick=${() => pick(k)}>
+      <b>${title}</b>${word ? html`<span class="muted">${word}</span>` : ""}<span class="grow" />
+      ${how === "ai" ? html`<${Tag} k="var(--agent)">AI<//>` : ""}${c ? html`<${Tag}>critic<//>` : ""}</button></li>`;
+  };
+  return html`<div class="cfg-cycle-list" role="group" aria-label=${M.WORDS.graph.aria}>${LIST.map(([lane, ks]) => html`<ul key=${lane || "rec"} class="cfg-lane">
+    ${lane === "setup" ? html`<li class="cfg-lane-t">SETUP</li>` : ""}${ks.map(row)}</ul>`)}</div>`;
 }

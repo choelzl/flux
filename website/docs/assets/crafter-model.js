@@ -272,7 +272,8 @@
   /** A box's kinds of worker, for its current value `cur`: [{k, label, cls, is(v), value()}]. `searchOnly`: Design
       under a parameter-only search (paramOnly) -- off, unless a script or files make each point a design (D911). */
   function whoOptions(box, cur, agent, searchOnly) {
-    var a = { k: "agent", cls: "agent", label: isAgentValue(cur) ? agentWord(cur) : agent, is: isAgentValue,
+    // D1203: the choice says "agent"; which agent is the menu beside it (and the drawing's word, `name`)
+    var a = { k: "agent", cls: "agent", label: "agent", name: isAgentValue(cur) ? agentWord(cur) : agent, is: isAgentValue,
               value: function () { return isAgentValue(cur) ? cur : "agent:" + agent; } };
     function modelOf(vals) {
       return { k: "model", label: "model", cls: "model", is: function (v) { return vals.indexOf(v) >= 0; },
@@ -281,7 +282,7 @@
     switch (box) {
       case "validate": return [whoOpt("rules", "rules", "rules"), whoOpt("model", "model", "model"), a];
       case "plan": return [whoOpt("off", "off", "off"), whoOpt("model", "model", "model"), a];
-      case "feedback": return [whoOpt("human", "notes", "rules"), whoOpt("off", "off", "off")];
+      case "feedback": return [whoOpt("human", "on", "rules"), whoOpt("off", "off", "off")];       // D1209: on/off, as the other switches
       // D1133: no `orchestrate:` line is Flux's default -- rules pick the kind of work (a model picks the part when there are parts)
       case "orchestrate": return [whoOpt("default", "default", "rules"), whoOpt("rules", "rules", "rules"), modelOf(["model", "tools"]), a, whoOpt("command", "script", "script")];
       case "generate":
@@ -326,7 +327,7 @@
      [value, label]; a budget knob is {label, dflt, hint}. */
   var STEP_TITLES = ["Prompt", "Check & Measure", "Objective", "Graph", "Extra", "Save"];
   var WORDS = {
-    prompt: { nameHint: "Letters, digits, - and _", fromTools: "from tools", other: "other…", languageName: "Language name",
+    prompt: { name: "Name", namePlaceholder: "my_loop", nameHint: "Letters, digits, - and _", fromTools: "from tools", other: "other…", languageName: "Language name",
       statement: "What to make", statementPlaceholder: "Say it as you would to an engineer: what it does, what matters.",
       rules: "Rules for every design", rulesPlaceholder: "Names, ports, what is not allowed" },
     checks: { say: "in order; a failure sends the design back", add: "+ Check", timeLimit: "Time limit, s",
@@ -351,7 +352,10 @@
       searchCommand: "Search command", searchPlaceholder: "{python} {home}/search.py {history} {state}", searchHint: "answers each round with the next candidates",
       command: "Command", generatePlaceholder: "{python} {home}/gen.py {artifact} {knob}", generateHint: "writes {artifact}; each setting is {its name}",
       existing: "Existing designs", existingPlaceholder: "designs/a.sv, designs/b.sv", existingHint: "files beside the document, tried in order",
-      prototype: "Prototype first", prototypeHint: "default: with a golden model",
+      prototype: "Prototype first",
+      // D1203: the hint says what the choice shown does, by its value
+      prototypeHints: { "": "when there is a golden model", "false": "target written directly", "true": "checked against the golden model first",
+        python: "in Python, against the golden model", systemc: "in SystemC, against the golden model" },
       prototypes: [["", "default"], ["false", "off"], ["true", "on"], ["python", "in Python"], ["systemc", "in SystemC"]],
       // D1152: the Knowledge box -- skills, the library, lessons from the record, the workbench's digest
       knowledge: "Knowledge", knowledgeSays: "What every agent and prompt gets: skills, library, lessons, workbench digest.",
@@ -362,16 +366,16 @@
       lessons: "Lessons from records", lessonsBy: "Lessons by", workbench: "Workbench digest", workbenchBy: "Summed up by",
       workbenchSays: "When the workbench changed, before a pass",
       // D1159: paths hidden from the AI agents (flow.knowledge.hidden) -- the Knowledge box's section, the Files tab's
-      hidden: "Hidden from AI", hiddenSays: "Agents and prompts never read these; the loop's checks and measurements still use them.",
+      hidden: "Hidden from AI", hiddenCount: "hidden", hiddenSays: "Agents and prompts never read these; the loop's checks and measurements still use them.",
       hiddenNone: "Nothing hidden.", hiddenAdd: "File, folder or pattern", hiddenPick: "Hide", hiddenRemove: "Show to AI" },
     budget: { steps: { label: "Designs per pass", dflt: "24" }, passes: { label: "Passes", dflt: "until stopped" },
       parallel: { label: "Passes at once", dflt: "1", hint: "needs an admin on a server" }, batch: { label: "Designs side by side", dflt: "1" },
       repair_attempts: { label: "Repairs per design", dflt: "12" }, exploration_quota: { label: "Share kept for new ideas", dflt: "0", hint: "0 to 1" },
-      finalists: { label: "Finalists for the costly one", dflt: "3" }, workers: { label: "Tool runs at once", dflt: "auto", hint: "1 for anything timed" } },
-    extra: { settings: "Settings to search", settingsSay: "{name} in the commands", addSetting: "+ Setting", setting: "Setting", values: "Values, in order",
+      finalists: { label: "Finalists measured by", dflt: "3", last: "the last" }, workers: { label: "Tool runs at once", dflt: "auto", hint: "1 for anything timed" } },
+    extra: { settings: "Settings to search", settingsSay: "each used as {name} in commands", addSetting: "+ Setting", setting: "Setting", values: "Values, in order",
       partsSay: "each checked on its own, then composed", partsPlaceholder: "decoder, datapath",
       partsModes: [["none", "One design"], ["list", "These parts"], ["decompose", "Parts as it decides"]],
-      baselineSay: "pass 0", baselineModes: [["off", "off"], ["before", "first"], ["only", "only"]],
+      baselineSay: "pass 0, measured before any design", baselineRun: "Run it", paramsSay: "written to a file, its path {params} in commands", baselineModes: [["off", "off"], ["before", "first"], ["only", "only"]],
       baselineFrom: [["project", "project"], ["file", "file"], ["command", "command"], ["metrics", "numbers"]],
       baselineFile: "baseline.sv", baselineCommand: "{python} {home}/baseline.py {artifact}", addMetric: "+ Metric", deepest: "deepest" },
     save: { draft: "Save draft", draftSaved: "Draft saved.", saving: "Saving…", saved: "Saved.", kept: "Kept as written", vsSaved: "vs saved",
@@ -385,6 +389,11 @@
   /** D912: where a draft stands -- the document, its files, the loop's own check, a start -- apart, each [kind, what,
       words]. `files` {missing} when the page knows them; `save` a page that saves (the check and the start said too). */
   function plural(n, one) { return n + " " + (n === 1 ? one : one + "s"); }
+  /** "Agent claude must be installed", "Agents claude, codex and opencode must be installed" (D1204). */
+  function agentsInstalled(names) {
+    var said = names.length > 1 ? names.slice(0, -1).join(", ") + " and " + names[names.length - 1] : names[0];
+    return (names.length > 1 ? "Agents " : "Agent ") + said + " must be installed where the loop runs.";
+  }
   /** Where a draft stands, once: `rows` Save's checklist ([kind, what, words]) and `sum` the rail's line under Save,
       both from the same points. `o.loadError` the loader's refusal of the document as saved (said first); `o.files`
       {missing, later} -- `later` a golden model the loop's model writes before its first pass (D604); `o.isNew` a
@@ -392,7 +401,7 @@
   function standing(msgs, o) {
     var named = o.named || [], files = o.files, calm = o.calm, loadError = String(o.loadError || "");
     var errors = msgs.filter(function (m) { return m.level === "error"; }).length;
-    var todo = plural(errors, "thing") + " to " + (calm ? "do" : "fix");
+    var todo = errors + " to fix";                     // D1204: one phrase, calm or not
     var rows = [];
     // the starter as it came: what is left said calmly, not as the loader's refusal (it goes red once edited)
     if (o.starter) rows.push(["todo", "Starter", WORDS.save.starterLeft]);
@@ -408,7 +417,7 @@
     if (ck) rows.push([ck[0], "Checked", ck[1]]);
     // what stands in the way first: the Ready line names it, the rail says every one
     var gone = (missing || []).length, failed = ck && ck[0] === "error";
-    var blocker = loadError ? "after the document loads" : errors ? "after " + todo : gone ? "after " + plural(gone, "missing file") + (gone === 1 ? " is" : " are") + " added"
+    var blocker = loadError ? "after the document loads" : errors ? "after " + plural(errors, "fix").replace(/fixs$/, "fixes") : gone ? "after " + plural(gone, "missing file") + (gone === 1 ? " is" : " are") + " added"
       : failed ? "after a Check passes" : ck && ck[0] !== "ok" ? "after a Check passes" : "";
     if (ck) rows.push([blocker ? "note" : "ok", "Ready to run", blocker || "yes"]);
     if (o.starter) return { rows: rows, sum: WORDS.save.starterSum };
@@ -934,7 +943,7 @@
     var r = resolve(state, cat);
     var kept = state.kept || [];                     // kept as written: the server appends them (D686)
     function own(key) { return kept.indexOf(key) < 0; }
-    var id = String(state.id || "").trim() || "my_problem";
+    var id = String(state.id || "").trim() || WORDS.prompt.namePlaceholder;
     var loopPath = id.charAt(0) === "-" ? "./" + id : id;
     // D786: the document is the folder's problem.yaml; the folder's name is the id, not said here
     var out = "# " + id + "/problem.yaml: made with the Flux problem builder.\n" +
@@ -1363,11 +1372,11 @@
     function note(t) { say("note", t); }
     var id = String(state.id || "").trim(), lang = language(state, true);
     var r = resolve(state, cat), flow = state.flow || {}, knobs = knobNames(state);
-    if (!id) error("Give the problem a name (letters, digits, - and _).", "id");
+    if (!id) error("Name the loop (letters, digits, - and _).", "id");
     else if (!/^[A-Za-z0-9_-]{1,60}$/.test(id)) error("The name \"" + id + "\" should use letters, digits, - and _ (1–60 characters).", "id");
     if (!String(state.statement || "").trim()) error("Say what you want made (the statement is empty).", "statement");
     var implied = impliedLanguage(state, cat);
-    if (!lang && !implied) note("The language is not said and no chosen tool tells it: the design is a .txt file -- choose one if the checks need another kind.");
+    if (!lang && !implied) note("The language is not said and no chosen tool tells it: the design is a .txt file – choose one if the checks need another kind.");
     if (!lang) lang = implied;                         // D832: what the loader will take
 
     function params(row, what, nm) {
@@ -1511,7 +1520,7 @@
       if (String(x.knob || "").trim() && !choicesOf(x.choices).length) error("The setting \"" + x.knob.trim() + "\" has no choices.");
     });
     var searching = parameterSearch(state);
-    if (flow.dse && flow.dse !== "none" && !knobs.length) note("The DSE policy guides code and prototype experiments; no parameter space is required.");
+    if (flow.dse && flow.dse !== "none" && !knobs.length) note("The search policy guides the designs and prototypes; no settings to search are needed.");
     at = STEP_OF.flow;
     if (searching && flow.dse === "pareto" && r.objectives.length < 2) error("The trade-off front (pareto) needs two objectives or more.");
     if (state.budget.exploration_quota && !(Number(state.budget.exploration_quota) >= 0 && Number(state.budget.exploration_quota) <= 1)) error("Exploration quota must be a fraction between 0 and 1.");
@@ -1581,7 +1590,7 @@
     at = STEP_OF.flow;
     var agents = {};
     flowSaid(state).forEach(function (b) { if (String(flow[b]).indexOf("agent:") === 0 && flow[b] !== INLINE_AGENT) agents[flow[b].slice(6)] = 1; });
-    if (Object.keys(agents).length) note("The coding agent " + Object.keys(agents).join(", ") + " must be installed where it runs.");
+    if (Object.keys(agents).length) note(agentsInstalled(Object.keys(agents)));
     var fl = namedFiles(state, cat);
     if (fl.length) { note("Put these beside the document: " + fl.join(", ") + "."); msgs[msgs.length - 1].files = fl; }
     return msgs;

@@ -25,7 +25,7 @@ def test_every_goal_is_a_limit_and_the_goal_less_one_decides_among_those_meeting
             _sc("ok-cool", fmax_mhz=1010, area_um2=79, power_w=0.4)]
     pick, why = objs.decide(pool)
     assert pick.candidate.name == "ok-cool"
-    assert why == "least power_w at fmax_mhz >= 1000 and area_um2 <= 80"
+    assert why == "smallest power_w at fmax_mhz >= 1000 and area_um2 <= 80"
     # the pairwise rule agrees: meeting both beats missing one, however cool
     assert objs.better(pool[3].metrics, pool[0].metrics) and not objs.better(pool[0].metrics, pool[3].metrics)
     assert objs.better(pool[3].metrics, pool[2].metrics)

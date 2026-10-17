@@ -27,6 +27,14 @@ from flux_loop.words import plural
 RESTART_WAIT_S = 30.0
 
 
+def _clip(text: str, n: int = 600) -> str:
+    """A long text cut at a word, "…" where it was cut: never mid-word ("the exhaustive checker ac")."""
+    if len(text) <= n:
+        return text
+    cut = text[:n].rsplit(" ", 1)[0].rstrip(" ,;:-")
+    return f"{cut}…"
+
+
 def register(app: FastAPI, ctx: SimpleNamespace) -> None:
     """The admin's routes; the minute's sample of the machine goes into `app.state` (D888)."""
     usage_log = ctx.usage_log
@@ -410,7 +418,7 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
                 import yaml
 
                 raw = yaml.safe_load((d / doc).read_text()) or {}
-                statement = " ".join(str(raw.get("statement") or "").split())[:220] if isinstance(raw, dict) else ""
+                statement = _clip(" ".join(str(raw.get("statement") or "").split())) if isinstance(raw, dict) else ""
             except Exception:  # noqa: BLE001 -- a document the list cannot read: its name alone
                 pass
             loop = mine.get(d.name)
@@ -432,7 +440,7 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
             meta = ws(a).import_dir(app_name, src, replace=refresh)
         except WorkspaceError as exc:
             raise fail(exc) from exc
-        store.audit(a.name, "application refreshed" if refresh else "application used", app_name)
+        store.audit(a.name, "application refreshed" if refresh else "application used", app_name, loop=(a.name, app_name))
         return {"name": app_name, **meta}
 
     # ---- D811: documents of an earlier form, brought to today's by an admin
@@ -493,7 +501,7 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
                 store.move_paths(got["moves"])
                 migrated = [x["file"] for x in got["documents"] if x["status"] == "migrated"]
                 if migrated:
-                    store.audit(a.name, "document migrated", f"{u.name}/{name}: {', '.join(migrated)}")
+                    store.audit(a.name, "document migrated", f"{u.name}/{name}: {', '.join(migrated)}", loop=(u.name, name))
                 done.append({"user": u.name, "app": name, "why": "",
                              "documents": [{k: x[k] for k in ("file", "to", "status", "manual", "why")} for x in got["documents"]]})
         if body.app and not done:

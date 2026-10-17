@@ -189,7 +189,7 @@ console.log(JSON.stringify({ groups, scopes: C.scopesOf(groups), whole: whole.le
   encFront: C.frontier(enc, 'minimize', 'minimize').map(p => p.x), flat: C.scopesOf(C.groupList([design('x', '', 1, 1, true)])) }));
 """)
     assert got["groups"] == ["decoder", "encoder"]
-    assert got["scopes"][0] == ["whole", "Whole"] and got["whole"] == 0   # no whole: nothing to compare, not the parts pooled
+    assert got["scopes"][0] == ["whole", "whole"] and got["whole"] == 0   # no whole: nothing to compare, not the parts pooled
     assert got["encFront"] == [10]                                       # the decoder does not knock the encoder off its front
     assert got["flat"] == [["", "All designs"]]
 

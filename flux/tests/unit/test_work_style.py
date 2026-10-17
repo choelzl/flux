@@ -87,3 +87,9 @@ def test_an_agents_digest_is_setup_work():
     setup step above it (a journal written before the quiet step held its turn) -- it was an agent's: Design."""
     assert kind_of("agent: claude", "digest workbench") == "setup" and kind_of("agent: codex", "digest a.pdf") == "setup"
     assert kind_of("agent: claude", "lo#2") is None
+
+
+def test_a_short_charts_ticks_are_milliseconds():
+    """codec_parts' Pass 7 lasted under a second: its ticks all read "+0.0s". Under a second they are milliseconds."""
+    got = run("m => { const dur = s => s < 60 ? `${s.toFixed(1)}s` : `${Math.floor(s / 60)}m`; return [[0, .05], [.025, .05], [.05, .05], [0, 4], [2, 4], [0, 400], [200, 400]].map(([at, span]) => m.tickText(at, span, dur)); }")
+    assert got == ["+0 ms", "+25 ms", "+50 ms", "+0.0s", "+2.0s", "+0.0s", "+3m"]

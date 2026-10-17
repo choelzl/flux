@@ -8,6 +8,6 @@ import { Uploader, placedFiles } from "./Uploader.js";
 
 export function AttachBox({ items, onChange, hideable = false }) {
   const rows = items.map(g => ({ key: g.path, label: g.path, folder: null, files: [{ file: g.file, path: g.path }], dest: "", custom: "", hidden: !!g.hidden }));
-  return html`<div class="attach"><${Uploader} rows=${rows} places=${false} hideable=${hideable} label="Drop specs, reference models, tests or papers"
+  return html`<div class="attach"><${Uploader} rows=${rows} places=${false} hideable=${hideable}
     onChange=${next => onChange(next.flatMap(r => placedFiles([r]).map(x => r.hidden ? { ...x, hidden: true } : x)))} /></div>`;
 }

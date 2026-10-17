@@ -3,7 +3,7 @@
 // most; the disk as it is now), how the endpoints did and what the network refused.
 
 import { Ago, Card, Empty, Skeleton, cx, html, useState } from "../view.js";
-import { api, confirmDialog, enc, toast, when } from "../ui.js";
+import { api, confirmDialog, enc, toast } from "../ui.js";
 import { bytes, dur, fmtTok, plural } from "../format.js";
 import { route } from "../app.js";
 import { Act } from "../components/Act.js";
@@ -26,6 +26,8 @@ const period = () => {
   return insightsDays;
 };
 const sum = xs => xs.reduce((s, x) => s + x, 0);
+/** A moment as the columns' days are said ("Oct 10, 09:16"), no seconds. */
+const at = t => new Date(t * 1000).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
 const When = ({ t }) => t ? html`<${Ago} t=${t} />` : "—";
 const LoopLink = ({ u, a }) => html`<a href=${`#/u/${enc(u)}/app/${enc(a)}`}>${`${u}/${a}`}</a>`;
 const Total = ({ label, value, mono = true }) => html`<td class=${cx("num", mono && "mono")} data-label=${label}>${value}</td>`;
@@ -39,7 +41,7 @@ function Spark({ xs, label }) {
 function Failures({ f }) {
   return html`${f.starts.length ? html`<${Table} heads=${["When", "Loop", "Why"]}>
       ${f.starts.slice(0, 20).map(s => html`<tr key=${`${s.when}|${s.user}|${s.app}`}><td class="muted"><${When} t=${s.when} /></td><td><${LoopLink} u=${s.user} a=${s.app} /></td>
-        <td class="mono small why-cell">${(s.why || []).slice(-2).join(" · ") || `exit ${s.rc}`}</td></tr>`)}<//>`
+        <td class="mono small why-cell"><span class="why-short" title=${(s.why || []).join("\n")}>${(s.why || []).slice(-2).join(" · ") || `exit ${s.rc}`}</span></td></tr>`)}<//>`
     : html`<${Empty} text="No failed starts." />`}
     ${f.tests.length ? html`<h3>Failed agent tests</h3><${Table} heads=${["User", "Agent", "Step", "Why", "When"]}>
       ${f.tests.map(t => html`<tr key=${`${t.user}|${t.agent}|${t.step}|${t.when}`}><td>${t.user}</td><td>${t.agent}</td><td>${t.step}</td><td class="small">${t.why}</td><td class="muted"><${When} t=${t.when} /></td></tr>`)}<//>` : ""}`;
@@ -59,7 +61,7 @@ function Usage({ u }) {
   const table = (by, head) => {
     const rows = Object.entries(by).sort((a, b) => sum(b[1].tokens) - sum(a[1].tokens)), values = rows.map(([, v]) => v);
     const tokens = u.days.map((_, i) => sum(values.map(v => v.tokens[i] || 0)));
-    return html`<${SortableTable} memo=${`flux-sort-usage-${head}`} first=${2} rows=${rows} keyOf=${([k]) => k}
+    return html`<${SortableTable} memo=${`flux-sort-usage-${head}`} first=${2} rows=${rows} keyOf=${([k]) => k} cls="list compact usage-table"
       cols=${[{ label: head, key: ([k]) => k, asc: true }, { label: "Turns", key: ([, v]) => sum(v.turns), num: true }, { label: "Tokens", key: ([, v]) => sum(v.tokens), num: true },
         { label: "Cost", key: ([, v]) => sum(v.cost), num: true }, { label: `Tokens ${per} (${u.days[0]} – ${u.days.at(-1)}, UTC)` }]}
       row=${([k, v]) => html`<tr><td class="strong">${k}</td><td class="num">${String(sum(v.turns))}</td><td class="num mono">${fmtTok(sum(v.tokens))}</td>
@@ -68,7 +70,7 @@ function Usage({ u }) {
         <${Total} label="Cost" value=${`$${sum(values.map(v => sum(v.cost))).toFixed(2)}`} /><td data-label=${`Tokens ${per}`}><${Spark} xs=${tokens} label=${`Total: tokens ${per}`} /></td><//>`} />`;
   };
   return html`${Object.keys(u.users).length ? html`<h3>By user</h3>${table(u.users, "User")}<h3>By agent</h3>${table(u.agents, "Agent")}
-      ${u.top.length ? html`<h3>Top loops</h3><${SortableTable} memo="flux-sort-usage-loops" first=${2} rows=${u.top} keyOf=${t => `${t.user}/${t.app}`}
+      ${u.top.length ? html`<h3>Top loops</h3><${SortableTable} memo="flux-sort-usage-loops" first=${2} rows=${u.top} keyOf=${t => `${t.user}/${t.app}`} cls="list compact usage-table"
         cols=${[{ label: "Loop", key: t => `${t.user}/${t.app}`, asc: true }, { label: "Turns", key: t => t.turns, num: true }, { label: "Tokens", key: t => t.tokens, num: true },
           { label: "Cost", key: t => t.cost, num: true }, { label: "Time", key: t => t.seconds, num: true }]}
         row=${t => html`<tr><td><${LoopLink} u=${t.user} a=${t.app} /></td><td class="num">${String(t.turns)}</td><td class="num mono">${fmtTok(t.tokens)}</td>
@@ -109,7 +111,7 @@ function Disk() {
           { label: "Largest loop", key: x => x.largest ? x.largest.size : null }, { label: "Total", key: x => x.total, num: true }, { label: "" }]}
         row=${x => html`<tr><td class="strong">${x.user}</td><td class="num mono">${bytes(x.home)}</td><td class="num mono">${`${bytes(x.loops)} (${x.count})`}</td>
           <td>${x.largest ? html`<${LoopLink} u=${x.user} a=${x.largest.app} /> <span class="muted mono small">${bytes(x.largest.size)}</span>` : "—"}</td>
-          <td class="num mono strong">${bytes(x.total)}</td><td class="meter-cell"><${Meter} frac=${x.total / max} /></td></tr>`}
+          <td class="num mono strong">${bytes(x.total)}</td><td class="meter-cell"><${Meter} frac=${x.total / max} color="var(--accent)" /></td></tr>`}
         foot=${html`<${Totals} label="Total"><${Total} label="Home" value=${bytes(sum(d.disk.map(x => x.home)))} />
           <${Total} label="Loops" value=${`${bytes(sum(d.disk.map(x => x.loops)))} (${sum(d.disk.map(x => x.count))})`} /><td />
           <${Total} label="Total" value=${bytes(sum(d.disk.map(x => x.total)))} /><td /><//>`} />`; }}<//><//>`;
@@ -125,7 +127,7 @@ export function Insights({ part }) {
   const range = html`<div class="range-pick"><label for="insights-range">Over the last</label>
     <${Select} id="insights-range" aria-label="Over the last" options=${PERIODS} value=${days} onChange=${pick} /></div>`;
   return html`<${Card} title=${TITLE[part]} actions=${range}><${Loaded} read=${read} failed="Insights could not be read">${r => html`<div>
-      <p class="muted small range-said">${`${when(r.range.start)} – ${when(r.range.end)}`}${r.catching_up ? " · counting past turns: numbers fill in within minutes" : ""}</p>
+      <p class="muted small range-said">${`${at(r.range.start)} – ${at(r.range.end)}`}${r.catching_up ? " · counting past turns: numbers fill in within minutes" : ""}</p>
       ${part === "failures" ? html`<${Failures} f=${r.failures} />` : part === "usage" ? html`<${Usage} u=${r.usage} />` : html`<${Endpoints} eps=${r.endpoints} />`}</div>`}<//><//>
     ${part === "endpoints" && r ? html`<${Network} net=${r.network} />` : ""}${part === "usage" ? html`<${Disk} />` : ""}`;
 }

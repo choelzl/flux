@@ -5,9 +5,9 @@
 import { html } from "../view.js";
 import { Choice } from "../components/Tabs.js";
 import { Tool } from "../components/Head.js";
-import { Select } from "../components/Select.js";
 import { Tag } from "../components/Tone.js";
 import { Kept, isKept } from "./fields.js";
+import { Add } from "../components/Add.js";
 
 const up = o => o.label === "atleast" || o.label === "max" || (o.label === "balance" && o.direction !== "minimize");
 /** The label a row's direction and goal make: a goal is a limit (at least, at most). */
@@ -48,6 +48,6 @@ export function ObjectiveStep({ M, state, edit, direct }) {
           <button type="button" class="small" disabled=${i === objs.length - 1} aria-label=${`Move ${o.metric} down`} onClick=${() => move(i, 1)}>↓</button>
           <${Tool} icon="close" label=${`Remove ${o.metric}`} onClick=${() => edit(() => { objs.splice(i, 1); })} /></div>`;
       })}</div>
-      <${Select} class="cfg-add" aria-label=${M.WORDS.objective.addLabel} value="" onChange=${add} none=${rep.length ? M.WORDS.objective.add : M.WORDS.objective.none}
-        options=${rep.filter(m => !used.includes(m)).map(m => [m, m + (unit(m) ? ` (${unit(m)})` : "")])} /></section>`;
+      <${Add} cls="cfg-add" label=${M.WORDS.objective.addLabel} onPick=${add}
+        options=${rep.filter(m => !used.includes(m)).map(m => [m, m + (unit(m) ? ` (${unit(m)})` : "")])}>${rep.length ? M.WORDS.objective.add : M.WORDS.objective.none}<//></section>`;
 }

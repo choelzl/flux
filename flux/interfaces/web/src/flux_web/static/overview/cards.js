@@ -14,7 +14,9 @@ import { Bin } from "../components/Bin.js";
 import { Stat, SummaryTable, ValueCell } from "./parts.js";
 import { DecisionCard, LastPass, own } from "./Decision.js";
 import { Pill } from "../components/Tone.js";
+import { Status } from "../components/Status.js";
 import { passOf } from "../components/StatePill.js";
+import { decidedText, objectiveText } from "../results/objective.js";
 
 /** Each card is `a => vnode` (`a` its attributes: which card it is), or null. `o`: { ctx, r, notes, bench, use, ideas, main, objs, dec, comparison, directions, unit }. */
 export function overviewCards(o) {
@@ -34,7 +36,7 @@ export function overviewCards(o) {
   const counts = r.counts, count = counts ? counts.accepted + (counts.pending || 0) + counts.failed : 0;
   const tokens = n => total?.counted ? fmtTok(n) : "—", partial = total?.partial ? "Includes incomplete usage" : "";
   const stats = {
-    state: a => html`<${Stat} ...${a} label="State" value=${st.running ? "running" : st.last_active ? (st.failed ? "failed" : st.stopped ? "stopped" : "idle") : "never run"} onClick=${go("Live")}
+    state: a => html`<${Stat} ...${a} label="State" value=${st.running ? (st.restart_requested ? "restarting" : st.stop_requested ? "stopping" : "running") : st.last_active ? (st.failed ? "failed" : st.stopped ? "stopped" : "idle") : "never run"} onClick=${go("Live")}
       sub=${st.running ? html`since <${Ago} t=${st.since} />${passOf(st) != null ? ` · pass ${passOf(st)}` : ""}` : st.last_active ? html`last active <${Ago} t=${st.last_active} />` : ""} />`,
     // D1092: a loop with no measure stage still chooses -- on its checks; D1094: the designs only their checks judged, said beside the measured
     designs: a => html`<${Stat} ...${a} label="Designs measured" value=${String(designs.length)} onClick=${go("Results")}
@@ -47,7 +49,7 @@ export function overviewCards(o) {
       return html`<${Stat} ...${a} label="Passes" value=${String(n)} sub=${html`${here && here < n ? `${here} this start · ` : ""}${none ? `${none} without a decision · ` : ""}${ps.length ? html`last decided <${Ago} t=${ps.at(-1).when} />` : n ? "none decided" : ""}`} />`; },
     usage: a => html`<${Stat} ...${a} label="Agents" value=${total ? plural(total.turns, "turn") : "—"} onClick=${go("Agents")}
       sub=${total ? `${dur(total.seconds) || "0s"}${total.counted ? ` · ${fmtTok(total.tokens_in)} → ${fmtTok(total.tokens_out)} tokens` : ""}${total.cost_usd ? ` · $${total.cost_usd.toFixed(2)}` : ""}` : "Usage unavailable"} />`,
-    objective: a => html`<${Stat} ...${a} label="Objective" value=${html`<span class="obj-line">${r.objectives || "—"}</span>`} />`,
+    objective: a => html`<${Stat} ...${a} label="Objective" value=${html`<span class="obj-line">${objectiveText(r) || "—"}</span>`} />`,
     tokens_in: a => html`<${Stat} ...${a} label="Tokens in" value=${tokens(total?.tokens_in)} sub=${partial} onClick=${go("Agents")} />`,
     tokens_out: a => html`<${Stat} ...${a} label="Tokens out" value=${tokens(total?.tokens_out)} sub=${partial} onClick=${go("Agents")} />`,
     cost: a => html`<${Stat} ...${a} label="Cost" value=${total?.cost_usd != null ? `$${total.cost_usd.toFixed(2)}` : "—"} sub="At set prices" onClick=${go("Agents")} />`,
@@ -68,8 +70,8 @@ export function overviewCards(o) {
   const cards = {
     decision: a => html`<${DecisionCard} a=${a} r=${r} main=${main} comparison=${comparison} unit=${unit} />`,
     best: a => html`<${Card} ...${a} title="Best so far">${objs.length ? objs.map(ob => html`<${BestChart} rows=${designPoints(designs, ob)} obj=${ob} passes=${r.passes} groups=${groupList(designs)} />`)
-      : html`<${Empty} text="Pick a main metric in Settings → Measurements." />`}<//>`,
-    last_pass: a => html`<${LastPass} a=${a} r=${r} />`,
+      : html`<${Empty} text=${!designs.length ? "No design measured yet." : "Pick a main metric in Settings → Measurements."} />`}<//>`,
+    last_pass: a => o.layout?.columns?.flat().includes("decision") ? null : html`<${LastPass} a=${a} r=${r} />`,     // results-20: said in the Decision card
     notes: a => notes.length ? html`<${Card} ...${a} title="Latest notes"><div class="notes">${notes.slice(-5).reverse().map(n => html`<div key=${n.id} class="note has-bin">
         <small class="muted">${n.by} · <${Ago} t=${n.t} /></small><div>${n.text}</div>
         ${ctx.mine ? html`<${Bin} what="note" title="Remove this note?" said="Removed unless the loop read it already."
@@ -93,7 +95,7 @@ export function overviewCards(o) {
             ...metrics.slice(0, 3).map(([m, value]) => `${m}=${num(value)}`), metrics.length > 3 ? `+${metrics.length - 3} metrics` : ""].filter(Boolean).join(" · ") : "Not tested yet";
           return html`<li data-idea-id=${idea.id}>
             <div class="overview-idea-head"><button type="button" class="link strong" onClick=${go("Results", "ideas")}>${idea.title}</button>
-              <${Pill} tone=${idea.status === "failed" ? "bad" : idea.status === "interrupted" ? "warn" : "none"}>${idea.status || "proposed"}<//></div>
+              <${Status} status=${idea.status || "proposed"} /></div>
             ${idea.part ? html`<small class="muted">${`Part: ${idea.part}`}</small>` : ""}
             ${idea.hypothesis ? html`<p class="overview-idea-hypothesis" title=${idea.hypothesis}>${idea.hypothesis}</p>` : ""}
             <div class="small muted overview-idea-evidence">${evidence}</div>
@@ -138,7 +140,7 @@ export function overviewCards(o) {
     pass_history: a => html`<${Card} ...${a} title="Recent passes" actions=${button("History", "Live", "history")}>${(r.passes || []).length
       ? html`<ol class="overview-pass-history">${r.passes.slice(-5).reverse().map(p => {
         const c = p.conclusion, pick = typeof c === "object" && c ? c.decision : null, said = typeof pick === "object" && pick ? pick.name : pick;
-        return html`<li><small class="muted"><${Ago} t=${p.when} /></small><div>${said ? own(ctx, said) : "No decision"}</div>${c?.decided_by ? html`<small class="muted">${c.decided_by}</small>` : ""}</li>`; })}</ol>`
+        return html`<li><small class="muted"><${Ago} t=${p.when} /></small><div>${said ? own(ctx, said) : "No decision"}</div>${c?.decided_by ? html`<small class="muted">${decidedText(c.decided_by)}</small>` : ""}</li>`; })}</ol>`
       : html`<${Empty} text="No passes yet." />`}<//>`,
     usage_breakdown: a => html`<${Card} ...${a} title="Usage by agent" actions=${button("Agents", "Agents")}>${use?.by?.length
       ? html`<${SummaryTable} heads=${["Who", "Turns", "Time", "Tokens in", "Tokens out", "Cost"]}>${use.by.map(b => html`<tr key=${`${b.who}|${b.kind}`}>

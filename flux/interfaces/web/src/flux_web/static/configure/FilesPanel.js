@@ -1,10 +1,10 @@
 // Flux web, configure (D828, D912, D1095, D1116): the files that go with the document -- each opened to edit,
 // removable; the ones the document names and the loop lacks; a new one written here; files dropped (into a folder,
 // when one is named). `FilesBody` is the list itself (the configurator's Prompt holds it, each file with what it is
-// to the loop); `FilesPanel` folds it under a form (Direct edit), open by itself when there are files or one is missing.
+// to the loop). Direct edit has no list of its own: it links to the Files tab (review loopwork-7).
 // D1159: with `hide(paths)`, each file or folder dropped may be marked hidden from AI, the paths it makes said to `hide`.
 
-import { html, Notice, useChanges, useEffect, useRef, useState, Empty } from "../view.js";
+import { html, Notice, useChanges, useState, Empty } from "../view.js";
 import { bytes, plural } from "../format.js";
 import { Uploader, hiddenRows, placedFiles } from "../components/Uploader.js";
 import { Tool } from "../components/Head.js";
@@ -26,17 +26,7 @@ export function FilesBody({ store, more = null, hide = null }) {
         <${Tool} icon="close" danger label=${`Delete ${f.path}`} onClick=${() => store.remove(f)} /></li>`)}</ul>` : rows.length ? "" : html`<${Empty} text="No files." />`}
       ${missing.length ? html`<${Notice} key="missing" tone="bad" what="Named but missing:">
         ${" "}${missing.map((p, i) => html`${i ? ", " : ""}<button type="button" class="link" title="Write it here" onClick=${() => store.editor(p, "")}>${p}</button>`)}<//>` : ""}
-      <div class="row"><button class="small" type="button" onClick=${() => store.editor("", "")}>New file</button></div>
-      <${Uploader} rows=${rows} onChange=${setRows} hideable=${!!hide} label="Drop scripts, models, papers or folders" />
+      <${Uploader} rows=${rows} onChange=${setRows} hideable=${!!hide}
+        extra=${html`<button class="small" type="button" onClick=${() => store.editor("", "")}>New file</button>`} />
       ${rows.length ? html`<div class="row"><button class="small primary" type="button" onClick=${add}>${`Add ${plural(placedFiles(rows).length, "file")}`}</button></div>` : ""}</div>`;
-}
-
-export function FilesPanel({ store }) {
-  const fold = useRef(null);
-  useChanges(store);
-  const { files, missing } = store.s;
-  useEffect(() => { if ((files.length || missing.length) && fold.current) fold.current.open = true; }, [files.length, missing.length]);
-  return html`<details class="card files-card files-fold" ref=${fold}><summary><strong>Files</strong>
-      <span class="muted small">${` · ${plural(files.length, "file")}` + (missing.length ? ` · ${missing.length} missing` : "")}</span></summary>
-    <${FilesBody} store=${store} /></details>`;
 }

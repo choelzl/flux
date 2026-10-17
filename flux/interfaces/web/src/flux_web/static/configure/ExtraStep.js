@@ -7,6 +7,7 @@ import { Tool } from "../components/Head.js";
 import { Select } from "../components/Select.js";
 import { Table } from "../components/Table.js";
 import { Kept, Pick, Text, isKept } from "./fields.js";
+import { Add } from "../components/Add.js";
 
 function Baseline({ M, state, edit }) {
   const bp = state.baseline || (state.baseline = { mode: "off", source: "project" });
@@ -14,7 +15,7 @@ function Baseline({ M, state, edit }) {
   const metrics = bp.metrics || (bp.metrics = []);
   const unit = m => (M.dictionarySpec(state, m) || {}).unit || M.unitFor(m), W = M.WORDS.extra;
   return html`<div class="cfg-grid2">
-      <${Pick} label="Baseline" k="baseline-mode" value=${bp.mode} set=${v => edit(() => { bp.mode = v; })}
+      <${Pick} label=${W.baselineRun} k="baseline-mode" value=${bp.mode} set=${v => edit(() => { bp.mode = v; })}
         options=${W.baselineModes} />
       ${bp.mode !== "off" ? html`<${Pick} label="From" k="baseline-source" value=${bp.source} set=${v => edit(() => { bp.source = v; })}
         options=${W.baselineFrom} />` : ""}
@@ -29,7 +30,7 @@ function Baseline({ M, state, edit }) {
         <${Select} aria-label="Stage" data-fc-field=${`baseline-stage-${i}`} value=${m.stage || ""} options=${[["", W.deepest], ...r.stages.map(s => [s.name, s.name])]}
           onChange=${v => edit(() => { m.stage = v; })} />
         <span class="grow" /><${Tool} icon="close" label="Remove" onClick=${() => edit(() => { metrics.splice(i, 1); })} /></div>`)}
-      <div><button type="button" class="small" onClick=${() => edit(() => { metrics.push({ metric: rep[0] || "", value: "", stage: "" }); })}>${W.addMetric}</button></div></div>` : ""}`;
+      <div><${Add} onClick=${() => edit(() => { metrics.push({ metric: rep[0] || "", value: "", stage: "" }); })}>${W.addMetric}<//></div></div>` : ""}`;
 }
 
 export function ExtraStep({ M, state, edit, extra, direct }) {
@@ -45,7 +46,7 @@ export function ExtraStep({ M, state, edit, extra, direct }) {
     <td><${Tool} icon="close" label="Remove" onClick=${() => edit(() => { list.splice(i, 1); })} /></td></tr>`;
   return html`<section class="cfg-sec"><h3>${W.settings} <span class="muted">${W.settingsSay}</span></h3>
       ${keptSpace ? kept("flow.dse.space") : state.space.length ? html`<${Table} heads=${[W.setting, W.values, ""]} cls="list compact cfg-table">${state.space.map((x, i) => row(state.space, "knob", "choices", i, "Setting", "Its values"))}<//>` : ""}
-      <div class="cfg-bar">${keptSpace ? "" : html`<button type="button" class="small" onClick=${() => edit(() => { state.space.push({ knob: "", choices: "" }); })}>${W.addSetting}</button>`}<span class="grow" />
+      <div class="cfg-bar">${keptSpace ? "" : html`<${Add} onClick=${() => edit(() => { state.space.push({ knob: "", choices: "" }); })}>${W.addSetting}<//>`}<span class="grow" />
         <label class="cfg-inline"><span class="muted small">Search by</span><${Select} aria-label="Search by" disabled=${keptBoxes} value=${walking}
           none="not searched" options=${searchable.map(c => [c.value, c.label])} onChange=${v => edit(() => { state.flow.dse = v || "none"; if (state.agentRaw) delete state.agentRaw.dse; })} /></label></div>
       ${knobs.length && walking ? html`<p class="muted small">${`${points} point${points === 1 ? "" : "s"}; the commands get ${knobs.map(x => `{${x.knob.trim()}}`).join(" and ")}.`}</p>` : ""}</section>
@@ -57,8 +58,8 @@ export function ExtraStep({ M, state, edit, extra, direct }) {
             set=${v => edit(() => { state.parts = v; })} />` : ""}`}
       ${isKept(state, "subtasks") ? kept("subtasks") : ""}</section>
     <section class="cfg-sec"><h3>Baseline <span class="muted">${W.baselineSay}</span></h3>${isKept(state, "baseline") ? kept("baseline") : html`<${Baseline} M=${M} state=${state} edit=${edit} />`}</section>
-    <section class="cfg-sec"><h3>Parameters <span class="muted">in the {params} file</span></h3>
+    <section class="cfg-sec"><h3>Parameters <span class="muted">${W.paramsSay}</span></h3>
       ${isKept(state, "params") ? kept("params") : html`${(state.params || []).length ? html`<${Table} heads=${["Name", "Value", ""]} cls="list compact cfg-table">${state.params.map((x, i) => row(state.params, "key", "value", i, "Parameter", "Its value"))}<//>` : ""}
-      <div><button type="button" class="small" onClick=${() => edit(() => { (state.params = state.params || []).push({ key: "", value: "" }); })}>+ Parameter</button></div>`}</section>
+      <div><${Add} onClick=${() => edit(() => { (state.params = state.params || []).push({ key: "", value: "" }); })}>+ Parameter<//></div>`}</section>
     ${extra ? html`<section class="cfg-sec"><h3>Resources</h3>${extra}</section>` : ""}`;
 }

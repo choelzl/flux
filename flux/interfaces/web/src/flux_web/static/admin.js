@@ -5,7 +5,6 @@ import { setPageRefresh } from "./state.js";
 import { api } from "./ui.js";
 import { html, useEffect, useState } from "./view.js";
 import { Loaded, useLoad } from "./components/Load.js";
-import { Crumbs } from "./components/Crumbs.js";
 import { PageHead } from "./components/PageHead.js";
 import { Tabs } from "./components/Tabs.js";
 import { Resources } from "./admin/Resources.js";
@@ -75,8 +74,9 @@ const TAB = {
 function AdminRoute({ sub = "" }) {
   // D814: Models and variables are the agents' tab; D816: the audit is Insights', the documents are the Loops'
   const tab = sub === "models" ? "agents" : sub === "audit" ? "insights" : ADMIN_TABS[sub] ? sub : "";
-  return html`<${Crumbs} parts=${[["Admin", "#/admin"], tab ? [ADMIN_TABS[tab], null] : null]} /><${PageHead} title="Admin" />
-    <${Tabs} cls="tabs admin-tabs" items=${Object.entries(ADMIN_TABS)} on=${tab} href=${k => `#/admin${k ? "/" + k : ""}`} />
+  // the tabs say where one is: no crumbs over the heading ("Admin" over "Admin")
+  return html`<${PageHead} title="Admin" />
+    <${Tabs} cls="tabs admin-tabs scroll-x" items=${Object.entries(ADMIN_TABS)} on=${tab} href=${k => `#/admin${k ? "/" + k : ""}`} />
     <div>${TAB[tab](sub === "audit" ? "audit" : null)}</div>`;
 }
 

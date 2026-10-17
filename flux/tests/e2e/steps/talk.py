@@ -152,6 +152,9 @@ def flows(r):
                 b.js("const h = document.querySelector('.ask-history'), log = document.querySelector('[data-ask-log]'); h.scrollTop = 170; log.scrollTop = 55; document.querySelector('#ask-q').focus(); window.__askBeforePoll = window.__askPolls; window.__askData[0].log.push('new activity'); return 1")
                 b.wait("window.__askPolls > window.__askBeforePoll && document.querySelector('[data-ask-log]')?.textContent.includes('new activity')", what="chat activity refresh")
                 r.check("polling preserves draft, focus, expanded activity and scroll positions", b.js("return document.querySelector('#ask-q').value === 'Keep this draft' && document.activeElement.id === 'ask-q' && document.querySelector('.ask-history').scrollTop === 170 && document.querySelector('[data-ask-log]').scrollTop === 55 && document.querySelector('details[data-ask-output]').open"))
+                pill = b.js("const p = document.querySelector('.ask-turn .pill.t-run'); return p ? [p.textContent,"
+                            " getComputedStyle(p).getPropertyValue('--t').trim(), getComputedStyle(document.documentElement).getPropertyValue('--agent').trim()] : null")
+                r.check("the agent at work on an answer is in the agent's colour", bool(pill) and pill[0].endswith("Reading") and pill[1] == pill[2], pill)
                 r.check("live refresh keeps other conversations collapsed", b.js('const c = document.querySelector(`[data-ask-toggle="${arguments[0]}"]`).closest(".ask-card"); return c.classList.contains("collapsed") && !c.querySelector(".ask-agent").getClientRects().length && c.querySelector(".ask-user p").textContent === "An unrelated question"', other))
                 for width in (1200, 390):
                     b.cmd("WebDriver:SetWindowRect", {"width": width, "height": 900})

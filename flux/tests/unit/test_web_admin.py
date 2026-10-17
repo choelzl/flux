@@ -259,3 +259,40 @@ def test_author_containers_are_active_without_a_loop_run(server, monkeypatch, re
     sample = app.state.sample()
     assert sample["loops"] == 0 and sample["containers"] == 4
     assert sample["cpu"] == 8 and sample["cmem"] == 4096
+
+
+def test_an_application_statement_is_cut_at_a_word():
+    """Review of Oct 17: Admin › Applications cut statements at 220 characters, mid-word ("the exhaustive checker ac")."""
+    from flux_web.routes_admin import _clip
+
+    assert _clip("short one") == "short one"
+    text = "word " * 200
+    got = _clip(text.strip(), 50)
+    assert got.endswith("word…") and len(got) <= 51 and "wor…" not in got
+
+
+def test_an_audit_entry_about_a_loop_names_it_to_link(server, tmp_path):
+    """Review of Oct 17: an audit entry's words named its loop three ways ("kept_parts", "ada/popcount_live",
+    "bob/tune_blocks: …"), never a link. A new entry about a loop keeps its owner and name; one about none, nothing."""
+    import sqlite3
+
+    app, _tmp = server
+    bob, ada = _client(app, "bob", "another long secret"), _client(app, "ada", "correct horse battery")
+    _loop(bob, "linked")
+    assert bob.put("/api/apps/linked/file", params={"path": "notes.md"}, json={"text": "x\n"}, headers=H).status_code == 200
+    got = ada.get("/api/audit").json()
+    up = next(a for a in got if a["action"] == "upload")
+    edit = next(a for a in got if a["action"] == "edit" and a["user"] == "bob")
+    assert (up["owner"], up["app"]) == ("bob", "linked") and (edit["owner"], edit["app"]) == ("bob", "linked")
+    login = next(a for a in got if a["action"] == "login")
+    assert login["owner"] is None and login["app"] is None, "an entry about no loop links nothing"
+    # an older database: its audit gains the two columns, its rows stay, unlinked
+    old = tmp_path / "old"
+    old.mkdir()
+    with sqlite3.connect(old / "flux-web.db") as db:
+        db.execute("CREATE TABLE audit (id INTEGER PRIMARY KEY, t REAL NOT NULL, user TEXT, action TEXT NOT NULL, detail TEXT NOT NULL DEFAULT '')")
+        db.execute("INSERT INTO audit(t, user, action, detail) VALUES (1, 'bob', 'edit', 'x/y')")
+    s = Store(old)
+    s.audit("bob", "start", "x", loop=("bob", "x"))
+    rows = {r["action"]: r for r in s.audit_log()}
+    assert (rows["edit"]["owner"], rows["start"]["owner"], rows["start"]["app"]) == (None, "bob", "x")

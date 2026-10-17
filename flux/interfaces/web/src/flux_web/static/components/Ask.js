@@ -21,12 +21,13 @@ export const asks = q => String(q || "").split("\n").filter(l => l.trim() && !OP
 const choicesOf = q => q.options?.length ? q.options
   : String(q.question || "").split("\n").filter(l => OPTION.test(l)).map(l => l.replace(OPTION, "").trim().replace(/^[*` ]+|[*` ]+$/g, "")).filter(Boolean).slice(0, 5);
 
-/** How long it waits, in words: "8 min", "decided itself" -- `long` "decides itself in 8 min"; null when it waits on. */
+/** How long it waits, in words: "decides in 8 min", "decided itself" -- `long` "decides itself in 8 min"; null when it
+    waits on. Never a bare "8 min", which reads as an age. */
 export function waits(q, long = false) {
   const left = questionLeft(q);
   if (left == null) return null;
   if (left <= 0) return "decided itself";
-  return long ? `decides itself in ${Math.ceil(left / 60)} min` : `${Math.ceil(left / 60)} min`;
+  return `decides${long ? " itself" : ""} in ${Math.ceil(left / 60)} min`;
 }
 
 /** The slim line: the question's asking line, the time left, Answer (`open`). */

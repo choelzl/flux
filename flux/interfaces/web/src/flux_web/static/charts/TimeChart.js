@@ -30,15 +30,38 @@ function smoothPath(pts) {
   return d;
 }
 
-export function TimeChart({ samples, series, title, top = null, level = null, levelLabel = "", intervals = false, fmt = num }) {
+/** A scale's top a round number at or over `v` (its half round too): 1 to 8 times a power of ten, in units of a
+    power of `base` (1024 for bytes: "400 MiB", not "381.5 MiB"). */
+export function niceTop(v, base = 10) {
+  if (!(v > 0)) return 1;
+  const unit = base === 10 ? 1 : base ** Math.max(0, Math.floor(Math.log(v) / Math.log(base))), m = v / unit;
+  const p = 10 ** Math.floor(Math.log10(m)), f = m / p;
+  return unit * p * [1, 1.2, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10].find(x => f <= x + 1e-9);
+}
+
+/** The axis' times: the hour within a day, the day and hour from 20 h on (24 h said "09:15 AM … 09:15 AM"), the day
+    alone past a week. */
+export function stampOf(span) {
+  const o = span > 8 * 86400 ? { day: "numeric", month: "short" } : span >= 20 * 3600 ? { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }
+    : { hour: "2-digit", minute: "2-digit" };
+  return t => new Date(t * 1000).toLocaleString(undefined, o);
+}
+
+/** `from`/`to` the window shown (every chart of a page alike), else the samples' own; `base` 1024 for a scale in
+    bytes. A tick whose words repeat another's is left out ("1 B, 1 B, 0 B"); all zero, the zero alone. */
+export function TimeChart({ samples, series, title, top = null, level = null, levelLabel = "", intervals = false, fmt = num, from = null, to = null, base = 10 }) {
   const [hover, setHover] = useState(null), tipRef = useRef(null), svgRef = useRef(null);
   const pts = samples.filter(s => series.some(se => se.get(s) != null));
   if (pts.length < 2) return html`<figure class="tchart"><figcaption><strong>${title}</strong></figcaption><p class="muted small">Not enough samples yet.</p></figure>`;
-  const t0 = intervals ? pts[0].start_t : pts[0].t, t1 = pts[pts.length - 1].t;
-  const vals = pts.flatMap(s => series.map(se => se.get(s)).filter(v => v != null));
-  const hi = top != null ? top : Math.max(...vals, level || 0) * 1.1 || 1;
+  const t0 = from ?? (intervals ? pts[0].start_t : pts[0].t), t1 = to ?? pts[pts.length - 1].t;
+  const vals = pts.flatMap(s => series.map(se => se.get(s)).filter(v => v != null)), most = Math.max(...vals, level || 0);
+  const hi = top != null ? top : niceTop(most * 1.05, base);
   const X = t => L + (W - L - R) * (t - t0) / Math.max(1, t1 - t0), Y = v => T + (H - T - B) * (1 - Math.min(v, hi) / hi);
-  const span = t1 - t0, stamp = t => new Date(t * 1000).toLocaleString(undefined, span > 86400 ? { weekday: "short", hour: "2-digit" } : { hour: "2-digit", minute: "2-digit" });
+  const stamp = stampOf(t1 - t0);
+  const ticks = (top == null && most <= 0 ? [0] : [0, 0.5, 1]).reduce((out, f) => {
+    const text = fmt(hi * f);
+    return out.some(x => x.text === text) ? out : [...out, { f, text }];
+  }, []);
   const last = pts[pts.length - 1];
   const move = e => {
     const box = svgRef.current.getBoundingClientRect();
@@ -62,8 +85,8 @@ export function TimeChart({ samples, series, title, top = null, level = null, le
   return html`<figure class="tchart"><figcaption><strong>${title}</strong> ${series.map((se, i) => html`<span class="muted">${i ? " · " : ""}<i class=${`sw s${i}`} />${se.label} <strong>${last && se.get(last) != null ? fmt(se.get(last)) : "—"}</strong></span>`)}</figcaption>
     <div class="tchart-plot">
       <svg viewBox=${`0 0 ${W} ${H}`} class="chart tchart-svg" role="img" aria-label=${title} ref=${svgRef} onPointerMove=${move} onPointerLeave=${() => setHover(null)}>
-        ${[0, 0.5, 1].map(f => html`<line x1=${L} x2=${W - R} y1=${Y(hi * f)} y2=${Y(hi * f)} class="grid" /><text x=${L - 5} y=${Y(hi * f) + 4} class="tick" text-anchor="end">${fmt(hi * f)}</text>`)}
-        ${level != null ? html`<line x1=${L} x2=${W - R} y1=${Y(level)} y2=${Y(level)} class="limit" /><text x=${W - R} y=${Y(level) - 3} class="tick limit-t" text-anchor="end">${levelLabel}</text>` : ""}
+        ${ticks.map(({ f, text }) => html`<line x1=${L} x2=${W - R} y1=${Y(hi * f)} y2=${Y(hi * f)} class="grid" /><text x=${L - 5} y=${Y(hi * f) + 4} class="tick" text-anchor="end">${text}</text>`)}
+        ${level != null ? html`<line x1=${L} x2=${W - R} y1=${Y(level)} y2=${Y(level)} class="limit" />` : ""}
         ${series.map((se, i) => timeSegments(samples, se.get).map(p => {
           // D1085: a rate over intervals is a smooth line through each interval's middle, its ends level to the first
           // interval's start and the last's end -- every interval drawn, never below zero, not a staircase
@@ -72,6 +95,7 @@ export function TimeChart({ samples, series, title, top = null, level = null, le
             : p.map((s, j) => `${j ? "L" : "M"}${X(s.t).toFixed(1)},${Y(se.get(s)).toFixed(1)}`).join("");
           return html`${i === 0 ? html`<path d=${`${d}L${X(p[p.length - 1].t).toFixed(1)},${Y(0)}L${X(intervals ? p[0].start_t : p[0].t).toFixed(1)},${Y(0)}Z`} class="area s0" />` : ""}<path d=${d} class=${`ln s${i}`} />`;
         }))}
+        ${level != null && levelLabel ? html`<text x=${L + 4} y=${Y(level) - 4} class="tick limit-t halo">${levelLabel}</text>` : ""}
         <text x=${L} y=${H - 5} class="tick">${stamp(t0)}</text><text x=${W - R} y=${H - 5} class="tick" text-anchor="end">${stamp(t1)}</text>
         <line x1=${hover?.gx ?? 0} x2=${hover?.gx ?? 0} y1=${T} y2=${H - B} class="hover-guide" visibility=${hover ? "visible" : "hidden"} />
         ${series.map((se, i) => { const v = hover ? se.get(hover.s) : null;

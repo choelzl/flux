@@ -48,8 +48,10 @@ export function Conversation({ steps, k = "", offset = 0, live = false, quiet = 
     const cmds = work.filter(x => x.k !== "think").length, failed = work.filter(x => x.error).length;
     const end = now ? Date.now() / 1000 : (steps[j]?.at ?? work[work.length - 1].at);
     const secs = work[0].at != null && end != null ? end - work[0].at : null;
+    // the line neutral, only its failed commands red: a turn that went on after one failed is not a failure
     const said = [`${work.length} step${work.length === 1 ? "" : "s"}${now ? " so far" : ""}`,
-      cmds ? `${cmds} command${cmds === 1 ? "" : "s"}` : "", failed ? `${failed} failed` : "", secs != null ? took(secs) : ""].filter(Boolean).join(" · ");
+      cmds ? `${cmds} command${cmds === 1 ? "" : "s"}` : "", failed ? html`<span class="bad">${`${failed} failed`}</span>` : "", secs != null ? took(secs) : ""]
+      .filter(Boolean).flatMap((x, n) => n ? [" · ", x] : [x]);
     // D1126: a stretch is known by where it ends (the answer after it), the one at work as "live" -- not by its first
     // step, which a live window rolls away with every new step (the box one opened closed on each update)
     const live_ = `${k}:wlive`, id = now ? live_ : `${k}:w${offset + j}`;
@@ -57,7 +59,7 @@ export function Conversation({ steps, k = "", offset = 0, live = false, quiet = 
     // open while a step in it is open
     const open = convOpen.has(id) || work.some((_x, n) => convOpen.has(`${k}:${offset + first + n}`));
     items.push(html`<details key=${id} class=${cx("cv-work", now && "live", failed && "bad")} open=${open} onToggle=${remember(id)}>
-      <summary title="Thinking and commands"><span class="cv-work-said">${now ? html`<${Glyph} tone="run" />` : ""}${now ? `working · ${said}` : said}</span></summary>
+      <summary title="Thinking and commands"><span class="cv-work-said">${now ? html`<${Glyph} tone="run" />` : ""}${now ? "working · " : ""}${said}</span></summary>
       <div class="cv-work-steps">${work.map((x, n) => html`<${Step} key=${`${k}:${offset + first + n}`} st=${x} id=${`${k}:${offset + first + n}`} live=${live && first + n === steps.length - 1} />`)}</div></details>`);
     i = j;
   }

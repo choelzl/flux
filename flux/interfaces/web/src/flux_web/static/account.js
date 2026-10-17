@@ -3,9 +3,9 @@
 
 import { setMe } from "./state.js";
 import { api, enc } from "./ui.js";
-import { html, Notice } from "./view.js";
+import { html } from "./view.js";
 import { PageRead, useLoad } from "./components/Load.js";
-import { LoginCard } from "./components/Login.js";
+import { LoginCard, Refusal } from "./components/Login.js";
 import { Account } from "./account/Account.js";
 import { route } from "./app.js";
 
@@ -24,8 +24,7 @@ function InviteRoute({ token }) {
   if (!read.got) return null;
   // the server's words ("this link has been used or has expired: ask an admin for a new one") as a sentence, Log in under it
   if (read.got.error) {
-    const [what, why] = String(read.got.error).split(": ");
-    return html`<${LoginCard}><${Notice} tone="bad" role="alert" what=${`${what[0].toUpperCase()}${what.slice(1)}.`} why=${why ? `${why[0].toUpperCase()}${why.slice(1)}.` : ""} />
+    return html`<${LoginCard}><${Refusal} text=${read.got.error} />
       <a class="btn primary wide" href="#/login">Log in</a><//>`;
   }
   const got = read.got.d, invite = got.kind === "invite";
@@ -37,7 +36,7 @@ function InviteRoute({ token }) {
   };
   return html`<${LoginCard} sub=${invite ? `Welcome, ${got.name}: choose a password.` : `${got.name}: choose a new password.`} submit=${submit}
       after=${html`<p class="muted small">${`Valid once, until ${new Date(got.expires * 1000).toLocaleString()}.`}</p>`}>
-    <label class="stack">Password (10+ characters)<input name="pw" id="inv-pw" type="password" autocomplete="new-password" required minlength="10" /></label>
+    <label class="stack">Password, 10+ characters<input name="pw" id="inv-pw" type="password" autocomplete="new-password" required minlength="10" /></label>
     <label class="stack">Again<input name="pw2" id="inv-pw2" type="password" autocomplete="new-password" required /></label>
     <button class="primary wide" type="submit">${invite ? "Set and log in" : "Change and log in"}</button><//>`;
 }

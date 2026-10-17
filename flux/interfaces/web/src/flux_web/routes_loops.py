@@ -122,11 +122,11 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
                 raise HTTPException(400, f"mounts: {exc}") from exc
         before = advanced(store, whose.name, name).get("mounts") or []
         store.server_set(f"adv:{whose.name}:{name}", got or None)
-        store.audit(a.name, "advanced settings", f"{whose.name}/{name}: {json.dumps(got) or 'defaults'}")
+        store.audit(a.name, "advanced settings", f"{whose.name}/{name}: {json.dumps(got) or 'defaults'}", loop=(whose.name, name))
         if before != (got.get("mounts") or []):
             from .runs import mounts_said
 
-            store.audit(a.name, "sandbox mounts", f"{whose.name}/{name}: {mounts_said(got) or 'none'}")     # D936
+            store.audit(a.name, "sandbox mounts", f"{whose.name}/{name}: {mounts_said(got) or 'none'}", loop=(whose.name, name))     # D936
         return {"advanced": got}
 
     # ---- sharing a loop (D701): watch sees its runs and outputs, edit also changes and runs it
@@ -156,7 +156,7 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
             store.notify(other.name, f"{user.name} shared {label} with you to {body.perm}", href, "ok")
         elif not body.perm and before:
             store.notify(other.name, f"{user.name} stopped sharing {label} with you", "", "warn")
-        store.audit(user.name, "share" if body.perm else "unshare", f"{whose.name}/{name} with {other.name}: {body.perm or '-'}")
+        store.audit(user.name, "share" if body.perm else "unshare", f"{whose.name}/{name} with {other.name}: {body.perm or '-'}", loop=(whose.name, name))
         return {"shares": [{"user": u, "perm": p} for u, p in sorted(got.items())]}
 
     @app.delete("/api/apps/{name}/shares/me")
@@ -167,7 +167,7 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
             raise HTTPException(404, "this loop is not shared with you")
         store.set_share(o.name, name, user.name, None)
         store.notify(o.name, f"{user.name} left {name}", f"#/app/{name}/settings", "info")
-        store.audit(user.name, "left a share", f"{o.name}/{name}")
+        store.audit(user.name, "left a share", f"{o.name}/{name}", loop=(o.name, name))
         return {"ok": f"you left {o.name}'s {name}"}
 
     def group_loops(user: User, *, summaries: bool = True) -> list[dict[str, Any]]:
@@ -243,7 +243,7 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
                 got = move_loop(store, whose, name, target, to.strip(), keep_permissions=keep_permissions)
                 action = "transfer loop" if target.id != whose.id else "rename loop"
                 store.audit(user.name, action, f"{whose.name}/{name} -> {target.name}/{got['name']}"
-                            + (" (special permissions kept)" if keep_permissions else ""))
+                            + (" (special permissions kept)" if keep_permissions else ""), loop=(target.name, got['name']))
                 href = f"#/app/{got['name']}/settings"
                 if target.id != whose.id:
                     store.notify(target.name, f"{user.name} transferred {whose.name}'s {name} to you as {got['name']}", href, "ok")
@@ -292,7 +292,7 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
             raise HTTPException(409, str(exc)) from exc
         except WorkspaceError as exc:
             raise fail(exc) from exc
-        store.audit(user.name, "upload", f"{name}: {plural(len(got), 'file')}")
+        store.audit(user.name, "upload", f"{name}: {plural(len(got), 'file')}", loop=(user.name, name))
         return {"name": name, **meta}
 
     @app.post("/api/apps/{name}/files")
@@ -304,7 +304,7 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
             written = w.add(name, got, folder)
         except WorkspaceError as exc:
             raise fail(exc) from exc
-        store.audit(user.name, "add files", f"{name}: {plural(len(written), 'file')}")
+        store.audit(user.name, "add files", f"{name}: {plural(len(written), 'file')}", loop=(_whose.name, name))
         return {"written": written}
 
     @app.put("/api/apps/{name}/part")
@@ -318,7 +318,7 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
         except WorkspaceError as exc:
             raise fail(exc) from exc
         if final:
-            store.audit(user.name, "add files", f"{name}: {path} ({size} bytes, in parts)")
+            store.audit(user.name, "add files", f"{name}: {path} ({size} bytes, in parts)", loop=(_whose.name, name))
         return {"size": size}
 
     @app.delete("/api/apps/{name}/part")
@@ -402,7 +402,7 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
         except (ValueError, HTTPException) as exc:
             shutil.rmtree(d, ignore_errors=True)
             raise exc if isinstance(exc, HTTPException) else fail(exc) from exc
-        store.audit(user.name, "loop by an agent", f"{name}: {author}")
+        store.audit(user.name, "loop by an agent", f"{name}: {author}", loop=(user.name, name))
         return {"name": name, "ok": f"{name}: the agent is writing its problem"}
 
     @app.post("/api/apps/{name}/author")
@@ -422,7 +422,7 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
                             attachments=got, revise=w.meta(name).get("document"), by=user.name, ask_me=ask_me)
         except ValueError as exc:
             raise HTTPException(409, str(exc)) from exc
-        store.audit(user.name, "problem revised by an agent", f"{whose.name}/{name}: {author}")
+        store.audit(user.name, "problem revised by an agent", f"{whose.name}/{name}: {author}", loop=(whose.name, name))
         return {"ok": "the agent is revising the problem"}
 
     @app.get("/api/apps/{name}/author")
@@ -447,7 +447,7 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
             raise HTTPException(409, str(exc)) from exc
         except (Escape, OSError) as exc:
             raise HTTPException(400, "the agent's inbox is not a file of this loop") from exc
-        store.audit(user.name, "answered the author", f"{whose.name}/{name}")
+        store.audit(user.name, "answered the author", f"{whose.name}/{name}", loop=(whose.name, name))
         return {"ok": said}
 
     @app.post("/api/apps/{name}/author/retry")
@@ -464,7 +464,7 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
                                    note=body.text)
         except ValueError as exc:
             raise HTTPException(409, str(exc)) from exc
-        store.audit(user.name, "draft repaired by an agent", f"{whose.name}/{name}: {author}")
+        store.audit(user.name, "draft repaired by an agent", f"{whose.name}/{name}: {author}", loop=(whose.name, name))
         return {"ok": said}
 
     @app.get("/api/apps/{name}/author/decisions")
@@ -487,7 +487,7 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
             raise HTTPException(409, "the draft has no problem document")
         w.set_meta(name, agent_draft=False)
         authoring.made(d)
-        store.audit(user.name, "loop made from an agent's draft", f"{whose.name}/{name}")
+        store.audit(user.name, "loop made from an agent's draft", f"{whose.name}/{name}", loop=(whose.name, name))
         if not body.first_pass:
             return {"ok": f"{name} is made"}
         said = ctx.start_loop(name, RunOptions(passes=1, screen_only=True), owner, user)
@@ -538,7 +538,7 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
                                private=perm not in ("owner", "edit", "admin"))
         except ValueError as exc:
             raise HTTPException(409, str(exc)) from exc
-        store.audit(user.name, "asked about a loop", f"{whose.name}/{name}: {body.author}")
+        store.audit(user.name, "asked about a loop", f"{whose.name}/{name}: {body.author}", loop=(whose.name, name))
         return {"id": ident, "ok": "the agent is reading the loop"}
 
     @app.get("/api/apps/{name}/asks/{ident}/agent")
@@ -699,7 +699,7 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
             after = views(path)
         except (WorkspaceError, ValueError, OSError) as exc:
             raise fail(exc) from exc
-        store.audit(user.name, "configure", name)
+        store.audit(user.name, "configure", name, loop=(_whose.name, name))
         return {"ok": "saved" + ("" if not after["error"] else f"; the loader says: {after['error']}"),
                 "id": w.meta(name).get("id"), "error": after["error"]}
 
@@ -712,7 +712,7 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
             raise HTTPException(409, str(exc)) from exc
         except WorkspaceError as exc:
             raise fail(exc) from exc
-        store.audit(user.name, "write document", body.name)
+        store.audit(user.name, "write document", body.name, loop=(user.name, body.name))
         return {"name": body.name, **meta}
 
     def reset_owner(name: str, user: User, owner: str | None) -> Workspace:
@@ -765,9 +765,10 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
                 clear(w, name, user.name, keep)
                 if "history" not in keep:
                     store.clear_runs(user, name)
-                removed = ", ".join(f["path"] for f in affected["folders"] if f["key"] not in keep)
+                # the audit names the server's folders (the dialog, the loop's own)
+                removed = ", ".join(f"{w.app(name) / f['path']}/" if f["path"] else f"{cache_root() / key}/" for f in affected["folders"] if f["key"] not in keep)
                 store.audit(user.name, "reset app", f"{name}: cleared {removed or 'last check status only'}"
-                            + ("; kept " + ", ".join(sorted(set(keep))) if keep else ""))
+                            + ("; kept " + ", ".join(sorted(set(keep))) if keep else ""), loop=(owner or user.name, name))
         except ValueError as exc:
             raise fail(exc) from exc
         except OSError as exc:
@@ -884,7 +885,7 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
             got = w.move(name, body.path, body.to, body.revision)
         except WorkspaceError as exc:
             raise _mutation_failed(exc) from exc
-        store.audit(user.name, "move file", f"{whose.name}/{name}: {body.path} -> {got['path']}")
+        store.audit(user.name, "move file", f"{whose.name}/{name}: {body.path} -> {got['path']}", loop=(whose.name, name))
         return {"ok": f"{body.path} is now {got['path']}", **got}
 
     @app.delete("/api/apps/{name}/file")
@@ -895,7 +896,7 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
             got = editor(user, owner, name)[0].remove(name, path, recursive=recursive, rev=revision)
         except WorkspaceError as exc:
             raise _mutation_failed(exc) from exc
-        store.audit(user.name, "delete file", f"{name}/{path}" + ("" if got["kind"] == "file" else f" (a {got['kind']})"))
+        store.audit(user.name, "delete file", f"{name}/{path}" + ("" if got["kind"] == "file" else f" (a {got['kind']})"), loop=(owner or user.name, name))
         return {"ok": f"{path} deleted", **got}
 
     @app.put("/api/apps/{name}/file")
@@ -912,7 +913,7 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
             raise HTTPException(409, f"{path!r} is gone since you opened it") from exc
         except WorkspaceError as exc:
             raise _mutation_failed(exc) from exc
-        store.audit(user.name, "edit", f"{name}/{path}")
+        store.audit(user.name, "edit", f"{name}/{path}", loop=(owner or user.name, name))
         return {"ok": path, "revision": rev}
 
     @app.post("/api/apps/{name}/check")
@@ -954,7 +955,7 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
         except WorkspaceError as exc:
             raise fail(exc) from exc
         (ws(user).app(name) / "library").mkdir(exist_ok=True)
-        store.audit(user.name, "empty loop", name)
+        store.audit(user.name, "empty loop", name, loop=(user.name, name))
         return {"name": name, **meta}
 
     @app.post("/api/apps/{name}/clone")
@@ -980,7 +981,7 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
                 raise fail(exc) from exc
             raise
         store.audit(user.name, "clone loop", f"{whose.name}/{name} -> {body.to.strip()}" + (" (with its workbench)" if body.workbench else "")
-                    + (" (special permissions kept)" if body.keep_permissions else ""))
+                    + (" (special permissions kept)" if body.keep_permissions else ""), loop=(user.name, body.to.strip()))
         return {"name": body.to.strip(), **meta}
 
     @app.post("/api/apps/{name}/validate")
@@ -1000,7 +1001,9 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
         except yaml.YAMLError as exc:
             return {"ok": False, "error": f"not YAML: {' '.join(str(exc).split())[:300]}"}
         except Exception as exc:  # noqa: BLE001 -- what the loader says is what the user reads
-            return {"ok": False, "error": " ".join(str(exc).split())[:400]}
+            from flux_web.configure import loader_says
+
+            return {"ok": False, "error": " ".join(loader_says(str(exc), d).split())[:400]}
         return {"ok": True, "error": ""}
 
     @app.get("/api/apps/{name}/preflight")
@@ -1096,7 +1099,7 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
             raise HTTPException(409, str(exc)) from exc
         w.set_meta(name, last_start_digest=w.inputs_digest(name), rerun_baseline=False,             # D693, D1005: once
                    **({} if body.reevaluate or body.reevaluate_of else {"last_options": {**body.model_dump(), "rerun_baseline": False}}))   # D988: not repeated
-        store.audit(user.name, "start", name if whose.id == user.id else f"{whose.name}/{name}")
+        store.audit(user.name, "start", name if whose.id == user.id else f"{whose.name}/{name}", loop=(whose.name, name))
         return {"ok": f"{name} started: it resumes from its record"}
 
     ctx.start_loop = start
@@ -1107,14 +1110,14 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
         if user.id != whose.id:
             runner(user, owner, name)
         said = ctx.actions.request(run, whose, user, now=body.now)
-        store.audit(user.name, "stop", f"{whose.name}/{name}: {said}")
+        store.audit(user.name, "stop", f"{whose.name}/{name}: {said}", loop=(whose.name, name))
         return {"ok": said}
 
     @app.post("/api/apps/{name}/restart")
     def restart(name: str, body: Stop, owner: str | None = None, user: User = Depends(user_of)) -> dict[str, str]:
         _w, whose, _d, run = loop_of(name, user, owner, run=True)
         said = ctx.actions.request(run, whose, user, restart=True, now=body.now)
-        store.audit(user.name, "restart requested", f"{whose.name}/{name}: {said}")
+        store.audit(user.name, "restart requested", f"{whose.name}/{name}: {said}", loop=(whose.name, name))
         return {"ok": said}
 
     @app.post("/api/apps/{name}/notes")
@@ -1128,7 +1131,7 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
             runs.note(d / "runs", user, body.text.strip())
         except (Escape, OSError) as exc:                  # D852: an inbox that is a link is not written
             raise HTTPException(400, "the loop's inbox is not a file of this loop") from exc
-        store.audit(user.name, "note", name)
+        store.audit(user.name, "note", name, loop=(_whose.name, name))
         return {"ok": "sent: it reaches the next prompt, or answers the agent's open question"}
 
     @app.delete("/api/apps/{name}/notes/{ident}")
@@ -1155,7 +1158,7 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
                     record.append_event(cid, "human_note_removed", {"id": ident, "text": text})
             except Exception:  # noqa: BLE001 -- the inbox's removal stands; a running loop says it to its record
                 pass
-        store.audit(user.name, "note removed", name)
+        store.audit(user.name, "note removed", name, loop=(_whose.name, name))
         return {"ok": "the note is removed"}
 
     @app.get("/api/apps/{name}/notes")

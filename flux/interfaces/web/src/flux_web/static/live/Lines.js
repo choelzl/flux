@@ -4,6 +4,7 @@ import { Glyph, html } from "../view.js";
 import { WORK_COLORS as COLORS } from "./work_style.js";
 import { taskState as state } from "./model.js";
 import { Tag } from "../components/Tone.js";
+import { More } from "../components/More.js";
 
 const Segment = ({ s }) => typeof s === "string" ? s
   : s.b != null ? html`<b>${s.b}</b>`
@@ -26,11 +27,11 @@ function actOf(l, a) {
 }
 
 function Line({ l, a, located }) {
-  if (l.type === "more") return html`<button type="button" class="alt-more-tries" style=${`--depth:${l.depth}`} data-more=${l.key} onClick=${() => a.toggleTries(l.key)}>${l.text}</button>`;
+  if (l.type === "more") return html`<${More} cls="alt-more-tries" style=${`--depth:${l.depth}`} data-more=${l.key} onClick=${() => a.toggleTries(l.key)}>${l.text}<//>`;
   if (l.type === "skip") return html`<div class="alt-tree-row step quiet skipped" style=${`--depth:${l.depth};--k:${COLORS.check}`}>
     <span class="alt-fold-space" /><span class="alt-task" title="not run: a check before it failed"><${Glyph} tone="none" /><span class="alt-task-name muted">${l.text}</span></span></div>`;
-  if (l.type === "wait") return html`<div class="alt-tree-row box wait" style=${`--depth:${l.depth};--k:${l.k}`} aria-label=${`${l.title}: still to come`}>
-    <span class="alt-fold-space" /><span class="alt-task"><${Glyph} tone="none" /><span class="alt-task-name"><b>${l.title}</b></span></span></div>`;
+  if (l.type === "wait") return html`<div class="alt-tree-row box wait" style=${`--depth:${l.depth};--k:${l.k}`} aria-label=${`${l.title}: ${l.said || "waiting"}`}>
+    <span class="alt-fold-space" /><span class="alt-task"><${Glyph} tone="none" /><span class="alt-task-name"><b>${l.title}</b></span><span class="muted small alt-wait-word">${l.said || "waiting"}</span></span></div>`;
   const f = l.fold, here = l.act.task && located != null && String(l.act.task.id) === String(located);
   return html`<div class=${`alt-tree-row ${l.cls}`} style=${`--depth:${l.depth}` + (l.k ? `;--k:${l.k}` : "")}>
     ${f ? html`<button type="button" class="alt-fold" data-fold=${String(f.key)} aria-label=${`${f.collapsed ? "Expand" : "Collapse"} ${f.label}`} aria-expanded=${String(!f.collapsed)}

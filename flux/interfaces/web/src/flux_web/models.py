@@ -276,19 +276,20 @@ class Settings(BaseModel):
     values: dict[str, str | None]
 
 
+# each named as the card it draws is headed (review of Oct 17: "Models and agents" drew "Agents")
 OVERVIEW_SMALL_CARDS = {
     "state": "State", "designs": "Designs measured", "passes": "Passes",
-    "usage": "Models and agents", "objective": "Objective",
-    "tokens_in": "Tokens in", "tokens_out": "Tokens out", "cost": "Model and agent cost",
+    "usage": "Agents", "objective": "Objective",
+    "tokens_in": "Tokens in", "tokens_out": "Tokens out", "cost": "Cost",
     "primary_metric": "Main metric", "reference_change": "Change vs reference", "acceptance": "Acceptance rate",
-    "runtime": "Active run time", "model_time": "Model and agent time", "goals": "Goals met",
+    "runtime": "Run time", "model_time": "Agent time", "goals": "Goals met",
     "ideas": "Ideas",
 }
 OVERVIEW_LARGE_CARDS = {
-    "decision": "Decision", "best": "Best so far", "last_pass": "Last pass",
-    "notes": "Latest notes", "workbench": "Agents' workbench", "usage": "Models and agents",
-    "pareto": "Pareto front", "references": "Reference comparison", "goals": "Goal status",
-    "recent_designs": "Recent designs", "pass_history": "Recent passes", "usage_breakdown": "Usage by model and agent",
+    "decision": "Decision", "best": "Best so far", "last_pass": "Last decision",
+    "notes": "Latest notes", "workbench": "Workbench", "usage": "Agents",
+    "pareto": "Pareto front", "references": "Reference", "goals": "Goals",
+    "recent_designs": "Recent designs", "pass_history": "Recent passes", "usage_breakdown": "Usage by agent",
     "ideas": "Ideas",
 }
 OVERVIEW_DEFAULT = {

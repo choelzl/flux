@@ -5,8 +5,9 @@ export const when = (t) => t ? new Date(t * 1000).toLocaleString() : "";
 
 /** How long ago, in words: "just now", "5 min ago", "3 h ago", "2 d ago". */
 export function agoText(t) {
-  const s = Date.now() / 1000 - t;
-  return s < 45 ? "just now" : s < 3600 ? `${Math.round(s / 60)} min ago` : s < 86400 ? `${Math.round(s / 3600)} h ago` : `${Math.round(s / 86400)} d ago`;
+  // each unit up to where it rounds to the next ("60 min ago" is "1 h ago", "24 h ago" "1 d ago")
+  const s = Date.now() / 1000 - t, m = Math.round(s / 60), h = Math.round(s / 3600);
+  return s < 45 ? "just now" : m < 60 ? `${m} min ago` : h < 24 ? `${h} h ago` : `${Math.round(s / 86400)} d ago`;
 }
 
 /** A duration: "4.2s", "3m 05s", "2h 10m". */
@@ -31,6 +32,21 @@ export function num(v, digits = 4) {
 
 /** A count of tokens: "950", "1.2k", "34k", "1.25M". */
 export const fmtTok = (n) => !n ? "0" : n >= 1e9 ? (n / 1e9).toFixed(2) + "G" : n >= 1e6 ? (n / 1e6).toFixed(2) + "M" : n >= 1e4 ? Math.round(n / 1e3) + "k" : n >= 1e3 ? (n / 1e3).toFixed(1) + "k" : String(Math.round(n));
+
+/** A turn's tokens, said alike in Agents, Talk and Live: "14,062 in · 522 out" ("—" for a count not reported);
+    `short` with counts as fmtTok says them ("14k in · 522 out"), for a table's column. */
+export const tokensInOut = (i, o, short = false) => {
+  const n = v => v == null || v === "" || !Number.isFinite(Number(v)) ? "—" : short ? fmtTok(Number(v)) : Math.round(Number(v)).toLocaleString("en-US");
+  return `${n(i)} in · ${n(o)} out`;
+};
+
+/** The engine's "tokens (reported)" ("12,345 in, 678 out", "— in, 9 out") as [in, out] counts (null for "—"); null
+    when it is not that. */
+export function reportedTokens(s) {
+  const m = /^\s*([\d,.]+|—) in[,·\s]+([\d,.]+|—) out/.exec(String(s ?? ""));
+  const n = v => v === "—" ? null : Number(v.replace(/,/g, ""));
+  return m ? [n(m[1]), n(m[2])] : null;
+}
 
 /** A size: "512 B", "1.5 KiB", "2.0 MiB". */
 export const bytes = (n) => n == null ? "" : n < 1024 ? `${n} B` : n < 1048576 ? `${(n / 1024).toFixed(1)} KiB` : n < 1073741824 ? `${(n / 1048576).toFixed(1)} MiB` : `${(n / 1073741824).toFixed(2)} GiB`;

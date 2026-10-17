@@ -398,7 +398,7 @@ class Objectives(tuple):
             if len(limits) == 1:
                 o = limits[0]
                 return pick, (f"nothing reaches {o.metric} {o.goal_at(stage, stages):g}{o._margin_said(stage, stages)}; "
-                              f"{'most' if o.direction == 'maximize' else 'least'} {o.metric}")
+                              f"{'largest' if o.direction == 'maximize' else 'smallest'} {o.metric}")
             short = ", ".join(f"{o.metric} ({_num(o.value(pick.metrics))} for {o.goal_at(stage, stages):g})"
                               for o in self.missed(pick.metrics, getattr(pick, "stage", None), stages))
             return pick, f"nothing meets every limit ({at}); closest misses {short}"
@@ -428,7 +428,7 @@ class Objectives(tuple):
         pick = min(cands, key=lambda p: tuple(_cost(o, p) for o in used))
         head = used[0]
         if limits:
-            words = f"{'least' if head.direction == 'minimize' else 'most'} {head.metric} at {at}"
+            words = f"{'smallest' if head.direction == 'minimize' else 'largest'} {head.metric} at {at}"
         else:
             words = f"{'smallest' if head.direction == 'minimize' else 'largest'} {head.metric}"
         return pick, words + "".join(f", then {o.describe()}" for o in used[1:])

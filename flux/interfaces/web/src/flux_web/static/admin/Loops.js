@@ -9,7 +9,7 @@ import { route } from "../app.js";
 import { Act } from "../components/Act.js";
 import { LoopsBrowser } from "../loops/Table.js";
 import { Select } from "../components/Select.js";
-import { Pill, Said } from "../components/Tone.js";
+import { Pill } from "../components/Tone.js";
 import { Check } from "../components/Check.js";
 
 /** A notification to every user, or to those ticked: `v` {text, kind, all, to}. */
@@ -64,7 +64,8 @@ function Controls({ loops, paused }) {
 const PILL = { "would migrate": "none", "needs a hand": "bad", failed: "bad", current: "ok", migrated: "ok" };
 /** Admin › Documents (D811): every loop's documents of an earlier form, what each would change to be of today's,
     and the migration -- one loop or all; a result written only when it loads, the original kept as `<file>.orig`;
-    what needs a person said, not written (D813: and the way to do it by hand). */
+    what needs a person said, not written (D813: and the way to do it by hand). A document's state said once: its
+    pill, and why under it in plain words. */
 function OldDocuments({ r }) {
   if (!r?.loops.length) return null;
   const run = async (b, what) => {
@@ -79,10 +80,9 @@ function OldDocuments({ r }) {
     ${r.loops.map(l => html`<div key=${`${l.user}/${l.app}`} class="mig-loop"><div class="mig-head"><strong>${`${l.user} / `}<a href=${appHref(l.user, l.app)}>${l.app}</a></strong>${l.running ? html`<${Pill} tone="run">running<//>` : ""}
         <span class="grow" />${l.documents.some(d => d.status === "would migrate") ? (l.running ? html`<span class="muted small">stop it to migrate</span>`
           : html`<${Act} cls="small primary" title="Keeps originals" onClick=${() => run({ user: l.user, app: l.app }, `${l.user}/${l.app}`)}>Migrate<//>`)
-          : html`<${Said} tone="bad" cls="small">${l.documents.some(d => d.status === "needs a hand") ? "needs a hand (below)" : "would not load (below)"}<//>
-            <a class="btn small" href=${`${appHref(l.user, l.app)}/settings/problem`}>Edit document</a>`}</div>
+          : html`<a class="btn small" href=${`${appHref(l.user, l.app)}/settings/problem`}>Edit document</a>`}</div>
       ${l.documents.filter(d => d.status !== "current").map(d => html`<div key=${d.file} class="mig-doc"><div><span class="mono">${d.file}</span>${d.to !== d.file ? html`<span class="mono muted">${` → ${d.to}`}</span>` : ""} <${Pill} tone=${PILL[d.status] || "none"}>${d.status}<//></div>
-        ${d.why || d.manual.length ? html`<${Notice} tone="bad" what=${d.why || "By hand"}>${d.manual.length ? html`<ul class="small">${d.manual.map(m => html`<li>${m}</li>`)}</ul>` : ""}<//>` : ""}
+        ${d.why || d.manual.length ? html`<${Notice} tone="bad" cls="mig-why" why=${d.why || "By hand:"}>${d.manual.length ? html`<ul class="small">${d.manual.map(m => html`<li>${m}</li>`)}</ul>` : ""}<//>` : ""}
         ${d.said.length ? html`<details><summary class="small">${plural(d.said.length, "change")}</summary><ul class="small mono">${d.said.map(x => html`<li>${x}</li>`)}</ul>${d.text ? html`<pre class="log small">${d.text}</pre>` : ""}</details>` : ""}</div>`)}</div>`)}<//>`;
 }
 

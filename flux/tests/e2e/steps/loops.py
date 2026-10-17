@@ -75,8 +75,8 @@ def flows(r):
         b.wait("document.querySelector('dialog[open] .reset-folders')", what="the folder warning")
         warning = b.js("return document.querySelector('dialog[open]').innerText")
         r.check("the reset warning names every folder and says it cannot be undone",
-                all(f"{root / n}/" in warning for n in ("out", "runs", "workbench", ".author-work"))
-                and f"{r.data}/cache/flux/apps/bob.resettable/" in warning and "Cannot be undone" in warning, warning)
+                all(f"{n}/" in warning for n in ("out", "runs", "workbench", ".author-work"))
+                and "Tool cache" in warning and str(root) not in warning and str(r.data) not in warning and "Cannot be undone" in warning, warning)
         r.check("the warning says source files and settings stay", "source files" in warning and "sharing stay" in warning)
         r.check("folder paths fit the dialog", b.js("""const d = document.querySelector('dialog[open]');
             return d.scrollWidth <= d.clientWidth + 1"""))
@@ -87,7 +87,7 @@ def flows(r):
         r.check("reset defaults to clearing generated data", b.js("return [...document.querySelectorAll('dialog[open] [data-reset-keep]')].every(i => !i.checked)"))
         b.click("[data-reset-keep=workbench]")
         b.click("[data-reset-keep=history]")
-        r.check("keep choices update the folder warning and explain retained history", b.js("const d = document.querySelector('dialog[open]'); const folders = d.querySelector('.reset-folders').textContent; return !folders.includes('/workbench/') && !folders.includes('/out/') && !folders.includes('/runs/') && d.textContent.includes('history stay')"))
+        r.check("keep choices update the folder warning and explain retained history", b.js("const d = document.querySelector('dialog[open]'); const folders = d.querySelector('.reset-folders').textContent; return !folders.includes('workbench/') && !folders.includes('out/') && !folders.includes('runs/') && d.textContent.includes('history stay')"))
         b.click("[data-reset-keep=history]")
         r.dialog_button("Reset")
         b.wait("!document.querySelector('dialog[open]') && [...document.querySelectorAll('.toast')].some(x => x.textContent.includes('resettable reset'))",
@@ -225,11 +225,18 @@ def flows(r):
         b.js("const s = document.querySelector('#clone-from'); s.value = JSON.stringify(['', 'sw']); s.dispatchEvent(new Event('change', {bubbles: true})); return 1")
         r.button("Clone…", "#main")
         b.wait("document.querySelector('#clone-to')", timeout=10, what="the clone dialog")
+        r.check("Clone… does not spin while its dialog asks; what a clone copies is said once (configurator-35, -36)",
+                b.js("return !document.querySelector('#main .busy, #main .g.spin') && !document.querySelector('#main .card p.muted')"
+                     " && document.querySelector('#clone-from').closest('label').firstChild.textContent.trim() === 'Loop'"))
         b.js("const i = document.querySelector('#clone-to'); i.value = 'sw-copy'; i.dispatchEvent(new Event('input', {bubbles: true})); return 1")
         b.js("[...document.querySelectorAll('dialog[open] button')].find(x => x.textContent === 'Clone').click(); return 1")
         b.wait("location.hash === '#/app/sw-copy'", timeout=20, what="the clone's page")
         files = [f["path"] for f in json.loads(r.api("/apps/sw-copy/files?ignored=true")["body"])]
         r.check("the clone has the problem, not the runs", "problem.yaml" in files and "out" not in files and "runs" not in files, str(files))
+        r.page("#/app/sw-copy/live", "document.querySelector('#main .empty')", "the clone's Live, never run")
+        r.check("a loop never run: Live says what it will show, its one Start in the head (live-27)", b.js(
+            "const e = document.querySelector('#main .empty'); return e.textContent.includes('Not run yet. Once started') && !e.querySelector('button')"
+            " && [...document.querySelectorAll('.page-head button')].some(x => x.textContent.trim() === 'Start')"))
         r.clean("clone")
     r.step("clone", clone, setup=True)
 
@@ -252,7 +259,7 @@ def flows(r):
                 and b.js(f"return {tbl}.querySelectorAll('th button.th-sort').length") == 5, r.text()[:200])
         r.check("the loops open on their newest activity (D926)", b.js(f"return {sorts}")["Activity"] == "descending", str(b.js(f"return {sorts}")))
         acts = b.js(f"return [...{tbl}.querySelectorAll('tbody tr')].map(tr => tr.children[2].textContent)")
-        never = [i for i, a in enumerate(acts) if a == "never run"]
+        never = [i for i, a in enumerate(acts) if a == "—"]            # shell-10: "never run" is said once, by the state
         r.check("a loop never run is after every loop that ran (D926)", not never or never == list(range(never[0], len(acts))), str(acts))
         b.js(f"const x = {head}; x.focus(); return 1", "Loop")
         b.keys(b.ENTER)
@@ -304,11 +311,11 @@ def flows(r):
         # Admin › Loops: the same headers, its own remembered order
         r.login("ada")
         r.page("#/admin", f"{tbl} && {names}.includes('N10')", "admin loops, sortable")
-        r.check("Admin › Loops has no Order menu: its headers sort, User among them (D926)", not b.js("return !!document.querySelector('#main .list-bar select')")
-                and b.js(f"return {head} ? 1 : 0", "User") == 1)
-        b.js(f"{head}.click(); return 1", "User")
+        r.check("Admin › Loops has no Order menu: its headers sort, the owner in the loop's cell, no User column (D926, shell-8)", not b.js("return !!document.querySelector('#main .list-bar select')")
+                and b.js(f"return {head} ? 1 : 0", "User") == 0 and b.js(f"return !!{tbl}.querySelector('tbody .loop-owner')"))
+        b.js(f"{head}.click(); return 1", "Designs")
         kept = b.js("return [localStorage.getItem('flux-sort-admin-loops'), localStorage.getItem('flux-sort-loops')]")
-        r.check("Admin › Loops keeps its own order, not the Loops page's (D926)", '"User"' in (kept[0] or "") and '"User"' not in (kept[1] or ""), str(kept))
+        r.check("Admin › Loops keeps its own order, not the Loops page's (D926)", '"Designs"' in (kept[0] or "") and '"Designs"' not in (kept[1] or ""), str(kept))
         r.clean("admin › loops sorted")
         # Admin › Users: sorted with an edit being made -- the row moved, not rebuilt
         utbl = "document.querySelector('#main table.list.users')"
@@ -327,7 +334,7 @@ def flows(r):
         saved = b.wait("(() => { const m = document.querySelector('#main tr[data-user=bob] .save-mark'); return m && m.dataset.state === 'saved'; })()", timeout=10, what="the limit saved")
         ctl = json.loads(r.api("/admin/controls")["body"])
         r.check("the pending save went through after the sort (D926)", bool(saved) and (ctl.get("limits") or {}).get("bob") == 7, str(ctl.get("limits")))
-        b.js(f"{uhead}.click(); return 1", "Running limit")
+        b.js(f"{uhead}.click(); return 1", "Limit")
         got = b.js(f"return {users}")
         r.check("a saved limit sorts as saved; no limit last (D926)", got[0] == "bob", str(got))
         if os.environ.get("FLUX_E2E_SHOTS"):
@@ -406,9 +413,13 @@ def flows(r):
         try:
             r.page(f"#/app/{original}/settings", "document.querySelector('#loop-rename')", "ownership settings")
             r.check("owners can rename and transfer stopped loops", b.js("return !document.querySelector('#loop-rename').disabled && !document.querySelector('#loop-transfer').disabled"))
+            r.check("a stopped loop is not told to stop", b.js("""return !document.querySelector('.settings-running') && !/Stop it/.test(document.querySelector('#main').textContent)
+              && [...document.querySelectorAll('.danger-card button')].every(x => !x.disabled)"""))
             b.click("#loop-rename")
             b.wait("document.querySelector('dialog[open] #loop-rename-to')", what="rename dialog")
+            r.check("Rename waits for another name", b.js("return document.querySelector('dialog[open] .dlg-actions .primary').disabled"))
             b.type("#loop-rename-to", renamed)
+            r.check("Rename is offered once the name differs", b.js("return !document.querySelector('dialog[open] .dlg-actions .primary').disabled"))
             b.click("dialog .dlg-actions .primary")
             b.wait(f"location.hash === '#/app/{renamed}/settings' && document.querySelector('#loop-rename')", what="renamed loop")
             current_name = renamed
@@ -424,8 +435,10 @@ def flows(r):
             b.wait("document.querySelector('dialog[open] #loop-transfer-user')", what="transfer dialog")
             r.check("regular owners cannot preserve admin permissions", b.js("return !document.querySelector('#transfer-keep-permissions')"))
             r.check("transfer explains secrets, access and admin override changes", b.js("const text = document.querySelector('dialog').textContent; return text.includes('secrets too') && text.includes('admin overrides') && text.includes('You lose access')"))
+            r.check("Transfer waits for a user", b.js("return document.querySelector('dialog[open] .dlg-actions .primary').disabled"))
             b.js("const who = document.querySelector('#loop-transfer-user'); who.value = 'cy'; who.dispatchEvent(new Event('change')); return 1")
             b.type("#loop-transfer-to", transferred)
+            r.check("Transfer is offered once a user is chosen", b.js("return !document.querySelector('dialog[open] .dlg-actions .primary').disabled"))
             b.click("dialog .dlg-actions .primary")
             b.wait("location.hash === '#/' && document.querySelector('#main table.list, #main .empty')", what="transferred away")
             current_owner, current_name = "cy", transferred
@@ -494,49 +507,55 @@ def flows(r):
                 r.page(f"#/app/{name}", "document.querySelector('.page-head .pill.t-run')", "running loop controls")
                 r.check("an active loop has just Stop and Restart controls", b.js("return [...document.querySelectorAll('.page-head button')].map(b=>b.textContent).join()==='Stop,Restart'"))
                 r.button("Stop", ".page-head")
-                b.wait("[...document.querySelectorAll('.page-head button.danger.solid')].some(b=>b.textContent==='Stop')", what="scheduled stop")
-                r.check("first Stop schedules the pass boundary without a dialog", b.js("return window.__controlCalls.length===1 && !window.__controlCalls[0].now && !document.querySelector('dialog[open]') && document.querySelector('.page-head button.danger.solid').textContent==='Stop'"))
-                r.button("Stop", ".page-head")
+                b.wait("[...document.querySelectorAll('.page-head button.asked')].some(b=>b.textContent==='Stopping…')", what="scheduled stop")
+                r.check("first Stop schedules the pass boundary without a dialog", b.js("return window.__controlCalls.length===1 && !window.__controlCalls[0].now && !document.querySelector('dialog[open]') && document.querySelector('.page-head button.asked').textContent==='Stopping…'"))
+                r.button("Stopping…", ".page-head")
                 b.wait("document.querySelector('dialog[open]')", what="immediate stop warning")
                 r.check("second Stop warns about abandoning the current pass", "Abandons the current pass" in b.js("return document.querySelector('dialog').textContent"))
                 r.dialog_button("Cancel")
                 r.check("cancelled immediate Stop retains the scheduled request", b.js("return window.__controlCalls.length===1 && window.__controlState.stop_requested"))
-                r.button("Stop", ".page-head")
+                r.button("Stopping…", ".page-head")
                 r.dialog_button("Stop")
                 b.wait("window.__controlCalls.length===2", what="immediate stop request")
                 r.check("confirmed second Stop sends now=true", b.js("return window.__controlCalls[1].action==='stop' && window.__controlCalls[1].now"))
                 r.button("Restart", ".page-head")
-                b.wait("[...document.querySelectorAll('.page-head button.danger.solid')].some(b=>b.textContent==='Restart')", what="scheduled restart")
-                r.check("first Restart schedules a restart and resets Stop to its regular action", b.js("return window.__controlCalls.at(-1).action==='restart' && !window.__controlCalls.at(-1).now && [...document.querySelectorAll('.page-head button')].map(b=>b.textContent).join()==='Stop,Restart' && document.querySelector('.page-head button.danger.solid').textContent==='Restart'"))
-                r.button("Restart", ".page-head")
+                b.wait("[...document.querySelectorAll('.page-head button.asked')].some(b=>b.textContent==='Restarting…')", what="scheduled restart")
+                r.check("first Restart schedules a restart and resets Stop to its regular action", b.js("return window.__controlCalls.at(-1).action==='restart' && !window.__controlCalls.at(-1).now && [...document.querySelectorAll('.page-head button')].map(b=>b.textContent).join()==='Stop,Restarting…' && document.querySelector('.page-head button.asked').textContent==='Restarting…'"))
+                r.button("Restarting…", ".page-head")
                 b.wait("document.querySelector('dialog[open]')", what="immediate restart warning")
                 r.check("immediate Restart explains abandonment and retained settings", b.js("const text=document.querySelector('dialog').textContent; return text.includes('Abandons the current pass') && text.includes('settings and budget')"))
                 r.dialog_button("Cancel")
                 r.check("cancelled immediate Restart sends no extra request", b.js("return window.__controlCalls.length===3 && window.__controlState.restart_requested"))
-                r.button("Restart", ".page-head")
+                r.button("Restarting…", ".page-head")
                 r.dialog_button("Restart")
                 b.wait("window.__controlCalls.length===4", what="immediate restart request")
                 r.check("confirmed second Restart sends now=true", b.js("return window.__controlCalls.at(-1).action==='restart' && window.__controlCalls.at(-1).now"))
                 r.page(f"#/app/{name}/settings", "document.querySelector('.measurement-options, .settings-section, .loop-ownership') || document.querySelector('#main .subtabs')", "another loop view")
-                r.page(f"#/app/{name}", "document.querySelector('.page-head button.danger.solid')", "return to the queued restart")
-                r.check("the pending action survives navigation", b.js("return document.querySelector('.page-head button.danger.solid').textContent==='Restart'"))
-                # D1006: the loop lists work as the loop's page -- a second press turns red and, confirmed, is now
+                b.wait("document.querySelector('#main .danger-card')", what="running loop's settings")
+                r.check("a running loop's Settings say stop once, above, and disable what waits (review loopwork-3, -4)",
+                        b.js("""const m = document.querySelector('#main'), said = m.textContent.match(/stop it/gi) || [];
+                          return !!m.querySelector('.notice.settings-running') && said.length === 1 && document.querySelector('#loop-rename').disabled
+                            && [...m.querySelectorAll('.danger-card button')].map(x => x.disabled).join() === 'true,true'"""))
+                r.page(f"#/app/{name}", "document.querySelector('.page-head button.asked')", "return to the queued restart")
+                r.check("the pending action survives navigation", b.js("return document.querySelector('.page-head button.asked').textContent==='Restarting…'"))
+                # D1006: the loop lists work as the loop's page -- the first press says "Stopping…" in the button, a second, confirmed, is now
                 b.js("Object.assign(window.__controlState,{stop_requested:false,restart_requested:false}); return 1")
                 r.page("#/", "document.querySelector('table.list tbody tr')", "loop list controls")
-                red = "[...document.querySelectorAll('table.list button.danger.solid')].some(b=>b.textContent===arguments[0])"
+                asked = "[...document.querySelectorAll('table.list button.asked')].some(b=>b.textContent===arguments[0])"
+                ing = {"Stop": "Stopping…", "Restart": "Restarting…"}
                 for label in ("Stop", "Restart"):
                     r.button(label, "table.list tbody")
-                    b.wait(red.replace("arguments[0]", repr(label)), what=f"list {label} scheduled, red")
-                    b.js("[...document.querySelectorAll('table.list tbody button.danger.solid')].find(x => x.textContent === arguments[0]).click(); return 1", label)
+                    b.wait(asked.replace("arguments[0]", repr(ing[label])), what=f"list {label} scheduled, said in the button")
+                    b.js("[...document.querySelectorAll('table.list tbody button.asked')].find(x => x.textContent === arguments[0]).click(); return 1", ing[label])
                     r.dialog_button(label)
                     b.wait(f"window.__controlCalls.at(-1).action==={label.lower()!r} && window.__controlCalls.at(-1).now", what=f"list {label} now")
-                r.check("loop-list Stop and Restart: the first press after the pass, then red, the confirmed second now (D1006)",
+                r.check("loop-list Stop and Restart: the first press after the pass, then \"Stopping…\", the confirmed second now (D1006)",
                         b.js("return window.__controlCalls.length===8 && window.__controlCalls.slice(4).map(c=>!!c.now).join()==='false,true,false,true'"))
                 # review shell-4: Running chosen is the segment shown chosen and the rows it keeps, each a running loop
                 pick = "[...document.querySelectorAll('#main .choice button')].find(x => x.textContent.startsWith(arguments[0])).click(); return 1"
                 b.js(pick, "Running")
                 got = b.js("const rows = [...document.querySelectorAll('#main table.list tbody tr')], on = document.querySelector('#main .choice button[aria-pressed=true]');"
-                           " return [on.textContent, rows.length, rows.every(tr => !!tr.querySelector('.pill.t-run')), rows.some(tr => tr.textContent.includes(arguments[0]))]", name)
+                           " return [on.textContent, rows.length, rows.every(tr => !!tr.querySelector('.pill.t-run, .pill.t-warn')), rows.some(tr => tr.textContent.includes(arguments[0]))]", name)
                 r.check("the Running filter is chosen and keeps only the running loops (review shell-4)",
                         got[0].startswith("Running") and got[1] >= 1 and got[2] and got[3], str(got))
                 b.js(pick, "All")
@@ -548,8 +567,8 @@ def flows(r):
                 r.page("#/admin", "document.querySelector('.ctl-grid') && document.querySelector('table.list tbody tr')", "admin loop controls")
                 r.button("Restart", "table.list tbody")
                 b.wait("window.__controlCalls.length===9", what="admin row restart")
-                b.wait(red.replace("arguments[0]", "'Restart'"), what="admin row restart scheduled, red")
-                r.check("admin row controls: the loop's owner, after the pass first, then a red Restart (D1006, D1018)",
+                b.wait(asked.replace("arguments[0]", "'Restarting…'"), what="admin row restart scheduled, said in the button")
+                r.check("admin row controls: the loop's owner, after the pass first, then \"Restarting…\" (D1006, D1018)",
                         b.js("return !window.__controlCalls.at(-1).now && window.__controlCalls.at(-1).owner==='bob'"))
                 r.clean("loop controls")
             finally:
@@ -576,7 +595,7 @@ def flows(r):
             b.wait("document.querySelector('dialog.dlg[open] .reset-folders')", what="reset warning")
             warning = b.js("return document.querySelector('dialog.dlg[open]').innerText")
             r.check("reset warns about permanent history loss and lists affected folders", "Cannot be undone" in warning and "full run logs" in warning.lower()
-                    and all(f"/{folder}/" in warning for folder in ("out", "runs", "workbench")), warning)
+                    and all(f"{folder}/" in warning for folder in ("out", "runs", "workbench")), warning)
             r.dialog_button("Cancel")
             r.check("canceling reset leaves every generated file and recorded start intact", all((home / p).read_bytes() == content for p, content in before.items())
                     and len(json.loads(r.api(f"/apps/{name}/runs")["body"])["starts"]) == 2)

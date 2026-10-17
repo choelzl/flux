@@ -5,14 +5,16 @@
 
 import { cx, html } from "../view.js";
 
+/** A segmented row scrolls sideways on a phone (flux.css), so it is a `scroll-x`: what it holds may run past the screen. */
+
 /** One of several: `options` [value, label, count?], `value` the chosen one, `onChange(value)`; `label` names the
     group (for a screen reader); `small` in a row of controls. A count is its option's bold number. */
-export const Choice = ({ options, value, onChange, label, small = false, cls = "", ...rest }) => html`<div ...${rest} class=${cx("subtabs choice", small && "small", cls)}
+export const Choice = ({ options, value, onChange, label, small = false, cls = "", ...rest }) => html`<div ...${rest} class=${cx("subtabs choice scroll-x", small && "small", cls)}
   role="group" aria-label=${label}>${options.map(([v, text, n]) => html`<button key=${String(v)} type="button" class=${v === value ? "on" : ""} aria-pressed=${String(v === value)}
     onClick=${() => onChange(v)}>${text}${n != null ? html`${" "}<b>${n}</b>` : ""}</button>`)}</div>`;
 
 /** D1149: `href(key)` instead of `pick`: each tab a link to its address (the admin's). */
-export const Tabs = ({ items, on, pick, href = null, cls = "tabs", ...rest }) => html`<div ...${rest} class=${cls} role="tablist">${items.map(([k, label, badge, title]) => href
+export const Tabs = ({ items, on, pick, href = null, cls = "tabs", ...rest }) => html`<div ...${rest} class=${cx(cls, /\bsubtabs\b/.test(cls) && "scroll-x")} role="tablist">${items.map(([k, label, badge, title]) => href
   ? html`<a key=${String(k)} role="tab" href=${href(k)} class=${k === on ? "on" : ""} aria-selected=${k === on ? "true" : "false"} title=${title || null}>${label}${badge || ""}</a>`
   : html`<button key=${String(k)} role="tab" type="button" class=${k === on ? "on" : ""} aria-selected=${k === on ? "true" : "false"} title=${title || null}
     onClick=${() => pick(k)}>${label}${badge || ""}</button>`)}</div>`;

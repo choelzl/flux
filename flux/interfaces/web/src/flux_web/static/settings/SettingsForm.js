@@ -26,8 +26,8 @@ function Field({ k, f, values, setValue, list = null }) {
   const { st, server, save, scope, secret, price, inherited } = f;
   const [text, setText] = useState(secret ? "" : values[k] || "");
   const cur = values[k];
-  const holder = secret ? (cur ? "set · type to replace" : inherited(k) ? "From Server" : "Not set")
-    : price ? (inherited(k) ? "From Server" : "not priced") : inherited(k) ? "From Server" : "Not set";
+  // review of Oct 17: two words for an empty field, wherever it is -- "from server" (inherited), "not set"
+  const holder = secret && cur ? "set · type to replace" : inherited(k) ? "from server" : "not set";
   // D833: saved as it changes; a key once typed and left (never shown back)
   const { box, mark } = useAutosave(async () => {
     const v = text.trim();
@@ -103,8 +103,9 @@ export function SettingsForm({ st, server = null, save, scope, agentEnv = null, 
     : html`<div class="stack"><label for=${`set-${scope}-${k}`} title=${k}>${labels[k] || k}</label>${field(k)}</div>`;
   const priceRow = ([pin, pout]) => html`<div class="stack"><label for=${`set-${scope}-${pin}`}>Price ($ / 1M tokens)</label>
     <span class="price-pair"><span class="muted small">in</span>${field(pin)}<span class="muted small">out</span>${field(pout)}</span></div>`;
-  const fold = (title, n, open, kids) => html`<details class=${"set-fold" + (title.startsWith("Variables") ? " agent-vars" : "")} open=${open || null}>
-    <summary>${title}<span class="muted small">${n ? ` · ${n} set` : " · none"}</span></summary>${kids}</details>`;
+  // what is set here counted apart from what comes from the server ("1 set" over fields that all read "from server")
+  const fold = (title, n, open, kids, from = 0) => html`<details class=${"set-fold" + (title.startsWith("Variables") ? " agent-vars" : "")} open=${open || null}>
+    <summary>${title}<span class="muted small">${[n ? `${n} set` : "", from ? `${from} from server` : ""].filter(Boolean).map(x => ` · ${x}`).join("") || " · none"}</span></summary>${kids}</details>`;
   // D721: a tab per tool -- Flux, OpenCode, Claude Code, Codex, Other; a tab that holds a value is marked; the tab
   // last looked at kept in this browser
   const tabs = [...new Set([...st.groups.map(g => g.tab || g.label), ...extraTabs.map(x => x.tab)])];
@@ -117,13 +118,13 @@ export function SettingsForm({ st, server = null, save, scope, agentEnv = null, 
       : server && keys.some(k => server[k]) && !own ? "Server settings apply" : "";
     const vars = g.agent && agentEnv ? agentEnv(g.agent) : null, panel = panels[g.agent || g.id] || null;
     // D823: an agent's model and its own variables fold away, open by themselves when something is set
-    const setHere = keys.filter(k => values[k] || (server && server[k])).length;
-    const rows = html`${g.hint ? html`<p class="muted small">${g.hint}</p>` : ""}${note ? html`<p class="small hint-line">${note}</p>` : ""}
+    const setHere = keys.filter(k => values[k]).length, fromServer = keys.filter(k => !values[k] && f.inherited(k)).length;
+    const rows = html`${g.hint ? html`<p class="muted small">${g.hint}</p>` : ""}${note ? html`<p class="muted small set-note">${note}</p>` : ""}
       <div class="grid-2 set-fields">${g.public.filter(k => !prices.includes(k)).map(row)}${g.secret.map(row)}${prices.length === 2 ? priceRow(prices) : ""}</div>
       ${server && prices.length && g.endpoint ? html`<p class="muted small price-said">${endpointOf(prices[0]) ? "" : "Prices apply with your own endpoint."}</p>` : ""}`;
     const nVars = vars ? vars.rows.length + (vars.server || []).length : 0;
     return { g, own, tab: g.tab || g.label, el: html`<fieldset key=${g.id || g.label} class=${"set-group" + (panel ? " with-panel" : "")} hidden=${(g.tab || g.label) !== cur}><legend>${g.label}</legend>${panel || ""}
-      ${g.agent ? fold("Model", setHere, setHere > 0, rows) : rows}
+      ${g.agent ? fold("Model", setHere, setHere + fromServer > 0, rows, fromServer) : rows}
       ${vars ? fold("Variables (this agent only)", nVars, nVars > 0, html`<${EnvEditor} rows=${vars.rows} save=${vars.save} scope=${`${scope}-${g.agent}`} />
         ${vars.server && vars.server.length ? html`<div><p class="muted small">Server's, under yours:</p>
           <${EnvTable} rows=${vars.server.map(x => ({ ...x, from: "server" }))} shadowed=${new Set(vars.rows.map(x => x.name))} /></div>` : ""}`) : ""}</fieldset>` };

@@ -1,11 +1,12 @@
 // Flux web (D691, D1095): an editor -- a textarea over a highlighted layer that follows it (its scroll, its
 // viewport); the layer drawn from `tokens()` a moment after typing stops. The text is the textarea's own as one
-// types: set again only when `text` changes. `onEditor(ed)` handed it (`ed.textarea` its text), null when it goes.
+// types: set again only when `text` changes. `onEditor(ed)` handed it (`ed.textarea` its text), null when it goes;
+// `onType()` told each time it is typed in.
 
 import { html, useEffect, useLayoutEffect, useMemo, useRef, useState } from "../view.js";
 import { tokens } from "../highlight.js";
 
-export function CodeEditor({ text, lang, readonly = false, placeholder = null, onEditor = null }) {
+export function CodeEditor({ text, lang, readonly = false, placeholder = null, onEditor = null, onType = null }) {
   const ta = useRef(null), layer = useRef(null), [shown, setShown] = useState(text), t = useRef(null);
   const sync = () => {
     const a = ta.current, l = layer.current;
@@ -22,7 +23,7 @@ export function CodeEditor({ text, lang, readonly = false, placeholder = null, o
     return () => { resize.disconnect(); clearTimeout(t.current); };
   }, []);
   useLayoutEffect(() => { onEditor?.({ textarea: ta.current }); return () => onEditor?.(null); }, [text, lang, readonly]);   // before a click can read it
-  const typed = () => { clearTimeout(t.current); t.current = setTimeout(() => setShown(ta.current.value), ta.current.value.length > 60000 ? 250 : 40); };
+  const typed = () => { onType?.(); clearTimeout(t.current); t.current = setTimeout(() => setShown(ta.current.value), ta.current.value.length > 60000 ? 250 : 40); };
   const key = e => {                                                   // Tab indents, as an editor does
     if (e.key !== "Tab" || e.shiftKey || readonly) return;
     e.preventDefault();

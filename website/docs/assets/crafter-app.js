@@ -39,7 +39,7 @@ function Crafter({ M, draft, restart }) {
   useEffect(() => { store.draw(); }, [store]);
   const save = async yaml => {
     download(yaml, "problem.yaml");
-    return "Downloaded problem.yaml: put it in your loop's folder with the files it names, then run flux task check FOLDER.";
+    return "Downloaded problem.yaml: put it in the loop's folder with the files it names, then run flux task check FOLDER.";
   };
   const saveDraft = (s, step) => {
     remember(DRAFT, { state: s, step });
@@ -50,7 +50,7 @@ function Crafter({ M, draft, restart }) {
     <${Configurator} M=${M} state=${state} step=${stepOfHash() || draft?.step || "prompt"} touched=${used(draft?.state)} calm isNew
       onStep=${id => history.replaceState(null, "", `#step=${id}`)} onChange=${() => { store.watch(); redraw(n => n + 1); }}
       save=${save} saveDraft=${saveDraft} saveLabel="Download problem.yaml" store=${store}
-      checked=${() => ["note", "run flux task check FOLDER on your loop's folder"]} nameLabel="Loop name" namePlaceholder="my_loop" />`;
+      checked=${() => ["note", "run flux task check FOLDER on the loop's folder"]} />`;
 }
 
 function Page() {

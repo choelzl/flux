@@ -162,6 +162,10 @@ function who(runs) {
   return all.some(isAgent) || all.some(isModel) ? "AI" : "";              // D1044: an agent or a model, one pill
 }
 
+/** A box with nothing run yet, in words -- the same in the tree, the graph and the inspector: "not recorded" when a
+    box after it ran (BoxPanel's rule), else "waiting". */
+export const waitWord = (boxes, b) => boxes.slice(boxes.indexOf(b) + 1).some(x => x.runs.length) ? "not recorded" : "waiting";
+
 /** The boxes of a pass's flow: [{key, title, kind, state, runs, steps, who, count}]. */
 export function flowBoxes(rows, p, running, notes = []) {
   const kind = passKind(p);

@@ -52,12 +52,20 @@ def flows(r):
         r.check("the audit's What offers groups only (D733)", "Users and sign-in" in values and "Runs" in values
                 and "login" not in values and not b.js("return !!document.querySelector('#insights-part select[aria-label=What] optgroup')"), str(opts))
         b.js("const s = document.querySelector('#insights-part select[aria-label=What]'); s.value = 'Users and sign-in'; s.dispatchEvent(new Event('change')); return true;")
-        whats = b.js("return [...document.querySelectorAll('#insights-part tbody tr')].map(t => t.children[2].textContent.split(' · ')[0])")
+        whats = b.js("return [...document.querySelectorAll('#insights-part tbody tr .audit-what')].map(t => t.textContent)")
         r.check("a group shows its kinds together", "login" in whats and set(whats) <= {"login", "login refused", "add user", "change user", "change password"}, str(whats))
+        runs = b.js("return [...document.querySelectorAll('#insights-part tbody tr')].map(t => [t.children[1]?.textContent, t.querySelector('.audit-what')?.textContent, !!t.querySelector('.tag.count')])")
+        r.check("logins one after another by one user are one row, counted (review of Oct 17)",
+                not any(a[:2] == b_[:2] and a[1] == "login" for a, b_ in zip(runs, runs[1:])), str(runs))
+        r.check("the audit says its count once: in What, no 'N entries' beside it",
+                "entries" not in b.js("return document.querySelector('#insights-part .toolbar').textContent"))
         b.js("const s = document.querySelector('#insights-part select[aria-label=What]'); s.value = ''; s.dispatchEvent(new Event('change'));"
              "const w = document.querySelector('#insights-part select[aria-label=Who]'); w.value = 'bob'; w.dispatchEvent(new Event('change')); return true;")
         whos = b.js("return [...document.querySelectorAll('#insights-part tbody tr')].map(t => t.children[1].textContent)")
         r.check("the audit narrows to one user", whos and set(whos) == {"bob"}, str(whos))
+        links = b.js("return [...document.querySelectorAll('#insights-part tbody a.audit-loop')].map(a => [a.textContent, a.getAttribute('href')])")
+        r.check("an entry about a loop links it as user/loop, to its page (review of Oct 17)",
+                bool(links) and all(h == f"#/u/{t.split('/')[0]}/app/{t.split('/')[1]}" for t, h in links), str(links[:3]))
         r.page("#/admin", "document.querySelector('#main .tabs')", "admin loops")
         b.wait("document.querySelector('#main').innerText.includes('sw')", what="every loop listed")
         r.check("the admin sees bob's loop", "bob" in r.text())
@@ -361,8 +369,13 @@ def flows(r):
                     r.check(f"group {value} access survives refresh", b.js("return document.querySelector('.user-groups select[aria-label=\"Server access for E2E Research\"]').value") == value)
                 r.button("Users", "#users-subtabs")
                 b.wait("document.querySelector('table.users')", what="user permissions after group access")
-                r.check("user permissions use a compact labelled Select button", b.js("const button = [...document.querySelectorAll('tr[data-user=cy] button')].find(b => b.getAttribute('aria-label') === \"Select cy's permissions\"); return button && button.textContent === 'Select'"))
-                r.button("Select", "tr[data-user=cy]")
+                said = b.js("const button = [...document.querySelectorAll('tr[data-user=cy] button')].find(b => b.getAttribute('aria-label') === \"cy's permissions\"); return button && button.textContent")
+                own = b.js("return [...document.querySelectorAll('tr[data-user=ada] button')].map(b => b.textContent)")
+                r.check("an admin's own row offers no Disable nor View as (the server refuses both)", own is not None and "Disable" not in own and "View as" not in own, str(own))
+                r.check("a user's row is one line high at 1280: actions side by side", b.js("""return [...document.querySelectorAll('table.users tbody tr')].every(tr => {
+                  const bs = [...tr.querySelectorAll('.user-actions button')]; return bs.every(x => Math.abs(x.getBoundingClientRect().top - bs[0].getBoundingClientRect().top) < 2); })"""))
+                r.check("a user's permissions button says how many they have (review of Oct 17: 'Select' said nothing)", said == "2 of 7", repr(said))
+                b.js("[...document.querySelectorAll('tr[data-user=cy] button')].find(b => b.getAttribute('aria-label') === \"cy's permissions\").click(); return 1")
                 b.wait("document.querySelector('dialog[open] input[data-permission=view_others]')", what="member permissions")
                 r.check("members start with own-loop permissions only", b.js("return document.querySelector('[data-permission=create_loops]').checked && document.querySelector('[data-permission=run_loops]').checked && !document.querySelector('[data-permission=view_others]').checked && !document.querySelector('[data-permission=edit_others]').checked"))
                 b.click("[data-permission=view_others]")

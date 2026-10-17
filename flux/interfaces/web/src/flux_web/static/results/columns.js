@@ -5,7 +5,7 @@
 import { cx, html, useState } from "../view.js";
 import { mainMeasurements, relativeMeasurement, resultPreferences } from "./preferences.js";
 import { useLoop } from "../loop/context.js";
-import { Pill } from "../components/Tone.js";
+import { Status } from "../components/Status.js";
 import { Table } from "../components/Table.js";
 import { Check } from "../components/Check.js";
 
@@ -93,18 +93,20 @@ export function MeasurementHeader({ text, button = null, arrow = null, children 
     <div class="measurement-footer">${arrow}${children}</div></div>`;
 }
 
-/** D1102: a verdict's tone -- a rejection is a warning, pending the quiet tone. */
-const VERDICT_TONE = { accepted: "ok", pending: "none", rejected: "warn", failed: "bad" };
+/** A design's verdict, a word: accepted, pending, rejected, failed (anything else a failure). */
+const VERDICTS = new Set(["accepted", "pending", "rejected", "failed"]);
+const verdictOf = v => VERDICTS.has(v) ? v : "failed";
 
+/** A table's verdict: the shared status pill, small, its reason on hover. */
 export function VerdictBadge({ verdict, reason = "" }) {
-  return html`<${Pill} icon tone=${VERDICT_TONE[verdict] || "bad"} cls="verdict-badge" title=${reason ? `${verdict}: ${reason}` : verdict} />`;
+  return html`<${Status} small status=${verdictOf(verdict)} cls="verdict-badge" title=${reason ? `${verdictOf(verdict)}: ${reason}` : null} />`;
 }
 
 /** D1090: a critic's rejection is "rejected · critic"; a person's keeps the name. */
 export const byCritic = by => /^(the )?\w+ critic\b/.test(String(by || ""));
 export function VerdictPill({ d }) {
   const said = d.verdict !== "rejected" ? d.verdict : !d.rejected?.by ? "rejected" : byCritic(d.rejected.by) ? "rejected · critic" : `rejected · ${d.rejected.by}`;
-  return html`<${Pill} tone=${VERDICT_TONE[d.verdict] || "bad"}>${VERDICT_TONE[d.verdict] ? said : "failed"}<//>`;
+  return html`<${Status} status=${verdictOf(d.verdict)}>${VERDICTS.has(d.verdict) ? said : "failed"}<//>`;
 }
 
 /** Settings › Measurements (D1001, D1008, D1013): each metric's column shown or not, main or not, said as a

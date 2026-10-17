@@ -2,7 +2,7 @@
 // lines the step writes lit (and brought into view); Copy and Download.
 
 import { cx, html, useEffect, useRef } from "../view.js";
-import { tokens } from "../highlight.js";
+import { tokenLines } from "../highlight.js";
 import { toast } from "../ui.js";
 import { Head, Tool } from "../components/Head.js";
 
@@ -42,10 +42,12 @@ export function DocView({ yaml, file, step = "", card = true }) {
   const pre = useRef(null);
   useEffect(() => {                                 // the step's first line in view, inside the document's own scroll
     const el = pre.current, lit = el?.querySelector(".lit");
-    if (el && lit && el.scrollHeight > el.clientHeight) el.scrollTop = Math.max(0, lit.offsetTop - 24);              // the pre is the lines' offset parent
+    // D1206: a whole line at the top -- the one before the step's, as context (the pre is the lines' offset parent)
+    if (el && lit && el.scrollHeight > el.clientHeight) { const at = (lit.previousElementSibling || lit).offsetTop; el.scrollTop = at <= 8 ? 0 : at; }
   }, [step]);
-  const body = html`<pre class="cfg-yaml hl" ref=${pre} aria-label=${file}>${linesOf(yaml).map(l => html`<div class=${cx(step && l.steps.includes(step) && "lit")}>${
-    tokens(l.text || " ", "yaml").map(([c, s]) => c ? html`<span class=${"tk-" + c}>${s}</span>` : s)}</div>`)}</pre>`;
+  const toks = tokenLines(String(yaml || "").replace(/\n$/, ""), "yaml");      // D1206: a block scalar's lines are prose
+  const body = html`<pre class="cfg-yaml hl" ref=${pre} aria-label=${file}>${linesOf(yaml).map((l, i) => html`<div class=${cx(step && l.steps.includes(step) && "lit")}>${
+    (l.text ? toks[i] || [] : [["", " "]]).map(([c, s]) => c ? html`<span class=${"tk-" + c}>${s}</span>` : s)}</div>`)}</pre>`;
   const acts = html`<button type="button" class="small" onClick=${() => copyText(yaml)}>Copy</button>
     <${Tool} icon="download" label=${`Download ${file.split("/").pop()}`} onClick=${() => download(yaml, file)} />`;
   if (!card) return html`<div class="cfg-doc-acts">${acts}</div>${body}`;

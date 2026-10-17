@@ -148,22 +148,25 @@ def flows(r):
         r.login("bob")
         r.page("#/account", "document.querySelector('#set-me-FLUX_REMOTE_PRICE_IN')", "bob's model settings")
         got = b.js("const i = document.querySelector('#set-me-FLUX_REMOTE_PRICE_IN'); return [i.disabled, i.placeholder]")
-        r.check("a user's price waits for their own endpoint, From Server shown (D925)", got == [True, "From Server"], str(got))
+        r.check("a user's price waits for their own endpoint, 'from server' shown (D925)", got == [True, "from server"], str(got))
         r.check("no inherited value anywhere in the page, its fields or their attributes (D925)",
                 b.js("return !document.querySelector('#main').outerHTML.includes('0.4')"))
         got = b.js("const e = document.querySelector('#set-me-FLUX_REMOTE_BASE_URL'), i = document.querySelector('#set-me-FLUX_REMOTE_PRICE_IN');"
                    "e.value = 'https://mine.example/v1'; e.dispatchEvent(new Event('input')); const on = [!i.disabled, i.placeholder];"
                    "e.value = ''; e.dispatchEvent(new Event('input')); return [on, i.disabled, i.placeholder]")
-        r.check("and opens once they name one -- then the server's is not theirs: not From Server (D925)",
-                got == [[True, "not priced"], True, "From Server"], str(got))
+        r.check("and opens once they name one -- then the server's is not theirs: not 'from server' (D925)",
+                got == [[True, "not set"], True, "from server"], str(got))
         r.login("ada")                                     # D925: a server model and variable, as bob is shown them
         r.api("/admin/env", "PUT", {"name": "E2E_SHARED", "value": "server-literal-e2e"})
         r.api("/admin/settings", "PUT", {"values": {"FLUX_CODEX_MODEL": "server-model-e2e"}})
         r.login("bob")
         r.page("#/account", "document.querySelector('#set-me-FLUX_CODEX_MODEL')", "bob's model settings")
         got = b.js("const m = document.querySelector('#main').outerHTML; return [document.querySelector('#set-me-FLUX_CODEX_MODEL').placeholder,"
-                   " m.includes('server-model-e2e'), m.includes('server-literal-e2e'), [...document.querySelectorAll('table.env td')].some(t => t.textContent === 'From Server')]")
-        r.check("inherited model and variables say From Server, their values nowhere in the page (D925)", got == ["From Server", False, False, True], str(got))
+                   " m.includes('server-model-e2e'), m.includes('server-literal-e2e'), [...document.querySelectorAll('table.env td')].some(t => t.textContent === 'from server')]")
+        r.check("inherited model and variables say from server, their values nowhere in the page (D925)", got == ["from server", False, False, True], str(got))
+        said = b.js("return document.querySelector('#set-me-FLUX_CODEX_MODEL').closest('details').querySelector('summary').textContent")
+        r.check("the Model fold counts the server's apart: 'from server', not 'set' over fields that read 'from server' (review of Oct 17)",
+                "from server" in said, said)
         r.login("ada")
         r.api("/admin/env", "PUT", {"name": "E2E_SHARED", "value": None})
         r.api("/admin/settings", "PUT", {"values": {"FLUX_CODEX_MODEL": None}})
@@ -264,6 +267,12 @@ def flows(r):
                             time.sleep(0.6)
                             at = f"{width}px {theme}"
                             r.check(f"{view}: an agent's turn is Live's chat (D1144), {at}", b.js(f"return !!{doc}.querySelector(arguments[0] + ' .agent-turn .alt-chat .cv')", where))
+                            if view != "live":
+                                facts = b.js(f"return [...{doc}.querySelectorAll(arguments[0] + ' .fact')].map(f => f.querySelector('small').textContent)", where)
+                                tok = b.js(f"return [...{doc}.querySelectorAll(arguments[0] + ' .fact')].find(f => f.querySelector('small').textContent === 'tokens')?.querySelector('.v').textContent", where)
+                                r.check(f"{view}: a turn's tokens said one way, no model named twice, {at}", tok == "12,345 in · 678 out" and facts.count("model") <= 1, [tok, facts])
+                            red = b.js(f"const s = {doc}.querySelector(arguments[0] + ' .cv-work-said'); return [s.querySelector('.bad')?.textContent, getComputedStyle(s).color === getComputedStyle(s.querySelector('.bad')).color]", where)
+                            r.check(f"{view}: of the work's line only its failed commands are red, {at}", red == ["1 failed", False], red)
                             wide = b.js(f"const d = {doc}, w = d.defaultView, g = d.querySelector('dialog[open]');"
                                         " return [d.documentElement.scrollWidth, w.innerWidth, g ? g.scrollWidth : 0, g ? g.clientWidth : 0]")
                             r.check(f"{view}: nothing scrolls sideways, {at}", wide[0] <= wide[1] + 1 and wide[2] <= wide[3] + 1, wide)
@@ -302,13 +311,68 @@ def flows(r):
                 r.page(f"#/app/{name}/agents", "document.querySelector('.open-turn')", "partial agent usage")
                 r.check("usage totals identify partial and wholly uncounted turns", "1 turn without tokens · 3 partial" in r.text())   # D1092: said once
                 tokens = b.js("return Object.fromEntries([...document.querySelectorAll('.open-turn')].map(b => [b.textContent, b.closest('tr').cells[3].textContent]))")
-                r.check("partial counts and unavailable usage are distinct", tokens == {"claude": "300 → 30 (partial)",
-                        "opencode": "100 → — (partial)", "codex": "—"}, tokens)
+                r.check("partial counts and unavailable usage are distinct", tokens == {"claude": "300 · 30 (partial)",
+                        "opencode": "100 · — (partial)", "codex": "—"}, tokens)
+                r.check("the turn list fits its half of the page: no sideways scroll (loopwork-8)",
+                        b.js("const x = document.querySelector('.agent-turns'); return !!x && x.scrollWidth <= x.clientWidth + 1"))
                 b.js("[...document.querySelectorAll('.open-turn')].find(b => b.textContent === 'claude').click(); return 1")
-                b.wait("document.querySelector('.detail-card .facts')?.textContent.includes('Partial:')", what="partial token detail")
-                r.check("turn details explain exactly which usage was retained", "Partial: reported before stopping" in r.text())
+                b.wait("document.querySelector('.detail-card .facts')?.textContent.includes('(partial)')", what="partial token detail")
+                facts = b.js("return [...document.querySelectorAll('.detail-card .agent-detail > .facts .fact')].map(f => [f.querySelector('small').textContent, f.querySelector('.v').textContent])")
+                r.check("turn details say the tokens it kept, partial, in one format", ["tokens", "300 in · 30 out (partial)"] in facts, facts)
+                b.js("[...document.querySelectorAll('.open-turn')].find(b => b.textContent === 'codex').click(); return 1")
+                b.wait("document.querySelector('.detail-card h2')?.textContent === 'codex'", what="codex's detail")
+                r.check("a turn that reported no tokens says so", "not reported" in b.js("return document.querySelector('.detail-card .facts').textContent"))
                 r.clean("partial agent usage")
             finally:
                 b.js("window.fetch = window.__partialFetch; return 1")
 
     r.step("partial agent usage", partial_agent_usage)
+
+    def agents_empty_and_asking():
+        """The Agents tab of a loop with no turn is one line saying so (not an empty list beside "Select a turn"); while
+        the loop runs and its agent asks, the turn that waits is the list's first row, its "asks" opening Talk at the card."""
+        with loop(r, "ui-agents-asking") as name:
+            b.js("""const name = arguments[0], base = '/api/apps/' + name; window.__askFetch = window.fetch; window.__asking = false;
+              const reply = d => new Response(JSON.stringify(d), {status: 200, headers: {'Content-Type': 'application/json'}});
+              window.fetch = async (u, o) => {
+                const p = new URL(String(u), location.href).pathname;
+                if (p === base + '/turns') return reply({turns: []});
+                if (p === base + '/usage') return reply({by: [], total: {turns: 0, counted: 0, partial: 0, errors: 0, seconds: 0, tokens_in: 0, tokens_out: 0, tokens_cached: 0, cost_usd: 0}});
+                const response = await window.__askFetch(u, o);
+                if (!window.__asking || (p !== base && p !== base + '/state')) return response;
+                const data = await response.json(), state = p === base ? data.state : data;
+                state.running = true; state.question = {question: 'Signed or unsigned?', asked: Date.now() / 1000 - 60, wait_s: 3600};
+                return reply(data);
+              }; return 1;""", name)
+            try:
+                r.page(f"#/app/{name}/agents", "document.querySelector('#main .empty, #main .notice')", "an Agents tab with no turn")
+                said = b.js("return [document.querySelectorAll('#main .split').length, document.querySelector('#main').textContent]")
+                r.check("no turn: one line, no list beside an empty detail", said[0] == 0 and "No agent turns yet" in said[1] and "Select a turn" not in said[1], said)
+                b.js("window.__asking = true; return 1")
+                r.page("#/", "document.querySelector('#main table.list, #main .empty')", "the loop list")
+                r.page(f"#/app/{name}/agents", "document.querySelector('.agent-turns tr.turn-asking')", "the turn that asks")
+                row = b.js("const t = document.querySelector('tr.turn-asking'); return [t.textContent, document.querySelector('.qline small')?.textContent]")
+                r.check("the waiting turn says what it asks", "Agent asks: Signed or unsigned?" in row[0] and "asks" in row[0], row)
+                r.check("the line says when it decides, not a bare age", (row[1] or "").startswith("decides in "), row)
+                fab = b.js("""const f = document.querySelector('.ask-fab.asking'), s = getComputedStyle(f);
+                    const lum = c => { const v = c.match(/[\\d.]+/g).slice(0, 3).map(x => { x = x / 255; return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4; });
+                                       return 0.2126 * v[0] + 0.7152 * v[1] + 0.0722 * v[2]; };
+                    const [a, b] = [lum(s.color), lum(s.backgroundColor)].sort((x, y) => y - x);
+                    return [s.opacity, s.backgroundColor, (a + 0.05) / (b + 0.05), !!f.querySelector('.ask-fab-dot')];""")
+                r.check("Talk while the agent asks: opaque, the agent's colour, readable, a dot", fab[0] == "1" and fab[2] >= 4.5 and fab[3], fab)
+                b.js("document.querySelector('tr.turn-asking .tag').click(); return 1")
+                b.wait("document.querySelector('.drawer.open .talk-ask .qbox')", what="Talk open at the question")
+                r.check("asks opens Talk at the question's card", True)
+                r.clean("agents empty and asking")
+                # Settings › Problem › Agent: Revise in a bar under the form, as the New loop wizard puts its actions
+                b.js("window.__asking = false; return 1")
+                r.page("#/", "document.querySelector('#main table.list, #main .empty')", "the loop list")
+                r.page(f"#/app/{name}/settings/problem/agent", "document.querySelector('#ag-ask')", "Settings › Problem › Agent")
+                bar = b.js("const x = [...document.querySelectorAll('#main button')].find(b => b.textContent === 'Revise'), bar = x?.closest('.ba-nav');"
+                           " return [!!bar, !!x?.closest('.card'), bar ? bar.getBoundingClientRect().top >= document.querySelector('#ag-ask').closest('.card').getBoundingClientRect().bottom : null]")
+                r.check("Revise sits in a bar under the form, not inside its card", bar == [True, False, True], bar)
+                r.clean("revise bar")
+            finally:
+                b.js("window.fetch = window.__askFetch; return 1")
+
+    r.step("agents empty and asking", agents_empty_and_asking)

@@ -141,7 +141,8 @@ def flows(r):
                 and saved["normal"] is not None, str(saved))
         graph()
         box("orchestrate")
-        r.check("the saved agent is restored in Orchestrate", b.js("return document.querySelector('.cfg-panel .cfg-who button.on').textContent") == "codex")
+        r.check("the saved agent is restored in Orchestrate: the choice agent, its menu codex", b.js("return [document.querySelector('.cfg-panel .cfg-who button.on').textContent,"
+                " document.querySelector('.cfg-panel .cfg-who-bar select').value]") == ["agent", "codex"])
         b.click(".cfg-rail button[data-step=extra]")
         r.button("+ Setting", ".cfg-body")
         b.type("[aria-label='Setting']", "block")
@@ -192,7 +193,8 @@ def flows(r):
         b.js(setv, ".cfg-panel [data-fc-field=knowledge-text]", "Widths are 8 bits.")
         b.js(setv, ".cfg-panel [data-fc-field=knowledge-sheet]", "method.md")
         b.js(pick, "Who works Digest papers", b.js("return [...document.querySelector('.cfg-panel [role=group][aria-label=\"Who works Digest papers\"]').querySelectorAll('button')].pop().textContent.trim()"))
-        digest = b.js("return document.querySelector('.cfg-panel [role=group][aria-label=\"Who works Digest papers\"] button.on').textContent.trim()")
+        digest = b.js("const g = document.querySelector('.cfg-panel [role=group][aria-label=\"Who works Digest papers\"]'), on = g.querySelector('button.on').textContent.trim();"
+                      " return on === 'agent' ? g.parentElement.querySelector('select').value : on")
         b.js(pick, "Who works Lessons", "mined")
         added = r.files / "library_box" / "notes.md"            # where the browser may read
         added.parent.mkdir(parents=True, exist_ok=True)
@@ -343,6 +345,92 @@ def flows(r):
             b.wait("document.querySelector('#main')", timeout=20)
         r.clean("an agent's settings")
     r.step("agent settings", agent_settings, setup=True)
+
+    def box_panels():
+        """The UI review, waves 2-5 (D1203-K10): every box's panel one head -- its title, then who works it on a row of its
+        own, the agent one choice ("agent") with a menu saying which; a step's pills on its second line, its name whole;
+        Notes says what it does; script designs ask no repair or prototype; a long statement shown whole; a hidden path
+        listed under Hidden only, counted "N hidden"; the preview wrapped; on a phone the Graph a list, Next beside Back
+        and Save's lines one text each."""
+        import yaml
+
+        made = r.api("/apps/new-empty", "POST", {"name": "box_panels"})
+        r.check("create a loop for the box panels", made["status"] == 200, made["body"])
+        root = r.data / "users/bob/apps/box_panels"
+        (root / "tests").mkdir(exist_ok=True)
+        (root / "tests/t.py").write_text("x = 1\n")
+        (root / "notes.md").write_text("# notes\n")
+        raw = yaml.safe_load((root / "problem.yaml").read_text())
+        raw.update({"statement": " ".join(["A long statement that goes on and says what matters, line after line."] * 9), "language": "python",
+                    "flow": {"generate": "claude", "test": {"test": "true"}, "orchestrate": {"critic": "model"}, "select": {"critic": "model"},
+                             "knowledge": {"hidden": ["tests/"]}}})
+        (root / "problem.yaml").write_text(yaml.safe_dump(raw, sort_keys=False))
+        r.page("#/app/box_panels/settings/problem?step=prompt", "document.querySelector('.cfg [data-fc-field=statement]')", "the Prompt step")
+        area = b.js("const t = document.querySelector('[data-fc-field=statement]'); return [t.scrollHeight, t.clientHeight]")
+        r.check("a long statement is shown whole, no line cut (configurator-15)", area[0] <= area[1] + 1, str(area))
+        yaml_ = b.js("const p = document.querySelector('.cfg-docside pre.cfg-yaml'); return [p.scrollWidth, p.clientWidth]")
+        r.check("the preview wraps its lines, no sideways scroll (configurator-32)", yaml_[0] <= yaml_[1] + 1, str(yaml_))
+        r.check("the name is said one way (configurator-18)", b.js("return document.querySelector('[data-fc-field=id]').closest('label').querySelector('span').textContent") == "Name")
+        b.click(".cfg-rail button[data-step=checks]")
+        said = b.wait("document.querySelector('.cfg-critic-said') && document.querySelector('.cfg-critic-said').textContent", timeout=10, what="the critic said")
+        r.check("Check & Measure says the critic on passing designs, set in Graph (configurator-29)", said.strip() == "Critic: off · set in Graph"
+                and not b.js("return !!document.querySelector('.cfg-body [aria-label=\"The critic on a design that passed\"]')"), said)
+        b.js("document.querySelector('.cfg-critic-said button').click(); return 1")
+        b.wait("document.querySelector('.cfg[data-step=graph] .cfg-panel .cfg-who-bar[data-who=test]')", timeout=10, what="the Graph's Check box, opened from there")
+        b.click(".cfg-rail button[data-step=graph]")
+        b.wait("document.querySelector('.cfg-cycle [data-node=generate]')", timeout=10, what="the Graph")
+        open_box = "document.querySelector('.cfg-cycle [data-node=' + arguments[0] + ']').dispatchEvent(new MouseEvent('click', {bubbles: true})); return 1"
+        heads = {}
+        for k in ("orchestrate", "generate", "test", "measure", "select", "validate", "plan", "feedback", "records"):
+            b.js(open_box, k)
+            b.wait(f"document.querySelector('.cfg-panel .cfg-who-bar[data-who={k}]')", timeout=10, what=f"{k}'s panel")
+            heads[k] = b.js("const p = document.querySelector('.cfg-panel'), h = p.querySelector(':scope > .head');"
+                            " return [!!h.querySelector('.actions'), h.nextElementSibling && h.nextElementSibling.classList.contains('cfg-who-bar')]")
+        r.check("every box: its title, then who works it on its own row (configurator-9)", all(v == [False, True] for v in heads.values()), str(heads))
+        b.js(open_box, "generate")
+        b.wait("document.querySelector('.cfg-panel .cfg-who-bar[data-who=generate] select')", timeout=10, what="Design's agent menu")
+        kinds = b.js("return [...document.querySelectorAll('.cfg-panel .cfg-who-bar .cfg-who button')].map(x => x.textContent)")
+        which = b.js("return document.querySelector('.cfg-panel .cfg-who-bar select').value")
+        r.check("the agent is one choice, the menu says which (configurator-10)", "agent" in kinds and "claude" not in kinds and which == "claude", f"{kinds} {which}")
+        cut = b.js("""return [...document.querySelectorAll('.cfg-cycle g.hit')].map(g => {
+            const t = g.querySelector('text.t').getBBox(), pills = [...g.querySelectorAll('.svg-pill rect')].map(x => x.getBBox());
+            return pills.some(p => p.x < t.x + t.width && p.y < t.y + t.height && p.y + p.height > t.y) ? g.dataset.node : null; }).filter(Boolean)""")
+        r.check("no pill covers a box's name (configurator-1)", not cut, str(cut))
+        labels = "return [...document.querySelectorAll('.cfg-panel label.stack > span')].map(x => x.textContent)"
+        r.check("a model or agent design asks its repairs and prototype", "Repairs per design" in b.js(labels) and "Prototype first" in b.js(labels), str(b.js(labels)))
+        b.js("[...document.querySelectorAll('.cfg-panel .cfg-who-bar .cfg-who button')].find(x => x.textContent === 'script').click(); return 1")
+        b.wait("!document.querySelector('.cfg-panel .cfg-who-bar select')", timeout=10, what="script chosen")
+        got = b.js(labels)
+        r.check("script designs ask no repair or prototype (configurator-8)", not {"Repairs per design", "Prototype first", "Repair by", "Revert after"} & set(got), str(got))
+        b.js(open_box, "feedback")
+        says = b.wait("document.querySelector('.cfg-panel .cfg-says') && document.querySelector('.cfg-panel .cfg-says').textContent", timeout=10, what="Notes' line")
+        r.check("Notes says what it does, its switch on/off (configurator-28)", "Notes" in says
+                and b.js("return [...document.querySelectorAll('.cfg-panel .cfg-who button')].map(x => x.textContent)") == ["on", "off"], says)
+        b.js(open_box, "knowledge")
+        b.wait("document.querySelector('.cfg-panel [data-sec=hidden] .cfg-hidden li')", timeout=10, what="Hidden from AI")
+        reads = b.js("return [...document.querySelectorAll('.cfg-panel [data-sec=library] .cfg-lib-reads li code')].map(c => c.textContent)")
+        r.check("a hidden path is listed under Hidden only, not as read (configurator-27)", "tests/" not in reads and "notes.md" in reads, str(reads))
+        r.check("Hidden from AI counts in words (configurator-27)", b.js("return document.querySelector('.cfg-panel [data-sec=hidden] .cfg-bar').textContent").strip().endswith("1 hidden"))
+        # a phone: the Graph a list, Next beside Back, Save's lines one text each (configurator-24)
+        b.js("document.body.innerHTML = ''; const f = document.createElement('iframe'); f.id = 'phone';"
+             "f.style.cssText = 'width:390px;height:900px;border:0'; f.src = '/?boxes=' + Date.now() + '#/app/box_panels/settings/problem?step=graph'; document.body.append(f); return 1")
+        d = "document.getElementById('phone').contentDocument"
+        b.wait(f"(() => {{ const d = {d}; return d && d.querySelector('.cfg-cycle-list .cfg-lrow'); }})()", timeout=20, what="the phone's Graph")
+        shown = b.js(f"const d = {d}; return [d.querySelector('.cfg-draw > svg.cfg-cycle').getBoundingClientRect().height, d.querySelectorAll('.cfg-cycle-list .cfg-lrow').length]")
+        r.check("on a phone the Graph is a list of its ten boxes", shown == [0, 10], str(shown))
+        b.js(f"{d}.querySelector('.cfg-cycle-list [data-node=select]').click(); return 1")
+        b.wait(f"!!{d}.querySelector('.cfg-panel .cfg-who-bar[data-who=select]')", timeout=10, what="Choose opened from the list")
+        nav = b.js(f"const d = {d}, top = s => Math.round(d.querySelector('.cfg-nav ' + s).getBoundingClientRect().top); return [top('button'), top('.cfg-next'), top('.cfg-save')]")
+        r.check("Next on the first line, beside Back; the save under them", nav[0] == nav[1] and nav[2] > nav[1], str(nav))
+        b.js(f"const m = {d}.querySelector('.cfg-stephead select'); m.value = 'save'; m.dispatchEvent(new Event('change')); return 1")
+        b.wait(f"!!{d}.querySelector('.cfg-ready li')", timeout=10, what="Save")
+        rows = b.js(f"""return [...{d}.querySelectorAll('.cfg-ready li, .cfg-todo li')].map(li => {{
+            const g = li.querySelector('.g').getBoundingClientRect(), l = li.getBoundingClientRect(); return Math.round(g.top - l.top); }})""")
+        r.check("Save's lines: each mark beside its words, not on a line of its own", rows and max(rows) < 12, str(rows))
+        b.cmd("WebDriver:Navigate", {"url": f"{r.url}/?after-boxes={time.time()}#/"})
+        b.wait("document.querySelector('#main')", timeout=20)
+        r.clean("box panels")
+    r.step("box panels", box_panels, setup=True)
 
     def preset_named():
         """D1141: a measurement that runs a preset but lists only some of its numbers (a command of one's own to the
@@ -498,7 +586,7 @@ def flows(r):
         b.js(click, ".cfg-nav button", "Create loop")
         said = b.wait("(document.querySelector('.cfg-nav .cfg-status.t-bad') || {}).textContent", timeout=10, what="the refusal beside the button")
         r.check("a create refused says why beside its button, on Prompt, the name focused (D912)",
-                "name" in said and b.js("return document.activeElement && document.activeElement.dataset.fcField === 'id'")
+                "name" in said.lower() and b.js("return document.activeElement && document.activeElement.dataset.fcField === 'id'")
                 and b.js("return !!document.querySelector('.cfg[data-step=prompt]') && !!document.querySelector('.cfg-nav .cfg-status.t-bad').offsetParent"), said)
         b.js(click, ".draft-line button", "Discard draft")
         r.dialog_button("Discard")
@@ -523,6 +611,12 @@ def flows(r):
     r.step("empty loop", empty_loop, setup=True)
 
     def direct_edit():
+        r.page("#/app/sw/settings/problem/edit", "document.querySelector('.editor textarea')", "Direct edit")
+        r.check("Direct edit has no file list of its own: it links to Files (review loopwork-7)",
+                b.js("""const a = document.querySelector('#main .direct-files a');
+                  return !document.querySelector('#main .files-panel') && !!a && a.getAttribute('href') === '#/app/sw/files'"""))
+        b.click(".direct-files a")
+        b.wait("location.hash === '#/app/sw/files' && document.querySelector('#main .files-card ul.files')", what="the Files tab from Direct edit")
         r.page("#/app/sw/settings/problem/edit", "document.querySelector('.editor textarea')", "Direct edit")
         edit = "const [from, to] = arguments; const t = document.querySelector('.editor textarea'); t.value = t.value.replace(from, to); t.dispatchEvent(new Event('input')); return true;"
         b.js(edit, "timeout_s: 60", "timeout_s: 90")

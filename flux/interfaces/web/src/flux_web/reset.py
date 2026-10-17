@@ -33,8 +33,9 @@ def plan(workspace: Workspace, name: str, user: str) -> dict[str, Any]:
     if root.is_symlink():
         raise WorkspaceError("cannot reset a linked loop folder")
     within(root, workspace.root)
-    return {"folders": [{"key": FOLDER_KEYS[folder], "path": f"{root / folder}/", "what": what} for folder, what in FOLDERS.items()] + [
-        {"key": "cache", "path": f"{cache_root() / _key(user, name)}/", "what": "This loop's tool caches, scratch files and agent traces"}],
+    # paths as the loop names them (its own folders), never the server's layout; the cache lies outside it
+    return {"folders": [{"key": FOLDER_KEYS[folder], "name": f"{folder}/", "path": f"{folder}/", "what": what} for folder, what in FOLDERS.items()] + [
+        {"key": "cache", "name": "Tool cache", "path": None, "what": "This loop's tool caches, scratch files and agent traces"}],
         "keep_options": [{"key": key, "label": label} for key, label in KEEP_OPTIONS.items()],
         "history": "All saved starts and their history, plus the last check and start status"}
 

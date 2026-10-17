@@ -334,7 +334,9 @@ class UsageLog:
         hourly = days <= 1
         size = 3600.0 if hourly else float(DAY)
         n = int(round((now - start) / size))
-        labels = [time.strftime("%H:%M" if hourly else "%m-%d", time.gmtime(start + (i + 1) * size)) for i in range(n)]
+        # "Oct 11", as the page says its moments ("10-11" read as neither a date nor a time)
+        stamps = [time.gmtime(start + (i + 1) * size) for i in range(n)]
+        labels = [time.strftime("%H:%M", g) if hourly else f"{time.strftime('%b', g)} {g.tm_mday}" for g in stamps]
         blank = lambda: {"turns": [0] * n, "tokens": [0.0] * n, "cost": [0.0] * n}   # noqa: E731
         by_user: dict[str, dict] = {}
         by_who: dict[str, dict] = {}

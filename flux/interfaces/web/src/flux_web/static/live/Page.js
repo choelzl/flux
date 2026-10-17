@@ -3,6 +3,7 @@
 
 import { Card, Empty, Skeleton, cx, html, useChanges, useEffect, useLayoutEffect, useRef } from "../view.js";
 import { appHref, when } from "../ui.js";
+import { plural } from "../format.js";
 import { StreamPill } from "../components/StatePill.js";
 import { scrollState, restoreScroll } from "../scroll.js";
 import { phaseKind } from "./work_style.js";
@@ -20,6 +21,7 @@ import { Log } from "./Log.js";
 import { Select } from "../components/Select.js";
 import { useLoop } from "../loop/context.js";
 import { Failed, Pill } from "../components/Tone.js";
+import { More } from "../components/More.js";
 
 const narrowScreen = () => window.matchMedia("(max-width: 960px)").matches;
 
@@ -33,28 +35,32 @@ export function Controls({ store }) {
   const { s, a } = store, scope = s.scopeRows && s.journal ? s.lastScope : null;
   if (!s.history) return null;
   const passes = scope?.passes || [], current = scope?.current || [];
+  // on the Log, Follow is the log's (its end in view) and the pass is no filter there: the log is the start's
+  const log = ctx.curSub() === "log", following = log ? s.logFollow : s.following;
   return html`<div class="alt-controls">
-    <button type="button" class=${cx("small", s.following && "on")} hidden=${!ctx.st.running} aria-pressed=${String(s.following)}
-      title=${s.following ? "Stop following" : "Follow the latest task"} onClick=${a.follow}>${s.following ? "Following" : "Follow"}</button>
-    <button type="button" class="small" hidden=${!(s.journal?.model.before || s.journal?.model.cut) || s.startId !== "current"} title="Load all passes of this start" onClick=${a.earlier}>Earlier passes</button>
+    <button type="button" class=${cx("small", following && "on")} hidden=${!ctx.st.running} aria-pressed=${String(following)}
+      title=${following ? "Stop following" : log ? "Follow the log's end" : "Follow the latest task"} onClick=${log ? () => a.logFollow(!s.logFollow) : a.follow}>${following ? "Following" : "Follow"}</button>
+    <button type="button" class="small" hidden=${log || !(s.journal?.model.before || s.journal?.model.cut) || s.startId !== "current"} title="Load all passes of this start" onClick=${a.earlier}>Earlier passes</button>
     <div class="alt-selectors">
       <label>Start <${Select} aria-label="Live start" value=${s.startId} onChange=${a.setStart}
         options=${[["current", "Current start"], ...s.history.starts.filter(x => !x.running).map(x => [x.id, `${when(x.started)} · ${x.rc == null ? "ended" : "exit " + x.rc}`])]} /></label>
-      <label>Pass <${Select} aria-label="Live pass" value=${s.pass} onChange=${a.setPass} options=${[
+      ${log ? "" : html`<label>Pass <${Select} aria-label="Live pass" value=${s.pass} onChange=${a.setPass} options=${[
         ...(s.startId === "current" ? [["current", `Current${current.length ? " · " + current.join(", ") : ""}`]] : []), ["all", "All passes"],
         ...passes.map(n => [n, passName(n)]),
-        ...(!["current", "all"].includes(s.pass) && !passes.includes(Number(s.pass)) ? [[s.pass, `Pass ${s.pass} · unavailable`]] : [])]} /></label>
+        ...(!["current", "all"].includes(s.pass) && !passes.includes(Number(s.pass)) ? [[s.pass, `Pass ${s.pass} · unavailable`]] : [])]} /></label>`}
     </div></div>`;
 }
 
 /** D1063: a task at work inside another at work is one piece of work; D1084: a failure a design got past is "retried". */
 function Summary({ v, s }) {
   const rows = v.scopeRows, J = v.J;
+  const holds = n => state(n) === "running" && (n.kids || []).some(k => k.t1 == null);   // at work around a task at work: one piece
   const count = st => rows.filter(r => st === "retried" ? state(r.node) === "failed" && J.recovered(r.node)
-    : state(r.node) === st && (st !== "failed" || !J.recovered(r.node)) && (st !== "running" || !(r.node.kids || []).some(k => k.t1 == null))).length;
+    : state(r.node) === st && (st !== "failed" || !J.recovered(r.node)) && (st !== "running" || !holds(r.node))).length;
+  const total = rows.filter(r => !holds(r.node)).length;                // the pills add up to it
   const name = s.pass === "all" ? "All passes" : s.pass === "current" ? v.scope.current.length ? v.scope.current.map(passName).join(", ") : "Setup" : passName(Number(s.pass));
   return html`<div class="alt-summary"><strong>${name === "Pass 0" ? "Pass 0 · baseline" : name}</strong>
-    <span class="muted small">${`${rows.length} tasks`}</span>
+    <span class="muted small">${plural(total, "task")}</span>
     ${["running", "done", "failed", "retried", "rejected", "interrupted", "timeout"].map(st => [st, count(st)]).filter(([, n]) => n)
       .map(([st, n]) => html`<${Pill} small tone=${COUNT_TONE[st]} cls=${`alt-count ${st}`} title=${`${n} ${st} in this scope`}><b>${n}</b>${` ${st === "timeout" ? "out of time" : st}`}<//>`)}</div>`;
 }
@@ -143,7 +149,7 @@ function Body({ store }) {
     <div class=${cx("alt-split", mode === "timeline" && s.pass === "all" && "wide")}>
       <section class="card alt-visual-card"><div class="alt-list-head"><${Summary} v=${v} s=${s} /></div>
         <div class="alt-visual" tabindex="0" aria-label="Live task view" ref=${panel} onKeyDown=${onKey}>${content}
-          ${more ? html`<button class="small alt-more" type="button" onClick=${a.more}>${`Earlier tasks (${v.scopeRows.length - v.rows.length})`}</button>` : ""}</div></section>
+          ${more ? html`<${More} cls="alt-more" onClick=${a.more}>${`▸ ${plural(v.scopeRows.length - v.rows.length, "earlier task")}`}<//>` : ""}</div></section>
       <section class="card alt-inspector-card">
         <div class="alt-detail-actions">
           <button type="button" class="small" disabled=${!s.boxView && v.selected == null} title="Show the selected task in the list" onClick=${a.locate}>Locate</button>

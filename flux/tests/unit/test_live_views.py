@@ -392,3 +392,40 @@ def test_the_same_failure_twice_is_one_toast_counted():
     r = subprocess.run(["node", "-e", js], capture_output=True, text=True, timeout=30)
     assert r.returncode == 0, r.stderr
     assert json.loads(r.stdout) == [["The page failed: x", 9], ["other", 1]]
+
+
+def test_a_check_that_exited_non_zero_is_no_tick_though_it_says_0_failing():
+    """popcount_live: a failed build's check read "✓ 0 failing of 0 · exit 3" -- a tick inside a failed check."""
+    got = run_inspector("""m => [[{output: {exit: 3}}, "0 failing of 0"], [{output: {exit: 0}}, "0 failing of 4"], [{output: {exit: "0"}}, "0 failing"],
+      [{output: {}, failed: true}, "0 failing"], [{output: {exit: 1}}, "2 failing of 4"], [{output: {}}, "built"]]
+      .map(([n, out]) => { const r = m.checkResult({ t1: 1, ...n }, out); return r && [r.ok, r.exited, r.failing]; })""")
+    assert got == [[False, True, 0], [True, False, 0], [True, False, 0], [False, False, 0], [False, True, 2], None]
+
+
+def test_older_words_tokens_and_the_model_are_said_as_now():
+    """"the smallest time_ms" beside "smallest time_ms"; "1 candidate(s)"; "7405 in, 181 out, finish_reason=stop";
+    "codex codex 1.0" -- each said one way."""
+    got = run_inspector("""m => [m.tidyWords("the smallest time_ms"), m.tidyWords("the least area_um2 at fmax_mhz >= 3000"), m.tidyWords("1 candidate(s)"),
+      m.tidyWords("3 candidate(s) on screen"), m.tidyWords("the generator"), m.tokensSaid("7405 in, 181 out, finish_reason=stop"),
+      m.tokensSaid("7405 in, 181 out, finish_reason=length"), m.tokensSaid("7,405 in, 18 out"), m.tokensSaid("about 300 tokens"),
+      m.modelSaid("codex codex 1.0"), m.modelSaid("claude-opus, Claude Code 2.1")]""")
+    assert got == ["smallest time_ms", "smallest area_um2 at fmax_mhz >= 3000", "1 candidate", "3 candidates on screen", "the generator",
+                   "7,405 in · 181 out", "7,405 in · 181 out · cut at its length limit", "7,405 in · 18 out", "about 300 tokens",
+                   "codex 1.0", "claude-opus, Claude Code 2.1"]
+
+
+def test_a_choice_says_when_its_table_is_not_the_pool():
+    """popsweep: "4 in the pool" over 5 designs listed; sw: "6 in the pool" over 1."""
+    got = run_inspector("""m => [m.poolSaid("4 in the pool", 5), m.poolSaid("6 in the pool", 1), m.poolSaid("8 in the pool", 8),
+      m.poolSaid("3 in the pool, 1 rejected", 3), m.poolSaid("again, without x#1", 2), m.poolSaid("6 in the pool", 0)]""")
+    assert got == ["5 shown: every design measured, 4 of them in the pool", "1 of 6 shown: the rest measured in passes not loaded", "", "", "", ""]
+
+
+def test_a_box_not_run_is_waiting_or_not_recorded_alike_everywhere(tmp_path):
+    """adder8: Design at work, Search before it never ran -- the tree and the graph drew both as a bare circle, the
+    inspector said "waiting". Each says the inspector's word: "not recorded" (a later box ran), else "waiting"."""
+    ev = [{"t": 0, "ev": "hello", "pid": 1}, {**_st(1, 1, "generation: x", "drafts"), "params": {"pass": 2}}]
+    got = views(tmp_path, ev, """({ lines, sc, v, V }) => {
+      const boxes = V.flowBoxes(sc.rows, 2, true), word = k => V.waitWord(boxes, boxes.find(b => b.key === k));
+      return [word("search"), word("check"), lines(sc.rows, v).tree().filter(l => l.type === "wait").map(l => [l.title, l.said])]; }""")
+    assert got == ["not recorded", "waiting", [["Search", "not recorded"], ["Check", "waiting"], ["Measure", "waiting"], ["Choose", "waiting"]]], got

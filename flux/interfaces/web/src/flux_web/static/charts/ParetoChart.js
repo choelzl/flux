@@ -6,9 +6,9 @@
 import { Empty, html } from "../view.js";
 import { num, plural } from "../format.js";
 import { baselinePoints, designPoints, directionOf, frontier, inScope, verdictOf } from "./data.js";
-import { Legend, Mark, Ring, pointTitle, stylesOf } from "./marks.js";
+import { Legend, Mark, Ring, niceTicks, pointTitle, stylesOf } from "./marks.js";
 
-const W = 560, H = 300, L = 62, R = 14, T = 14, B = 34;
+const W = 560, H = 300, R = 14, T = 14, B = 34;
 let serial = 0;
 
 /** `focus`: fit the axes to the front (D1028); `onPick(design)`: a point clicked. */
@@ -24,14 +24,17 @@ export function ParetoChart({ designs, xm, ym, stage, objectives, onPick, styles
   const on = new Set(front), focused = focus === true && front.length > 0;
   const goal = m => { const o = (objectives || []).find(x => x.metric === m); return o && o.goal != null ? Number(o.goal) : null; };
   const gx = goal(xm), gy = goal(ym);
+  // results-11, -12: an axis from a round tick to a round tick, never below 0 for a measure that is never negative
   const span = vals => { let lo = vals[0], hi = vals[0]; for (const v of vals) { if (v < lo) lo = v; if (v > hi) hi = v; }
-    if (lo === hi) { lo -= Math.abs(lo) * 0.1 || 1; hi += Math.abs(hi) * 0.1 || 1; } const p = (hi - lo) * 0.08; return [lo - p, hi + p]; };
+    if (lo === hi) { lo -= Math.abs(lo) * 0.1 || 1; hi += Math.abs(hi) * 0.1 || 1; return [lo, hi]; }      // one value: in the middle
+    const p = (hi - lo) * 0.08; return [lo >= 0 ? Math.max(0, lo - p) : lo - p, hi + p]; };
   const xs = focused ? front.map(p => p.x) : pts.map(p => p.x).concat(xr.map(p => p.metrics[xm]), gx != null ? [gx] : []);
   const ys = focused ? front.map(p => p.y) : pts.map(p => p.y).concat(yr.map(p => p.metrics[ym]), gy != null ? [gy] : []);
   if (!xs.length || !ys.length) return html`<${Empty} text="No measurements in this scope." />`;
   const [x0, x1] = span(xs), [y0, y1] = span(ys);
+  const ticks = (a, b) => niceTicks(a, b).filter(v => v >= a - 1e-9 && v <= b + 1e-9);
+  const L = 30 + 6.2 * Math.max(...ticks(y0, y1).map(v => num(v).length));   // results-12: the widest tick's room before the axis title
   const X = v => L + (W - L - R) * (v - x0) / (x1 - x0), Y = v => T + (H - T - B) * (1 - (v - y0) / (y1 - y0));
-  const ticks = (a, b) => [a + (b - a) * 0.08 / 1.16, (a + b) / 2, b - (b - a) * 0.08 / 1.16];
   // the front as a staircase: between two designs on it, the corner neither beats
   const worseY = (a, b) => (dy === "minimize" ? Math.max(a, b) : Math.min(a, b));
   const line = front.map((p, i) => i ? `L${X(p.x).toFixed(1)},${Y(worseY(p.y, front[i - 1].y)).toFixed(1)}L${X(p.x).toFixed(1)},${Y(p.y).toFixed(1)}` : `M${X(p.x).toFixed(1)},${Y(p.y).toFixed(1)}`).join("");

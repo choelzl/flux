@@ -5,12 +5,25 @@ running any of its code -- and the configurator's YAML saved with the keys it ke
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Any
 
 import yaml
 
 KEPT_HEADER = "# Kept as written: the configurator does not edit these (D686).\n"
+
+
+_REFS = re.compile(r"\s*\((?:D\d+[a-z]?(?:, ?D\d+[a-z]?)*)\)|\bD\d+[a-z]?(?:, ?D\d+[a-z]?)*;\s*")
+
+
+def loader_says(error: str, folder: Path) -> str:
+    """The loader's refusal as the web says it (D1208): its files named inside the loop (`problem.yaml`, not the
+    server's path to it), no decision numbers -- they are the repository's, not the reader's."""
+    text = str(error)
+    for at in {str(folder), str(folder.resolve())}:
+        text = text.replace(at.rstrip("/") + "/", "")
+    return _REFS.sub("", text).strip()
 
 
 def views(path: Path, root: Path | None = None) -> dict[str, Any]:
@@ -32,7 +45,7 @@ def views(path: Path, root: Path | None = None) -> dict[str, Any]:
         with confined(root or path.parent):
             normal, error = load_task(str(path)).to_dict(), ""
     except Exception as exc:  # noqa: BLE001 -- the configurator shows why and reads what it can
-        normal, error = None, str(exc)
+        normal, error = None, loader_says(str(exc), root or path.parent)
     return {"raw": raw, "normal": normal, "error": error}
 
 

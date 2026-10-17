@@ -4,6 +4,7 @@ and loop; each endpoint and agent as its turns found it; the hosts refused; the 
 from __future__ import annotations
 
 import json
+import re
 import types
 
 import pytest
@@ -214,3 +215,24 @@ def test_token_rate_accepts_epoch_zero_and_untimed_legacy_turns(tmp_path):
     got = _rate(tmp_path, [(0, "model", 0, 100, 10)], 1, 180, 0)
     assert got[-1]["t"] == 0
     assert sum(p["in_model"] for p in got) * 20 == pytest.approx(100)
+
+
+def test_a_failure_says_its_paths_short():
+    """Review of Oct 17: Insights › Failures said "/nix/store/8z15…-python3-3.13.13-env/bin/python3: can't open file
+    '/…/users/bob/apps/broken_gen/nope.py'" over three lines -- a Nix program by its name, a loop's file by its path there."""
+    from flux_web.runs import short_paths
+
+    loop = "/data/users/bob/apps/broken_gen"
+    said = ("algorithm=a: the generator exited 2: /nix/store/8z15s70cdnpl6g8imgg9hikgq3845hz0-python3-3.13.13-env/bin/python3: "
+            f"can't open file '{loop}/scripts/nope.py': [Errno 2] No such file or directory")
+    assert short_paths(said, (loop, "/cache/bob-broken_gen")) == (
+        "algorithm=a: the generator exited 2: python3: can't open file 'scripts/nope.py': [Errno 2] No such file or directory")
+    assert short_paths("/usr/bin/false exited 1", (loop,)) == "/usr/bin/false exited 1", "a path elsewhere stays whole"
+
+
+def test_usage_days_are_said_as_dates(tmp_path):
+    """Review of Oct 17: the columns said "10-11 – 10-17", a date read as neither; now "Oct 11"."""
+    log = UsageLog(tmp_path / "u.db", clock=lambda: NOW)
+    days = log.usage_by_day(7, NOW)["days"]
+    assert len(days) == 7 and all(re.fullmatch(r"[A-Z][a-z]{2} \d{1,2}", d) for d in days), days
+    assert all(re.fullmatch(r"\d\d:\d\d", h) for h in log.usage_by_day(1, NOW)["days"])

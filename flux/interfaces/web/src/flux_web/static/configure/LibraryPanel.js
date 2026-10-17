@@ -104,9 +104,8 @@ export function Knowledge({ M, state, edit, store, who, opts, fixed, direct }) {
     <${Head} title=${W.library} on=${libOn} disabled=${fixed} set=${on => edit(() => { f.knowledge = on ? "default" : "none"; })} />
     ${libOn ? html`<h4 class="muted small">${W.reads}</h4>
       <ul class="cfg-lib-reads" aria-label=${W.reads}>
-        ${readRows(files, reads).map(r => hiddenBy(r.path, M.hiddenOf(state))      // D1159: hidden from AI, read by no prompt
-          ? row(r.path, html`<code>${r.path}</code>`, "hidden from AI", false, null, true)
-          : row(r.path, html`<code>${r.path}</code>`, r.missing ? "missing" : r.n ? `folder, ${plural(r.n, "file")}` : "", isRead(r.path), () => toggle(r.path), false))}
+        ${readRows(files, reads).filter(r => !hiddenBy(r.path, hid))   // D1209: hidden from AI is read by no prompt -- listed under Hidden only
+          .map(r => row(r.path, html`<code>${r.path}</code>`, r.missing ? "missing" : r.n ? `folder, ${plural(r.n, "file")}` : "", isRead(r.path), () => toggle(r.path), false))}
         ${row("library/", html`<code>library/</code>`, (lib ? `${plural(lib, "paper")}, digested` : "papers added there, digested") + (libHidden ? `; ${libHidden} hidden from AI` : ""), true, null, true)}
         ${row("shared", html`<span>shared library</span>`, papers != null ? plural(papers, "paper") : "", true, null, true)}</ul>
       <${AddFiles} store=${store} rows=${up} setRows=${setUp} into="" label="Drop files or folders to read" then=${readAdded} />
@@ -138,7 +137,7 @@ export function Knowledge({ M, state, edit, store, who, opts, fixed, direct }) {
   };
   const tops = [...new Set(files.map(x => x.path.includes("/") ? `${x.path.split("/")[0]}/` : x.path))].filter(p => !isDoc(p) && !hidden.some(h => bare(h) === bare(p))).sort();
   const hiddenSec = html`<div class="cfg-sub" data-sec="hidden">
-    <${Head} title=${W.hidden} control=${html`<span class="muted small">${hidden.length || ""}</span>`} />
+    <${Head} title=${W.hidden} control=${hidden.length ? html`<span class="muted small">${`${hidden.length} ${W.hiddenCount}`}</span>` : html`<span />`} />
     <p class="cfg-says">${W.hiddenSays}</p>
     ${hidden.length ? html`<ul class="cfg-hidden" aria-label=${W.hidden}>${hidden.map(p => html`<li key=${p}><${HiddenMark} path=${p} /><code>${p}</code>
         <${Tool} icon="close" label=${`${W.hiddenRemove}: ${p}`} onClick=${() => setHidden(hidden.filter(x => x !== p))} /></li>`)}</ul>`

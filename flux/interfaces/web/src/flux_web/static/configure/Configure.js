@@ -6,8 +6,8 @@
 // is the address's (`?step=checks`), else the draft's.
 
 import { Card, Empty, Notice, Skeleton, html, useEffect, useMemo, useRef, useState } from "../view.js";
-import { appHref, confirmDialog, createFromText, enc, loopApi, toast, when } from "../ui.js";
-import { plural } from "../format.js";
+import { appHref, confirmDialog, createFromText, enc, loopApi, toast } from "../ui.js";
+import { agoText, plural } from "../format.js";
 import { me } from "../state.js";
 import { diffCounts, lineDiff } from "../diff.js";
 import { Diff } from "../components/Diff.js";
@@ -16,6 +16,7 @@ import { UploadForm } from "../loops/Create.js";
 import { filesStore } from "./files.js";
 import { Configurator } from "./Configurator.js";
 import { DraftLine } from "./DraftLine.js";
+import { Refused } from "./fields.js";
 import { stepOfHash, stepToHash, useModel } from "./model.js";
 import { CloneForm, DirectEdit, NewByAgent, ReviseByAgent, confirmDiff } from "./Views.js";
 import { Select } from "../components/Select.js";
@@ -45,9 +46,9 @@ function draftUsed(d) {
 /** D913b: the preflight's check as Review's line -- [kind, words]. */
 function checkedOf(pre) {
   if (!pre) return ["note", "reading the last check…"];
-  if (pre.checked && pre.ok === true) return ["ok", `passed on saved files (${when(pre.when)})`];
-  if (pre.checked && pre.ok === false) return ["error", `failed on saved files (${when(pre.when)}): see Check`];
-  return ["note", pre.when ? `not on current files (last: ${when(pre.when)})` : "not checked yet"];
+  if (pre.checked && pre.ok === true) return ["ok", `passed on saved files (${agoText(pre.when)})`];
+  if (pre.checked && pre.ok === false) return ["error", `failed on saved files (${agoText(pre.when)}): see Check`];
+  return ["note", pre.when ? `not on current files (last: ${agoText(pre.when)})` : "not checked yet"];
 }
 
 /** Save's folded Changes (D941) and the save (D693): what it changes, line by line, before it writes. */
@@ -83,7 +84,7 @@ function ConfigureLoop({ M, name, owner }) {
     return () => { live = false; };
   }, [name]);
   if (problem === "none") return html`<${Card}><${Empty} text="No problem document yet." /><//>`;
-  if (problem) return html`<${Card}><${Notice} tone="bad" what="The document does not load:" why=${problem} />
+  if (problem) return html`<${Card}><${Refused} text=${problem} />
     <p class="muted">The configurator cannot read it. Fix it in <a href=${`${appHref(owner, name)}/settings/problem/edit`}>Direct edit</a>.</p><//>`;
   if (!doc) return html`<${Card}><${Skeleton} lines=${6} /><//>`;
   const got = ref.current.got;
@@ -101,7 +102,7 @@ function ConfigureLoop({ M, name, owner }) {
   // D710: a document the loader refuses is said first, here and as Save's first line; the form is what could be read
   return html`<p class="muted small doc-line"><span class="mono">${doc.document}</span>${" · saving drops comments" + (got.kept.length ? "; the rest is kept as written" : "")}</p>
     ${fresh ? html`<${Notice} tone="none" what=${M.WORDS.save.starterWhat} why=${M.WORDS.save.starterWhy} />`
-    : doc.error ? html`<${Notice} tone="bad" what="The document does not load:" why=${doc.error}>
+    : doc.error ? html`<${Refused} text=${doc.error}>
       <p class="small">Below is what could be read from it, not what runs. Fix it here and save, or in <a href=${`${appHref(owner, name)}/settings/problem/edit`}>Direct edit</a>.</p><//>` : ""}
     <${Configurator} M=${M} state=${got.state} step=${stepOfHash() || "prompt"} onStep=${stepToHash} notes=${got.notes} saveLabel=${"Save to " + doc.document}
       loadError=${doc.error || ""} starter=${starter} calm=${starter}
@@ -123,7 +124,7 @@ function ConfigureNew({ M, draft, onDraft }) {
   const save = async (yaml, state) => {
     const name = String(state.id || "").trim();
     // D912: said beside the button pressed, the name's box focused
-    if (!/^[A-Za-z0-9_-]{1,60}$/.test(name)) throw Object.assign(new Error("Give the loop a name first (Prompt › Loop name): letters, digits, - and _ (1–60 characters)."), { field: "id" });
+    if (!/^[A-Za-z0-9_-]{1,60}$/.test(name)) throw Object.assign(new Error("Name the loop first (Prompt › Name): letters, digits, - and _ (1–60 characters)."), { field: "id" });
     if (!await createFromText(name, "problem.yaml", yaml)) return "Not created: the name is taken.";   // D906
     const n = await store.upload(name);
     if (adv.current) await loopApi(name).api("/advanced", { method: "PUT", body: adv.current });
@@ -138,8 +139,7 @@ function ConfigureNew({ M, draft, onDraft }) {
   };
   return html`<${Configurator} M=${M} state=${draft.state} step=${stepOfHash() || draft.step} onStep=${id => { draft.step = id; stepToHash(id); }}
     touched=${draftUsed(draft)} calm isNew extra=${extra} saveDraft=${saveDraft} save=${save} saveLabel="Create loop"
-    checked=${() => ["note", "not checked yet"]} store=${store} onChange=${() => { store.watch(); onDraft(); }}
-    nameLabel="Loop name" namePlaceholder="my_loop" />`;
+    checked=${() => ["note", "not checked yet"]} store=${store} onChange=${() => { store.watch(); onDraft(); }} />`;
 }
 
 /** The ways' tabs (`small`: as sub-tabs) and, on a phone, one compact menu (D913). */
@@ -159,7 +159,7 @@ export function Configure({ name, owner, mode, pick, tabs = true }) {
   if (M === null) return html`<${Card}><${Empty} text="The configurator's script did not load." /><//>`;
   if (!M) return html`${tabs ? html`<${ModeTabs} name=${name} mode=${mode} pick=${pick} />` : ""}<${Card}><${Skeleton} lines=${6} /><//>`;
   const view = mode === "configurator" ? (name ? html`<${ConfigureLoop} key=${`of:${name}`} M=${M} name=${name} owner=${owner} />` : html`<${ConfigureNew} key=${`new:${gen}`} M=${M} draft=${draft} onDraft=${onDraft} />`)
-    : mode === "upload" ? html`<${UploadForm} />` : mode === "edit" ? html`<${DirectEdit} name=${name} />` : mode === "clone" ? html`<${CloneForm} />`
+    : mode === "upload" ? html`<${UploadForm} />` : mode === "edit" ? html`<${DirectEdit} name=${name} owner=${owner} />` : mode === "clone" ? html`<${CloneForm} />`
     : name ? html`<${ReviseByAgent} name=${name} /> ` : html`<${NewByAgent} draft=${draft} onDraft=${onDraft} done=${() => draftDone(draft)} />`;
   // D912: the draft is the configurator's -- said on its tab (Create or upload and Clone do not use it; Agent says its own)
   const line = mode === "configurator" && draft && draftUsed(draft) ? html`<${DraftLine} M=${M} state=${draft.state} staged=${draft.staged.size} discard=${discard} />`

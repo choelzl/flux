@@ -164,3 +164,15 @@ def test_real_timeout_records_tokens_including_updates_during_shutdown(tmp_path,
     assert record["streamed"] is True and sum(p["in_agent"] + p["out_agent"] for p in rates) == 0
     endpoint, = log.endpoints(end - 3600, end)
     assert endpoint["failed"] == 0, "an agent time budget remains neutral for endpoint health"
+
+
+def test_an_agent_whose_version_names_itself_is_said_once(monkeypatch, tmp_path):
+    """Live's model read "codex codex 1.0": the tool's name before a --version that already says it."""
+    from flux_loop import agent
+
+    for name, said, want in (("codex", "codex 1.0", "codex 1.0"), ("codex", "codex-cli 0.46.0", "codex-cli 0.46.0"), ("opencode", "0.15.2", "opencode 0.15.2")):
+        exe = tmp_path / name
+        exe.write_text(f"#!/bin/sh\necho '{said}'\n")
+        exe.chmod(0o755)
+        monkeypatch.setattr(agent, "_VERSIONS", {})
+        assert agent._about(str(exe), {}) == want

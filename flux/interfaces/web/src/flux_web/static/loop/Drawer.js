@@ -9,7 +9,7 @@ const LEAST = 520;
 
 /** `open`, `asking` (the agent waits), `toggle(open)`; its body the children -- kept while closed. */
 export function Drawer({ open, asking, toggle, children }) {
-  const [width, setWidth] = useState(LEAST), [wide, setWide] = useState(() => window.innerWidth), drag = useRef(null), handle = useRef(null), aside = useRef(null);
+  const [width, setWidth] = useState(LEAST), [wide, setWide] = useState(() => document.documentElement.clientWidth || window.innerWidth), drag = useRef(null), handle = useRef(null), aside = useRef(null);
   const size = w => setWidth(Math.max(LEAST, Math.min(w, wide)));
   const end = () => {
     const d = drag.current;
@@ -18,7 +18,7 @@ export function Drawer({ open, asking, toggle, children }) {
     if (d && handle.current?.hasPointerCapture(d.id)) handle.current.releasePointerCapture(d.id);
   };
   useEffect(() => {
-    const resized = () => setWide(window.innerWidth);
+    const resized = () => setWide(document.documentElement.clientWidth || window.innerWidth);   // without its scroll bar
     const key = e => { if (e.key === "Escape" && open && !document.querySelector("dialog[open]")) toggle(false); };
     window.addEventListener("resize", resized); document.addEventListener("keydown", key);
     return () => { end(); window.removeEventListener("resize", resized); document.removeEventListener("keydown", key); };
@@ -38,7 +38,9 @@ export function Drawer({ open, asking, toggle, children }) {
     if (!(e.key in sizes)) return;
     e.preventDefault(); size(sizes[e.key]);
   };
-  return html`<button class=${cx("ask-fab", open && "on", asking && "asking")} type="button" onClick=${() => toggle(!open)}>Talk</button>
+  // the agent waits for an answer: the button in the agent's colour, a dot on it (opaque: it floats over the page)
+  return html`<button class=${cx("ask-fab", open && "on", asking && "asking")} type="button" aria-label=${asking ? "Talk: the agent asks" : null}
+      title=${asking ? "The agent asks: answer in Talk" : null} onClick=${() => toggle(!open)}>Talk${asking ? html`<span class="ask-fab-dot" aria-hidden="true" />` : ""}</button>
     <aside class=${cx("drawer", open && "open")} aria-label="Talk to this loop" ref=${aside} style=${`--talk-width:${Math.max(LEAST, shown)}px`}>
       <div class="drawer-resize" role="separator" tabindex=${open ? 0 : -1} aria-label="Resize Talk panel" aria-orientation="vertical" ref=${handle}
         title="Drag or use arrow keys to resize" aria-valuemin=${Math.min(LEAST, wide)} aria-valuemax=${wide} aria-valuenow=${shown}

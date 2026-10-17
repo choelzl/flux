@@ -3,7 +3,8 @@
 // picked), a failing one turning Start into "Start anyway".
 
 import { html, Notice, useEffect, useState } from "../view.js";
-import { dialog, enc, loopApi, toast, when, withOwner } from "../ui.js";
+import { dialog, enc, loopApi, toast, withOwner } from "../ui.js";
+import { agoText } from "../format.js";
 import { pageOwner } from "../state.js";
 import { Select } from "../components/Select.js";
 import { Check } from "../components/Check.js";
@@ -12,7 +13,7 @@ import { Check } from "../components/Check.js";
 function StartForm({ name, pre, v, set }) {
   const docs = (pre.documents || []).filter(d => d.ok), [said, setSaid] = useState(null);
   const verdict = (ok, output) => {
-    if (ok) setSaid({ ok: true, text: pre.checked ? `Check passed (${when(pre.when)}).` : "Check passes." });
+    if (ok) setSaid({ ok: true, text: pre.checked && pre.when ? `Check passed · ${agoText(pre.when)}` : "Check passes." });   // results-27: as the app says times
     else setSaid({ ok: false, text: "Check fails: the loop would not get far.", output });
     set({ failing: !ok });
   };
@@ -32,9 +33,10 @@ function StartForm({ name, pre, v, set }) {
       options=${docs.map(d => [d.path, `${d.path} — record ${d.record}`])} /></label>` : ""}
     <div class="preflight">${said ? html`<${Notice} tone=${said.ok === true ? "ok" : said.ok === false ? "bad" : "run"} what=${said.text}>
       ${said.output ? html`<details><summary>Check output</summary><pre class="log small">${said.output}</pre></details>` : ""}<//>` : ""}</div>
-    <div class="row"><label class="stack">Passes<input type="number" class="start-passes w-90" min="1" value=${v.passes} disabled=${v.forever} onInput=${e => set({ passes: e.currentTarget.value })} /></label>
-      <${Check} class="start-forever" checked=${v.forever} onChange=${forever => set({ forever })}>until I stop it<//></div>
-    <${Check} class="start-screen" checked=${v.screen} onChange=${screen => set({ screen })}>screen only (skip costly stages)<//>`;
+    <div class="start-options"><label for="start-passes">Passes</label>
+      <div class="start-line"><input id="start-passes" type="number" class="start-passes w-90" min="1" value=${v.passes} disabled=${v.forever} onInput=${e => set({ passes: e.currentTarget.value })} />
+        <${Check} class="start-forever" checked=${v.forever} onChange=${forever => set({ forever })}>until I stop it<//></div>
+      <${Check} class="start-screen" checked=${v.screen} onChange=${screen => set({ screen })}>screen only (skip costly stages)<//></div>`;
 }
 
 /** The dialog for a start's options, then the start; true when it started. */

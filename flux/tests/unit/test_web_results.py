@@ -132,6 +132,20 @@ def test_an_accepted_design_never_misses_a_goal_at_the_stage_it_shows(tmp_path):
         assert d["verdict"] != "accepted" or all(d["meets"].values()), (d["name"], d["meets"])
 
 
+def test_a_number_under_a_goal_is_coloured_whichever_stage_judges_it(tmp_path):
+    """Review results-10: a pending design's 2290 under "≥ 2000" (judged at a later stage) stayed black, and so did a
+    loop's whose goal is judged at another stage. Now every number in a column with a goal is met or missed."""
+    by = {d["name"]: d for d in designs(_record(tmp_path), STAGES, decision="fast")["designs"]}
+    assert by["tiny"]["shown"] == "screen" and by["tiny"]["meets"]["fmax_mhz"] is False      # 700, the goal 1000 judged at confirm
+    db = str(tmp_path / "p.db")
+    rec = Records(db, objective={"study": "t"}, name="t")
+    rec.remember("objectives", {"objectives": [{"metric": "fmax_mhz", "direction": "maximize", "goal": 2000, "stage": "confirm"}]})
+    rec.trial({"name": "t#5", "artifact": "x"}, "t#5@screen", stage="screen", strategy="loop", metrics={"fmax_mhz": 2290.0}, evaluator="screen")
+    rec.close("paused")
+    p = designs(db, [{"name": "screen"}, {"name": "confirm"}])["designs"][0]
+    assert p["verdict"] == "pending" and p["meets"] == {"fmax_mhz": True}
+
+
 def test_the_accepted_designs_of_a_start_are_counted_for_the_loops_list(tmp_path):
     """Review shell-1: the list's Designs are "new accepted / accepted / measured" -- this start's accepted ones too."""
     db = _record(tmp_path)

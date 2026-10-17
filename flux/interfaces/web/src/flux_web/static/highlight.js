@@ -56,11 +56,28 @@ export function guessLang(text) {
 
 const MAX_CHARS = 400000;
 
+/** D1206: a YAML text's lines as tokens, each line's own -- the lines of a block scalar (`key: >-`, `key: |`) are its
+    prose, plain text: no word in them is a key, a boolean or a number. */
+export function tokenLines(text, lang) {
+  const lines = String(text ?? "").split("\n");
+  if (lang !== "yaml" || String(text ?? "").length > MAX_CHARS) return lines.map(l => tokens(l, lang));
+  let block = null;                                   // the indent a block scalar's lines are deeper than
+  return lines.map(line => {
+    const indent = line.length - line.trimStart().length;
+    if (block !== null && (!line.trim() || indent > block)) return line ? [["", line]] : [];
+    block = /^\s*(?:-\s+)?[^\s#][^#]*:\s*[|>][-+0-9]*\s*(?:#.*)?$/.test(line) ? indent : null;
+    return tokens(line, lang);
+  });
+}
+
 /** D1095: the text as tokens -- [class, text] each, class "" for plain text -- drawn as spans by the components
     (components/Markdown.js Code and Prose, components/CodeEditor.js). */
 export function tokens(text, lang) {
   const rules = RULES[lang], out = [];
   text = String(text ?? "");
+  if (lang === "yaml" && text.includes("\n") && text.length <= MAX_CHARS) {        // D1206: block scalars as prose
+    return tokenLines(text, lang).flatMap((l, i) => i ? [["", "\n"], ...l] : l);
+  }
   if (!rules || text.length > MAX_CHARS) return text ? [["", text]] : [];
   let i = 0, plain = "";
   const flush = () => { if (plain) { out.push(["", plain]); plain = ""; } };

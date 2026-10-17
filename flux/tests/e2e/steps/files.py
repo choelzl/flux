@@ -345,19 +345,29 @@ def flows(r):
                 b.js(watch)
                 r.check(f"reload preserves {path}", b.js("return location.hash") == f"#/app/{name}/{path}")
                 r.check(f"reload keeps {path}'s loop breadcrumb", name in b.js("return document.querySelector('.crumbs-bar').innerText"))
+                if path == "files/workbench":           # review loopwork-5, -33: nothing yet said so, no viewer; one group unnamed
+                    r.check("an empty workbench says so, with no viewer beside it", b.js("""const m = document.querySelector('#main');
+                      return m.textContent.includes('No tools or notes yet') && !m.querySelector('.viewer-card')"""))
+                    put(r, name, "workbench/sweep.py", "# Sweep the clocks\n")
+                    r.page(f"#/app/{name}/files", "document.querySelector('#main .files-card')", "Files")
+                    r.page(f"#/app/{name}/{path}", "document.querySelector('#main ul.bench li')", "the workbench with a file")
+                    r.check("a single group has no heading; a row is name, time and first line", b.js("""const m = document.querySelector('#main');
+                      const li = m.querySelector('ul.bench li');
+                      return !m.querySelector('.bench-group h3') && li.querySelector('.file-link').textContent.endsWith('sweep.py')
+                        && li.querySelector('.first').textContent === 'Sweep the clocks' && !!m.querySelector('.viewer-card')"""))
                 if path.endswith("/edit"):
                     b.wait("document.querySelector('#main .editor textarea')", what="reloaded direct editor")
                     r.check("reload restores the saved document", b.js("return document.querySelector('#main .editor textarea').value") == DOCUMENT)
                 r.clean(f"reload {path}")
             r.page(f"#/app/{name}/files", f"document.querySelector('{EDITOR}')", "Files")
-            results_ready = "document.querySelector('#main .empty')?.textContent === 'No results yet.'"
+            results_ready = "document.querySelector('#main .empty')?.textContent === 'Not run yet.'"
             r.page(f"#/app/{name}/results", results_ready, "Results")
             b.cmd("WebDriver:Back", {})
             b.wait(f"location.hash === '#/app/{name}/files' && document.querySelector('{EDITOR}')", what="Back to Files")
             r.check("browser Back restores Files", b.js(f"return document.querySelector('{EDITOR}').value") == DOCUMENT)
             b.cmd("WebDriver:Forward", {})
             b.wait(f"location.hash === '#/app/{name}/results' && ({results_ready})", what="Forward to Results")
-            r.check("browser Forward restores Results", "No results yet." in r.text())
+            r.check("browser Forward restores Results", "Not run yet." in r.text())
             r.clean("browser history")
 
     r.step("reload and browser history", navigation)
@@ -410,7 +420,12 @@ def flows(r):
             r.page(f"#/app/{name}/files", f"document.querySelector('{EDITOR}')", "Files")
             select_file(r, "notes.txt")
             b.wait(f"document.querySelector('{EDITOR}').value === 'original\\n'", what="notes opened")
+            r.check("Save waits for a change (review loopwork-32)", b.js("return document.querySelector('#file-save').disabled"))
+            below = b.js("""scrollTo(0, 0); const e = document.querySelector('.viewer .editor').getBoundingClientRect(),
+              f = document.querySelector('.ask-fab').getBoundingClientRect(); return [e.bottom, f.top]""")
+            r.check("the editor ends above the Talk button (review loopwork-32)", below[0] <= below[1], str(below))
             edit(r, "my edit\n")
+            r.check("an edit offers Save", b.js("return !document.querySelector('#file-save').disabled"))
             put(r, name, "notes.txt", "another writer\n")
 
             def save_conflict():
@@ -533,7 +548,7 @@ def flows(r):
             r.check("the restored editor can still save", file_api(r, name, path)["body"] == draft)
             r.button("Fullscreen", ".viewer")
             b.wait("document.querySelector('dialog.fullscreen-view[open]')")
-            r.page(f"#/app/{name}/results", "document.querySelector('#main .empty')?.textContent === 'No results yet.'", "Results")
+            r.page(f"#/app/{name}/results", "document.querySelector('#main .empty')?.textContent === 'Not run yet.'", "Results")
             r.check("leaving a fullscreen view closes its modal without leaving an old editor", not b.js("return !!document.querySelector('dialog.fullscreen-view, #main textarea')"))
             r.clean("fullscreen draft and raw")
 

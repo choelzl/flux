@@ -3,7 +3,7 @@
 
 import { html } from "../view.js";
 import { WORK_COLORS as COLORS, workLabel } from "./work_style.js";
-import { passName, taskLabel } from "./views.js";
+import { passName, taskLabel, waitWord } from "./views.js";
 import { PassSummary } from "./inspector/Inspector.js";
 import { asYaml, noteName, noteSaid } from "./notes.js";
 import { Facts, Pill } from "../components/Tone.js";
@@ -14,9 +14,9 @@ const said = v => typeof v === "object" ? JSON.stringify(v) : String(v);
 /** D1059: a box of a pass -- its state as its box says it, its runs to open, or its notes, or what the
     document sets it to (as YAML, D1094) while it has not run. */
 export function BoxPanel({ v, a, box }) {
-  const { b, boxes, config, took } = box, later = b && boxes.slice(boxes.indexOf(b) + 1).some(x => x.runs.length);
+  const { b, boxes, config, took } = box, later = b && waitWord(boxes, b) === "not recorded";
   const [tone, said] = b?.done ? ["ok", "done"] : b?.runs.length || b?.notes?.length ? { ok: ["ok", "done"], bad: ["bad", "failed"], part: ["warn", "partly failed"], run: ["run", "running"] }[b.state] || ["ok", "done"]
-    : later ? ["none", "not recorded"] : ["none", "waiting"];
+    : ["none", b ? waitWord(boxes, b) : "waiting"];
   return html`<div class="detail alt-detail alt-box-detail" data-box=${v.boxView.key} data-pass=${String(v.boxView.p ?? "setup")} data-drawn=${v.drawn}>
     <${Head} cls="alt-ihead" stripe=${COLORS[b?.kind] || COLORS.setup} title=${b?.title || workLabel(v.boxView.key)}><${Pill} tone=${tone}>${said}<//><//>
     <p class="muted small">${passName(v.boxView.p)}</p>

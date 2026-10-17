@@ -69,22 +69,23 @@ export function dialog(title, body, buttons, init = {}) {
 /** D1102: one name or path asked for, in the one dialog shape -- the field (full width, monospace), a hint under it,
     a notice when the change has a consequence, the actions; Enter asks. `hint(text)` follows what is typed;
     `Consequence({ text, bad })` is a component drawn under it (it may look something up), calling `bad(true)` when
-    its notice is bad -- the button is red exactly then. The trimmed text, or null. */
-export const askText = (title, { label, value = "", hint = null, Consequence = null, ok = "OK", id, maxlength, ...field } = {}) =>
+    its notice is bad -- the button is red exactly then. `valid(text)`: the button disabled (Enter too) until it
+    holds. The trimmed text, or null. */
+export const askText = (title, { label, value = "", hint = null, Consequence = null, ok = "OK", id, maxlength, valid = null, ...field } = {}) =>
   dialog(title, ({ v, set, submit }) => {
     const t = v.text.trim();
     return html`<div class="stack ask-text"><label class="stack">${label}<input ...${field} id=${id} class="mono full" value=${v.text} autocomplete="off"
         spellcheck="false" maxlength=${maxlength} onInput=${e => set({ text: e.currentTarget.value })} onKeyDown=${e => { if (e.key === "Enter") submit(); }} /></label>
       ${hint ? html`<p class="hint">${typeof hint === "function" ? hint(t) : hint}</p>` : ""}
       ${Consequence ? html`<${Consequence} text=${t} bad=${b => { if (b !== v.bad) set({ bad: b }); }} />` : ""}</div>`;
-  }, v => [["Cancel", null], [ok, x => x.text.trim(), v.bad ? "danger" : "primary"]], { text: value, bad: false });
+  }, v => [["Cancel", null], [ok, x => x.text.trim(), v.bad ? "danger" : "primary", !!valid && !valid(v.text.trim())]], { text: value, bad: false });
 /** D1102: a question in the one dialog shape -- the title asks it, `hint` says what it means, then its consequence
     `said` as a notice: bad when `danger` (the button red exactly then), warn otherwise; `said` [what, why] or a
-    sentence. True once confirmed. */
-export const confirmDialog = (title, said, { ok = "OK", danger = false, hint = null } = {}) => {
+    sentence; `tone` another (results-26: a stop now is a caution, warn, its button still red). True once confirmed. */
+export const confirmDialog = (title, said, { ok = "OK", danger = false, hint = null, tone = null } = {}) => {
   const [what, why] = Array.isArray(said) ? said : [null, null];
   return dialog(title, html`<div class="stack">${hint ? html`<p class="hint">${hint}</p>` : ""}${said
-    ? html`<${Notice} tone=${danger ? "bad" : "warn"} what=${what} why=${why}>${Array.isArray(said) ? "" : said}<//>` : ""}</div>`,
+    ? html`<${Notice} tone=${tone || (danger ? "bad" : "warn")} what=${what} why=${why}>${Array.isArray(said) ? "" : said}<//>` : ""}</div>`,
     [["Cancel", false], [ok, true, danger ? "danger solid" : "primary"]]);
 };
 

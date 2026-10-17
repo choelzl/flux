@@ -115,7 +115,7 @@ AREAS: dict[str, dict[str, list[str]]] = {
                     *_loop("agent", "agent_check", "agent_env", "agent_usage", "boxes", "probe", "capabilities")],
         "unit": ["test_agent_*.py", "test_agents_*.py", "test_coding_agent.py", "test_probe.py", "test_workbench.py",
                  "test_prompt_limits.py", "test_web_agent_steps.py", "test_web_d934.py", "test_web_d945.py",
-                 "test_web_conversation.py", "test_document_fixes_d967.py"],
+                 "test_web_conversation.py", "test_document_fixes_d967.py", "test_web_turn_words.py"],
         "e2e": ["agent settings", "models from endpoint", "live page"],
     },
     "talk": {

@@ -2,16 +2,16 @@
 // choice (P9), a critic (P10), any other task's steps -- and the quiet steps it took (D1047).
 
 import { html } from "../../view.js";
-import { bytes, dur } from "../../format.js";
+import { bytes, dur, plural } from "../../format.js";
 import { WORK_COLORS as COLORS, phaseKind } from "../work_style.js";
 import { Block, Fold, Pre, StepRow, Stream } from "./bits.js";
-import { bestOf, candidateOf, cell, chooseColumns, colorOf, dictsOf, failingOf, fieldsOf, isTool, linesOf, meanOf, measured, metricsOf, notReached,
-  running, stdoutOf, taskLabel, tidyCommand, usualOf } from "./parts.js";
+import { bestOf, candidateOf, cell, checkResult, chooseColumns, colorOf, dictsOf, fieldsOf, isTool, linesOf, meanOf, measured, metricsOf, notReached,
+  poolSaid, running, stdoutOf, taskLabel, tidyCommand, tidyWords, usualOf } from "./parts.js";
 import { Fact, Facts, Pill, Tag } from "../../components/Tone.js";
 import { Table } from "../../components/Table.js";
 import { Meter } from "../../components/Stat.js";
 
-const lineCount = t => `${linesOf(t).length} line${linesOf(t).length === 1 ? "" : "s"}`;
+const lineCount = t => plural(linesOf(t).length, "line");
 
 /** The numbers a measurement gave, against the best so far (D1063: whose; D1064: a dictionary's too, key by
     key, D1075: each coloured by its own way), the goals first (D1068). */
@@ -33,7 +33,7 @@ function Metrics({ n, env, out, metrics }) {
     return [Math.abs(c) < 0.0005 ? "=" : `${c > 0 ? "+" : "−"}${Math.abs(c * 100).toFixed(1)}%`, dir * c > 0 ? "up" : dir * c < 0 ? "down" : ""];
   };
   return html`<${Table} cls="list compact alt-metrics" thead=${html`<tr><th>metric</th><th class="num keep-case" title=${me}>${me ? env.N.shortAll(me) : "this design"}</th>
-      ${compares ? html`<th class="num">best so far</th><th class="num">change</th>` : ""}</tr>`}>
+      ${compares ? html`<th class="num" title="the best of each goal among the designs measured before this one">best before</th><th class="num">change</th>` : ""}</tr>`}>
     ${rows.map(([k, v, m]) => { const b = best[k], [said, better] = change(k, m);
       return html`<tr><td>${k}${goals[k] ? ` ${goals[k] > 0 ? "↑" : "↓"}` : ""}</td><td class="num mono">${cell(v)}</td>
         ${compares ? html`<td class="num mono" title=${b?.who || ""}>${b ? [cell(b.v), html`<span class="muted small">${` ${env.N.shortAll(b.who || "")}`}</span>`] : "—"}</td>
@@ -51,17 +51,18 @@ export function ToolBody({ n, env, mem }) {
       ${usual ? html`<${Meter} cls="flush" frac=${took / usual} color=${colorOf(n)} />` : ""}</div>
       ${linesOf(out).length ? html`<${Pre} k="stdout" cls="val alt-tail" text=${linesOf(out).slice(-8).join("\n")} mem=${mem} />` : ""}`;
   } else {
-    const fails = failingOf(out), metrics = metricsOf(out);
+    const fails = checkResult(n, out), metrics = metricsOf(out);
     if (fails) {
-      const ok = fails.failing === 0, before = linesOf(out.slice(0, fails.index)).filter(l => !/^\s*\d+\s+failing/.test(l));
+      const { ok, exited } = fails, before = linesOf(out.slice(0, fails.index)).filter(l => !/^\s*\d+\s+failing/.test(l));
       top = html`<div class=${`alt-result ${ok ? "ok" : "bad"}`} style=${`--k:${ok ? colorOf(n) : "var(--bad)"}`}>
           <span class="alt-big">${`${ok ? "✓" : "✗"} ${fails.failing} failing`}</span>
-          <span class="muted">${[fails.of != null ? `of ${fails.of}` : "", f.exit && f.exit !== 0 ? `exit ${f.exit}` : ""].filter(Boolean).join(" · ")}</span></div>
+          <span class="muted">${[fails.of != null ? `of ${fails.of}` : "", exited ? `exit ${f.exit}` : ""].filter(Boolean).join(" · ")}</span></div>
         ${!ok && before.length ? html`<div><div class="alt-label">First failures</div><pre class="val alt-cases">${before.slice(0, 3).join("\n") + (before.length > 3 ? `\n… and ${before.length - 3} more` : "")}</pre></div>` : ""}`;
     } else if (Object.keys(metrics).length || Object.keys(dictsOf(out)).length) top = html`<${Metrics} n=${n} env=${env} out=${out} metrics=${metrics} />`;
     else if (n.timedOut) top = html`<div class="alt-result warn" style="--k:var(--warn)"><span class="alt-big">${`! exit ${f.exit} · time limit`}</span></div>`;   // D997
-    else if (f.exit != null) top = html`<div class=${`alt-result ${f.exit === 0 ? "ok" : "bad"}`} style=${`--k:${f.exit === 0 ? colorOf(n) : "var(--bad)"}`}>
-      <span class="alt-big">${f.exit === 0 ? "✓ exit 0" : `✗ exit ${f.exit}`}</span></div>`;
+    else if (f.exit != null && f.exit !== "") { const zero = Number(f.exit) === 0;
+      top = html`<div class=${`alt-result ${zero ? "ok" : "bad"}`} style=${`--k:${zero ? colorOf(n) : "var(--bad)"}`}>
+      <span class="alt-big">${zero ? "✓ exit 0" : `✗ exit ${f.exit}`}</span></div>`; }
   }
   return html`<div class="task-inspector alt-tool">${top}
     <${Fold} k="input" title="Input" summary=${tidyCommand(String(p.command || ""), p.folder).split("\n")[0]} mem=${mem}><${Block} title="Input" obj=${p} mem=${mem} /><//>
@@ -99,7 +100,7 @@ export function ChooseBody({ n, a, env }) {
   const rejected = new Map();
   for (const x of env.nodes.values()) if ((x.failed || x.rejected) && /^\s*critique\s*:\s*(decision|measurement)/i.test(String(x.name)))
     rejected.set(String(x.why || "").replace(/@\S*$/, ""), String(fieldsOf(x).verdict || "").replace(/^REJECTED:\s*/i, ""));
-  const refused = chosen && rejected.has(chosen), by = String(said["decided by"] || "");
+  const refused = chosen && rejected.has(chosen), by = tidyWords(said["decided by"] || "");
   // D1061: three columns at most; D1182: the metric the decision named first, none empty for every design
   const cols = chooseColumns(rows, goals, by);
   // D1055: a goal written as its name alone takes its direction from what the decision said ("the largest score")
@@ -108,14 +109,16 @@ export function ChooseBody({ n, a, env }) {
   const sign = g0 && dir ? (/max/i.test(dir) ? -1 : 1) : 0, num = v => typeof v === "number" ? v : null;
   rows.sort((x, y) => (y[0] === chosen) - (x[0] === chosen) || (g0 && sign ? sign * ((num(x[1][g0.metric]) ?? Infinity * sign) - (num(y[1][g0.metric]) ?? Infinity * sign)) : 0));
   const id = c => env.N.shortAll(c);
+  const shown = poolSaid(n.why, rows.length);
   return html`<div class="task-inspector">
     ${refused ? html`<div class="alt-result bad" style="--k:var(--bad)"><span class="alt-big" title=${chosen}>${`✗ ${id(chosen)}`}</span>
         <span class="muted">${`picked, then rejected by the critic${rejected.get(chosen) ? `: ${rejected.get(chosen)}` : ""}`}</span></div>`
       : chosen || said.decision ? html`<div class="alt-result ok" style=${`--k:${colorOf(n)}`}><span class="alt-big" title=${chosen || said.decision}>${`★ ${id(chosen || said.decision)}`}</span>
         ${by ? html`<span class="muted">${by}</span>` : ""}</div>` : ""}
-    ${rows.length ? html`<${Table} cls="list compact alt-metrics" thead=${html`<tr><th>design</th>${cols.map(k => { const g = k === g0?.metric ? g0 : goals.find(x => x.metric === k), d = g === g0 ? dir : g?.direction; return html`<th class="num">${k}${d ? ` ${/max/i.test(d) ? "↑" : "↓"}` : ""}</th>`; })}</tr>`}>
+    ${shown ? html`<p class="muted small alt-pool">${shown}</p>` : ""}
+    ${rows.length ? html`<${Table} cls="list compact alt-metrics" thead=${html`<tr><th>design</th>${cols.map(k => { const g = k === g0?.metric ? g0 : goals.find(x => x.metric === k), d = g === g0 ? dir : g?.direction; return html`<th class="num keep-case">${k}${d ? ` ${/max/i.test(d) ? "↑" : "↓"}` : ""}</th>`; })}</tr>`}>
       ${rows.map(([c, m, earlier]) => html`<tr class=${rejected.has(c) ? "alt-rejected" : c === chosen ? "alt-chosen" : ""} title=${rejected.has(c) ? `rejected by the critic: ${rejected.get(c)}` : ""}>
-        <td title=${c}>${rejected.has(c) ? [`✗ ${id(c)}`, html`<${Tag} k=${COLORS.critic}>critic<//>`] : c === chosen ? `★ ${id(c)}` : id(c)}
+        <td title=${c}>${rejected.has(c) ? [`✗ ${id(c)}`, html`<${Tag}>critic<//>`] : c === chosen ? `★ ${id(c)}` : id(c)}
           ${earlier ? html`<span class="muted small"> · an earlier pass</span>` : ""}</td>
         ${cols.map(k => html`<td class="num mono">${cell(m[k])}</td>`)}</tr>`)}<//>` : ""}
     ${n.kids.length ? html`<div class="alt-steps">${n.kids.map(x => html`<${StepRow} key=${x.id} x=${x} a=${a} N=${env.N} />`)}</div>` : ""}</div>`;

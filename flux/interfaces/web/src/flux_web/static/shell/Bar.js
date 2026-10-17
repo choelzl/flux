@@ -43,7 +43,7 @@ export function applyTheme(t) {
 }
 
 /** D856: on a phone the theme, the name and Log out fold into one menu; the bell stays in the bar. */
-export function Who() {
+export function Who({ here = "" }) {
   const { open, setOpen } = usePopover({ inside: t => !!t.closest?.("#who") }), [t, setT] = useState(theme);
   const next = () => { const order = ["system", "light", "dark"], n = order[(order.indexOf(theme()) + 1) % 3]; applyTheme(n); setT(n); };
   const logout = async () => { await api("/logout", { method: "POST" }).catch(() => {}); setMe(null); location.hash = "#/login"; };
@@ -51,7 +51,7 @@ export function Who() {
     <button class="small acct-btn" type="button" aria-label="Account menu" aria-expanded=${String(open)} onClick=${() => setOpen(!open)}>☰</button>
     <div class=${cx("who-items", open && "open")} onClick=${e => { if (e.target.closest("a, button")) setOpen(false); }}>
       <button class="small theme" title="Theme" onClick=${next}>${THEMES[t]}</button>
-      ${me ? html`<a href="#/account" class="me" title=${me.name}>${me.name}</a><button class="small" onClick=${logout}>Log out</button>` : ""}</div>`;
+      ${me ? html`<a href="#/account" class=${cx("me", here.startsWith("#/account") && "on")} title=${`${me.name}: account`} aria-current=${here.startsWith("#/account") ? "page" : null}>${me.name}</a><button class="small" onClick=${logout}>Log out</button>` : ""}</div>`;
 }
 
 /** While an admin views as a user: who, read-only, the way back. */

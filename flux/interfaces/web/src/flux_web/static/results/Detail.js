@@ -15,6 +15,7 @@ import { Pill } from "../components/Tone.js";
 import { Head, Tool } from "../components/Head.js";
 import { Table } from "../components/Table.js";
 import { Check } from "../components/Check.js";
+import { shortName } from "./names.js";
 
 /** The reject form (D1043): why, each measurement measured again or cleared, hidden too (at rest). `v` {reason,
     hide, ticked: {"stage metric": "again" | "clear"} for each ticked}. */
@@ -46,7 +47,7 @@ function readReject(v) {
 // the last design read, by its address: the same design shown in the other view (D916) is there at once, read again
 let last = { url: null, full: null };
 
-export function DesignDetail({ d, fmt, reload }) {
+export function DesignDetail({ d, fmt, reload, label = null }) {
   const ctx = useLoop();
   const { name } = ctx;
   const url = loopApi(name).at(`/design?design=${enc(d.base || d.name)}&part=${enc(d.part)}&key=${enc(d.key || "")}`);
@@ -57,23 +58,24 @@ export function DesignDetail({ d, fmt, reload }) {
   const metrics = [...new Set(stages.flatMap(([, m]) => Object.keys(m)))];
   const mine = ctx.mine, running = !!ctx.st?.running;
   const reject = async () => {
-    const got = await dialog(`Reject ${d.name}?`, ({ v, set }) => html`<${RejectForm} d=${d} fmt=${fmt} live=${running} v=${v} set=${set} />`, [["Cancel", null], ["Reject", readReject, "primary"]],
+    const got = await dialog(`Reject ${said}?`, ({ v, set }) => html`<${RejectForm} d=${d} fmt=${fmt} live=${running} v=${v} set=${set} />`, [["Cancel", null], ["Reject", readReject, "primary"]],
       { reason: "", hide: false, ticked: {} });
     if (!got) return;
     toast((await loopApi(name).api("/results/reject", { method: "POST", body: { key: d.key || "", name: d.base || d.name, ...got } })).ok, "ok");
     reload();
   };
   const restore = async () => { toast((await loopApi(name).api("/results/unreject", { method: "POST", body: { id: d.rejected.id } })).ok, "ok"); reload(); };
-  return html`<${ViewerFrame} v=${view} title=${d.name}><div class="detail">
-    <${Head} cls="detail-head" title=${d.name} mono tools=${html`${mine && !d.reference_only && !d.rejected ? html`<${Tool} icon="reject" label="Reject… (shown, never chosen)" danger cls="reject-design" onClick=${reject} />` : ""}
-        <${ViewerTools} v=${view} title=${d.name} rawText=${JSON.stringify(full, null, 2)} />`}>
+  const said = label || shortName(name, d.name);          // results-8: "#3", as the table says it; the whole name on hover
+  return html`<${ViewerFrame} v=${view} title=${said}><div class="detail">
+    <${Head} cls="detail-head" title=${said} hint=${d.name} mono tools=${html`${mine && !d.reference_only && !d.rejected ? html`<${Tool} icon="reject" label="Reject… (shown, never chosen)" danger cls="reject-design" onClick=${reject} />` : ""}
+        <${ViewerTools} v=${view} title=${said} rawText=${JSON.stringify(full, null, 2)} />`}>
       <${VerdictPill} d=${d} />${d.decision ? html`<${Pill} tone="ok">decision<//>` : ""}${d.part ? html`<span class="muted">${`part ${d.part}`}</span>` : ""}<//>
     ${d.rejected ? html`<div class="blk rejected-blk"><h3>Rejected</h3><p>${d.rejected.why}</p>
       <p class="muted small">${`${byCritic(d.rejected.by) ? "critic" : d.rejected.by} · `}<${Ago} t=${Date.parse(d.rejected.at) / 1000} />${(d.cleared || []).length ? ` · cleared ${d.cleared.map(c => `${c.stage} ${c.metric}`).join(", ")}` : ""}</p>
       ${(d.rejected.again || []).length ? html`<${Pill} tone="none">${running ? "measured again before the next pass" : "to be measured again"}<//>` : ""}
       ${mine ? html`<${Act} cls="small" title="Counts again" onClick=${restore}>Restore<//>` : ""}</div>` : ""}
     ${d.why.length ? html`<div class="blk"><h3>${d.verdict === "pending" ? "Waiting for" : "Not met"}</h3><ul class="misses">${d.why.map(w => html`<li>${w}</li>`)}</ul></div>` : ""}
-    ${stages.length ? html`<div key="measured" class="blk"><h3>Measurements</h3><${Table} heads=${["stage", ...metrics.map(label => ({ label, num: true }))]}>
+    ${stages.length ? html`<div key="measured" class="blk"><h3>Measurements</h3><${Table} heads=${["stage", ...metrics.map(label => ({ label, num: true, cls: "metric-head" }))]}>
       ${stages.map(([st, m]) => html`<tr><td>${st}</td>${metrics.map(k => html`<td class="mono num">${fmt(m[k])}</td>`)}</tr>`)}<//></div>` : ""}
     ${full.artifact ? html`<div class="blk"><h3>Design</h3><${Code} text=${full.artifact} lang="" /></div>` : ""}</div><//>`;
 }

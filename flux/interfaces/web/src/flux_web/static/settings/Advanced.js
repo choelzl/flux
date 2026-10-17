@@ -24,7 +24,7 @@ function advancedSaid(e) {
     ...(a.mounts || []).map(m => `${m.host} in it at ${m.inside} (${m.mode === "rw" ? "read-write" : "read-only"})`),
     ...(a.nix_packages?.length ? [`Nixpkgs packages: ${a.nix_packages.join(", ")}`] : []),
     ...(a.nixchip_packages?.length ? [`Nixchip packages: ${a.nixchip_packages.join(", ")}`] : []),
-    a.parallel ? "parallel work allowed" : "one at a time"].join(" · ");
+    a.parallel ? "parallel work allowed" : "one at a time"].join(" · ").replace(/^./, c => c.toUpperCase());
 }
 
 function AdvancedForm({ a, sandboxedServer, save }) {

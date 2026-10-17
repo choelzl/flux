@@ -24,7 +24,7 @@ def flows(r):
         b.type("form.login input[type=password]", "not the password")
         b.click("form.login button[type=submit]")
         said = b.wait("document.querySelector('form.login .notice.t-bad') && document.querySelector('form.login .notice.t-bad').textContent", what="the refusal")
-        r.check("a wrong password is refused, said", "wrong name or password" in said, said)
+        r.check("a wrong password is refused, said", "wrong name or password" in said.lower(), said)
         b.js("window.__e2e.errors.splice(0); return true;")       # the 401 itself is expected
     r.step("login refused", login_refused)
 
@@ -36,8 +36,8 @@ def flows(r):
         b.js(WATCH)
         r.check("a name logs in whatever its case and spaces", True)
         b.wait("document.querySelector('#main').innerText.includes('No loops yet.')", timeout=30, what="the empty list")
-        r.check("the empty list says so, without buttons in the middle", "No loops yet." in r.text()
-                and not b.js("return !!document.querySelector('.empty a.btn, .empty button')"))
+        r.check("the empty list says so, its one next step at its end: New loop (shell-12)", "No loops yet." in r.text()
+                and b.js("const a = [...document.querySelectorAll('#main .empty a.btn, #main .empty button')]; return a.length === 1 && a[0].textContent === 'New loop' && a[0].getAttribute('href') === '#/configure'"))
         r.clean("loops page")
     r.step("login", login_as_typed_on_a_phone)
 
@@ -149,7 +149,7 @@ def flows(r):
             b.js(f"{box}.querySelector('input').click(); return 1")
             b.wait(f"document.querySelector('{model}')?.tagName === 'SELECT' && document.querySelector('{model}').options.length === 3", what="the endpoint's list")
             got = b.js(f"return [...document.querySelector('{model}').options].map(o => o.textContent)")
-            r.check("on, a menu of the models the endpoint lists (D1161)", got == ["Not set", "e2e-alpha", "e2e-beta"], str(got))
+            r.check("on, a menu of the models the endpoint lists (D1161)", got == ["not set", "e2e-alpha", "e2e-beta"], str(got))
             r.check("the key never reaches the page", b.js("return !document.documentElement.outerHTML.includes('e2e-model-secret')"))
             b.js(f"const s = document.querySelector('{model}'); s.value = 'e2e-beta'; s.dispatchEvent(new Event('change', {{bubbles: true}})); return 1")
             b.wait(f"document.querySelector('{model}').closest('.stack').querySelector('.save-mark')?.dataset.state === 'saved'", what="the model saved")

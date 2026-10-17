@@ -6,6 +6,7 @@ import { html, useLayoutEffect, useRef, useState, Empty, Notice } from "../view.
 import { Overview } from "./Overview.js";
 import { Select } from "../components/Select.js";
 import { Tag } from "../components/Tone.js";
+import { plural } from "../format.js";
 import { LoopContext } from "../loop/context.js";
 
 const MOCK_CTX = { name: "sample", owner: "__overview_mock_data__", qs: "", mine: false, tab: "Overview", still: () => () => true, goTab: () => {}, drawBody: () => {} };
@@ -61,14 +62,14 @@ export function LayoutEditor({ prefs, example, save, cancel }) {
   const heading = (title, count, sub = false) => html`<div class="overview-layout-heading">${sub ? html`<h4>${title}</h4>` : html`<h3>${title}</h3>`}<span class="overview-layout-count">${count}</span></div>`;
   return html`<h2 id="overview-layout-title">Overview layout</h2><p>Applies to all loops, in every browser.</p>
     <div class="overview-customizer"><div class="overview-layout-editor" ref=${content} inert=${saving}>
-        <section class="overview-layout-section" aria-label="Top cards">${heading("Top cards", `${draft.stats.length} / 5`)}
+        <section class="overview-layout-section" aria-label="Top cards">${heading("Top cards", plural(draft.stats.length, "card"))}
           <p class="muted small">3–5 cards, left to right.</p><${List} ids=${draft.stats} catalog=${prefs.small_cards} used=${draft.stats} edit=${editStats} /></section>
-        <section class="overview-layout-section" aria-label="Main cards">${heading("Main cards", `${draft.columns.flat().length} selected`)}
+        <section class="overview-layout-section" aria-label="Main cards">${heading("Main cards", plural(draft.columns.flat().length, "card"))}
           <p class="muted small">Top to bottom; ← / → moves between columns.</p>
           <div class="overview-layout-columns">${draft.columns.map((ids, c) => html`<section class="overview-layout-column" aria-label=${`${c === 0 ? "Left" : "Right"} column`}>
             ${heading(c === 0 ? "Left column" : "Right column", ids.length, true)}<${List} ids=${ids} catalog=${prefs.large_cards} column=${c} used=${draft.columns.flat()} edit=${editColumn(c)} moveOut=${moveOut(c)} /></section>`)}</div>
           <p class="muted small overview-layout-mobile-note">On phones, the left column comes first.</p></section></div>
-      <section class="overview-preview-panel" aria-label="Overview preview with mock data"><div class="overview-layout-heading"><h3>Preview</h3><${Tag}>Mock Data<//></div>
+      <section class="overview-preview-panel" aria-label="Overview preview with mock data"><div class="overview-layout-heading"><h3>Preview</h3><${Tag}>mock data<//></div>
         <p class="muted small">Sample values; nothing changes until you save.</p>
         <div class="overview-layout-preview" inert><${LoopContext.Provider} value=${{ ...MOCK_CTX, st: example.state }}><${Overview} r=${example.results} notes=${example.notes} bench=${example.workbench}
           use=${example.usage} prefs=${{ layout: draft }} ideas=${example.ideas} /><//></div></section></div>

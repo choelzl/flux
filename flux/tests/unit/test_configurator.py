@@ -559,7 +559,7 @@ def test_saves_checklist_and_the_rails_line_are_one_standing():
     assert out["refused"]["rows"][0] == ["error", "Loads", "no: the loader refuses it as saved"], out["refused"]
     assert out["refused"]["sum"].startswith("does not load") and rows["refused"]["Ready to run"] == ("note", "after the document loads")
     n = out["errors"]["sum"].split(" ")[0]
-    assert out["errors"]["sum"] == f"{n} things to fix" and rows["errors"]["Ready to run"] == ("note", f"after {n} things to fix"), out["errors"]
+    assert out["errors"]["sum"] == f"{n} to fix" and rows["errors"]["Ready to run"] == ("note", f"after {n} fixes"), out["errors"]
     for k, v in out.items():                                   # a ✗ in the checklist is never "ready"
         assert any(kind == "error" for kind, _w, _x in v["rows"]) == (not v["sum"].startswith("ready")), (k, v)
 
@@ -681,3 +681,129 @@ def test_the_files_a_parent_names_are_its_sub_loops(tmp_path, monkeypatch):
     gone = c.post("/api/apps/nlu/document/named", json={"text": "flow:\n  test: \"fluxpreset golden {artifact} --golden {home}/other.py\"\n"}, headers=H).json()
     assert gone["missing"] == [] and gone["later"] == ["other.py"], "a golden model the folder lacks: the loop's model writes it first (D604)"
     assert c.post("/api/apps/nlu/document/named", json={"text": "- not a mapping"}, headers=H).json() == {"named": [], "missing": [], "later": []}
+
+
+WORDS_JS = r"""
+const c = require(process.argv[1]);
+const s = c.base(); s.flow.generate = "agent:codex"; s.flow.plan = "agent:claude";
+const opts = c.whoOptions("generate", s.flow.generate, "claude"), plan = c.whoOptions("plan", "off", "opencode");
+const two = c.base(); two.flow.validate = "agent:claude"; two.flow.generate = "agent:codex";
+const one = c.base(); one.flow.generate = "agent:codex";
+const errs = st => c.check(st).map(m => m.text);
+process.stdout.write(JSON.stringify({
+  agent: opts.find(o => o.k === "agent"), works: c.whoWorks("generate", s.flow.generate, "claude"), off: plan.find(o => o.k === "agent"),
+  feedback: c.whoOptions("feedback", "human", "claude").map(o => o.label), words: c.WORDS, yaml: c.buildYaml(c.base()),
+  two: errs(two).filter(t => /must be installed/.test(t)), one: errs(one).filter(t => /must be installed/.test(t)),
+  unnamed: errs(c.base()).filter(t => /name/i.test(t)), all: errs(Object.assign(c.base(), {flow: Object.assign(c.base().flow, {dse: "explore"})})),
+}));
+"""
+
+
+def _words() -> dict:
+    r = subprocess.run(["node", "-e", WORDS_JS, str(ASSETS / "crafter-model.js")], capture_output=True, text=True, timeout=60)
+    assert r.returncode == 0, r.stderr
+    return json.loads(r.stdout)
+
+
+def test_the_agent_is_one_choice_and_the_menu_says_which():
+    """configurator-10: the kinds' last choice was the agent's own name ("codex") with a menu beside it saying "codex"
+    again. The choice says "agent"; the drawing's word (and a kept flow's tag) is its `name`."""
+    out = _words()
+    assert out["agent"]["label"] == "agent" and out["agent"]["name"] == "codex", out["agent"]
+    assert out["works"]["name"] == "codex" and out["off"]["label"] == "agent" and out["off"]["name"] == "opencode"
+    assert out["feedback"] == ["on", "off"], "Notes' switch is on/off like the others, not its own title again (configurator-28)"
+
+
+def test_the_prototype_hint_says_the_choice_shown():
+    """configurator-6: under "Prototype first" the hint read "default: with a golden model" whatever was chosen. Every
+    choice has its own words."""
+    g = _words()["words"]["graph"]
+    assert "prototypeHint" not in g
+    assert {v for v, _ in g["prototypes"]} == set(g["prototypeHints"]), g["prototypeHints"]
+    assert len(set(g["prototypeHints"].values())) == len(g["prototypeHints"])
+
+
+def test_one_name_one_placeholder_and_plain_checklist_words():
+    """configurator-18, -20: "Loop name"/my_loop on New loop, "Name"/my_design in a loop's settings, my_problem in the
+    preview and "Give the problem a name" in Save. One label and placeholder (the model's), the preview the same, the
+    checklist says "Name the loop"; agents listed as words, no "DSE", no "--"."""
+    out = _words()
+    p = out["words"]["prompt"]
+    assert p["name"] == "Name" and p["namePlaceholder"] == "my_loop"
+    assert out["yaml"].startswith("# my_loop/problem.yaml"), out["yaml"][:60]
+    assert out["unnamed"] == ["Name the loop (letters, digits, - and _)."], out["unnamed"]
+    assert out["two"] == ["Agents claude and codex must be installed where the loop runs."], out["two"]
+    assert out["one"] == ["Agent codex must be installed where the loop runs."], out["one"]
+    assert not [t for t in out["all"] if "DSE" in t or " -- " in t], out["all"]
+    web = REPO / "flux/interfaces/web/src/flux_web/static/configure"
+    for f in (web / "Configurator.js", web / "Configure.js", web / "PromptStep.js", ASSETS / "crafter-app.js"):
+        text = f.read_text()
+        assert "my_problem" not in text and "my_design" not in text and "Loop name" not in text and "your loop" not in text, f.name
+
+
+HL_JS = r"""
+const fs = require('fs'), vm = require('vm');
+(async () => {
+  const mod = new vm.SourceTextModule(fs.readFileSync(process.argv[1], 'utf8'), { context: vm.createContext({}) });
+  await mod.link(() => { throw new Error('the highlighter imports nothing'); }); await mod.evaluate();
+  const y = fs.readFileSync(0, 'utf8');
+  process.stdout.write(JSON.stringify({ lines: mod.namespace.tokenLines(y, 'yaml'), whole: mod.namespace.tokens(y, 'yaml').map(t => t[1]).join('') === y }));
+})().catch(e => { console.error(e); process.exitCode = 1; });
+"""
+
+
+def test_a_block_scalars_lines_are_prose_to_the_highlighter():
+    """configurator-14: in `statement: >-` the words "on", "no", "false" were booleans, "SystemVerilog:" a key. A block
+    scalar's lines are plain text; the keys and values around it are still coloured, and the text is kept whole."""
+    doc = ("statement: >-\n  A fast on no false 32-bit SystemVerilog: thing\n\n  have: x\ncontract: |\n  - on\n"
+           "flag: on\nflow:\n  test:\n    - run: >\n        prose: on\n    - b: 3\n")
+    r = subprocess.run(["node", "--experimental-vm-modules", "-e", HL_JS, str(REPO / "flux/interfaces/web/src/flux_web/static/highlight.js")],
+                       input=doc, capture_output=True, text=True, timeout=30)
+    assert r.returncode == 0, r.stderr
+    out = json.loads(r.stdout)
+    lines = out["lines"]
+    plain = lambda i: all(c == "" for c, _ in lines[i])
+    assert plain(1) and plain(3) and plain(5) and plain(10), lines
+    assert ["kw", "on"] in lines[6] and lines[0][0] == ["key", "statement"] and lines[4][0] == ["key", "contract"], lines
+    assert ["num", "3"] in lines[11], "after the block, a value is coloured again"
+    assert out["whole"]
+
+
+def test_the_loaders_refusal_names_the_loops_files_and_no_decisions(tmp_path):
+    """configurator-22: the banner printed the server's path (/tmp/.../users/bob/apps/x/problem.yaml) and "(D1040; ...)".
+    The web says the file inside the loop and drops decision numbers; the refusal for an RTL preset in a Python loop
+    reads as a sentence ("Check them with for a Python design" was garbled)."""
+    from flux_web.configure import loader_says, views
+
+    loop = tmp_path / "users/bob/apps/x"
+    loop.mkdir(parents=True)
+    said = loader_says(f"{loop}/problem.yaml: flow.critique is a critic (D1040; `flux migrate` moves it), see (D12, D13).", loop)
+    assert said == "problem.yaml: flow.critique is a critic (`flux migrate` moves it), see.", said
+    (loop / "problem.yaml").write_text("statement: x\nlanguage: python\nflow:\n  test: fluxpreset golden {artifact} --golden {home}/golden.py\n")
+    err = views(loop / "problem.yaml")["error"]
+    assert str(tmp_path) not in err and "Check a Python design with `fluxpreset cases" in err and "Check them with" not in err, err
+
+
+def test_a_checks_critic_stays_at_the_gates_level(tmp_path):
+    """Admin › Loops showed "flow.test.correctness: keys ['critic'] are not a check's": the capture's invalid_doc (a
+    critic written inside a check on purpose, with an old `flow.critique`), not the configurator. Read back and written
+    again, the critic on passing designs stays `flow.test.critic`, the check's own map untouched; set from the Graph's
+    Check box it lands there too."""
+    src = tmp_path / "src" / "crit_loop"
+    src.mkdir(parents=True)
+    (src / "check.py").write_text("print('0 failing')\n")
+    (src / "problem.yaml").write_text("statement: x\nlanguage: python\nflow:\n  test:\n    build: \"{python} -m py_compile {artifact}\"\n"
+                                      "    correctness: {run: \"{python} {home}/check.py {artifact}\", timeout_s: 60}\n    critic: {by: opencode}\n")
+    before, after, _ = _round(src / "problem.yaml", tmp_path / "out")
+    assert after["flow"] == before["flow"], (before["flow"], after["flow"])
+    v = views(src / "problem.yaml")
+    js = r"""
+const c = require(process.argv[1]); c.setCatalog(JSON.parse(require("fs").readFileSync(process.argv[2], "utf8")));
+const v = JSON.parse(require("fs").readFileSync(0, "utf8")), g = c.fromDoc(v.raw, v.normal);
+c.setCritic(g.state, "test", "agent:claude"); process.stdout.write(c.buildYaml(g.state));
+"""
+    r = subprocess.run(["node", "-e", js, str(ASSETS / "crafter-model.js"), str(ASSETS / "tools.json")],
+                       input=json.dumps({"raw": v["raw"], "normal": v["normal"]}, default=str), capture_output=True, text=True, timeout=60)
+    assert r.returncode == 0, r.stderr
+    test = yaml.safe_load(r.stdout)["flow"]["test"]
+    assert test["critic"] == "claude" and "critic" not in test["correctness"], test

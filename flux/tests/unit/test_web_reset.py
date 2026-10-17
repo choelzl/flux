@@ -57,9 +57,10 @@ def test_reset_clears_generated_data_and_history_preserving_inputs_and_settings(
 
     preview = bob.get("/api/apps/x/reset")
     assert preview.status_code == 200
-    assert {f["path"] for f in preview.json()["folders"]} == {
-        f"{d / n}/" for n in ("out", "runs", "workbench", ".author-work")
-    } | {f"{cache}/"}
+    folders = preview.json()["folders"]
+    assert [f["path"] for f in folders] == ["out/", "runs/", "workbench/", ".author-work/", None], "relative to the loop"
+    assert [f["name"] for f in folders][-1] == "Tool cache"
+    assert str(app.state.store.data) not in preview.text and str(cache) not in preview.text, "no server path in the plan"
     assert (d / "out/x.db").exists(), "preview is read-only"
     got = bob.post("/api/apps/x/reset", headers=H)
     assert got.status_code == 200, got.text

@@ -81,5 +81,5 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
         except (WorkspaceError, OSError) as exc:
             raise fail(exc) from exc
         if paths != now:
-            store.audit(user.name, "hide from agents" if body.hidden else "show to agents", f"{whose.name}/{name}: {want}")
+            store.audit(user.name, "hide from agents" if body.hidden else "show to agents", f"{whose.name}/{name}: {want}", loop=(whose.name, name))
         return {"ok": f"{want} {'hidden from' if body.hidden else 'shown to'} the agents", "hidden": paths}

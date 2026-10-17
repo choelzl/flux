@@ -69,22 +69,25 @@ export function BoxPanel({ M, state, box, agent, setAgent = () => {}, edit, go, 
           ${K("A part yields after", "cooldown_after", "3", "designs that do not build")}${B("exploration_quota")}</div>`;
       break;
     }
-    case "generate":
+    case "generate": {
+      // D1203: a script or files make the designs -- no model to repair or prototype them
+      const made = f.generate === "command" || f.generate === "catalog";
       body = html`${M.paramOnly(state) ? html`<${Notice} tone="warn" what=${W.searchOn[0]} why=${W.searchOn[1]} />` : ""}
         ${f.generate === "command" ? html`<${Text} label=${W.command} mono wide value=${state.generateCommand} placeholder=${W.generatePlaceholder}
           hint=${W.generateHint} set=${v => edit(() => { state.generateCommand = v; })} />` : ""}
         ${f.generate === "catalog" ? html`<${Text} label=${W.existing} wide value=${state.generateCatalog} placeholder=${W.existingPlaceholder}
           hint=${W.existingHint} set=${v => edit(() => { state.generateCatalog = v; })} />` : ""}
-        <div class="cfg-grid2">${B("steps")}${off ? "" : html`${B("repair_attempts")}
-          <${Pick} label=${W.prototype} hint=${W.prototypeHint} disabled=${keptBudget} value=${state.budget.prototype} set=${v => edit(() => { state.budget.prototype = v; })}
-            options=${W.prototypes} />
+        <div class="cfg-grid2">${B("steps")}${off ? "" : html`${made ? "" : html`${B("repair_attempts")}
+          <${Pick} label=${W.prototype} hint=${W.prototypeHints[String(state.budget.prototype ?? "")] || ""} disabled=${keptBudget} value=${state.budget.prototype}
+            set=${v => edit(() => { state.budget.prototype = v; })} options=${W.prototypes} />
           <${Pick} label="Repair by" disabled=${keptBudget} value=${state.budget.patching} set=${v => edit(() => { state.budget.patching = v; })}
             options=${[["", "edits (default)"], ["true", "edits"], ["false", "rewrites"]]} />
-          ${K("Revert after", "revert_after", "3", "failed repairs")}${M.hasParts(state) ? K("Parts at once", "parallel_parts", "1") : ""}`}</div>
+          ${K("Revert after", "revert_after", "3", "failed repairs")}`}${M.hasParts(state) ? K("Parts at once", "parallel_parts", "1") : ""}`}</div>
         ${isAgent(f.generate) && !off ? html`<div class="cfg-sub"><h4>Agent turns</h4><div class="cfg-grid2">${K("Continues past time", "agent_continues", "3")}
           ${K("Final turn, s", "agent_grace_s", "¼ of its time")}</div></div>
           <${ProbeFields} M=${M} state=${state} edit=${edit} disabled=${kept} />` : ""}`;
       break;
+    }
     case "test":
       head = html`<${WhoTag} kind="fixed">checks<//>`;
       body = html`<${Goto} go=${go} step="checks" what=${M.STEP_TITLES[1]}>Its commands are set in<//>${critic("test")}`;
@@ -110,9 +113,12 @@ export function BoxPanel({ M, state, box, agent, setAgent = () => {}, edit, go, 
       head = "";                                // D1152: each section its own switch
       body = html`<${Knowledge} M=${M} state=${state} edit=${edit} store=${store} who=${who} opts=${opts} fixed=${kept} direct=${direct} />`;
       break;
-    default:
+    default:                                    // D1209: a box with no settings of its own (Validate, Plan, Notes) says what it does
+      body = html`<p class="cfg-says">${b.says}</p>`;
   }
-  return html`<${Head} title=${b.title} hint=${b.says} actions=${head || null} />
+  // D1203: one head for every box -- its title, then on a row of its own who works it (the kinds at full width, the
+  // agent's menu beside them) or, for a fixed step, what works it
+  return html`<${Head} title=${b.title} hint=${b.says} />${head ? html`<div class="cfg-who-bar" data-who=${box}>${head}</div>` : ""}
     ${box !== "knowledge" && isAgent(f[box]) && !M.parameterSearch(state) && !(box === "generate" && off) ? opts(box) : ""}
     ${body}`;
 }

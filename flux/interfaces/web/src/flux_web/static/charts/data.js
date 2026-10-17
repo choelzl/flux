@@ -53,7 +53,7 @@ function groupStyles(groups) {
     of parts has one scope, every design (""). `groups`: the results' groups, whole first. */
 function scopesOf(groups) {
   if (!groups.length) return [["", "All designs"]];
-  return [["whole", "Whole"], ...groups.filter(g => g !== "whole").map(g => [g, g || "other"])];
+  return [["whole", "whole"], ...groups.filter(g => g !== "whole").map(g => [g, g || "other"])];
 }
 const inScope = (groups, scope) => (p) => !groups.length || (p.group || "") === (scope || "whole");
 

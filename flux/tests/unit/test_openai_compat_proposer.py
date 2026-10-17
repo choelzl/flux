@@ -1085,3 +1085,12 @@ def test_the_tools_in_words_for_every_turn_and_an_empty_last_round(monkeypatch, 
     assert r.text == "done" and r.notes["tools_prompted"] == "FLUX_TOOL_CALLS=prompted" and len(r.hops) == 1
     assert "tools" not in sent[0] and "TOOLS YOU CAN CALL" in sent[0]["messages"][0]["content"]
     assert "call no tool" in sent[1]["messages"][-1]["content"] and r.notes["empty_round"] == 1
+
+
+def test_a_calls_tokens_are_said_in_words():
+    """The task pane read "7405 in, 181 out, finish_reason=stop"."""
+    from flux_llm.openai_compat import tokens_said
+
+    assert tokens_said({"prompt_tokens": 7405, "completion_tokens": 181}, "stop") == "7,405 in · 181 out"
+    assert tokens_said({"prompt_tokens": 12, "completion_tokens": 4000}, "length") == "12 in · 4,000 out · cut at its length limit"
+    assert tokens_said({}, None) == "— in · — out"

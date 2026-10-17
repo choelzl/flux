@@ -3,7 +3,7 @@
    followed when the system's changes (D691) -- so no value is written twice for the toggle and the system */
 :root {
   --bg: #f5f6f4; --panel: #ffffff; --ink: #1c1e22; --muted: #697079; --line: #e3e5e1; --soft: #f0f1ee;
-  --accent: #2c64d8; --accent-ink: #ffffff; --warn-ink: #ffffff; --ok: #1d8148; --bad: #c0352d; --warn: #9a6200; --run: #2c64d8;
+  --accent: #2c64d8; --accent-fill: #2c64d8; --accent-ink: #ffffff; --warn-ink: #ffffff; --ok: #1d8148; --bad: #c0352d; --warn: #9a6200; --run: #2c64d8;
   --on-tone: #ffffff;
   --shadow: 0 1px 2px rgba(20, 24, 30, .06), 0 1px 1px rgba(20, 24, 30, .03);
   --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -11,7 +11,7 @@
   --radius: 10px;
   /* D1150: one scale each -- shadows (black at the theme's own strength), the dialog's scrim, sizes of type, corners */
   --shadow-sm: 0 1px 2px rgb(0 0 0 / .08); --shadow-lift: 0 3px 10px rgb(0 0 0 / .16); --shadow-pop: 0 8px 26px rgb(0 0 0 / .16);
-  --shadow-dlg: 0 18px 60px rgb(0 0 0 / .25); --shadow-side: -8px 0 24px rgb(0 0 0 / .12); --scrim: rgb(10 12 16 / .45);
+  --shadow-dlg: 0 12px 40px rgb(0 0 0 / .22); --shadow-side: -8px 0 24px rgb(0 0 0 / .12); --scrim: rgb(10 12 16 / .45);
   --fs-2xs: 10px; --fs-xs: 11px; --fs-sm: 12px; --fs-ui: 12.5px; --fs-md: 13px; --fs-base: 14px; --fs-lg: 15px; --fs-xl: 16px; --fs-2xl: 18px;
   --radius-xs: 3px; --radius-sm: 6px; --radius-md: 8px; --radius-lg: 14px; --radius-pill: 999px;
   color-scheme: light;
@@ -21,24 +21,24 @@
   /* the mark (D696) */
   --logo-ink: #3f5268; --logo-forge: #f66824;
   /* Live's kinds of work and the agent over them (D978 palette A4): the tree, the graph, the timeline, a tag */
-  --work-setup: #8f9aa6; --work-plan: #c98a56; --work-search: #d9b440; --work-design: #5b6ee8;
-  --work-check: #3faa78; --work-measure: #2fb0c6; --work-choose: #e8804f; --work-critic: #97b84a; --agent: #d45eae;
+  --work-setup: #8f9aa6; --work-plan: var(--work-setup); --work-search: #d9b440; --work-design: #5b6ee8;
+  --work-check: #3faa78; --work-measure: #2fb0c6; --work-choose: #e8804f; --agent: #d45eae;
   /* the configurator's halves of a box (configure/; website/docs/assets/crafter.css copies them, D1146); the agent's is its pink (D1120) */
-  --half-rules: #2b7a86; --half-model: #6a4bd8; --half-agent: #d45eae; --half-fixed: #5f6670; --half-off: #9aa0a8;
-  /* the charts' series: a group of designs, a line of a time chart (D915) */
-  --g0: #2563eb; --g1: #d97706; --g2: #059669; --g3: #9333ea; --g4: #db2777; --g5: #0891b2; --g6: #65a30d; --g7: #78716c;
+  --half-rules: #2b7a86; --half-model: var(--agent); --half-agent: #d45eae; --half-fixed: #5f6670; --half-off: #9aa0a8;
+  /* the charts' series: a group of designs, a line of a time chart (D915); never the agent's pink */
+  --g0: #2563eb; --g1: #d97706; --g2: #059669; --g3: #9333ea; --g4: #92400e; --g5: #0891b2; --g6: #65a30d; --g7: #78716c;
 }
 :root[data-theme="dark"] { --bg: #131518; --panel: #1b1e22; --ink: #e5e7ea; --muted: #939aa3; --line: #2b3036; --soft: #22262b;
-  --accent: #6f9dff; --accent-ink: #0d1420; --warn-ink: #1a1205; --ok: #4cc27e; --bad: #ff6b61; --warn: #e3a53d; --run: #6f9dff;
+  --accent: #6f9dff; --accent-fill: #3b6fe0; --accent-ink: #ffffff; --warn-ink: #1a1205; --ok: #4cc27e; --bad: #ff6b61; --warn: #e3a53d; --run: #6f9dff;
   --on-tone: #111418;
-  --shadow: 0 1px 2px rgba(0, 0, 0, .4); color-scheme: dark;
+  --shadow: 0 1px 2px rgba(0, 0, 0, .4); --shadow-dlg: 0 12px 40px rgb(0 0 0 / .35); --scrim: rgb(0 0 0 / .62); color-scheme: dark;
   --tk-com: #7d8590; --tk-str: #a5d6a7; --tk-kw: #c792ea; --tk-num: #f2b36b; --tk-key: #82aaff; --tk-fn: #89ddff;
   --tk-deco: #f78c6c; --tk-sub: #ffcb6b; --tk-punc: #89929b;
   --logo-ink: #b7c4d4;
-  --work-setup: #9da8b4; --work-plan: #d99c6a; --work-search: #e2c257; --work-design: #7d8df2;
-  --work-check: #4fc08c; --work-measure: #43c2d6; --work-choose: #f09264; --work-critic: #a9ca5e; --agent: #e27cc0;
-  --half-rules: #6cc4cf; --half-model: #a996ff; --half-agent: #e27cc0; --half-fixed: #aab1bb; --half-off: #7d838c;
-  --g0: #60a5fa; --g1: #fbbf24; --g2: #34d399; --g3: #c084fc; --g4: #f472b6; --g5: #22d3ee; --g6: #a3e635; --g7: #a8a29e; }
+  --work-setup: #9da8b4; --work-search: #e2c257; --work-design: #7d8df2;
+  --work-check: #4fc08c; --work-measure: #43c2d6; --work-choose: #f09264; --agent: #e27cc0;
+  --half-rules: #6cc4cf; --half-agent: #e27cc0; --half-fixed: #aab1bb; --half-off: #7d838c;
+  --g0: #60a5fa; --g1: #fbbf24; --g2: #34d399; --g3: #c084fc; --g4: #d4a373; --g5: #22d3ee; --g6: #a3e635; --g7: #a8a29e; }
 * { box-sizing: border-box; }
 /* scrollbars in the theme's colours: inherited by every scrolling panel (D691) */
 :root { scrollbar-color: color-mix(in srgb, var(--muted) 45%, transparent) transparent; }
@@ -72,6 +72,7 @@ h3 { font-size: var(--fs-sm); margin: 12px 0 6px; color: var(--muted); text-tran
 #who { display: flex; gap: 10px; align-items: center; position: relative; min-width: 0; }
 .acct-btn { display: none; }
 #who .me { color: var(--ink); font-weight: 500; }
+#who .me.on { font-weight: 600; text-decoration: underline 2px var(--accent); text-underline-offset: 6px; }   /* on the Account: its way in marked, as the nav's tab is */
 #impersonation { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 8px 16px;
   padding: 8px 16px; border-bottom: 1px solid var(--line); background: var(--soft); }
 #impersonation[hidden] { display: none; }
@@ -113,15 +114,21 @@ button, .btn { font: inherit; font-weight: 500; border: 1px solid var(--line); b
                padding: 6px 13px; border-radius: var(--radius-md); cursor: pointer; display: inline-flex; align-items: center; gap: 6px;
                line-height: 1.3; text-decoration: none; }
 button:hover, .btn:hover, .bell-item:hover { background: var(--soft); text-decoration: none; }
-button.primary, .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+button.primary, .btn.primary { background: var(--accent-fill); border-color: var(--accent-fill); color: var(--accent-ink); }   /* a filled blue its white words read on (4.6:1 in dark) */
 button.primary:hover, .btn.primary:hover { filter: brightness(1.06); }
 button.danger { color: var(--bad); }
 button.danger.solid { background: var(--bad); border-color: var(--bad); color: var(--on-tone); }
 button.small, .btn.small { padding: 3px 9px; font-size: var(--fs-ui); }
+/* "+ X" (components/Add.js): one add control -- the small button, at a list's start; a menu when there is a choice */
+.add { align-self: flex-start; justify-self: start; width: auto; max-width: 100%; }
+select.add { padding: 3px 26px 3px 9px; font-size: var(--fs-ui); font-weight: 500; border-color: var(--line); cursor: pointer; min-height: 0; }
 button.wide, a.btn.wide { width: 100%; justify-content: center; }
 button.link { border: none; background: none; color: var(--accent); padding: 0; font-weight: 500; }
+/* "show more" (components/More.js): one small accent link wherever a list holds lines back */
+button.show-more { border: 0; background: transparent; color: var(--accent); font-size: var(--fs-sm); font-weight: 500; padding: 2px 8px; text-align: left; }
+button.show-more:hover { background: transparent; text-decoration: underline; }
 button:disabled { opacity: .55; cursor: default; }
-button.busy::after { content: ""; width: 12px; height: 12px; }     /* D1110: the small spinner -- the run tone's ring (.g.spin) */
+button.busy::after, button.asked::after { content: ""; width: 12px; height: 12px; }     /* D1110: the small spinner -- the run tone's ring (.g.spin) */
 input, textarea, select { font: inherit; color: var(--ink); background: var(--panel); border: 1px solid color-mix(in srgb, var(--line) 70%, var(--muted)); border-radius: var(--radius-md); padding: 6px 9px; }
 /* a box to type in is the panel's colour, so it reads as editable; one that is not reads apart (the page's colour, muted) */
 input:disabled, textarea:disabled:not(.editor-input), select:disabled { background: var(--bg); color: var(--muted); cursor: not-allowed; }
@@ -183,14 +190,18 @@ table.groups select { width: 100%; max-width: 24rem; min-width: 0; }
      color: var(--t, var(--muted)); font-style: normal; }
 /* D1110: two spinners -- this ring, small, for a line, a field or a button (button.busy::after wears it); the graph's
    dashed ring (.alt-done.run) where a box is at work; one turn for both */
-.g.spin, button.busy::after { border-radius: 50%; border: 2px solid color-mix(in srgb, var(--t, var(--run)) 25%, transparent); border-top-color: var(--t, var(--run)); box-sizing: border-box; }
-button.busy::after { --t: currentColor; flex-shrink: 0; }
+.g.spin, button.busy::after, button.asked::after { border-radius: 50%; border: 2px solid color-mix(in srgb, var(--t, var(--run)) 25%, transparent); border-top-color: var(--t, var(--run)); box-sizing: border-box; }
+button.busy::after, button.asked::after { --t: currentColor; flex-shrink: 0; }
+button.asked { color: var(--muted); }      /* a Stop or Restart asked, after this pass (components/PassAct.js): it waits, nothing is wrong */
+/* a button whose press opened a dialog waits on its answer, not busy behind it: no spinner, not faded, until confirmed */
+body:has(dialog[open]) button.busy:disabled:not(dialog *) { opacity: 1; }
+body:has(dialog[open]) button.busy:not(dialog *)::after { display: none; }
 .g-ok::before { content: "✓"; } .g-warn::before { content: "!"; } .g-bad::before { content: "✗"; } .g-none::before { content: "○"; }
-@media (prefers-reduced-motion: no-preference) { .g.spin, button.busy::after { animation: g-spin .9s linear infinite; } @keyframes g-spin { to { transform: rotate(360deg); } } }
+@media (prefers-reduced-motion: no-preference) { .g.spin, button.busy::after, button.asked::after { animation: g-spin .9s linear infinite; } @keyframes g-spin { to { transform: rotate(360deg); } } }
 
 /* ---- pills: a state in a line -- its glyph and its word; a label without a state is a quiet pill with none */
 .pill, .tag { display: inline-flex; align-items: center; gap: 5px; padding: 1px 9px; border-radius: var(--radius-pill); font-size: var(--fs-sm); font-weight: 500; line-height: 18px;
-        white-space: nowrap; margin-right: 4px; color: var(--t, var(--muted));
+        white-space: nowrap; margin-right: 4px; color: var(--t, var(--muted)); text-transform: none; letter-spacing: normal;   /* lowercase in a heading too */
         border: 1px solid color-mix(in srgb, var(--t, var(--muted)) 32%, transparent); background: color-mix(in srgb, var(--t, var(--muted)) 9%, transparent); }
 /* D1108: a tag -- a label that is not a state: no glyph, neutral; tinted by its kind (--k: an agent's pink, a box's
    kind); a count (×3, unread) small, in figures */
@@ -223,8 +234,14 @@ ul.files .ic { color: var(--muted); display: inline-block; width: 14px; }
 .adder, .agent-turn .inspector-input { margin-top: 12px; border-top: 1px solid var(--line); padding-top: 8px; }
 .viewer-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 10px; }
 .viewer textarea { min-height: 440px; }
+/* review loopwork-32: in Files the editor ends above the Talk button on a page that does not scroll (the head, tabs
+   and viewer head above it, the button and its margin below) */
+.files-view .viewer textarea.editor-input { min-height: clamp(240px, calc(100dvh - 460px), 440px); max-height: max(240px, calc(100dvh - 460px)); }
+.form-actions > .direct-files { align-self: center; }
 ul.bench li { padding: 6px 0; border-bottom: 1px dashed var(--line); }
 ul.bench li:last-child { border-bottom: none; }
+ul.files.bench li { flex-wrap: wrap; padding: 6px 4px; }
+ul.files.bench .first { flex-basis: 100%; padding-left: 14px; }
 ul.bench .first, .fact > .sub, .ignored-toggle, dl.agent-states dt { color: var(--muted); font-size: var(--fs-ui); }
 
 /* ---- the log */
@@ -253,6 +270,14 @@ pre.digest-text, .cv-thought { font: var(--fs-md)/1.5 var(--sans); }
 .stats small { color: var(--muted); text-transform: uppercase; font-size: var(--fs-xs); letter-spacing: .05em; }
 table.compact td, table.compact th { padding: 4px 8px; font-size: var(--fs-ui); }
 .detail { max-height: 76vh; overflow: auto; }
+/* the Agents tab: a turn's detail does not scroll itself -- its chat does (one scroll bar); a long name in the list cut,
+   whole on hover; its tokens on one line; the turn that waits on top */
+.detail.agent-detail { max-height: none; overflow: visible; }
+.agent-turns td.turn-who { text-align: left; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.agent-turns td.turn-who .open-turn { text-align: left; }
+/* loopwork-8: six columns need more than half the page; the detail keeps the rest (one column under 960 px, as .split) */
+@media (min-width: 961px) { .split.agents { grid-template-columns: minmax(0, 1.4fr) minmax(340px, 1fr); } }
+.agent-turns tr.turn-asking { background: color-mix(in srgb, var(--agent) 7%, var(--panel)); }
 /* ---- heads and tools (D1102): [stripe] title, state and meta, the tools joined at the end; a rule under the head */
 .head { display: flex; align-items: center; gap: 8px 10px; flex-wrap: wrap; min-width: 0; padding-bottom: 8px; margin-bottom: 10px; border-bottom: 1px solid var(--line); }
 .head h2 { margin: 0; font: 600 var(--fs-lg) var(--sans); min-width: 0; overflow-wrap: anywhere; }
@@ -320,6 +345,7 @@ dialog.dlg > h2 { font-size: var(--fs-xl); margin-bottom: 8px; }
 .steps.rail button.on { background: var(--soft); box-shadow: inset 3px 0 0 var(--accent); }
 .steps.rail .t { font-weight: 600; }
 .steps.rail .sum { grid-column: 2; font-size: var(--fs-sm); color: var(--muted); font-weight: 400; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.steps.cfg-rail .sum { white-space: normal; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; }   /* D1204: two lines */
 .cfg-stephead { display: none; }
 .cfg-body { display: grid; gap: 16px; min-width: 0; }
 .cfg-body > *, .cfg-sec > *, .cfg-body details, .ask-message .md, .ask-message .scroll-x, .ask-message pre { min-width: 0; max-width: 100%; }
@@ -361,9 +387,9 @@ dialog.dlg > h2 { font-size: var(--fs-xl); margin-bottom: 8px; }
 .cfg-status { font-size: var(--fs-ui); color: var(--t, var(--muted)); }
 .cfg-next-short { display: none; }
 /* who works a step: the choice tinted by the kind chosen */
-.cfg-who.on-rules { --k: var(--half-rules); } .cfg-who.on-model { --k: var(--half-model); } .cfg-who.on-agent { --k: var(--half-agent); }
-.cfg-who.on-script, .cfg-who.on-fixed { --k: var(--ink); } .cfg-who.on-off { --k: var(--muted); }
-.subtabs.cfg-who button.on { color: var(--k); background: color-mix(in srgb, var(--k) 14%, var(--panel)); }
+/* one segmented look (D1102's Choice): the chosen segment the white chip, whoever works; a model or an agent chosen
+   says so in the AI's pink, the only tint (the box carries the pink AI pill) */
+.subtabs.cfg-who.on-model button.on, .subtabs.cfg-who.on-agent button.on { color: color-mix(in srgb, var(--agent) 80%, var(--ink)); }
 .tag.cfg-who-tag:not(.kind) { color: var(--muted); }
 /* the Library: what every prompt reads, a row each (D1136) */
 .cfg-lib-reads { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
@@ -377,7 +403,7 @@ pre.cfg-kept-as { margin: 0; padding: 8px 10px; background: var(--soft); border:
 .cfg-file-tags { display: inline-flex; gap: 6px; flex-wrap: wrap; }
 /* the document: its lines, the step's lit */
 pre.cfg-yaml { position: relative; margin: 0; padding: 8px 0; background: var(--soft); border: 1px solid var(--line); border-radius: var(--radius-md); font-size: var(--fs-sm); line-height: 1.55; overflow: auto; max-height: calc(100vh - 150px); }
-pre.cfg-yaml > div { padding: 0 12px; white-space: pre; border-left: 3px solid transparent; }
+pre.cfg-yaml > div { padding: 0 12px 0 calc(12px + 2ch); text-indent: -2ch; white-space: pre-wrap; overflow-wrap: anywhere; border-left: 3px solid transparent; }   /* D1206: wrapped, hanging */
 pre.cfg-yaml > div.lit { background: color-mix(in srgb, var(--accent) 10%, transparent); border-left-color: var(--accent); }
 .cfg-doc .head h2 { font-size: var(--fs-md); }
 .cfg-doc-acts { display: flex; gap: 8px; justify-content: flex-end; margin-bottom: 6px; }
@@ -408,7 +434,7 @@ svg.cfg-cycle, svg.chart { display: block; width: 100%; height: auto; }
 /* D1149: a box's pill in an SVG (components/SvgPill.js), Live's Graph and the configurator's cycle alike */
 .svg-pill rect { stroke: none; } .svg-pill text { font: 600 var(--fs-2xs) var(--sans); text-anchor: middle; }
 .svg-pill.ai rect { fill: color-mix(in srgb, var(--agent) 18%, var(--panel)); } .svg-pill.ai text { fill: color-mix(in srgb, var(--agent) 75%, var(--ink)); }
-.svg-pill.critic rect { fill: color-mix(in srgb, var(--work-critic) 22%, var(--panel)); } .svg-pill.critic text { fill: color-mix(in srgb, var(--work-critic) 70%, var(--ink)); }
+.svg-pill.critic rect { fill: var(--panel); stroke: color-mix(in srgb, var(--muted) 55%, var(--panel)); stroke-width: 1; } .svg-pill.critic text { fill: var(--muted); }   /* a role: neutral, outlined, as a Tag */
 .svg-pill.count rect { fill: var(--line); } .svg-pill.count text { font-family: var(--mono); font-weight: 400; fill: var(--ink); }
 .cfg-cycle .e { fill: none; stroke: var(--muted); stroke-width: 1.3; }
 .cfg-cycle .e.ring-line { stroke: color-mix(in srgb, var(--ink) 32%, var(--panel)); stroke-width: 2; }
@@ -421,6 +447,34 @@ svg.cfg-cycle, svg.chart { display: block; width: 100%; height: auto; }
 .cfg-cycle .hit { cursor: pointer; outline: none; }
 .cfg-cycle .hit:hover .bx { stroke-width: 2.4; }
 .cfg-cycle .hit.sel > .bx:first-of-type { stroke-width: 3; }
+/* D1203: one head for every box -- the title, then who works it: the kinds at full width, the agent's menu beside them */
+.cfg-who-bar { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; min-width: 0; }
+.cfg-who-bar > .cfg-who-row { display: flex; flex: 1 1 100%; gap: 6px 8px; flex-wrap: wrap; min-width: 0; }
+.cfg-who-bar .cfg-who { display: flex; flex: 1 1 auto; min-width: 0; }
+.cfg-who-bar .cfg-who button { flex: 1 1 auto; }
+.cfg-who-bar select { flex: 0 1 auto; }
+/* D1205: the loop on a phone, a list of its boxes (the drawing is too small to read there) */
+.cfg-cycle-list { display: none; }
+.cfg-cycle-list ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.cfg-cycle-list ul + ul { margin-top: 10px; }
+.cfg-cycle-list .cfg-lane-t { font: 600 var(--fs-2xs) var(--sans); color: var(--muted); letter-spacing: .08em; padding: 0 2px; }
+.cfg-lrow { width: 100%; display: flex; align-items: center; gap: 8px; text-align: left; padding: 7px 10px; border: 1px solid var(--k); border-left-width: 4px;
+  border-radius: var(--radius-md); background: color-mix(in srgb, var(--k) 10%, var(--panel)); color: var(--ink); font-size: var(--fs-md); }
+.cfg-lrow.off { border-style: dashed; background: var(--panel); border-color: var(--muted); }
+.cfg-lrow.sel { box-shadow: 0 0 0 2px var(--k); }
+.cfg-lrow .muted { font-size: var(--fs-sm); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* D1207: a textarea grows with its text (fields.js grow) */
+.cfg textarea.cfg-grow { resize: vertical; }
+/* D1208: the loader's refusal, two lines and More */
+.cfg-refused .cfg-why.clamp { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
+.cfg-refused .cfg-why-more { margin-top: 2px; }
+/* D1204: Save's lists -- a line's mark, its words and the step that fixes it flow as one text, the mark hanging */
+.cfg-ready li, .cfg-todo li { display: block; position: relative; padding-left: 22px; }
+.cfg-ready li > .g, .cfg-todo li > .g { position: absolute; left: 2px; top: .3em; }
+.cfg-ready li > b { margin-right: 8px; }
+.cfg-todo li > button.link { margin-left: 8px; white-space: nowrap; }
+/* D1210: the configurator ends clear of the Talk button fixed over the page's corner */
+.cfg { margin-bottom: 64px; }
 /* D912, D913: the creation draft's line; the ways to make a problem, a menu on a phone */
 .draft-line:empty { display: none; }
 .draft-line { margin: -6px 0 10px; }
@@ -439,6 +493,13 @@ select.mode-menu { display: none; }
   .cfg-main > .head { display: none; }            /* the menu of steps says it */
   .cfg-next-what { display: none; } .cfg-next-short { display: inline; }
   pre.cfg-yaml { max-height: 50vh; }
+  /* D1205: the Graph a list; Next on the first line, beside Back, the saves under them */
+  .cfg-draw > svg.cfg-cycle { display: none; } .cfg-draw > .cfg-cycle-list { display: block; } .cfg-draw { padding: 8px; }
+  .cfg-nav > .grow { display: none; }
+  .cfg-nav > .cfg-next { order: 1; margin-left: auto; }
+  .cfg-nav:has(.cfg-next)::after { content: ""; order: 2; flex-basis: 100%; height: 0; }
+  .cfg-nav > .cfg-status, .cfg-nav > .cfg-draft, .cfg-nav > .cfg-save { order: 3; }
+  .cfg-nav > .cfg-status { margin-left: auto; }
 }
 @media (max-width: 640px) {
   .tabs.config-modes, .subtabs.config-modes { display: none; }
@@ -450,7 +511,6 @@ select.mode-menu { display: none; }
   .configure-head .sub { display: none; }        /* the menu of ways says them */
   .doc-line { margin: 0 0 6px; }
 }
-details.files-fold[open] > summary { margin-bottom: 10px; }
 
 @media (max-width: 960px) {
   .grid-app, .grid-2, .split { grid-template-columns: minmax(0, 1fr); }
@@ -460,6 +520,7 @@ details.files-fold[open] > summary { margin-bottom: 10px; }
 }
 @media (max-width: 560px) { .top .brand { display: none; } .bell-menu { right: -60px; width: min(340px, 92vw); } }
 .actions.end { justify-content: flex-end; }
+@media (min-width: 641px) { td.loop-acts .actions { flex-wrap: nowrap; white-space: nowrap; } }   /* "Stopping…" beside Restart, one line */
 .audit { max-height: 420px; overflow: auto; }
 /* ---- results (D690) */
 .split.results { grid-template-columns: minmax(0, 1.6fr) minmax(320px, 1fr); }
@@ -473,7 +534,7 @@ table.designs tr.failed td:first-child { color: var(--muted); }
 table.designs tr.decided td { background: color-mix(in srgb, var(--ok) 6%, transparent); }
 .star { color: var(--warn); }
 .small { font-size: var(--fs-sm); }
-@media (max-width: 960px) { .split.results { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 960px) { .split.results { grid-template-columns: minmax(0, 1fr); } .split.results > .detail-card.no-pick { display: none; } }   /* shell-32: under the table, only once a design is picked */
 ul.misses { margin: 4px 0; padding-left: 18px; color: var(--bad); }
 ul.misses li { margin: 2px 0; }
 table.designs td { white-space: nowrap; }
@@ -502,11 +563,26 @@ table.designs td { white-space: nowrap; }
 .best-table-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 6px; }
 .best-table-head h3 { margin: 0; }
 .best-group + .best-group { margin-top: 14px; }   /* a loop of parts: the whole's best, then each part's */
-.result-table-surface .table-design-name,
-.result-table-surface .table-part { display: inline-block; max-width: 16ch;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: middle; }
-.result-table-surface .table-part { display: block; font-size: var(--fs-xs); }
-.result-table-surface .table-design-name.design-id { max-width: none; overflow: visible; }
+.result-table-surface .table-part { display: block; max-width: 16ch; font-size: var(--fs-xs);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* results-1: a name cut in the middle only past its room (names.js MidName), its distinguishing end kept */
+.mid-name { display: inline-flex; max-width: 100%; min-width: 0; white-space: nowrap; vertical-align: middle; }
+.mid-name > .mid-h { overflow: hidden; text-overflow: ellipsis; min-width: 1.5ch; }
+.mid-name > .mid-t { flex: none; }
+/* the name's column takes the table's free width and cuts its name only past it (results-1) */
+.result-table-surface table.designs, .result-table-surface table.best-n { width: 100%; }
+.result-table-surface td.name-cell { width: 100%; max-width: 0; min-width: 16ch; }
+.result-table-surface td.name-cell .open-design { max-width: calc(100% - 1.6em); display: inline-flex; }
+.result-table-surface .table-design-name { max-width: 100%; }
+.result-table-surface table.flat-heads .measurement-footer { margin-top: 3px; }
+.result-table-surface td.num .none { color: var(--muted); }
+/* results-9: a few measurements: their raw names side by side, not turned */
+.measurement-head, table.designs th.measurement-head .th-sort { text-transform: none; letter-spacing: 0; }
+.result-table-surface table.flat-heads .measurement-heading { height: auto; display: block; text-align: right; }
+.result-table-surface table.flat-heads .measurement-label { position: static; transform: none; width: auto; }
+.result-table-surface table.flat-heads .measurement-label .th-sort { text-align: right; }
+th.metric-head { text-transform: none; letter-spacing: 0; font-family: var(--mono); font-weight: 500; }
+
 .measurement-columns { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 6px; }
 .measurement-groups th { height: auto !important; padding: 4px 8px !important; text-align: center; border-bottom: 1px solid var(--line); font-size: .85em; }
 .measurement-options td:first-child { overflow-wrap: anywhere; }
@@ -546,9 +622,18 @@ pre.code { white-space: pre; overflow: auto; }
 .stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; margin-bottom: 16px; }
 .num-cell small, .fact > small { color: var(--muted); text-transform: uppercase; letter-spacing: .05em; font-size: var(--fs-xs); font-weight: 600; }
 .decision-head { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
+/* results-27: Start's options in one column, a box's check on the passes' line, centred on it */
+.start-options { display: grid; gap: 8px; justify-items: start; font-size: var(--fs-ui); }
+.start-options > label { color: var(--muted); margin-bottom: -4px; }
+.start-options .start-line { display: flex; gap: 14px; align-items: center; }
+.graphs .charts:not(.grid-2) .chart-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 520px), 1fr)); gap: 0 24px; }   /* results-14: the row's width, charts at their size */
+.notice.scheduled { margin: 0 0 12px; }   /* results-25: a stop or restart asked */
+/* results-20: the last pass, at the Decision card's foot */
+.pass-facts { margin: 10px 0 4px; } .pass-facts p { margin: 0 0 4px; }
+.pass-facts .pass-timeline { margin-left: 8px; }
 .decision-nums { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px; }
 .num-cell { border: 1px solid var(--line); border-radius: var(--radius-md); padding: 8px 10px; background: var(--bg); }
-.num-cell small { overflow-wrap: anywhere; }
+.num-cell small { overflow-wrap: anywhere; text-transform: none; letter-spacing: 0; font-family: var(--mono); }   /* results-9: a metric's raw name */
 .num-cell .big { font-size: var(--fs-2xl); font-weight: 600; }
 .num-cell.meets .big { color: var(--ok); }
 .num-cell.misses .big { color: var(--bad); }
@@ -597,6 +682,17 @@ td .misses { color: var(--bad); }
 .up-input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 .page-head h1, .up-rows li { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 .up-place { display: inline-flex; gap: 6px; align-items: center; margin-left: auto; }
+/* D1212: Add files, Add folder (and New file) one group; a row's destination one column of fixed width, its menu the row's size */
+.dropzone .dz-acts { display: inline-flex; gap: 8px; flex-wrap: nowrap; }
+.up-rows li > .up-place { flex: 0 0 15rem; margin-left: 0; }
+.up-rows .up-place select { font-size: var(--fs-ui); padding-top: 3px; padding-bottom: 3px; flex: 0 0 auto; }
+.up-rows .up-place input { flex: 1 1 0; min-width: 0; font-size: var(--fs-ui); }
+@media (max-width: 640px) {
+  .up-rows li + li { margin-top: 6px; }
+  .up-rows li { border: 1px solid var(--line); border-radius: var(--radius-md); padding: 8px 10px; }
+  .up-rows li:hover { background: transparent; }
+  .up-rows li > .up-place { flex: 1 1 100%; }
+}
 pre.diff { font-family: var(--mono); font-size: var(--fs-ui); line-height: 1.45; max-height: 60vh; overflow: auto; margin: 0;
   border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--bg); padding: 4px 0; }
 pre.diff > div { padding: 0 10px 0 0; white-space: pre; }
@@ -719,7 +815,7 @@ table.env tr.shadowed td { text-decoration: line-through; opacity: .6; }
 /* D698: the sandbox's settings */
 .sb-allow { display: grid; gap: 8px; margin-top: 10px; }
 .sb-allow[hidden] { display: none; }
-textarea.mono { font-family: var(--mono); font-size: var(--fs-ui); }
+textarea.mono, label.stack textarea.mono { font-family: var(--mono); font-size: var(--fs-ui); }   /* one code size, in a label too (Admin › Sandbox's Homes was larger) */
 
 /* D699: the Log tab draws only the lines in view, each one row high */
 .logview.virt { position: relative; height: 68vh; max-height: none; padding: 0; }
@@ -790,6 +886,7 @@ figure.tchart { margin: 0; }
 .tchart-tip { position: absolute; top: 2px; pointer-events: none; background: var(--panel); color: var(--ink); border: 1px solid var(--line);
   border-radius: var(--radius-md); padding: 4px 8px; font-size: var(--fs-sm); line-height: 1.45; white-space: nowrap; box-shadow: var(--shadow-lift);
   font-variant-numeric: tabular-nums; z-index: 2; }
+svg.tchart-svg .halo { paint-order: stroke; stroke: var(--panel); stroke-width: 3px; stroke-linejoin: round; }   /* a level's label over the line under it */
 svg.tchart-svg .hover-guide { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 2 3; }
 /* D1107: a time chart's series are the charts' palette, not the tones (a line is no verdict) */
 .tchart .s0 { --s: var(--g0); } .tchart .s1 { --s: var(--g1); } .tchart .s2 { --s: var(--g2); } .tchart .s3 { --s: var(--g3); }
@@ -802,6 +899,8 @@ figure.tchart .sw { background: var(--s, var(--g0)); display: inline-block; widt
 /* D700 */
 progress.upload-bar { width: 100%; height: 10px; }
 td.app-what { max-width: 520px; }
+/* Admin › Applications: a statement in two lines, "…" where cut, the whole on hover */
+td.app-what .app-statement { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
 dialog.dlg .toasts { position: fixed; }
 /* D1095: a view's frame -- inline while closed (as if it were not there), modal for Fullscreen */
 dialog.viewer-frame, .viewer-frame-body { display: contents; }
@@ -835,6 +934,7 @@ ul.files li.ignored .file-link, ul.files li.ignored small { opacity: .55; }
 /* D704, D1131: an agent at work on a problem (components/AuthorJob.js) -- the strip, then its details */
 .card .aj { margin: 0; box-shadow: none; }
 .aj > .notice { margin: 0; }
+.aj { grid-template-columns: minmax(0, 1fr); }      /* its one column the card's width: a long line (an error, the log) scrolls in its block */
 .aj-strip { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .aj-strip > .g { flex-shrink: 0; }
 .aj-who { font-weight: 600; flex-shrink: 0; }
@@ -843,6 +943,12 @@ ul.files li.ignored .file-link, ul.files li.ignored small { opacity: .55; }
 .aj-now.bad { color: var(--bad); }
 .aj-time { font-size: var(--fs-sm); flex-shrink: 0; }
 .aj-strip button { flex-shrink: 0; }
+/* a phone: what it does now on a line of its own under the agent, the time and buttons kept on the first */
+@media (max-width: 640px) {
+  .aj-strip { flex-wrap: wrap; row-gap: 4px; }
+  .aj-strip .aj-who { margin-right: auto; } .aj-strip .aj-who::after { display: none; }
+  .aj-strip .aj-now { order: 9; flex-basis: 100%; white-space: normal; overflow-wrap: anywhere; }
+}
 .aj-details { display: grid; gap: 10px; border-top: 1px solid var(--line); padding-top: 10px; min-width: 0; }
 .aj-line { display: flex; gap: 8px; align-items: flex-start; line-height: 1.45; min-width: 0; }
 .aj-line > .g { margin-top: 3px; }
@@ -851,9 +957,8 @@ ul.files li.ignored .file-link, ul.files li.ignored small { opacity: .55; }
 .aj-line.k-ask > span { color: color-mix(in srgb, var(--agent) 72%, var(--ink)); }
 .aj-files { display: flex; flex-wrap: wrap; gap: 6px 14px; }
 .aj-file { display: inline-flex; gap: 6px; align-items: center; min-width: 0; }
-.aj-folds { display: flex; flex-wrap: wrap; gap: 4px 18px; min-width: 0; }
+.aj-folds { display: grid; grid-template-columns: minmax(0, 1fr); min-width: 0; }      /* full-width disclosure rows, stacked */
 .aj-folds > details { min-width: 0; }
-.aj-folds > details[open] { flex-basis: 100%; }
 .aj-folds summary, .aj-diff summary { cursor: pointer; font-size: var(--fs-md); color: var(--muted); }
 .aj-folds .agent-turn { margin: 8px 0 0; }
 
@@ -863,6 +968,8 @@ ul.files li.ignored .file-link, ul.files li.ignored small { opacity: .55; }
 .qline-mark { font-weight: 700; color: var(--agent); flex-shrink: 0; }
 .qline-text b, .qbox-head b { font-weight: 600; color: color-mix(in srgb, var(--agent) 72%, var(--ink)); }
 .qline > small, .qline > button { flex-shrink: 0; }
+/* a phone: the question wraps to two lines, not cut to a few words */
+@media (max-width: 600px) { .qline-text { white-space: normal; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; } }
 .qbox { display: grid; gap: 8px; padding: 10px 12px; min-width: 0; }
 .qbox-text { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 .qbox-choices { display: flex; gap: 6px; flex-wrap: wrap; }
@@ -870,8 +977,8 @@ ul.files li.ignored .file-link, ul.files li.ignored small { opacity: .55; }
 /* D1158: an author's draft its check refused, in the question's place: the refusal scrolls, its own height at most */
 .aj-error { max-height: 14em; overflow: auto; background: none; border: 0; padding: 0; font-size: var(--fs-sm); }
 /* a refused draft (D1158) stands in the question's place in the failure's tone (D1102), as the line above it: pink is the agent's own */
-.qbox.aj-refused { border-color: color-mix(in srgb, var(--bad) 30%, var(--line)); background: color-mix(in srgb, var(--bad) 6%, var(--panel)); }
-.aj-refused .qbox-head b { color: var(--bad); }
+.aj-refused .notice-text > * + * { margin-top: 8px; }     /* the refusal is the bad Notice: its output, its actions, a note under it */
+.aj-refused .notice-text > pre { color: var(--ink); }
 .talk-ask { min-width: 0; }
 .alt-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin: 0 0 12px; }
 .subrow .alt-controls { flex: 1; justify-content: flex-end; margin-left: auto; }
@@ -909,6 +1016,12 @@ ul.files li.ignored .file-link, ul.files li.ignored small { opacity: .55; }
 .alt-task.sel { background: transparent; }
 /* the selected row deeper and outlined across its whole width, indent included */
 .alt-tree-row:has(.alt-task.sel) { background: color-mix(in srgb, var(--k, var(--accent)) 32%, var(--panel)); box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--k, var(--accent)) 75%, var(--panel)); }
+/* one picked look, one focus look, one flash: each on the whole row (its indent, chevron and button together), never
+   a ring on the chevron or the button alone */
+.alt-tree-row :is(.alt-task, .alt-fold):focus-visible, .alt-tree-row .alt-task.alt-located { outline: none; animation: none; }
+.alt-tree-row:has(:focus-visible) { box-shadow: inset 0 0 0 2px var(--accent); }
+.alt-tree-row:has(.alt-task.alt-located) { outline: 2px solid var(--accent); outline-offset: -2px; }
+@media (prefers-reduced-motion: no-preference) { .alt-tree-row:has(.alt-task.alt-located) { animation: alt-locate .5s ease-in-out 3 alternate; } }
 /* D978: the pass as a flow, the chain of passes */
 .alt-chain { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 2px 0 12px; }
 .alt-chip { position: relative; min-width: 30px; padding: 2px 8px; border-radius: var(--radius-lg); font: var(--fs-sm) var(--mono, monospace); }
@@ -920,10 +1033,10 @@ ul.files li.ignored .file-link, ul.files li.ignored small { opacity: .55; }
 .alt-chip.sel { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
 svg.alt-flow { display: block; width: 100%; height: auto; margin: 0 auto; overflow: visible; }
 .alt-flow-edge, .alt-flow-back { stroke: var(--muted); stroke-width: 1.2; fill: none; } .alt-flow-back { stroke-dasharray: 4 3; } .alt-arrow-head { fill: var(--muted); }
-.alt-box { fill: var(--panel); stroke: var(--k); stroke-width: 1.4; } .alt-box.run { fill: color-mix(in srgb, var(--k) 16%, var(--panel)); stroke-width: 2.6; } .alt-flow-box.wait { opacity: .45; }  /* D1053: a box still to come, all of it dimmed */
+.alt-box { fill: var(--panel); stroke: var(--k); stroke-width: 1.4; } .alt-box.run { fill: color-mix(in srgb, var(--k) 16%, var(--panel)); }  /* at work: its tint, glow and spinner -- the thick outline is the selection's */ .alt-flow-box.wait { opacity: .45; }  /* D1053: a box still to come, all of it dimmed */
 .alt-glow { opacity: .22; } .alt-done.run { fill: var(--panel); stroke: var(--accent); stroke-width: 2.4; stroke-dasharray: 9 4; transform-box: fill-box; transform-origin: center; }
 @media (prefers-reduced-motion: no-preference) { .alt-done.run { animation: g-spin 1s linear infinite; } } @media (prefers-reduced-motion: no-preference) { .alt-glow { animation: alt-glow 1.4s ease-in-out infinite alternate; } @keyframes alt-glow { to { opacity: .06; } } }
-.alt-box-title { font: 600 var(--fs-sm) var(--sans, sans-serif); fill: var(--ink); }
+.alt-box-title { font: 600 var(--fs-sm) var(--sans, sans-serif); fill: var(--ink); } .alt-box-wait { font: var(--fs-2xs) var(--sans, sans-serif); fill: var(--muted); text-anchor: end; }
 .alt-box-note { font: var(--fs-2xs)/16px var(--mono, monospace); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .alt-step { fill: var(--k); } .alt-step.wait { fill: var(--line); } .alt-step.skip { fill: none; stroke: var(--line); stroke-dasharray: 2 2; } .alt-step.bad { fill: var(--bad); }
 @media (prefers-reduced-motion: no-preference) { .alt-step.run { animation: alt-glow 1s ease-in-out infinite alternate; } }
@@ -959,7 +1072,6 @@ svg.alt-flow { display: block; width: 100%; height: auto; margin: 0 auto; overfl
 .alt-step-row .alt-task-name .muted { font-size: var(--fs-sm); }
 .alt-fold-summary { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: var(--fs-sm) var(--mono); color: var(--muted); }
 .alt-verdict { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
-.alt-pass-detail { padding-right: 150px; }
 /* D984: an agent's turn as a chat */
 .alt-chat-wrap { position: relative; }
 .alt-chat { display: flex; flex-direction: column; gap: 6px; max-height: 62vh; overflow-y: auto; padding: 6px 2px 8px; border-top: 1px solid var(--line); }
@@ -975,7 +1087,7 @@ svg.alt-flow { display: block; width: 100%; height: auto; margin: 0 auto; overfl
 button.alt-chat-more { border: 0; background: transparent; cursor: pointer; } button.alt-chat-more:hover { color: var(--accent); background: transparent; text-decoration: underline; }
 .alt-chat-stop { align-self: stretch; margin: 6px 0; padding: 8px 12px; border-radius: var(--radius-md); font-size: var(--fs-md); background: color-mix(in srgb, var(--warn) 12%, var(--panel)); border: 1px solid color-mix(in srgb, var(--warn) 40%, var(--panel)); } .alt-chat-more.bad { color: var(--bad); }
 .alt-chat-now { display: flex; align-items: center; gap: 6px; font-size: var(--fs-ui); color: var(--muted); }
-.alt-chat-jump { position: absolute; right: 14px; bottom: 12px; border: 0; border-radius: var(--radius-lg); padding: 3px 10px; font-size: var(--fs-sm); background: var(--accent); color: var(--accent-ink); box-shadow: var(--shadow-lift); }
+.alt-chat-jump { position: absolute; right: 14px; bottom: 12px; border: 0; border-radius: var(--radius-lg); padding: 3px 10px; font-size: var(--fs-sm); background: var(--accent-fill); color: var(--accent-ink); box-shadow: var(--shadow-lift); }
 .alt-usage { margin-bottom: 6px; }
 /* D1144: Talk's Thinking & commands -- Live's agent view in a dialog over most of the screen, a phone's whole screen;
    the chat fills it, a long line wraps or scrolls in its own block */
@@ -997,8 +1109,11 @@ dialog.agent-dlg > .head { flex: none; }
 .cfg-cycle .hit:focus-visible > .bx:first-of-type, .alt-flow-box.sel .alt-box, .alt-flow-box:focus-visible .alt-box, .alt-time-task.alt-located .bar { stroke: var(--accent); stroke-width: 3; }
 .alt-time-task { cursor: pointer; }
 .alt-time-task:focus { outline: none; }
-.alt-time-task.sel .bar, .alt-time-task:focus-visible .bar { stroke: var(--ink); stroke-width: 2; }
-.alt-more { margin-top: 10px; }
+.alt-time-task:focus-visible .bar { stroke: var(--ink); stroke-width: 2; }
+/* the picked task: a ring in its kind's colour around the bar, the bar keeping its own (a 3 px bar stroked was black) */
+.alt-time-ring { fill: none; stroke-width: 1.5; }
+.alt-wrap { opacity: .55; }   /* the span a task wraps (a search over its designs), its own time the bar */
+.alt-more { margin-top: 8px; }
 .alt-choice-head, .alt-choice-task { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .alt-choice-head { font-size: var(--fs-sm); margin-bottom: 6px; }
 .alt-choice-task { width: 100%; text-align: left; border: 0; padding: 8px; }
@@ -1009,7 +1124,20 @@ svg.gantt .bar.timeout { stroke: var(--warn); }                          /* D997
 .alt-detail .facts:empty { display: none; }
 .task-inspector .val { overflow-wrap: anywhere; }
 @media (max-width: 960px) { .alt-split { grid-template-columns: minmax(0, 1fr); } }
-@media (max-width: 600px) { .alt-selectors { width: 100%; margin-left: 0; } .alt-selectors label { flex: 1 1 100%; } .alt-selectors select { flex: 1; width: 100%; } }
+/* a phone: Start and Pass a full-width row of their own, side by side; the inspector's Locate and Full log a row above
+   its head, so the head is one line (its title, state, time, its tools at the end); the pass chips stay chips */
+@media (max-width: 600px) {
+  .subrow .alt-controls { flex: 1 1 100%; }
+  .alt-selectors { width: 100%; margin-left: 0; flex-wrap: nowrap; }
+  .alt-selectors label { flex: 1 1 0; min-width: 0; }
+  .alt-selectors select { flex: 1; width: 100%; min-width: 0; max-width: none; }
+  .alt-detail-actions { position: static; justify-content: flex-end; margin-bottom: 8px; }
+  .alt-detail .alt-ihead { padding-right: 0; }
+  .alt-tree-row .alt-task-name { white-space: normal; overflow-wrap: anywhere; }   /* a long name wraps in its row, not past the screen */
+}
+.alt-chain .alt-chip { min-height: 0; }
+/* a choice's pool on a phone: each design's values as label and value lines, not pushed to the right */
+@media (max-width: 640px) { table.list.alt-metrics > tbody > tr > td.num { text-align: left; } }
 .attach, .ctl-grid { display: grid; gap: 8px; }
 
 /* D705: answers */
@@ -1028,7 +1156,12 @@ svg.gantt .bar.timeout { stroke: var(--warn); }                          /* D997
 .ask-meta { font-size: var(--fs-xs); color: var(--muted); }
 .ask-agent .md > :first-child { margin-top: 6px; }
 .ask-message pre { overflow: auto; }
-.ask-turn-actions { display: flex; justify-content: flex-end; margin-top: 8px; }
+.ask-turn-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+/* an answer's actions quiet: no box until hovered; Reply as readable as Thinking & commands (disabled only while one runs) */
+.ask-turn-actions button, .ask-running .ask-thinking { background: transparent; border-color: transparent; color: var(--muted); }
+.ask-turn-actions button:hover:not(:disabled), .ask-running .ask-thinking:hover { border-color: var(--line); color: var(--ink); }
+.ask-running { flex-wrap: wrap; }
+.ask-turn .pill.t-run { --t: var(--agent); }      /* the agent at work on an answer: its own colour, as on the stepper */
 .ask-output { min-width: 0; margin-top: 8px; }
 .ask-output pre { max-height: 180px; }
 td.bad { color: var(--bad); }
@@ -1049,7 +1182,7 @@ td.bad { color: var(--bad); }
 .cv-work-said { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
 .cv-work-said::before { content: "▸"; font-size: var(--fs-2xs); }
 .cv-work[open] .cv-work-said::before { content: "▾"; }
-.cv-work.bad .cv-work-said { color: var(--bad); }
+.cv-work-said .bad { color: var(--bad); }      /* the line neutral, its failed commands red */
 .cv-work.live .cv-work-said { color: var(--accent); }
 .cv-work-steps { display: flex; flex-direction: column; gap: 6px; padding: 4px 0 2px; }
 .cv-step > summary { padding: 4px 9px; }
@@ -1075,15 +1208,22 @@ td.bad { color: var(--bad); }
 .steps.row button.on, .subtabs button.on { background: var(--panel); color: var(--ink); box-shadow: var(--shadow-sm); font-weight: 600; }
 .subtabs button:hover:not(.on) { color: var(--ink); }
 .subtabs button b { font-weight: 600; font-variant-numeric: tabular-nums; color: var(--muted); } .subtabs button.on b { color: var(--ink); }
+/* shell-26: on a phone a segmented choice is one row that scrolls sideways, never a segment alone on a second line */
+@media (max-width: 640px) {
+  .subtabs { flex-wrap: nowrap; max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+  .subtabs::-webkit-scrollbar { display: none; }
+  .subtabs > button { flex: none; white-space: nowrap; }
+}
+@media (min-width: 641px) { .subtabs.scroll-x { overflow: visible; } }   /* wider, it never scrolls: a focus ring is not cut */
 .subtabs.choice { margin: 0; } .subtabs.choice.small button { padding: 2px 9px; font-size: var(--fs-ui); }
 .bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 10px; } .bar .grow { flex: 1; } .bar.scope { margin-bottom: 6px; }
 /* D1140: Talk floats in a gutter of its own -- the page ends that far below its last button, at every width */
 :root { --fab-bottom: 24px; }
 main:has(.ask-fab) { padding-bottom: calc(var(--fab-bottom) + 60px); }
 .ask-fab { position: fixed; right: 24px; bottom: var(--fab-bottom); z-index: 40; border-radius: var(--radius-pill); padding: 10px 20px; font-weight: 600;
-  background: var(--accent); color: var(--accent-ink); border: 0; box-shadow: var(--shadow-lift); cursor: pointer; }
+  background: var(--accent-fill); color: var(--accent-ink); border: 0; box-shadow: var(--shadow-lift); cursor: pointer; }
 .ask-fab.on { background: var(--ink); color: var(--panel); }
-.drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(var(--talk-width, 520px), 100vw); min-width: min(520px, 100vw); z-index: 50; background: var(--bg);
+.drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(var(--talk-width, 520px), 100%); min-width: min(520px, 100%); z-index: 50; background: var(--bg);
   border-left: 1px solid var(--line); box-shadow: var(--shadow-side); transform: translateX(105%); transition: transform .18s ease;
   display: flex; flex-direction: column; pointer-events: none; }
 .drawer.open { transform: none; pointer-events: auto; }
@@ -1102,6 +1242,13 @@ body.resizing-drawer, body.resizing-drawer * { cursor: ew-resize !important; use
 .ask-compose .composer-in { min-height: 64px; }
 .ask-agent-picker { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: var(--fs-sm); color: var(--muted); }
 .ask-agent-picker select { min-width: 0; width: auto; max-width: 220px; }
+/* a phone: the label over its select, the status under it, Send on a line of its own */
+@media (max-width: 640px) {
+  .ask-compose .composer-row { flex-wrap: wrap; align-items: stretch; }
+  .ask-agent-picker { flex: 1 1 100%; flex-direction: column; align-items: stretch; gap: 4px; }
+  .ask-agent-picker select { max-width: none; width: 100%; }
+  .ask-compose .composer-row > button { margin-left: auto; }
+}
 .drawer .steer-card { min-width: 0; }
 .steer-card > summary { cursor: pointer; font-size: var(--fs-md); font-weight: 600; overflow-wrap: anywhere; }
 .drawer .notes, .drawer .note { min-width: 0; }
@@ -1110,6 +1257,23 @@ body.resizing-drawer, body.resizing-drawer * { cursor: ew-resize !important; use
 .danger-card { border-color: color-mix(in srgb, var(--bad) 35%, var(--line)); }
 .reset-folders { padding-left: 20px; }
 .reset-folders li { margin: 10px 0; overflow-wrap: anywhere; }
+.reset-keep { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+.settings-running { margin-bottom: 16px; }
+/* loopwork-26: Settings on a phone -- the metric matrix keeps its columns, a clean-up task is one row with Run at its
+   right, the user to share with on its own row */
+@media (max-width: 640px) {
+  .measurement-preferences table.list { display: table; width: 100%; }
+  .measurement-preferences table.list > thead { display: table-header-group; }
+  .measurement-preferences table.list > tbody { display: table-row-group; }
+  .measurement-preferences table.list > tbody > tr { display: table-row; padding: 0; }
+  .measurement-preferences table.list > tbody > tr > td { display: table-cell; padding: 4px 5px; }
+  .measurement-preferences table.list > tbody > tr > td[data-label]::before { display: none; }
+  table.list.loop-mt > tbody > tr { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 10px; align-items: center; }
+  table.list.loop-mt > tbody > tr > td[data-label]::before { display: none; }
+  table.list.loop-mt > tbody > tr > td.mt-said { grid-column: 1; grid-row: 2; }
+  table.list.loop-mt > tbody > tr > td.mt-acts { grid-column: 2; grid-row: 1 / span 2; }
+  .share-grid #share-user { grid-column: 1 / -1; }
+}
 @media (max-width: 640px) { :root { --fab-bottom: 16px; } .ask-fab { right: 16px; } }
 body:has(.ask-fab) .toasts { bottom: calc(var(--fab-bottom) + 54px); }
 body:has(.drawer.open) .toasts { left: 18px; right: auto; bottom: 18px; pointer-events: none; }
@@ -1162,11 +1326,22 @@ body:has(.drawer.open) .toast a, body:has(.drawer.open) .toast button { pointer-
 .agent-found { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; overflow-wrap: anywhere; }
 .why-failed { border-color: color-mix(in srgb, var(--bad) 50%, var(--line)); }
 .why-failed h2 { color: var(--bad); }
-.ask-fab.asking { background: var(--warn); animation: pulse 1.4s ease-in-out infinite; }
+/* the agent waits for an answer: Talk in the agent's colour (deepened so its words read), opaque, a dot on it and a
+   ring that breathes -- never a fade: it floats over the page */
+.ask-fab.asking { background: color-mix(in srgb, var(--agent) 82%, var(--ink)); color: var(--on-tone); animation: fab-call 1.6s ease-in-out infinite; }
+.ask-fab-dot { display: inline-block; width: 7px; height: 7px; margin-left: 7px; vertical-align: 2px; border-radius: 50%; background: currentColor; }
+@keyframes fab-call { 50% { box-shadow: var(--shadow-lift), 0 0 0 6px color-mix(in srgb, var(--agent) 30%, transparent); } }
 .spark { display: inline-flex; align-items: flex-end; height: 16px; }
 .spark i { display: inline-block; background: var(--accent); border-radius: var(--radius-xs); }
 .spark i.z { background: var(--line); }
 .why-cell { overflow-wrap: anywhere; max-width: 60ch; }
+/* Admin › Insights: a failure's reason in two lines, the whole on hover; the three Usage tables on one column grid */
+.why-cell .why-short { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
+@media (min-width: 641px) {
+  table.usage-table { table-layout: fixed; width: 100%; }
+  table.usage-table th:nth-child(1) { width: 34%; }
+  table.usage-table th:nth-child(2), table.usage-table th:nth-child(3), table.usage-table th:nth-child(4) { width: 12%; }
+}
 .meter-cell { width: 120px; }
 td.num.bad { color: var(--bad); font-weight: 600; }
 
@@ -1190,6 +1365,7 @@ fieldset.set-group.with-panel { grid-column: 1 / -1; }
 h4.set-sub { margin: 10px 0 2px; font-size: 0.95em; border-top: 1px solid var(--line); padding-top: 8px; }
 .set-extra { grid-column: 1 / -1; min-width: 0; }
 h4.set-sub.first { border-top: 0; padding-top: 0; margin-top: 0; }
+.set-group .set-note { margin: 0 0 4px; }   /* "Server settings apply": a note, not a link */
 /* D924: an agent's three states apart -- installation, connection, verification -- each a label and what it is */
 dl.agent-states { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 12px; margin: 0; align-items: baseline; }
 dl.agent-states dd { margin: 0; display: flex; gap: 6px 8px; flex-wrap: wrap; align-items: baseline; min-width: 0; overflow-wrap: anywhere; }
@@ -1219,6 +1395,14 @@ ul.files li.own > .file-link { font-weight: 600; }   /* D829 */
 /* D834: a long file name wraps inside its row and the viewer's head, never past them */
 ul.files li > small, ul.files li > .pill { flex-shrink: 0; white-space: nowrap; }
 .viewer-head { flex-wrap: wrap; gap: 6px 12px; }
+/* Admin › Users: a row a line -- the account's state beside its name, the actions side by side, heads and times unwrapped */
+table.users .user-name { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+table.users .user-name .pill { font-weight: 400; }
+table.users select { max-width: 136px; }
+@media (min-width: 641px) {
+  table.users th, table.users th .th-sort, table.users .user-actions button { white-space: nowrap; }
+  table.users .user-actions { flex-wrap: nowrap; }
+}
 .viewer-head > .path-crumbs { min-width: 0; flex: 1 1 16em; overflow-wrap: anywhere; }
 
 /* D908: Files as a file manager -- the selected item's kind, size and time under its path; one
@@ -1271,15 +1455,15 @@ ul.files li > .file-link { margin-right: auto; }
   .who-items button { width: 100%; }
 }
 
-/* D856: the agent-asks state readable in both themes (white on the light amber, dark on the dark's) */
-.ask-fab.asking { color: var(--warn-ink); }
 
-/* D856: the Overview on a phone -- what stopped it and its question, then the decision, then the summary */
+/* D856, revised by results-24: the Overview on a phone -- what stopped it and its question, then the summary (two
+   columns, compact), then the decision: the desktop's order */
 @media (max-width: 640px) {
   .stats.five { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   div:has(> .ov-stats) { display: flex; flex-direction: column; }
   div:has(> .ov-stats) > .why-failed, div:has(> .ov-stats) > .card.ask { order: -2; }
-  div:has(> .ov-stats) > .grid-2.ov { order: -1; }
+  div:has(> .ov-stats) > .ov-stats { order: -1; gap: 8px; }
+  .ov-stats > * { padding: 8px 10px; }
 }
 @media (max-width: 360px) { .stats.five { grid-template-columns: minmax(0, 1fr); } }
 
@@ -1351,7 +1535,7 @@ svg.chart .pt.pending { stroke-dasharray: 2 1.5; }
 svg.chart .pt.rejected { fill: var(--panel); fill-opacity: 1; stroke: var(--muted); stroke-width: 1.2; opacity: .7; }   /* D1094: set aside, not missing a requirement */
 svg.chart .pt.on-front { stroke: var(--ink); stroke-width: 1.3; fill-opacity: 1; }
 svg.chart .baseline-ref { stroke: var(--muted); stroke-width: 1.5; stroke-dasharray: 6 3; stroke-opacity: .4; }
-svg.chart .pt.out { opacity: .35; }
+svg.chart .pt.out { opacity: .55; }      /* outside the scope, still seen on the dark panel */
 svg.chart .pt:hover { stroke-width: 2.4; }
 svg.chart .ring { fill: none; stroke: var(--ink); stroke-width: 1.5; pointer-events: none; }
 .legend.groups { display: inline-flex; flex-wrap: wrap; gap: 2px 12px; white-space: normal; }
@@ -1361,17 +1545,36 @@ svg.chart.key.wide { width: 16px; height: 9px; }
 .best-said { font-weight: 600; }
 
 .set-fields .inline .save-mark { min-width: 0; }
-.ideas-table td { white-space: normal; overflow-wrap: anywhere; min-width: 7rem; max-width: 22rem; vertical-align: top; }
-.ideas-table td:nth-child(1) { max-width: 16rem; }
+.ideas-table td { white-space: normal; overflow-wrap: break-word; vertical-align: top; }
+/* results-29: the columns' widths fixed by the header, so an opened row of evaluations does not move them */
+table.ideas-table { table-layout: fixed; width: 100%; }
+.ideas-table > thead th:nth-child(1) { width: 26%; }
+.ideas-table > thead th:nth-child(3) { width: 7.5rem; }
+.ideas-table > thead th:nth-child(4) { width: 11rem; }
+.idea-evaluations td.idea-design { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.idea-evaluations.no-pass th:nth-child(1), .idea-evaluations.no-pass td:nth-child(1) { width: 9rem; }
+.idea-evaluations.no-pass th:nth-child(2), .idea-evaluations.no-pass td:nth-child(2),
+.idea-evaluations.no-pass th:nth-child(3), .idea-evaluations.no-pass td:nth-child(3) { width: 5.5rem; }
+/* results-3: on a phone an idea is a card -- its title and id, the hypothesis, then its state and evidence on one row */
+@media (max-width: 640px) {
+  table.ideas-table { table-layout: auto; }
+  .ideas-table > tbody > tr:not(.idea-evals-row) { display: grid !important; grid-template-columns: auto 1fr; gap: 4px 10px; align-items: center; }
+  .ideas-table > tbody > tr > td:nth-child(1), .ideas-table > tbody > tr > td:nth-child(2) { grid-column: 1 / -1; }
+  .ideas-table > tbody > tr > td::before { display: none !important; }
+  .ideas-table > tbody > tr > td { overflow-wrap: break-word !important; }
+  .ideas-table > tbody > tr > td:nth-child(3) { font-size: var(--fs-sm); color: var(--muted); }
+  .ideas-table > tbody > tr > td:nth-child(4) .idea-queue { display: inline-flex; margin: 0 0 0 8px; }
+  .ideas-table > tbody > tr.idea-evals-row > td { padding: 0 0 8px; }
+}
 .ideas-table > tbody > tr.idea-open > td { border-bottom: none; }
 .ideas-table > tbody > tr.idea-evals-row > td { max-width: none; padding: 0 8px 12px; }
 .idea-evals-row .scroll-x { border: 1px solid var(--line); border-radius: var(--radius); background: color-mix(in srgb, var(--muted) 5%, transparent); }
 .idea-evidence { white-space: nowrap; }
 .ideas-table small, .idea-evaluations small { display: block; }
 .ideas-table p { margin: 0 0 .4rem; }
-.idea-evaluations th:nth-child(1), .idea-evaluations td:nth-child(1) { width: 3.2rem; }
-.idea-evaluations th:nth-child(2), .idea-evaluations td:nth-child(2) { width: 9rem; }
-.idea-evaluations th:nth-child(3), .idea-evaluations td:nth-child(3), .idea-evaluations th:nth-child(4), .idea-evaluations td:nth-child(4) { width: 5.5rem; }
+.idea-evaluations:not(.no-pass) th:nth-child(1), .idea-evaluations:not(.no-pass) td:nth-child(1) { width: 3.2rem; }
+.idea-evaluations:not(.no-pass) th:nth-child(2), .idea-evaluations:not(.no-pass) td:nth-child(2) { width: 9rem; }
+.idea-evaluations:not(.no-pass) th:nth-child(3), .idea-evaluations:not(.no-pass) td:nth-child(3), .idea-evaluations:not(.no-pass) th:nth-child(4), .idea-evaluations:not(.no-pass) td:nth-child(4) { width: 5.5rem; }
 .ideas-table .idea-evaluations td { min-width: 0; max-width: none; }
 .idea-metrics { display: flex; flex-wrap: wrap; gap: 3px; }
 .idea-metric { font: var(--fs-sm) var(--mono); padding: 0 5px; border-radius: var(--radius-xs); background: color-mix(in srgb, var(--muted) 12%, transparent); white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
@@ -1384,6 +1587,15 @@ svg.chart.key.wide { width: 16px; height: 9px; }
 @media (max-width: 400px) {
   .tabs button, .tabs a { padding-left: 9px; padding-right: 9px; }
 }
+
+/* shell-26: on a phone a page's tabs are one row that scrolls sideways, not a second line with one tab on it */
+@media (max-width: 640px) {
+  .tabs.loop-tabs, .tabs.admin-tabs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  .tabs.loop-tabs::-webkit-scrollbar, .tabs.admin-tabs::-webkit-scrollbar { display: none; }
+  .tabs.loop-tabs > *, .tabs.admin-tabs > * { flex: none; white-space: nowrap; }
+}
+/* results-32: a digest's size beside its name, under it on a phone */
+@media (max-width: 640px) { .digest summary { flex-wrap: wrap; } .digest summary > strong { flex: 1 1 0; min-width: 0; } .digest summary .digest-meta { display: block; flex-basis: 100%; margin-left: 1.2em; } }
 
 /* D955: Results › Library -- each digested paper folded, its digest's text wrapped (a phone too) */
 /* D998: a long list scrolls in its own box, its header kept in view -- picking an old row needs no page scroll */
@@ -1423,7 +1635,7 @@ td.cleared s { color: var(--muted); }
 .alt-tree-row.box { margin-top: 3px; box-shadow: inset 3px 0 0 var(--k); }
 .alt-tree-row.box .alt-task-name b { font-weight: 600; }
 .alt-tree-row.wait { opacity: .5; }
-.alt-more-tries { display: block; border: 0; background: transparent; color: var(--accent); font-size: var(--fs-sm); padding: 2px 8px; margin-left: calc(min(var(--depth), 8) * 12px + 24px); cursor: pointer; text-align: left; }
+.alt-more-tries { display: block; margin-left: calc(min(var(--depth), 8) * 12px + 24px); }
 /* D1044 (G1): a graph box's list, attached under it in its colour */
 .alt-box-tasks { border: 1px solid color-mix(in srgb, var(--k) 45%, var(--line)); border-top: 0; border-left: 4px solid var(--k); border-radius: 0 0 var(--radius-md) var(--radius-md); padding: 3px 4px 4px;
   background: color-mix(in srgb, var(--k) 4%, var(--panel)); box-sizing: border-box; height: 100%; overflow: hidden; }
@@ -1451,13 +1663,39 @@ td.cleared s { color: var(--muted); }
 .idea-queue-all { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
 .idea-queue { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-top: 6px; }
 .loop-agent { margin-left: 4px; }
+/* shell-8: every list of loops on one column grid, so State, Activity, Designs and Best line up from table to table */
+.loops-table table.loops-grid { table-layout: fixed; width: 100%; }
+.loops-grid > thead th:nth-child(1) { width: 24%; }
+.loops-grid > thead th:nth-child(2) { width: 21%; }
+.loops-grid > thead th:nth-child(3) { width: 17%; }
+.loops-grid > thead th:nth-child(4) { width: 9%; }
+.loops-grid > thead th:nth-child(6) { width: 196px; }
+.loops-grid td { overflow-wrap: anywhere; }
+.loops-grid .loop-access { margin-left: 6px; }
+.loop-main-measurements .goal { font-size: var(--fs-xs); }
+.loops-section + .loops-section { margin-top: 18px; }
+.loops-section > .head { margin-top: 4px; }
+/* shell-9: on a phone a loop is a compact card -- its name and action on one line, its state, then what it has */
+@media (max-width: 640px) {
+  .loops-table table.loops-grid { table-layout: auto; }
+  .loops-grid > tbody > tr { display: grid !important; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 10px; align-items: center; }
+  .loops-grid > tbody > tr > td { grid-column: 1; }
+  .loops-grid > tbody > tr > td.loop-acts { grid-column: 2; grid-row: 1 / span 2; }
+  .loops-grid > tbody > tr > td.loop-cell::before, .loops-grid > tbody > tr > td.loop-state::before,
+  .loops-grid > tbody > tr > td.loop-acts::before { display: none !important; }
+  .loops-grid > tbody > tr > td.blank { display: none !important; }
+  .loops-grid > tbody > tr > td.loop-main-measurements > div { display: inline-block; white-space: nowrap; margin-right: 10px; }
+  .loops-grid > tbody > tr > td[data-label]::before { min-width: 5.5em !important; }
+  .loops-page .sort-strip select, .loops-page .sort-strip button { font-size: var(--fs-md); }
+}
 
 /* ---- New loop › Agent (D1122; configure/byagent/, D1149: here, no stylesheet of its own): the stages, what it can use,
    the decisions (the author's job and its question: .aj and .qbox). */
-.ba-flow { display: grid; gap: 12px; }
+.ba-flow { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }      /* a long log line scrolls in its block, not the page */
 .ba-stages { justify-self: start; }
 .steps.ba-stages button.on .n { background: var(--agent); border-color: var(--agent); color: var(--on-tone); }
 .ba-draft-line { margin: -4px 0 0; }
+.steps.ba-stages button.done:disabled { opacity: 1; }        /* Ask done: the draft holds it, not faded as one not reached */
 
 /* the main column and the side: the files, what it can use, the document */
 .ba-grid { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(240px, 1fr); gap: 16px; align-items: start; }
@@ -1465,6 +1703,7 @@ td.cleared s { color: var(--muted); }
 .ba-grid > .card { margin-bottom: 0; }
 .ba-grid textarea, .ba-grid input:not([type=checkbox]) { width: 100%; }
 .ba-main { display: grid; gap: 10px; align-content: start; }
+.ba-main > .row { align-items: flex-start; }      /* Name and Agent from one top line: their boxes level, the agent's status under it */
 .ba-main > .head, .ba-side > .head { margin-bottom: 0; }
 .ba-main h3 { margin-bottom: 0; }
 .ba-nav { margin-top: 0; align-items: center; }
@@ -1491,7 +1730,8 @@ td.cleared s { color: var(--muted); }
 }
 @media (max-width: 520px) {
   .ba-decision { grid-template-columns: minmax(0, 1fr); }
-  .ba-decision .ba-acts { grid-row: auto; }
+  .ba-decision .ba-acts { grid-row: auto; order: 1; }      /* after its source line */
+  .ba-change { flex-wrap: wrap; } .ba-change input { flex: 1 1 100%; }
   .steps.ba-stages button { padding: 4px 8px 4px 4px; }
 }
 

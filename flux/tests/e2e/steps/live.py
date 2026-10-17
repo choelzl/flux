@@ -101,9 +101,9 @@ def flows(r):
         r.check("a note sent is confirmed and listed under the line", True)
         b.js("document.dispatchEvent(new KeyboardEvent('keydown', {key: 'Escape'})); return 1")
         r.button("Stop", ".page-head")
-        b.wait("[...document.querySelectorAll('.page-head button.danger.solid')].some(b => b.textContent==='Stop') || !document.querySelector('.page-head .pill.t-run')", what="stop scheduled")
+        b.wait("[...document.querySelectorAll('.page-head button.asked')].some(b => b.textContent==='Stopping…') || !document.querySelector('.page-head .pill.t-run')", what="stop scheduled")
         if b.js("return !!document.querySelector('.page-head .pill.t-run')"):
-            r.button("Stop", ".page-head")
+            r.button("Stopping…", ".page-head")
             r.dialog_button("Stop")
         b.wait("!document.querySelector('.page-head .pill.t-run')", timeout=60, what="stopped")
         r.check("stopped", True)
@@ -122,9 +122,12 @@ def flows(r):
         b.wait("document.querySelectorAll('.logview .ln').length > 3", timeout=30, what="the log's lines")
         stamps = b.wait("[...document.querySelectorAll('.logview .ln .at')].map(a => a.textContent).filter(Boolean)", timeout=10, what="the times")
         r.check("the log shows each line's day and time, by default (D732, D816)", bool(stamps) and all(re.match(r"^[A-Z][a-z]{2} \d\d \d\d:\d\d:\d\d$", x) for x in stamps), str(stamps[:3]))
-        b.js("const c = [...document.querySelectorAll('#main .toolbar label')].find(l => l.textContent.trim() === 'times').querySelector('input'); c.click(); return 1")
+        r.check("the Log's toggles are chips, Follow the page's one: no box of its own, no Pass picker (it filters nothing there)", b.js(
+            "const t = document.querySelector('#main .log-card .toolbar'); return [...t.querySelectorAll('button.chip')].map(c => c.textContent).join() === 'Wrap,Problems,Times'"
+            " && !t.querySelector('input[type=checkbox]') && !document.querySelector('[aria-label=\"Live pass\"]') && !!document.querySelector('[aria-label=\"Live start\"]')"))
+        r.button("Times", "#main .log-card .toolbar")
         r.check("and hides them when asked", b.wait("document.querySelectorAll('.logview .ln .at').length === 0", timeout=10, what="no times"))
-        b.js("const c = [...document.querySelectorAll('#main .toolbar label')].find(l => l.textContent.trim() === 'times').querySelector('input'); c.click(); return 1")
+        r.button("Times", "#main .log-card .toolbar")
         # D739: the tree is the loop's -- a line per pass, the crafter's boxes under it; a task opens in the inspector
         r.page("#/app/sw/live", "document.querySelector('.alt-tree [data-pass], .alt-tree [data-task]')", "Live, stopped")
         b.js("const s = document.querySelector('[aria-label=\"Live pass\"]'); s.value = 'all'; s.dispatchEvent(new Event('change', {bubbles: true})); return 1")
@@ -133,6 +136,19 @@ def flows(r):
         b.js("document.querySelector('.alt-tree [data-task]').click(); return 1")
         b.wait("document.querySelector('.alt-detail[data-task]')", timeout=10, what="a task in the inspector")
         r.check("a task opens in the inspector", True)
+        # live-20: on a phone the timeline of one pass is the whole width, the inspector under it (on a desktop it
+        # stays in the narrow column, D985) -- in a frame of a phone's width (the window does not go below 500 px)
+        b.js("document.body.innerHTML = ''; const f = document.createElement('iframe'); f.id = 'phone';"
+             "f.style.cssText = 'width:390px;height:800px;border:0'; f.src = '/#/app/sw/live/timeline'; document.body.append(f); return 1")
+        b.wait("(() => { const d = document.getElementById('phone').contentDocument; return d && d.querySelector('.alt-timeline') && d.querySelector('.alt-inspector-card'); })()",
+               timeout=20, what="the timeline at 390 px")
+        got = b.js("""const w = document.getElementById('phone').contentWindow, d = w.document, q = s => d.querySelector(s).getBoundingClientRect();
+            const card = q('.alt-visual-card'), insp = q('.alt-inspector-card'), chart = q('.alt-timeline'), main = q('.alt-split');
+            return [d.querySelector('[aria-label="Live pass"]').value, Math.round(card.width), Math.round(main.width), Math.round(chart.width), insp.top >= card.bottom];""")
+        r.check("on a phone one pass's timeline takes the width, the inspector under it (live-20)",
+                got[0] != "all" and got[1] >= got[2] - 2 and got[3] >= got[1] - 40 and got[4], str(got))
+        b.cmd("WebDriver:Navigate", {"url": f"{r.url}/?after-phone={time.time()}#/"})   # a reload: the page is the app again
+        b.wait("document.querySelector('#main')", timeout=20)
         r.page("#/app/sw/results", "document.querySelector('#main table.designs, #main .empty')", "Results")
         r.check("results listed", b.js("return document.querySelectorAll('#main table.designs tbody tr').length") > 0)
         sort_fit("Results")
@@ -141,7 +157,7 @@ def flows(r):
             b.shot(Path(os.environ["FLUX_E2E_SHOTS"]) / "results-sorted-desktop.png")
         # D916: Results and Graphs two views; the graphs built only when Graphs is first opened
         subs = b.js("return [...document.querySelectorAll('#main .subtabs [role=tab], .subrow .subtabs [role=tab]')].map(x => x.textContent)")
-        r.check("Results has its views: Results, Graphs, Ideas and Library (D916, D955)", subs == ["Results", "Graphs", "Ideas", "Library"], str(subs))
+        r.check("Results has its views: Designs, Graphs, Ideas and Library (D916, D955; results-31: not Results › Results)", subs == ["Designs", "Graphs", "Ideas", "Library"], str(subs))
         r.check("the graphs are not built while Results shows (D916)", b.js("return !document.querySelector('#main svg.chart') && !!document.querySelector('#main .decision-line')"))
         r.button("Graphs", ".subrow .subtabs")
         b.wait("document.querySelector('#main svg.chart.pareto, #main svg.best-chart')", timeout=10, what="the graphs")
@@ -156,13 +172,13 @@ def flows(r):
                      " const s = c && c.querySelector('svg.best-chart'); return s ? s.querySelectorAll('.pt').length : 0; })()", timeout=10, what="the chart's points")
         r.check("improvement by design: one point per design (D916: renamed)", pts == want, f"{pts} points, {want} designs, {len(got['rows'])} measurements")
         r.page("#/app/sw", "document.querySelector('#main .card')", "Overview")
-        card = b.wait("(() => { const c = [...document.querySelectorAll('#main .card')].find(x => (x.querySelector('h2') || {}).textContent === 'Last decision');"
-                      " return c && [c.querySelector('.pass-said') ? c.querySelector('.pass-said').textContent : '', !!c.querySelector('details.pass-record:not([open])'),"
-                      " c.innerText.includes('INFERENCE')]; })()", timeout=20, what="the last pass card")
-        r.check("Overview: the last pass says its decision in words, its record folded (D856)", card[0] and card[1] and not card[2], str(card))
+        card = b.wait("(() => { const c = [...document.querySelectorAll('#main .card')].find(x => (x.querySelector('h2') || {}).textContent === 'Decision');"
+                      " const f = c && c.querySelector('.pass-facts'); return f && [f.textContent.includes('Last pass'), !!f.querySelector('details.pass-record:not([open])'),"
+                      " c.innerText.includes('INFERENCE')]; })()", timeout=20, what="the last pass in the Decision card")
+        r.check("Overview: the last pass at the Decision card's foot, its record folded (D856, results-20)", card[0] and card[1] and not card[2], str(card))
         heads = b.js("return [...document.querySelectorAll('#main h2, #main h3, #main summary')].map(x => x.textContent.trim())")
-        r.check("Overview: concise headings -- Decision, Last pass, Record; none begins with 'The ' (D927)", "Decision" in heads
-                and any(x == "Last decision" for x in heads) and "Record" in heads and not [x for x in heads if x.startswith("The ")], str(heads))
+        r.check("Overview: concise headings -- Decision, Record, no Last decision card beside it; none begins with 'The ' (D927, results-20)", "Decision" in heads
+                and "Last decision" not in heads and "Record" in heads and not [x for x in heads if x.startswith("The ")], str(heads))
         # D928 (W3): the button itself, clicked -- Live › Timeline, not an Overview left in place
         b.js("[...document.querySelectorAll('#main button')].find(x => x.textContent === 'Timeline').id = 'e2e-where'; return 1")
         b.click("#e2e-where")
@@ -474,6 +490,8 @@ def flows(r):
                 r.button("Locate", ".alt-detail-actions")
                 r.check("Locate reveals the selected task inside a folded branch", b.js("return !!document.querySelector('.alt-tree [data-task=\"4\"].sel')"))
                 choose("Live pass", "all")
+                r.check("the header's pills add up to its task count (a task at work around one at work is one)", b.js("""const s=document.querySelector('.alt-summary'), n=+/(\\d+) tasks?/.exec(s.textContent)[1];
+                  return n===[...s.querySelectorAll('.alt-count b')].reduce((t,b)=>t+ +b.textContent,0)"""))
                 r.check("all passes have clear headings and a running task count", b.js("return [...document.querySelectorAll('.alt-pass-heading .alt-task-name')].map(n=>n.textContent).join(',')==='Pass 0 · baseline,Pass 1,Pass 2' && document.querySelector('.alt-summary .running').textContent==='1 running'"))
                 r.check("D978: a finished pass is folded to its line, the pass at work open, a running task spins", b.js("return !document.querySelector('.alt-tree [data-task=\"2\"]') && !!document.querySelector('.alt-tree [data-task=\"4\"] .g.spin') && document.querySelector('.alt-tree [data-fold=\"pass:1\"]').getAttribute('aria-expanded')==='false'"))
                 r.check("D978: tasks are named in the timeline's words, the engine's name kept for the inspector", b.js("const t=n=>document.querySelector('.alt-tree [data-task=\"'+n+'\"] .alt-task-name')?.textContent;return t(4)==='Design current' && !document.querySelector('.alt-tree [data-task=\"3\"]') && document.querySelector('.alt-tree [data-task=\"4\"]').title.startsWith('agent: claude')"))
@@ -507,6 +525,7 @@ def flows(r):
                 b.click('.alt-chip[data-chain="2"]')
                 b.wait("document.querySelector('.alt-chip.sel')?.textContent==='2'", what="pass 2's flow")
                 r.check("a running pass shows the boxes still to come as waiting, an agent's box with its pill", b.js("return !!document.querySelector('.alt-flow-box[data-box=design] .alt-glow') && [...document.querySelectorAll('.alt-flow-box[data-box=design] .svg-pill.ai text')].some(t=>t.textContent==='AI') && !!document.querySelector('.alt-flow-box[data-box=check] .alt-box.wait') && !!document.querySelector('.alt-flow-box[data-box=measure] .alt-box.wait')"))
+                r.check("a box still to come says so, in the inspector's word", b.js("return document.querySelector('.alt-flow-box[data-box=check] .alt-box-wait')?.textContent==='waiting' && document.querySelector('.alt-flow-box[data-box=check]').getAttribute('aria-label')==='Check · waiting'"))
                 b.wait("document.querySelector('.alt-flow-box[data-box=choose] .alt-box-note')", what="Choose objective note")
                 r.check("long objective notes sit below Choose, stay inside the box, and expose their full text on hover", b.js("""const box=document.querySelector('.alt-flow-box[data-box=choose]'), note=box.querySelector('.alt-box-note');
                   const n=note.getBoundingClientRect(), t=box.querySelector('.alt-box-title').getBoundingClientRect(), r=box.querySelector('.alt-box').getBoundingClientRect();
@@ -601,6 +620,9 @@ def flows(r):
                 b.click('.alt-timeline [data-task="6"] rect')
                 b.click('.alt-choice [data-choice="2"]')
                 r.check("timeline bars select their actual task", b.js("return document.querySelector('.alt-detail').dataset.task==='2'"))
+                r.check("the picked bar keeps its kind's colour, a ring in that colour around it", b.js(
+                    "const bar = document.querySelector('.alt-timeline [data-task=\"2\"].sel rect.bar'), ring = document.querySelector('.alt-timeline .alt-time-ring');"
+                    " return !!bar && !!ring && ring.style.stroke === bar.style.fill && getComputedStyle(bar).strokeWidth !== '2px'"))
                 b.js("window.__altStreams.at(-1).emit('live',{updates:{4:{steps:[{k:'text',text:'A new reply'}]}}});return 1")
                 b.wait("document.querySelector('.alt-controls button').getAttribute('aria-pressed')==='false'", what="pinned update")
                 r.check("new live output does not replace a pinned task", b.js("return document.querySelector('.alt-detail').dataset.task==='2'"))
@@ -619,7 +641,7 @@ def flows(r):
                     stream.emit('events',{ev:'start',id:1000+i,t:t+i*.002,parent:3,name:'tool: bulk '+i,params:{command:i===0?'python3 oldest-special.py':'python3 sample.py'}});
                     stream.emit('events',{ev:'end',id:1000+i,t:t+i*.002+.001,seconds:.001,output:{exit:0}});
                   } return 1;""")
-                b.wait("document.querySelector('.alt-summary').textContent.includes('208 tasks')", what="long task journal")
+                b.wait("document.querySelector('.alt-summary').textContent.includes('207 tasks')", what="long task journal (208, the agent at work inside its draft counted once)")
                 r.check("long journals keep the timeline compact and include every task", b.js("return new Set([...document.querySelectorAll('.alt-timeline [data-task]')].map(e => e.dataset.task)).size===208 && document.querySelector('.alt-timeline').getBoundingClientRect().height<120 && document.querySelector('.alt-detail').dataset.task==='4'"))
                 r.button("Tree", ".subrow .subtabs")
                 r.check("long trees keep the active agent and its ancestor visible", b.js("return document.querySelector('.alt-detail').dataset.task==='4' && !!document.querySelector('.alt-tree [data-task=\"4\"]') && !document.querySelector('.alt-tree [data-task=\"1000\"]') && !!document.querySelector('.alt-more')"))
@@ -639,6 +661,16 @@ def flows(r):
                 r.check("pausing Follow pins the inspected task and pass when the loop advances", b.js("return document.querySelector('.alt-detail').dataset.task==='4' && document.querySelector('[aria-label=\"Live pass\"]').value==='2' && document.querySelector('.alt-controls button').textContent==='Follow' && document.querySelector('.alt-controls button').getAttribute('aria-pressed')==='false'"))
                 r.button("Follow", ".alt-controls")
                 r.check("resuming Follow selects the newest active agent", b.js("return document.querySelector('.alt-detail').dataset.task==='2000' && document.querySelector('.alt-controls button').getAttribute('aria-pressed')==='true'"))
+                r.button("Log", ".subrow .subtabs")
+                b.wait("document.querySelector('.log-card .toolbar')", what="the Log")
+                r.check("on the Log, Follow is the log's and no Pass picker shows: the log is the start's", b.js(
+                    "const f = document.querySelector('.alt-controls button'); return f.textContent === 'Following' && !document.querySelector('[aria-label=\"Live pass\"]')"))
+                r.button("Following", ".alt-controls")
+                r.check("Following there stops the log's follow", b.js("const f = document.querySelector('.alt-controls button'); return f.textContent === 'Follow' && f.getAttribute('aria-pressed') === 'false'"))
+                r.button("Follow", ".alt-controls")
+                r.button("Tree", ".subrow .subtabs")
+                b.wait("document.querySelector('.alt-tree')", what="the tree again")
+                r.check("and leaves the tasks' Follow as it was", b.js("return document.querySelector('.alt-controls button').getAttribute('aria-pressed') === 'true' && !!document.querySelector('[aria-label=\"Live pass\"]')"))
                 b.js("""const s = window.__altStreams.at(-1), t = Date.now() / 1000;      // D1016: a design continued in its pass -- twice the same task
                   for (const [id, t0] of [[901, t], [902, t + 10]]) { s.emit('events', {ev: 'start', id, t: t0, parent: null, name: 'generation: improve wheel#7', why: 'gate', params: {}});
                     s.emit('events', {ev: 'end', id, t: t0 + 5, seconds: 5, output: {}}); } return 1""")

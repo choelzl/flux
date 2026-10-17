@@ -8,7 +8,7 @@ import { FilesBody } from "./FilesPanel.js";
 import { Pick, Text } from "./fields.js";
 import { HiddenMark, hiddenBy } from "../files/hidden.js";
 
-export function PromptStep({ M, state, edit, store, opts, invalid }) {
+export function PromptStep({ M, state, edit, store, invalid }) {
   const implied = M.impliedLanguage(state);              // D832: optional -- the tools usually tell
   const W = M.WORDS.prompt;
   const langs = [["", implied ? `${W.fromTools}: ${implied}` : W.fromTools], ...M.LANGUAGES.map(l => [l, l]), ["other", W.other]];
@@ -21,8 +21,8 @@ export function PromptStep({ M, state, edit, store, opts, invalid }) {
   // D1159: files dropped hidden from AI go to flow.knowledge.hidden (Graph › Knowledge lists them)
   const hide = paths => edit(() => { const now = M.hiddenOf(state); state.hidden = [...now, ...paths.filter(p => !now.includes(p))]; });
   return html`<div class="cfg-grid2">
-      <${Text} label=${opts.nameLabel || "Name"} k="id" invalid=${invalid} value=${state.id} set=${v => edit(() => { state.id = v; })}
-        placeholder=${opts.namePlaceholder || "my_design"} hint=${W.nameHint} />
+      <${Text} label=${W.name} k="id" invalid=${invalid} value=${state.id} set=${v => edit(() => { state.id = v; })}
+        placeholder=${W.namePlaceholder} hint=${W.nameHint} />
       <${Pick} label="Language" value=${state.language} options=${langs} set=${v => edit(() => { state.language = v; })} />
       ${state.language === "other" ? html`<${Text} label=${W.languageName} value=${state.languageOther} placeholder="ini" set=${v => edit(() => { state.languageOther = v; })} />` : ""}</div>
     <${Text} area rows=${3} label=${W.statement} k="statement" invalid=${invalid} value=${state.statement} set=${v => edit(() => { state.statement = v; })}

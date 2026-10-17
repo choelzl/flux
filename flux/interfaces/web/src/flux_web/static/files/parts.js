@@ -45,7 +45,9 @@ export function ActionsMenu({ label, it, acts, hid }) {
   const toggled = e => { const d = e.currentTarget; setOpen(d.open); if (d.open && document.activeElement === d.querySelector("summary")) d.querySelector(".menu-list button:not([disabled])")?.focus(); };
   const item = (text, fn, ok) => html`<button type="button" role="menuitem" disabled=${!ok} title=${ok ? null : it.why}
     onClick=${async e => { e.preventDefault(); setOpen(false); await fn(it); }}>${text}</button>`;
-  return html`<details class="actions-menu" ref=${ref} open=${open} onToggle=${toggled}>
+  // Escape on the menu itself closes it at once (the popover's own listener comes a frame after it opens)
+  const esc = e => { if (e.key !== "Escape" || !ref.current?.open) return; e.preventDefault(); ref.current.open = false; setOpen(false); ref.current?.querySelector("summary")?.focus(); };
+  return html`<details class="actions-menu" ref=${ref} open=${open} onToggle=${toggled} onKeyDown=${esc}>
     <summary class="btn small" aria-label=${`Actions for ${label}`} title="Rename, move or delete">Actions ▾</summary>
     <div class="menu-list" role="menu">${item("Rename…", acts.rename, it.can.rename)}${item("Move…", acts.move, it.can.move)}${item("Delete…", acts.remove, it.can.delete)}
       ${hid && it.path ? hideItem(it, hid, setOpen) : ""}
@@ -64,11 +66,13 @@ function hideItem(it, hid, setOpen) {
 
 /** A folder's entries (D829: a loop's own parts stand out -- its documents, the folders Flux keeps; D908: a
     link says it is one, never followed here; D937: a row is its name and size, an ignored one greyed). */
+// review loopwork-6: bold says what it means on the row -- the loop's document, or a folder Flux keeps
+const OWN = { out: "Flux's: results", runs: "Flux's: run logs", workbench: "Flux's: the agents' workbench", library: "Flux's: what the agents read" };
+const ownSaid = f => f.path.includes("/") ? null : f.dir ? OWN[f.path] || null : f.path === "problem.yaml" || f.path.endsWith(".problem.yaml") ? "the loop's document" : null;
 export function FileList({ list, open, hidden }) {
-  const own = f => !f.path.includes("/") && (f.dir ? ["out", "runs", "workbench", "library"].includes(f.path) : f.path === "problem.yaml" || f.path.endsWith(".problem.yaml"));
-  return html`<ul class="files">${list.map(f => html`<li key=${f.path} class=${`${f.ignored ? "ignored" : ""}${own(f) ? " own" : ""}${f.link ? " link" : ""}`}
+  return html`<ul class="files">${list.map(f => html`<li key=${f.path} class=${`${f.ignored ? "ignored" : ""}${ownSaid(f) ? " own" : ""}${f.link ? " link" : ""}`}
       title=${f.ignored ? "ignored" : null}>
-    <button type="button" class="link file-link" title=${f.path} onClick=${() => open(f.path, f.dir)}><span class="ic">${f.dir ? "▸" : f.link ? "↪" : "·"}</span>${baseOf(f.path) + (f.dir ? "/" : "")}</button>
+    <button type="button" class="link file-link" title=${ownSaid(f) ? `${f.path} · ${ownSaid(f)}` : f.path} onClick=${() => open(f.path, f.dir)}><span class="ic">${f.dir ? "▸" : f.link ? "↪" : "·"}</span>${baseOf(f.path) + (f.dir ? "/" : "")}</button>
     ${hiddenBy(f.path, hidden) ? html`<${HiddenMark} path=${f.path} by=${hiddenBy(f.path, hidden)} />` : ""}
     ${f.dir || f.link ? "" : html`<small class="muted">${bytes(f.size)}</small>`}</li>`)}</ul>`;
 }

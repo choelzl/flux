@@ -7,8 +7,8 @@ import { Notice, cx, html, useState } from "../view.js";
 import { Tag } from "../components/Tone.js";
 import { Tool } from "../components/Head.js";
 import { Select } from "../components/Select.js";
-import { Kept, Pick, Text, Who, isKept } from "./fields.js";
-import { whoOn, whoOptions } from "./who.js";
+import { Kept, Pick, Text, isKept } from "./fields.js";
+import { Add } from "../components/Add.js";
 
 /** A row of a list: its number, its name and a line, its tags, opened by its head; `acts` under its fields. */
 const XRow = ({ i, title, line, tags, open, toggle, children, acts }) => html`<div class=${cx("cfg-xrow", open && "open")}>
@@ -77,7 +77,7 @@ function StageFields({ M, state, st, lang, edit }) {
         <input aria-label="Unit" class="narrow" placeholder="ms" value=${m.unit || ""} onInput=${e => edit(() => { m.unit = e.currentTarget.value; })} />
         <${Select} aria-label="Aggregate" value=${m.aggregate || "mean"} options=${W.aggregates} onChange=${v => edit(() => { m.aggregate = v; })} />
         <${Tool} icon="close" label="Remove the dictionary" onClick=${() => edit(() => { dicts.splice(j, 1); })} /></div>`)}
-      <button type="button" class="small" onClick=${() => edit(() => { dicts.push({ name: "", direction: "minimize", unit: "" }); })}>${W.addDictionary}</button></div>` : ""}
+      <${Add} onClick=${() => edit(() => { dicts.push({ name: "", direction: "minimize", unit: "" }); })}>${W.addDictionary}<//></div>` : ""}
     <div class="cfg-sub"><h4>${W.cutoff}</h4>
       ${st.gates.map((g, j) => html`<div class="cfg-orow" key=${j}><span class="ix">${j ? W.cutoffOr : ""}</span>
         ${dicts.length ? html`<input aria-label="Number" value=${g.metric} placeholder="timings.test" onInput=${e => edit(() => { g.metric = e.currentTarget.value; })} />`
@@ -85,10 +85,10 @@ function StageFields({ M, state, st, lang, edit }) {
         <${Select} aria-label="Rule" value=${g.rule} options=${W.cutoffRules} onChange=${v => edit(() => { g.rule = v; })} />
         <input aria-label=${g.rule === "within" ? "Percent" : "Value"} class="narrow" value=${g.value} onInput=${e => edit(() => { g.value = e.currentTarget.value; })} />
         <${Tool} icon="close" label="Remove the cutoff" onClick=${() => edit(() => { st.gates.splice(j, 1); })} /></div>`)}
-      <button type="button" class="small" onClick=${() => edit(() => { st.gates.push({ metric: rep[0] || "", rule: "at", value: "" }); })}>${W.addCutoff}</button></div>`;
+      <${Add} onClick=${() => edit(() => { st.gates.push({ metric: rep[0] || "", rule: "at", value: "" }); })}>${W.addCutoff}<//></div>`;
 }
 
-export function ChecksStep({ M, state, edit, agent, direct }) {
+export function ChecksStep({ M, state, edit, agent, direct, go }) {
   const [open, setOpen] = useState(null), lang = M.language(state, true), r = M.resolve(state);
   const toggle = row => () => setOpen(o => o === row ? null : row);
   const addCheck = () => edit(() => {
@@ -104,8 +104,12 @@ export function ChecksStep({ M, state, edit, agent, direct }) {
     const row = M.newStage(state, M.nextStageTool(lang, state.stages.map(x => x.tool)));
     state.stages.push(row); setOpen(row);
   });
-  const crit = M.criticsOf(state).test, kinds = whoOptions(M, "critique", crit, agent);
+  // the critic on passing designs is set in the Graph's Check box, beside the other critics: said here, linked
+  const critWho = M.whoWorks("critique", M.criticsOf(state).test, agent);
   const keptChecks = isKept(state, "flow.test"), keptStages = isKept(state, "flow.measure");   // D1136: said, not edited
+  // D1210: the finalists are the ones the last (costly) measurement takes, named
+  const FW = M.WORDS.budget.finalists, lastStage = String((state.stages[state.stages.length - 1] || {}).name || "").trim();
+  const finalists = `${FW.label} ${lastStage || FW.last}`;
   return html`${M.catalog().length ? "" : html`<${Notice} tone="warn" what=${M.WORDS.checks.noCatalog[0]} why=${M.WORDS.checks.noCatalog[1]} />`}
     <section class="cfg-sec"><h3>Checks <span class="muted">${M.WORDS.checks.say}</span></h3>
       ${keptChecks ? html`<${Kept} M=${M} state=${state} at="flow.test" direct=${direct} />` : html`<div class="cfg-rows">${state.checks.map((c, i) => {
@@ -114,10 +118,8 @@ export function ChecksStep({ M, state, edit, agent, direct }) {
           tags=${html`<${Tag}>${ty?.preset || M.runsTool(c)?.preset ? "preset" : ty?.key === "test" ? "test script" : "command"}<//>${c.timeout ? html`<${Tag}>${c.timeout} s<//>` : ""}`}
           acts=${html`<${Acts} list=${state.checks} i=${i} edit=${edit} what=${r.checks[i].name} />`}><${CheckFields} M=${M} state=${state} c=${c} lang=${lang} edit=${edit} /><//>`;
       })}</div>`}
-      <div class="cfg-bar">${keptChecks ? "" : html`<button type="button" class="small" onClick=${addCheck}>${M.WORDS.checks.add}</button>`}<span class="grow" />
-        <span class="muted small">Critic on passing designs</span>
-        <${Who} label="The critic on a design that passed" fixed=${isKept(state, "flow.boxes")} options=${kinds} on=${whoOn(kinds, crit)}
-          pick=${k => edit(() => { M.setCritic(state, "test", kinds.find(o => o.k === k).value()); })} /></div></section>
+      <div class="cfg-bar">${keptChecks ? "" : html`<${Add} onClick=${addCheck}>${M.WORDS.checks.add}<//>`}<span class="grow" />
+        <span class="muted small cfg-critic-said">${`Critic: ${critWho.name || critWho.label} · `}<button type="button" class="link" onClick=${() => go?.("graph", null, "test")}>set in Graph</button></span></div></section>
     <section class="cfg-sec"><h3>Measurements <span class="muted">${M.WORDS.measure.say}</span></h3>
       ${keptStages ? html`<${Kept} M=${M} state=${state} at="flow.measure" direct=${direct} />` : html`<div class="cfg-rows">${state.stages.map((st, i) => {
         const rs = r.stages[i], est = st.estimate && st.estimate.kind && st.estimate.kind !== "off";
@@ -126,7 +128,7 @@ export function ChecksStep({ M, state, edit, agent, direct }) {
           open=${open === st} toggle=${toggle(st)} tags=${html`${est ? html`<${Tag}>${M.WORDS.measure.estimated}<//>` : ""}${st.gates.length ? html`<${Tag}>cutoff<//>` : ""}`}
           acts=${html`<${Acts} list=${state.stages} i=${i} edit=${edit} what=${rs.name} />`}><${StageFields} M=${M} state=${state} st=${st} lang=${lang} edit=${edit} /><//>`;
       })}</div>`}
-      <div class="cfg-bar">${keptStages ? "" : html`<button type="button" class="small" onClick=${addStage}>${M.WORDS.measure.add}</button>`}<span class="grow" />
-        ${state.stages.length > 1 ? html`<label class="cfg-inline"><span class="muted small">${M.WORDS.budget.finalists.label}</span>
-          <input aria-label=${M.WORDS.budget.finalists.label} class="narrow" placeholder=${M.WORDS.budget.finalists.dflt} value=${state.budget.finalists || ""} onInput=${e => edit(() => { state.budget.finalists = e.currentTarget.value; })} /></label>` : ""}</div></section>`;
+      <div class="cfg-bar">${keptStages ? "" : html`<${Add} onClick=${addStage}>${M.WORDS.measure.add}<//>`}<span class="grow" />
+        ${state.stages.length > 1 ? html`<label class="cfg-inline"><span class="muted small">${finalists}</span>
+          <input aria-label=${finalists} class="narrow" placeholder=${M.WORDS.budget.finalists.dflt} value=${state.budget.finalists || ""} onInput=${e => edit(() => { state.budget.finalists = e.currentTarget.value; })} /></label>` : ""}</div></section>`;
 }

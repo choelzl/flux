@@ -453,6 +453,19 @@ def loop_files(app_dir: Path) -> dict[str, Path]:
     return {"log": d / "loop.log", "answer": d / "answer.json", "inbox": d / "inbox.jsonl"}
 
 
+
+_NIX = re.compile(r"/nix/store/[0-9a-z]{32}-[^/\s'\"]+(?:/[^/\s'\":]+)*/([^/\s'\":]+)")
+
+
+def short_paths(text: str, roots: tuple[str, ...] | list[str] = ()) -> str:
+    """A failure's words with its paths short (Admin › Insights said "/nix/store/8z15…-python3-3.13.13-env/bin/python3:
+    can't open file '/…/users/bob/apps/broken_gen/nope.py'"): a program from the Nix store by its name ("python3"), a
+    file under the loop's own folders by its path there ("nope.py")."""
+    text = _NIX.sub(r"\1", text)
+    for root in sorted({r.rstrip("/") for r in roots if r}, key=len, reverse=True):
+        text = text.replace(root + "/", "")
+    return text
+
 class RunManager:
     def __init__(self, store: Store, *, sandbox: bool = True, max_running: int = 4) -> None:
         self.store, self.sandbox, self.max_running = store, sandbox, max_running
@@ -687,7 +700,8 @@ class RunManager:
         for ln in tidy:
             counted[ln] = counted.get(ln, 0) + 1
         said_once = [f"{ln} ({k} times)" if k > 1 else ln for ln, k in counted.items()]
-        return [ln[:400] for ln in said_once[-n:]]
+        roots = self.roots(run)
+        return [short_paths(ln, roots)[:400] for ln in said_once[-n:]]
 
     def state(self, user: User, app: str, run: Any = LOOKUP) -> dict[str, Any]:
         """The loop's state: running or not, since when, its last activity, and while it runs its

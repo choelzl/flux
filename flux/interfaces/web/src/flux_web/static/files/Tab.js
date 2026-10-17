@@ -109,7 +109,7 @@ function useFiles(ctx, refreshList = async () => {}) {
       } catch (x) { if (x.message !== "log in") toast(x.message, x.status === 409 ? "warn" : "bad", { timeout: 9000 }); }
     },
   };
-  return { sel, open, acts, save, draft, itemUrl };
+  return { sel, open, acts, save, draft, itemUrl, dirty };
 }
 
 /** The selected item: its head (path, actions, what it is), then a folder's entries, a text in the editor
@@ -117,6 +117,7 @@ function useFiles(ctx, refreshList = async () => {}) {
 function Viewer({ f, showIgnored, hid }) {
   const ctx = useLoop();
   const { name, q, mine } = ctx, { sel } = f, view = useViewer();
+  const [changed, setChanged] = useState(false);         // Save offered once the text differs from the saved
   const fileUrl = (path, dl) => `/api/apps/${enc(name)}/file?path=${enc(path)}${dl ? "&download=1" : ""}${q}`;
   // what is selected: a folder's entries, a text, a binary file -- D907: the answer's status first, an error (a file
   // gone since the list, a session ended) said with the file's name and a retry, never shown as a binary or edited
@@ -134,7 +135,7 @@ function Viewer({ f, showIgnored, hid }) {
   const { path, dir } = sel, here = it && it.path === path ? it : null;
   const download = html`<${Tool} icon="download" label="Download" href=${fileUrl(path, true)} />`;
   const editable = mine && got?.text != null && !got.cut;
-  const tools = got?.text != null ? html`${editable ? html`<${Act} cls="small" onClick=${() => f.save()}>Save<//>` : ""}
+  const tools = got?.text != null ? html`${editable ? html`<${Act} cls="small" id="file-save" disabled=${!(changed && f.dirty())} onClick=${async () => { await f.save(); setChanged(f.dirty()); }}>Save<//>` : ""}
       <${Tools}><${ViewerTools} v=${view} title=${path} rawUrl=${fileUrl(path, false) + "&raw=true"} />${download}<//>` : got?.binary ? html`<${Tools}>${download}<//>` : "";
   const head = html`<div class="viewer-head"><${PathCrumbs} name=${name} path=${path} open=${f.open} />
     <div class="actions">${tools}${here && mine ? html`<${ActionsMenu} label=${path || name} it=${here} acts=${f.acts} hid=${hid} />` : ""}</div>
@@ -146,7 +147,7 @@ function Viewer({ f, showIgnored, hid }) {
     : got.binary ? html`<${Empty} text="Binary file." action=${html`<a class="btn small" href=${fileUrl(path, true)}>Download</a>`} />`
     : html`${got.cut ? html`<${Notice} tone="warn" cls="truncated" what=${`Showing the first ${bytes(new TextEncoder().encode(got.text).length)} of ${bytes(got.size)}`}
           why="too large to edit here. Download has it all." />` : ""}
-        <${CodeEditor} key=${`${path}#${sel.n}`} text=${got.text} lang=${langOf(path)} readonly=${!editable} onEditor=${onEditor} />`}`}</div><//>`;
+        <${CodeEditor} key=${`${path}#${sel.n}`} text=${got.text} lang=${langOf(path)} readonly=${!editable} onEditor=${onEditor} onType=${() => setChanged(f.dirty())} />`}`}</div><//>`;
 }
 
 /** Files added: dropped or chosen (a folder keeps its paths), each where it goes (D1149: the one uploader). */
@@ -180,17 +181,21 @@ export function FilesTab({ root }) {
   useEffect(() => { if (ctx.info.document) f.open(ctx.info.document, false, true); }, []);
   const ignored = html`<${Check} cls="small ignored-toggle" title=".gitignore'd and dot files" id="show-ignored" checked=${showIgnored()}
     onChange=${on => { remember("flux-show-ignored", on ? "1" : "0"); ctx.drawBody(); }}>show ignored<//>`;
-  return html`<div class="grid-app"><${Card} title="Files" cls="files-card" actions=${ignored}><div class="files-list"><${FileList} list=${list} open=${f.open} hidden=${hid.list} /></div>${ctx.mine ? html`<${Adder} hid=${hid} />` : ""}<//>
+  return html`<div class="grid-app files-view"><${Card} cls="files-card" actions=${ignored}><div class="files-list"><${FileList} list=${list} open=${f.open} hidden=${hid.list} /></div>${ctx.mine ? html`<${Adder} hid=${hid} />` : ""}<//>
     <${Card} cls="viewer-card"><${Viewer} f=${f} showIgnored=${showIgnored()} hid=${hid} /><//></div>`;
 }
 
-/** The agents' workbench: their tools, their notes, the rest -- each opened in the viewer. */
+/** The agents' workbench: their tools, their notes, the rest -- each opened in the viewer; a row as the Files tree's
+    (its name, when it changed at the right, its first line under it), a group named only beside another. Nothing in
+    it yet: said with where it lives, no viewer beside it. */
 export function WorkbenchTab({ bench }) {
   const ctx = useLoop();
   const f = useFiles(ctx);
+  if (!bench.length) return html`<${Card} cls="bench-card"><${Empty} text="No tools or notes yet."><span class="muted"> Agents keep theirs in <span class="mono">workbench/</span>.</span><//><//>`;
   const groups = ["tools", "notes", ""].map(kind => [kind, bench.filter(b => b.kind === kind || (kind === "" && !["tools", "notes"].includes(b.kind)))]).filter(([, items]) => items.length);
-  return html`<div class="grid-app"><${Card} title="Workbench">${bench.length ? groups.map(([kind, items]) => html`<div key=${kind} class="bench-group"><h3>${kind || "other"}</h3>
-      <ul class="bench">${items.map(b => html`<li key=${b.path}><button type="button" class="link file-link" onClick=${() => f.open(b.path, false)}>${baseOf(b.path)}</button>
-        <small class="muted"> <${Ago} t=${b.mtime} /></small>${b.first ? html`<div class="first">${b.first}</div>` : ""}</li>`)}</ul></div>`) : html`<${Empty} text="Empty." />`}<//>
+  return html`<div class="grid-app files-view"><${Card} cls="bench-card">${groups.map(([kind, items]) => html`<div key=${kind} class="bench-group">${groups.length > 1 ? html`<h3>${kind || "other"}</h3>` : ""}
+      <ul class="files bench">${items.map(b => html`<li key=${b.path}><button type="button" class="link file-link" title=${b.path}
+          onClick=${() => f.open(b.path, false)}><span class="ic">·</span>${b.path.replace(/^workbench\//, "")}</button>
+        <small class="muted"><${Ago} t=${b.mtime} /></small>${b.first ? html`<div class="first">${b.first}</div>` : ""}</li>`)}</ul></div>`)}<//>
     <${Card} cls="viewer-card"><${Viewer} f=${f} showIgnored=${showIgnored()} /><//></div>`;
 }

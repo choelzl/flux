@@ -123,11 +123,11 @@ class LoopActions:
 
                     with added_agents(lambda: added_kinds(self.store)):
                         self.ctx.start_loop(run["app"], options, user.name, actor)
-                    self.store.audit(actor.name, "restart", f"{user.name}/{run['app']}")
+                    self.store.audit(actor.name, "restart", f"{user.name}/{run['app']}", loop=(user.name, run['app']))
                     self.store.notify(actor.name, f"{user.name}/{run['app']} restarted", kind="ok")
                 except (HTTPException, ValueError, WorkspaceError, OSError) as exc:
                     why = str(exc.detail if isinstance(exc, HTTPException) else exc)
-                    self.store.audit(actor.name if actor else "", "restart failed", f"{run['app']}: {why}")
+                    self.store.audit(actor.name if actor else "", "restart failed", f"{run['app']}: {why}", loop=(user.name, run['app']) if user else None)
                     if actor:
                         self.store.notify(actor.name, f"{run['app']} could not restart: {why}", kind="warn")
             self.store.server_set(self.KEY, pending or None)

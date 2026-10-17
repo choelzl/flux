@@ -22,7 +22,8 @@ export function Prose({ text, cls = "val tall" }) {
   })}</pre>`;
 }
 
-const Inline = ({ t }) => {
+/** A line's inline marks: `code`, **strong**, *em*. */
+export const Inline = ({ t }) => {
   const out = [], re = /(`[^`]+`|\*\*[^*]+\*\*|\*[^*\s][^*]*\*)/g;
   let at = 0, m;
   while ((m = re.exec(t))) {

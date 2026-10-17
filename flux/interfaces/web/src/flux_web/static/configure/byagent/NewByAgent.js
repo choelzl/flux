@@ -42,9 +42,12 @@ async function withFiles(url, fd, items) {
   return items.length ? sendWithProgress("Uploading", `${plural(items.length, "file")} for the agent`, p => apiUpload(url, fd, p), { say: false }) : apiUpload(url, fd);
 }
 
-/** The stages, each reachable once the draft is that far; `refused` Ready's check refused the draft (its step red). */
-const StageBar = ({ stage, reach, go, refused = false }) => html`<${Steps} cls="row ba-stages" label="Stage" at=${stage} go=${go}
-  items=${STAGES.map((s, i) => ({ key: i, title: i === 3 && refused ? "Not ready" : s, disabled: !reach(i), state: i === 3 && refused ? "bad" : "" }))} />`;
+/** The stages, each reachable once the draft is that far, a finished one ✓ (`done(i)`: Ask once asked -- the draft
+    holds it now, so it is not reached again --, Drafting once the draft is checked, Review once it is through);
+    `refused` Ready's check refused the draft (its step red). */
+const StageBar = ({ stage, reach, done, go, refused = false }) => html`<${Steps} cls="row ba-stages" label="Stage" at=${stage} go=${go}
+  items=${STAGES.map((s, i) => ({ key: i, title: i === 3 && refused ? "Not ready" : s, disabled: !reach(i),
+    state: i === 3 && refused ? "bad" : done(i) ? "done" : "" }))} />`;
 
 /** What the author has besides the ask: the facts, no more. */
 function Uses() {
@@ -220,7 +223,9 @@ export function NewByAgent({ draft = null, onDraft = () => {}, done = () => {} }
     : stage === 1 || !ready ? html`<${Drafting} name=${flow.name} st=${st} poll=${poll} review=${() => go(2)} made=${() => save({ name: null, stage: 0, kept: {} })} />`
     : stage === 2 ? html`<${Review} name=${flow.name} st=${st} poll=${poll} flow=${flow} save=${save} who=${flow.who || ""} askMe=${flow.askMe ?? true} check=${() => go(3)} />`
     : html`<${Ready} name=${flow.name} back=${() => go(2)} made=${() => save({ name: null, stage: 0, kept: {} })} onCheck=${setChecked} />`;
-  return html`<div class="ba-flow"><${StageBar} stage=${stage >= 2 && !ready ? 1 : stage} reach=${reach} go=${go} refused=${stage === 3 && ready && checked === false} />
-    ${flow.name ? html`<p class="muted small ba-draft-line">${"Draft "}<b class="mono">${flow.name}</b>${" · "}<button type="button" class="link" onClick=${discard}>Discard draft</button></p>` : ""}
+  const finished = i => i === 0 ? !!flow.name : i === 1 ? ready && !st?.running : i === 2 ? ready && stage === 3 : false;
+  // the draft by its loop's name (the name asked for), Discard beside it
+  return html`<div class="ba-flow"><${StageBar} stage=${stage >= 2 && !ready ? 1 : stage} reach=${reach} done=${finished} go=${go} refused=${stage === 3 && ready && checked === false} />
+    ${flow.name ? html`<p class="muted small ba-draft-line"><b class="mono">${flow.name}</b>${" · "}<button type="button" class="link" onClick=${discard}>Discard draft</button></p>` : ""}
     ${body}</div>`;
 }

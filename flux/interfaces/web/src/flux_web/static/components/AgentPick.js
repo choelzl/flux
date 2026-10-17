@@ -1,6 +1,7 @@
 // Flux web (D704, D705, D924, D942, D1025, D1095): which agent (or model) does it -- the user's by default, else the
 // admin's, else the first that works here; one not ready says so (its connection untested, failed, changed since its
-// test) and is tested from here, the draft kept. `ask`: only those offered for Ask.
+// test) and is tested from here, the draft kept -- said once, on the line under the select, not in its option. `ask`:
+// only those offered for Ask.
 
 import { html, useEffect, useState } from "../view.js";
 import { api, enc, toast } from "../ui.js";
@@ -30,7 +31,7 @@ export function AgentPick({ id, ask = false, value: wanted = null, onPick = () =
     toast(got.ok ? `${a.label} is ready` : `${a.label} is not ready: see Account › Agents`, got.ok ? "ok" : "warn");
   };
   return html`<span class="agent-pick"><select id=${id} value=${value} onChange=${e => pick(e.currentTarget.value)}>
-      ${list.length ? list.map(x => html`<option value=${x.id} disabled=${!x.available}>${x.label + (x.available ? (SAID[x.verified] ? ` (${SAID[x.verified]})` : "") : ` (${x.why})`)}</option>`)
+      ${list.length ? list.map(x => html`<option value=${x.id} disabled=${!x.available}>${x.label + (x.available ? "" : ` (${x.why})`)}</option>`)
         : html`<option value="" disabled>${ask ? "none offered for Ask (Admin › Agents)" : "none"}</option>`}</select>
-    <span class="agent-pick-said small">${!st || st === "ready" ? "" : html`<span class="muted">${SAID[st]} · <${Act} cls="small" onClick=${test}>Test<//> <a href="#/account" target="_blank" rel="noopener">Set up</a></span>`}</span></span>`;
+    <span class="agent-pick-said small">${!st || st === "ready" ? "" : html`<span class="muted">${SAID[st]} · <${Act} cls="small" onClick=${test}>Test<//> <a class="nowrap" href="#/account" target="_blank" rel="noopener">Set up</a></span>`}</span></span>`;
 }

@@ -100,15 +100,15 @@ def _preset_of(cmd: Iterable[str]) -> tuple[str, dict[str, Any]] | None:
 
 def _software_check(language: str) -> str:
     """What checks a design in `language` against a golden model, for a refusal to name."""
-    script = "your own script, `{python} {home}/check.py {artifact}`, that prints each failure and `N failing` last"
+    script = "a script of its own, `{python} {home}/check.py {artifact}`, that prints each failure and `N failing` last"
     if language == "python":
-        return ("for a Python design, `fluxpreset cases {artifact} --call <function> --reference "
+        return ("a Python design with `fluxpreset cases {artifact} --call <function> --reference "
                 "{home}/reference.py:<function> --random 200` (the reference is a plain Python function; its module's "
-                "`inputs(rng)` makes the random cases, or `CASES` lists them), or " + script)
+                "`inputs(rng)` makes the random cases, or `CASES` lists them), or with " + script)
     if language in ("c", "cpp", "c++"):
-        return ("for a C or C++ design, `fluxpreset ccases {artifact} --call <function> --sig \"long(long,long)\" "
-                "--reference {home}/reference.py:<function> --random 200`, or " + script)
-    return f"for a {language} design, " + script
+        return ("a C or C++ design with `fluxpreset ccases {artifact} --call <function> --sig \"long(long,long)\" "
+                "--reference {home}/reference.py:<function> --random 200`, or with " + script)
+    return f"a {language} design with " + script
 
 
 def _check_preset_languages(gate: "Gate | None", stages: Iterable["Stage"], language: str) -> None:
@@ -129,7 +129,7 @@ def _check_preset_languages(gate: "Gate | None", stages: Iterable["Stage"], lang
         if langs and langs <= RTL_LANGUAGES and lang not in RTL_LANGUAGES:
             raise TaskError(f"{what} runs `{said}`, which reads Verilog or SystemVerilog (it builds the design with "
                             f"Verilator or Yosys), but the loop's designs are `language: {language}`: it would fail "
-                            f"every try. Check them with {_software_check(lang)}; or say `language: systemverilog` "
+                            f"every try. Check {_software_check(lang)}; or say `language: systemverilog` "
                             "if the designs are RTL")
         if langs == {"python"} and lang in RTL_LANGUAGES:
             raise TaskError(f"{what} runs `{said}`, which loads a Python design, but the loop's designs are "

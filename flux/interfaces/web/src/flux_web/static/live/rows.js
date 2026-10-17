@@ -8,11 +8,11 @@
 //   mark: "spin" | {tone, title}, name: [segment], pills: [{text, title, k (a kind's colour) or count}] -- tags, time }
 // a segment: a string, {b: text}, {cls, text, title}, or {dots: [cls]}.
 // Other lines: {type: "more", key, depth, text} (more tries), {type: "skip", key, depth, text} (not run),
-// {type: "wait", key, depth, k, title} (a box still to come).
+// {type: "wait", key, depth, k, title, said} (a box still to come: "waiting", or "not recorded" when a later one ran).
 
 import { dur } from "../format.js";
 import { WORK_COLORS as COLORS, AGENT_COLOR, kindOf, workLabel, phaseKind } from "./work_style.js";
-import { boxKind, candidateOf, flowBoxes, isDraft, ownView, passName, taskLabel, taskNote } from "./views.js";
+import { boxKind, candidateOf, flowBoxes, isDraft, ownView, passName, taskLabel, taskNote, waitWord } from "./views.js";
 import { notReached as unreached } from "./inspector/parts.js";
 import { byPass, taskState as state } from "./model.js";
 import { AI, STAGE, checkWord, ended, firstFailing, isCritique, madeOf, numbersOf, rejectedBy, rest, soleOf } from "./rules.js";
@@ -93,7 +93,7 @@ export function lines(rows, v) {
         nums ? { cls: "alt-what", text: ` · ${nums}` } : "",
         n.failed && kind === "check" && (n.kids || []).length && firstFailing(n) ? { cls: "alt-what", text: ` · ${firstFailing(n)}` } : "",   // D1063
         collapsed && notReached(n).length ? { cls: "muted small", text: ` · ${notReached(n).join(", ")} not run` } : ""],   // D1065
-      pills: [isCritique(n) ? { k: COLORS.critic, text: "critic" } : null,                                              // D1068: a critic, then the ai
+      pills: [isCritique(n) ? { text: "critic" } : null,                                              // D1068: a critic, then the ai
         AI.test(String(n.params?.turn || n.name)) || aiOf.has(n.id) ? aiPill(n, (aiOf.get(n.id) || n).name) : null].filter(Boolean),
       time: dur(secs(n)) });
     if (!collapsed) runs(under, depth + 1);      // D1038: its children grouped as the pass's are
@@ -263,7 +263,7 @@ export function lines(rows, v) {
       name: [{ b: workLabel(kind) }, what ? { cls: "alt-what", text: ` ${N.shortAll(what)}`, title: what } : "",
         nodes.length === 1 && note(first) && N.shortAll(note(first)) !== N.shortAll(what) ? { cls: "alt-what", text: ` · ${note(first)}` } : ""],   // D1181: not the design twice
       pills: [tries && tries.length > 1 ? { count: true, text: `×${tries.length}` } : null,      // D1067: how many, a critic, the ai
-        crit ? { k: COLORS.critic, text: "critic" } : null, ai ? { k: AGENT_COLOR, text: "AI" } : null].filter(Boolean),
+        crit ? { text: "critic" } : null, ai ? { k: AGENT_COLOR, text: "AI" } : null].filter(Boolean),
       time: span(all) });
     if (collapsed) return;
     if (tries) newestFirst(key, tries.map((t, i) => [t, i]), ([t, i]) => tryLine(t, i + 1, depth + 1), depth + 1, holdsTry);
@@ -337,8 +337,8 @@ export function lines(rows, v) {
         boxes(others, depth);
         // D1044: in a pass at work, the boxes still to come, dimmed; D1059: the loop's last pass between two tasks is at work too
         if (g.rows.some(r => r.node.t1 == null) || (g === groups.at(-1) && g.p != null && [...v.model.nodes.values()].some(n => n.t1 == null)))
-          for (const b of flowBoxes(inPass(g.p), g.p, true, v.passNotes(g.p)).filter(x => x.state === "wait" && !x.runs.length))
-            out.push({ type: "wait", key: `wait:${g.p}:${b.key}`, depth, k: COLORS[b.kind] || COLORS.setup, title: b.title });
+          for (const [b, all] of flowBoxes(inPass(g.p), g.p, true, v.passNotes(g.p)).map((x, i, all) => [x, all]).filter(([x]) => x.state === "wait" && !x.runs.length))
+            out.push({ type: "wait", key: `wait:${g.p}:${b.key}`, depth, k: COLORS[b.kind] || COLORS.setup, title: b.title, said: waitWord(all, b) });
       }
       return out;
     },

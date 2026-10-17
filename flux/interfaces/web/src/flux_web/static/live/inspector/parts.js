@@ -3,7 +3,7 @@
 
 import { AGENT_COLOR, WORK_COLORS as COLORS, phaseKind } from "../work_style.js";
 import { candidateOf, ranFor, taskLabel } from "../views.js";
-import { num } from "../../format.js";
+import { num, plural } from "../../format.js";
 
 export const turnOf = n => String(n.params?.turn || n.name);          // D1050: a wrapper's taken-in turn
 export const isAgent = n => /^\s*agent\s*:/i.test(turnOf(n));
@@ -137,4 +137,32 @@ export function tidyCommand(cmd, folder) {
   if (folder && folder.length > 1) text = text.split(folder.replace(/\/$/, "") + "/").join("");
   return text.replace(/(^|[\s=])\/\S*?\/users\/[^/\s]+\/apps\/[^/\s]+\//g, "$1");
 }
+/** A model's tokens as people read them: "7,405 in · 181 out", how it finished only when it did not end by itself
+    (an older journal's "7405 in, 181 out, finish_reason=stop" too). */
+const FINISHED = { stop: "", length: "cut at its length limit", tool_calls: "asked for tools", content_filter: "filtered" };
+export const tokensSaid = v => {
+  const m = /^\s*(\d[\d,]*|None|—) in, (\d[\d,]*|None|—) out(?:, finish_reason=(\S+))?\s*$/.exec(String(v));
+  if (!m) return v;
+  const n = x => /^\d/.test(x) ? Number(x.replace(/,/g, "")).toLocaleString("en-US") : "—", fin = m[3] && m[3] !== "None" ? FINISHED[m[3]] ?? m[3] : "";
+  return [`${n(m[1])} in`, `${n(m[2])} out`, fin].filter(Boolean).join(" · ");
+};
+/** D1094: an agent's model as it reported it, said once ("codex 1.0", not "codex codex 1.0"). */
+export const modelSaid = v => String(v ?? "").replace(/^(\S+) (?=\1\b)/, "");
+/** A check's result: its "N failing" line, and whether it passed -- "0 failing" from a check that exited non-zero
+    (it did not build, it broke) or whose task failed is a failure: its exit says so. */
+export function checkResult(n, out) {
+  const fails = failingOf(out), f = fieldsOf(n), exited = f.exit != null && f.exit !== "" && Number(f.exit) !== 0;
+  return fails ? { ...fails, exited, ok: fails.failing === 0 && !exited && !n.failed } : null;
+}
+/** The pool the engine chose from ("6 in the pool", the choice's why) is not the table: that lists the designs
+    measured in the passes loaded -- said when the two differ. */
+export function poolSaid(why, shown) {
+  const pool = Number((/^\s*(\d+) in the pool\b/.exec(String(why || "")) || [])[1]) || 0;
+  return !pool || !shown || pool === shown ? "" : shown < pool ? `${shown} of ${pool} shown: the rest measured in passes not loaded`
+    : `${shown} shown: every design measured, ${pool} of them in the pool`;
+}
+/** An older journal's words, as they are said now: "1 candidate(s)" is "1 candidate" (D1094), "the smallest
+    time_ms" is "smallest time_ms", "least area_um2 at …" "smallest area_um2 at …" (the engine's one wording). */
+export const tidyWords = t => String(t).replace(/\b(\d+) (\w+)\(s\)/g, (_, k, x) => plural(Number(k), x)).replace(/^\s*the\s+(?=(smallest|largest|least|most)\b)/i, "")
+  .replace(/^\s*least\b/i, "smallest").replace(/^\s*most\b/i, "largest");
 export { candidateOf, taskLabel };

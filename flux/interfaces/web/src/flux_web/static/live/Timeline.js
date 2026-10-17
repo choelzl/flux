@@ -5,7 +5,7 @@
 import { cx, html } from "../view.js";
 import { Close } from "../components/Head.js";
 import { dur } from "../format.js";
-import { WORK_COLORS as COLORS, AGENT_COLOR, aiWorking, ownSpans, phaseKind, workLabel } from "./work_style.js";
+import { WORK_COLORS as COLORS, AGENT_COLOR, aiWorking, ownSpans, phaseKind, tickText, workLabel } from "./work_style.js";
 import { taskState as state } from "./model.js";
 import { passShort, taskLabel } from "./views.js";
 
@@ -33,6 +33,10 @@ export function Timeline({ v, a }) {
   // the selected task painted last, so it stays visible where work ran side by side
   const order = segs.slice().sort((x, y) => (x.n.id === v.selected) - (y.n.id === v.selected) || (y.t1 - y.t0) - (x.t1 - x.t0));
   const agents = segs.filter(x => aiWorking(x.n));
+  // D977: a task that holds other kinds of work (a search over its designs) is drawn by its own time; a thin line
+  // in its lane says the span it wraps, as the tree's time for it does
+  const wraps = rows.map(r => r.node).filter(n => n.kids.some(k => phaseKind(k) !== phaseKind(n)) && lanes.includes(phaseKind(n)))
+    .map(n => ({ n, kind: phaseKind(n), t0: n.t0, t1: end(n) }));
   const spans = new Map();
   for (const r of rows) { const p = v.membership.get(r.node.id) ?? null, sp = spans.get(p) || [Infinity, -Infinity]; spans.set(p, [Math.min(sp[0], r.node.t0), Math.max(sp[1], end(r.node))]); }
   const bands = [...spans.entries()].sort((x, y) => x[1][0] - y[1][0])
@@ -51,19 +55,25 @@ export function Timeline({ v, a }) {
     if (hits.length < 2) a.select(n.id);
     else a.choose(hits.sort((x, y) => y.depth - x.depth || y.n.t0 - x.n.t0).map(x => x.n.id), kind);
   };
+  // D977: a bar is a task's own time; one that holds others (a search over its designs) says it wraps them
+  const own = n => n.kids.length ? ` · wraps its tasks, ${dur(ownSpans(n, end).reduce((t, [x, y]) => t + y - x, 0)) || "0.0s"} its own` : "";
   const key = (e, n) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); a.select(n.id); } };
   return html`<div class="gantt-box">
     <svg viewBox=${`0 0 ${W} ${H}`} width=${W} height=${H} style=${`width:${W}px;max-width:none;height:${H}px`} class="chart gantt alt-timeline" role="group" aria-label="Task timeline by kind of work">
       ${lanes.map((kind, i) => html`<text x=${L - 8} y=${T + i * lane + lane / 2 + 4} class="tick" text-anchor="end">${workLabel(kind)}</text>
         <line x1=${L} x2=${W - R} y1=${T + (i + 1) * lane} y2=${T + (i + 1) * lane} class="grid" />`)}
       ${TICKS.map(f => html`<line x1=${X(t0 + f * (t1 - t0))} x2=${X(t0 + f * (t1 - t0))} y1=${T} y2=${H - B} class="grid" />
-        <text x=${X(t0 + f * (t1 - t0))} y=${H - 8} class="tick" text-anchor=${f === 0 ? "start" : f === 1 ? "end" : "middle"}>${`+${dur(f * (t1 - t0)) || "0s"}`}</text>`)}
+        <text x=${X(t0 + f * (t1 - t0))} y=${H - 8} class="tick" text-anchor=${f === 0 ? "start" : f === 1 ? "end" : "middle"}>${tickText(f * (t1 - t0), t1 - t0, dur)}</text>`)}
       ${bands.length > 1 ? bands.map(([p, [s0, s1]], i) => html`<rect x=${X(s0)} y="2" width=${Math.max(1, X(s1) - X(s0))} height=${H - B - 2} class=${cx("alt-band", i % 2 && "odd")} />
         <text x=${(X(s0) + X(s1)) / 2} y="12" class="tick alt-band-label" text-anchor="middle">${passShort(p)}</text>`) : ""}
+      ${wraps.map(({ n, kind, t0: s0, t1: s1 }) => html`<rect key=${`w${n.id}`} x=${X(s0)} y=${T + lanes.indexOf(kind) * lane + lane / 2 - 1} width=${Math.max(1, X(s1) - X(s0))} height="2"
+        class="alt-wrap" style=${`fill:${COLORS[kind]}`} pointer-events="none" />`)}
       ${order.map(({ n, kind, t0: s0, t1: s1 }) => html`<g class=${cx("alt-time-task", n.id === v.selected && "sel")} data-kind=${kind} aria-pressed=${String(n.id === v.selected)}
           data-task=${String(n.id)} tabindex="0" role="button" aria-label=${`${n.name} · ${state(n)}`} onClick=${e => press(e, n, kind)} onKeyDown=${e => key(e, n)}>
-        <title>${`${taskLabel(n)} · ${dur(n.seconds ?? now - n.t0)}${n.t1 == null ? " so far" : n.failed ? " · failed" : ""}`}</title>
+        <title>${`${taskLabel(n)} · ${dur(n.seconds ?? now - n.t0)}${n.t1 == null ? " so far" : n.failed ? " · failed" : ""}${own(n)}`}</title>
         <rect x=${X(s0)} y=${T + lanes.indexOf(kind) * lane + 3} width=${Math.max(3, X(s1) - X(s0))} height=${lane - 6} rx="2" style=${`fill:${COLORS[kind]}`} class=${`bar ${state(n)}`} /></g>`)}
+      ${order.filter(x => x.n.id === v.selected).map(({ kind, t0: s0, t1: s1 }) => html`<rect x=${X(s0) - 2.5} y=${T + lanes.indexOf(kind) * lane + .5}
+        width=${Math.max(3, X(s1) - X(s0)) + 5} height=${lane - 1} rx="3" class="alt-time-ring" style=${`stroke:${COLORS[kind]}`} pointer-events="none" />`)}
       ${cuts.map(([kind, t]) => html`<rect x=${X(t) - .75} y=${T + lanes.indexOf(kind) * lane + 3} width="1.5" height=${lane - 6} class="alt-cut" pointer-events="none" />`)}
       ${agents.map(({ kind, t0: s0, t1: s1 }) => html`<rect x=${X(s0)} y=${T + lanes.indexOf(kind) * lane + lane - 7} width=${Math.max(3, X(s1) - X(s0))} height="4" rx="1" style=${`fill:${AGENT_COLOR}`} class="agent-time" pointer-events="none" />`)}
     </svg>

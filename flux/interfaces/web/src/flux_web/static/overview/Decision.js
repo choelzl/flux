@@ -10,9 +10,12 @@ import { MainNumbers } from "./parts.js";
 import { useLoop } from "../loop/context.js";
 import { Pill } from "../components/Tone.js";
 import { Table } from "../components/Table.js";
+import { decidedText } from "../results/objective.js";
+import { MidName, shortName } from "../results/names.js";
+import { FLAT_HEADS } from "../results/Table.js";
 
 /** D1093: "#3", as everywhere; D1094: the parts' whole -- its whole name on hover. */
-export const own = (ctx, x) => String(x) === ctx.name ? "whole" : String(x).startsWith(`${ctx.name}#`) ? String(x).slice(ctx.name.length) : String(x);
+export const own = (ctx, x) => shortName(ctx.name, x);
 
 /** The best designs (D696): the decision, then the others by the loop's own order -- the server's ranking
     (D809), else accepted first, the deepest stage reached, then each objective without a limit in turn. A loop of
@@ -33,16 +36,16 @@ function BestTable({ r, n, comparison, unit }) {
   const names = designLabels(all, ctx.name);
   const metrics = columns.visible(), dict = dictionaryClasses(metrics, groups), labels = measurementLabels(metrics, groups);       // D1014
   const hid = m => columns.hidden(m) ? " hidden-measurement" : "";
-  const table = (part, top) => html`<${Table} key=${part || "whole"} cls="list compact best-n" data-part=${part || null} thead=${html`<${GroupRow} metrics=${metrics} groups=${groups} leading=${3} />
+  const table = (part, top) => html`<${Table} key=${part || "whole"} cls=${`list compact best-n${metrics.length <= FLAT_HEADS ? " flat-heads" : ""}`} data-part=${part || null} thead=${html`<${GroupRow} metrics=${metrics} groups=${groups} leading=${3} />
       <tr><th /><th>Design</th><th class="status-column">Status</th>
         ${metrics.map(m => html`<th class=${`num measurement-head${hid(m)}${dict.get(m) || ""}`} aria-label=${m} title=${`${m}${unit[m] ? " (" + unit[m] + ")" : ""}`}><${MeasurementHeader} text=${labels.get(m)} /></th>`)}</tr>`}>
       ${top.map((d, i) => html`<tr class=${`clickable ${d.verdict}`} onClick=${() => ctx.goTab("Results")}>
         <td class="muted">${d.decision ? "★" : String(i + 1)}</td>
-        <td class="mono" title=${`${d.name} · ${d.shown}${d.last ? " · " + d.last : ""}`}><span class=${`table-design-name${(d.base || d.name).includes("#") ? " design-id" : ""}`} title=${d.name}>${names.get(d)}</span></td>
+        <td class="mono name-cell" title=${`${d.name} · ${d.shown}${d.last ? " · " + d.last : ""}`}><${MidName} cls=${`table-design-name${(d.base || d.name).includes("#") ? " design-id" : ""}`} text=${names.get(d)} title=${d.name} /></td>
         <td class="status-column"><${VerdictBadge} verdict=${d.verdict} reason=${d.why.join("; ")} /></td>
         ${metrics.map(m => { const ok = d.meets[m], display = measurementText(d, m, comparison, num, values.relative);
           return html`<td class=${`num mono${hid(m)}${dict.get(m) || ""}${ok === true ? " meets" : ok === false ? " misses" : ""}`}
-            title=${`${display.title}${unit[m] ? " · " + unit[m] : ""}${ok === true ? " · meets the limit" : ok === false ? " · misses the limit" : ""}`}>${display.text}</td>`; })}</tr>`)}<//>`;
+            title=${`${display.title}${unit[m] ? " · " + unit[m] : ""}${ok === true ? " · meets the limit" : ok === false ? " · misses the limit" : ""}`}>${display.text || html`<span class="none">—</span>`}</td>`; })}</tr>`)}<//>`;
   return html`<div class="blk result-table-surface" data-values=${values.mode}>
     ${ranked.map(([part, top], i) => html`<div key=${part || "whole"} class="best-group">
       <div class="best-table-head"><h3>${`Best ${top.length}${part ? ` · ${part}` : parts.length ? " · whole" : ""}`}</h3>${i ? "" : html`${columns.controls}${values.toggle}`}</div>
@@ -59,15 +62,15 @@ export function DecisionCard({ a, r, main, comparison, unit }) {
     <div class="decision-head"><span class="mono strong" title=${dec.name}>${own(ctx, dec.name)}</span>
       ${dec.verdict === "accepted" ? html`<${Pill} tone="ok">meets all<//>` : html`<${Pill} tone="bad">misses one<//>`}
       <span class="muted">${`measured at ${dec.shown}`}</span></div>
-    ${r.decided_by ? html`<p class="small decided-by"><span class="muted">Decided by: </span>${r.decided_by}</p>` : ""}
+    ${r.decided_by ? html`<p class="small decided-by"><span class="muted">Decided by: </span>${decidedText(r.decided_by)}</p>` : ""}
     <${MainNumbers} r=${r} d=${dec} main=${main} unit=${unit} compare=${m => r.decision_measurements?.[m] ? () => r.decision_measurements[m] : comparison} />
-    ${dec.why.length ? html`<ul class="misses">${dec.why.map(w => html`<li>${w}</li>`)}</ul>` : ""}${best}<//>`;
+    ${dec.why.length ? html`<ul class="misses">${dec.why.map(w => html`<li>${w}</li>`)}</ul>` : ""}<${PassFacts} r=${r} said=${false} />${best}<//>`;
   // D900: no design meets every requirement -- the closest, apart, with what it does not meet: what the next pass can refine, not the answer
   if (c) return html`<${Card} ...${a} title="Decision" actions=${all}>
     <p class="decision-head"><strong>No feasible design yet</strong><${Pill} tone="warn">none meets all<//></p>
     <div class="decision-head"><small class="muted">Closest </small><span class="mono strong" title=${c.name}>${own(ctx, c.name)}</span><span class="muted">${`measured at ${c.shown}`}</span></div>
     <${MainNumbers} r=${r} d=${designs.find(d => d.closest) || { ...c, stages: { [c.shown]: c.numbers } }} main=${main} unit=${unit} compare=${() => comparison} />
-    ${c.reasons.length ? html`<ul class="misses">${c.reasons.map(w => html`<li>${w}</li>`)}</ul>` : ""}${best}<//>`;
+    ${c.reasons.length ? html`<ul class="misses">${c.reasons.map(w => html`<li>${w}</li>`)}</ul>` : ""}<${PassFacts} r=${r} said=${false} />${best}<//>`;
   // D1093: chosen on its checks (no measure stage) -- said, not "nothing measured" beside a decision
   const chosen = (r.passes || []).map(p => p.conclusion?.decision).filter(Boolean).at(-1);
   return html`<${Card} ...${a} title="Decision"><${Empty} text=${designs.length ? "No decision yet." : chosen ? `${own(ctx, chosen)}: chosen on its checks (no measure stage)` : "No design measured yet."} />${best}<//>`;
@@ -80,9 +83,10 @@ function conclusionText(c) {
     .map(([k, v]) => Array.isArray(v) ? `${k.replace(/_/g, " ")}:\n${v.map(x => "  - " + one(x)).join("\n")}` : `${k.replace(/_/g, " ")}: ${one(v)}`).join("\n");
 }
 
-/** The last pass that decided (D699, D1094): when, how many designs it measured, what it decided in words (D856),
-    the record's own fields behind a fold. */
-export function LastPass({ a, r }) {
+/** The last pass that decided (D699, D1094): when, how many designs it measured -- `said` what it decided in words
+    (D856) -- the record's own fields behind a fold, the Timeline. results-20: the Decision card's foot, or a card of
+    its own when the layout has no Decision card. */
+function PassFacts({ r, said = true }) {
   const ctx = useLoop();
   const ps = r.passes || [];
   if (!ps.length) return null;
@@ -90,13 +94,17 @@ export function LastPass({ a, r }) {
   const took = (r.designs || []).filter(d => { const t = Date.parse(d.first || "") / 1000; return t > prev && t <= p.when; }).length;   // D849
   const c = p.conclusion && typeof p.conclusion === "object" ? p.conclusion : null;
   // D900: a pass with no design meeting every requirement says so, and names its closest
-  const said = c ? (c.decision ? html`<strong title=${String(c.decision)}>${own(ctx, c.decision)}</strong>${c.decided_by ? ` — ${c.decided_by}` : ""}`
-      : c.closest ? html`No feasible design yet; the closest is <strong>${String(c.closest)}</strong>${(c.unmet || []).length ? ` — not met: ${c.unmet.join("; ")}` : ""}`
+  const words = !said ? "" : c ? (c.decision ? html`<strong title=${String(c.decision)}>${own(ctx, c.decision)}</strong>${c.decided_by ? ` — ${decidedText(c.decided_by)}` : ""}`
+      : c.closest ? html`No feasible design yet; closest <strong>${own(ctx, c.closest)}</strong>${(c.unmet || []).length ? ` — not met: ${c.unmet.join("; ")}` : ""}`
       : "No decision.")
     : p.conclusion ? String(p.conclusion) : "";
-  return html`<${Card} ...${a} title="Last decision">
-    <p><${Ago} t=${p.when} />${took ? ` · ${plural(took, "new design")}` : ""}</p>
-    ${said ? html`<p class="pass-said">${said}</p>` : ""}
-    ${c ? html`<details class="pass-record"><summary class="small muted">Record</summary><pre class="val small conclusion">${conclusionText(c)}</pre></details>` : ""}
-    <div class="form-actions"><button class="small" type="button" onClick=${() => ctx.goTab("Live", "timeline")}>Timeline</button></div><//>`;
+  return html`<div class="pass-facts">
+    <p class="small"><span class="muted">Last pass </span><${Ago} t=${p.when} />${took ? ` · ${plural(took, "new design")}` : ""}
+      <button class="small link pass-timeline" type="button" onClick=${() => ctx.goTab("Live", "timeline")}>Timeline</button></p>
+    ${words ? html`<p class="pass-said">${words}</p>` : ""}
+    ${c ? html`<details class="pass-record"><summary class="small muted">Record</summary><pre class="val small conclusion">${conclusionText(c)}</pre></details>` : ""}</div>`;
+}
+
+export function LastPass({ a, r }) {
+  return (r.passes || []).length ? html`<${Card} ...${a} title="Last decision"><${PassFacts} r=${r} /><//>` : null;
 }

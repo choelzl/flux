@@ -45,8 +45,8 @@ export function hiddenRows(rows) {
 }
 
 /** `rows` what was added, `onChange(next)`; `places` false: no destination (they all go where the caller puts them);
-    `hideable` a "hidden from AI" switch on each row. */
-export function Uploader({ rows, onChange, places = true, hideable = false, label = "Drop files or folders" }) {
+    `hideable` a "hidden from AI" switch on each row; `extra` another way to add, beside Add files and Add folder (New file). */
+export function Uploader({ rows, onChange, places = true, hideable = false, label = "Drop files or folders", extra = null }) {
   const [over, setOver] = useState(false), depth = useRef(0), n = useRef(0), filesIn = useRef(null), dirIn = useRef(null);
   const add = list => { if (list.length) onChange([...rows, ...rowsOf(list, ++n.current)]); };
   const drop = async e => {
@@ -60,13 +60,13 @@ export function Uploader({ rows, onChange, places = true, hideable = false, labe
         onDragEnter=${e => { e.preventDefault(); depth.current++; setOver(true); }} onDragOver=${e => { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; }}
         onDragLeave=${() => { if (--depth.current <= 0) { depth.current = 0; setOver(false); } }} onDrop=${drop}>
       <span class="dz-ic">⇪</span><span>${label}</span>
-      <button type="button" class="small" onClick=${() => filesIn.current.click()}>Add files</button>
-      <button type="button" class="small" onClick=${() => dirIn.current.click()}>Add folder</button>
+      <span class="dz-acts">${extra}<button type="button" class="small" onClick=${() => filesIn.current.click()}>Add files</button>
+        <button type="button" class="small" onClick=${() => dirIn.current.click()}>Add folder</button></span>
       <input type="file" multiple ref=${filesIn} class="up-input up-files" tabindex="-1" aria-hidden="true" onChange=${e => { add([...e.currentTarget.files].map(f => ({ file: f, path: f.name }))); e.currentTarget.value = ""; }} />
       <input type="file" webkitdirectory multiple ref=${dirIn} class="up-input up-folder" tabindex="-1" aria-hidden="true" onChange=${e => { add([...e.currentTarget.files].map(f => ({ file: f, path: f.webkitRelativePath || f.name }))); e.currentTarget.value = ""; }} /></div>
     ${rows.length ? html`<ul class="files flist up-rows">${rows.map(r => html`<li key=${r.key}>
         <span class="mono up-name">${r.label}</span><small class="muted up-size">${r.folder ? plural(r.files.length, "file") : bytes(r.files[0].file.size)}</small>
-        ${r.loop ? html`<small class="muted">loop itself</small>` : r.zip && places ? html`<small class="muted">unpacked as loop</small>`
+        ${r.loop ? html`<span class="up-place"><small class="muted">loop itself</small></span>` : r.zip && places ? html`<span class="up-place"><small class="muted">unpacked as loop</small></span>`
           : places ? html`<span class="up-place"><${Select} aria-label=${`Where ${r.label} goes`} value=${r.dest} options=${PLACES} onChange=${v => set(r, { dest: v })} />
             ${r.dest === "custom" ? html`<input class="narrow-in" aria-label="Folder" placeholder="folder" value=${r.custom} onInput=${e => set(r, { custom: e.currentTarget.value })} />` : ""}</span>` : ""}
         ${hideable && !r.loop && !r.zip ? html`<${Check} cls="small up-hide" checked=${r.hidden} aria-label=${`Hide ${r.label} from AI`}

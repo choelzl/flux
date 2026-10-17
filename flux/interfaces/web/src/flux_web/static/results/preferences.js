@@ -127,7 +127,7 @@ export function measurementLabels(metrics, groups = {}) {
   }
   for (const metric of metrics) {
     const parent = parentOf.get(metric);
-    const full = (parent ? metric === parent ? parent : distinct[metric] || metric.slice(parent.length + 1) : metric).replace(/_/g, " ");
+    const full = parent ? metric === parent ? parent : distinct[metric] || metric.slice(parent.length + 1) : metric;   // results-9: the raw name, as everywhere
     const short = full.length > 18 ? `…${full.slice(-16).trimStart()}` : full;
     let text = short, suffix = 1;
     while (used.has(text)) text = `${short} ${++suffix}`;

@@ -16,7 +16,7 @@ import { Talk } from "./Talk.js";
 import { Drawer } from "./Drawer.js";
 import { CheckButton, NotRun } from "./Cards.js";
 import { NoteComposer } from "./Notes.js";
-import { LoopHead, WRITING } from "./Head.js";
+import { LoopHead, Scheduled, WRITING } from "./Head.js";
 import { Crumbs } from "../components/Crumbs.js";
 import { Tabs } from "../components/Tabs.js";
 import { Ask, AskLine } from "../components/Ask.js";
@@ -30,7 +30,7 @@ const TABS = ["Overview", "Live", "Results", "Agents", "Files", "Settings"];
 const SLUG = { Overview: "", Live: "live", Results: "results", Agents: "agents", Files: "files", Settings: "settings" };
 const TAB_OF = Object.fromEntries(Object.entries(SLUG).map(([t, k]) => [k, t]));
 const ALIAS = { log: "live/log", timeline: "live/timeline", "agent-turns": "agents", workbench: "files/workbench", configure: "settings/problem" };
-const SUBS = { Live: [["", "Tree"], ["graph", "Graph"], ["timeline", "Timeline"], ["log", "Log"]], Results: [["", "Results"], ["graphs", "Graphs"], ["ideas", "Ideas"], ["library", "Library"]],
+const SUBS = { Live: [["", "Tree"], ["graph", "Graph"], ["timeline", "Timeline"], ["log", "Log"]], Results: [["", "Designs"], ["graphs", "Graphs"], ["ideas", "Ideas"], ["library", "Library"]],
   Files: [["", "Files"], ["workbench", "Workbench"]], Settings: [["loop", "Preferences"], ["problem", "Problem"]] };
 
 /** Where an address leads: the tab, its sub-tab, a mode below it, Talk open. */
@@ -89,6 +89,9 @@ export function LoopPage({ name, owner, info, path }) {
     }
     return { name, owner, qs, q, base, info, perm, mine, isOwner, canRun, goTab, refresh, sendNote, leaving, poll,
       drawBody: () => setTick(k => k + 1), curSub: () => curSubOf(now.current.at),
+      // the agent's open question, as the line above the tabs shows it; Talk opened at its card (the line's Answer)
+      openAsk: () => { setTalk({ open: true, opened: true }); setAskAt(k => k + 1); },
+      get asking() { const { question: q, st: s } = now.current; return q && s.running ? q : null; },
       get st() { return now.current.st; }, get tab() { return now.current.at.tab; } };
   }, []);
   const store = useMemo(() => createStore(ctx), []);
@@ -134,9 +137,9 @@ export function LoopPage({ name, owner, info, path }) {
   const body = () => {
     const k = `${at.tab}:${sub}:${at.n}`;
     switch (at.tab) {
-      case "Overview": return html`<${OverviewBody} key=${k} tick=${tick} notRun=${ran ? "" : notRun} />`;
+      case "Overview": return html`<${OverviewBody} key=${k} tick=${tick} notRun=${ran || info.document ? "" : notRun} />`;     // results-22: Start is in the head
       case "Live": return ran ? html`<${LiveBody} key=${`Live:${at.n}`} store=${store} ready=${setLiveReady} />`
-        : html`<${NotRun} info=${info} name=${name} mine=${mine} start=${start()} writing=${writing} />`;
+        : html`<${NotRun} info=${info} name=${name} mine=${mine} start=${null} text="Not run yet. Once started, each pass's tasks show here as they run." />`;
       case "Results": return sub === "ideas" || sub === "library" ? html`<${IdeasBody} key=${k} library=${sub === "library"} />`
         : html`<${ResultsBody} key=${`Results:${at.n}`} view=${sub} cache=${results} n=${at.n} />`;
       case "Agents": return html`<${AgentsBody} key=${k} />`;
@@ -153,8 +156,8 @@ export function LoopPage({ name, owner, info, path }) {
   return html`<${LoopContext.Provider} value=${ctx}><div><${Crumbs} parts=${[["Loops", "#/"], owner && owner !== me.name ? [owner, null] : null, [name, appHref(owner, name)], at.tab !== "Overview" ? [at.tab, null] : null,
       sub && sub !== (subs[0] || [""])[0] ? [subs.find(([k]) => k === sub)[1], null] : null]} /></div>
     <div><${LoopHead} name=${name} info=${info} st=${st} perm=${perm} mine=${mine} canRun=${canRun} acts=${acts} /></div>
-    <div>${asking ? html`<${AskLine} q=${asking} open=${answerIn} label=${mine ? "Answer" : "Read"} />` : ""}</div>
-    <div><${Tabs} items=${TABS.map(t => [t, t])} on=${at.tab} pick=${t => ctx.goTab(t)} /></div>
+    <div>${asking ? html`<${AskLine} q=${asking} open=${answerIn} label=${mine ? "Answer" : "Read"} />` : ""}<${Scheduled} st=${st} canAct=${!!acts.stop} /></div>
+    <div><${Tabs} cls="tabs loop-tabs scroll-x" items=${TABS.map(t => [t, t])} on=${at.tab} pick=${t => ctx.goTab(t)} /></div>
     <div class="subrow">${subs.length > 1 ? html`<${Tabs} cls="subtabs views" items=${subs} on=${sub} pick=${k => setAt(a => ({ ...a, sub: k, mode: "" }))} />` : ""}
       ${at.tab === "Live" && liveReady ? html`<${Controls} store=${store} />` : ""}
       ${mode ? html`<${ModeTabs} name=${name} mode=${mode} pick=${pickMode} small=${true} />${canRun && info.document ? html`<${CheckButton} name=${name} />` : ""}` : ""}</div>

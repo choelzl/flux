@@ -13,7 +13,7 @@ export function Overview({ r, notes, bench, use, prefs, ideas = null }) {
   const { st, goTab } = ctx, designs = r.designs || [];
   const directions = [...(r.objective_list || []), ...Object.entries(r.metric_info || {}).map(([metric, info]) => ({ metric, ...info }))];
   const main = mainMeasurements(ctx, r.metrics || [], defaultMainMeasurements(r));
-  const { stats, cards } = overviewCards({ ctx, r, notes, bench, use, ideas, main, directions,
+  const { stats, cards } = overviewCards({ ctx, r, notes, bench, use, ideas, main, directions, layout: prefs.layout,
     objs: main.map(metric => ({ ...directions.find(o => o.metric === metric), metric, direction: directionOf(metric, directions) })),
     dec: designs.find(d => d.decision) || null, comparison: measurementComparison(designs, directions), unit: measurementUnitsFor(r) });
   // a card with nothing to say (no notes, no workbench, no pass) stays out

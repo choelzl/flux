@@ -42,7 +42,7 @@ def test_the_golden_campaign_stands_on_the_numbers_and_rests(tmp_path):
     assert out.decision is not None and out.decision.stage == "screen"
     whole = out.decision.metrics
     assert whole["fmax_mhz"] == 10.0 * len(out.decision.candidate.artifact) and whole["fmax_mhz"] >= 500
-    assert out.decided_by == "least area_um2 at fmax_mhz >= 500"
+    assert out.decided_by == "smallest area_um2 at fmax_mhz >= 500"
     assert any("decision" in m and "fmax_mhz=" in m for m in out.lessons)
     # the record holds it under the document's name (D524)
     from flux_records import Records

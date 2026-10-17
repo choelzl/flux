@@ -142,3 +142,14 @@ def test_default_main_metric_is_the_ranking_objective_not_a_goal(server, objecti
         assert summary["best"]["metric"] == primary
         assert summary["best"]["value"] == (8 if primary == "latency" else 120)
         assert set(summary["best"]["measurements"]) == {"latency", "score"}
+
+
+def test_a_summary_says_the_goal_a_number_is_coloured_against():
+    """shell-11: the loops list coloured fmax_mhz 2240 green and time_ms 8.8 black with no visible reason: a number with
+    a goal carries it (said beside it), one without has none."""
+    decision = _design("winner", 8)
+    result = {"metrics": ["score", "other"], "designs": [decision],
+              "limits": [{"metric": "score", "direction": "maximize", "goal": 5}, {"metric": "other", "direction": "minimize", "goal": None}]}
+    got = measurement_summary(result, decision)
+    assert (got["score"]["goal"], got["score"]["direction"], got["score"]["meets"]) == (5, "maximize", True)
+    assert "goal" not in got["other"]

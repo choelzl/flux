@@ -1,6 +1,7 @@
 // Live (D692, D697, D699, D754, D759, D816, D917, D1095): the log of the start in view -- the current one as it
-// grows over the page's stream (its last 2 MiB first, the earlier on asking), a past one as it was kept; follow,
-// wrap, problems only, times, a filter (text or /regex/), Raw, Fullscreen, Download. Only the lines in view are
+// grows over the page's stream (its last 2 MiB first, the earlier on asking), a past one as it was kept; followed
+// by the toolbar's one Follow (the store's `logFollow`); Wrap, Problems, Times, a filter (text or /regex/), Raw,
+// Fullscreen, Download. Only the lines in view are
 // drawn: a row has one height, so the scroll says which; wrapped, the last 3000.
 
 import { Card, cx, html, Notice, useEffect, useLayoutEffect, useMemo, useRef, useState } from "../view.js";
@@ -12,7 +13,6 @@ import { atEnd } from "../scroll.js";
 import { useLoop } from "../loop/context.js";
 import { Pill } from "../components/Tone.js";
 import { Tool, Tools } from "../components/Head.js";
-import { Check } from "../components/Check.js";
 
 const WRAPPED = 3000, TAIL = 2 << 20;
 const storedTimes = () => recall("flux-log-times") !== "off";
@@ -48,7 +48,8 @@ function useLog(store, ctx) {
 export function Log({ store }) {
   const ctx = useLoop();
   const L = useLog(store, ctx);
-  const [o, setO] = useState(() => ({ follow: true, wrap: NARROW.matches, problems: false, times: storedTimes(), filter: "" }));   // D754: on a phone a line wraps
+  const follow = store.s.logFollow;
+  const [o, setO] = useState(() => ({ wrap: NARROW.matches, problems: false, times: storedTimes(), filter: "" }));   // D754: on a phone a line wraps
   const set = patch => setO(x => ({ ...x, ...patch }));
   const [scroll, setScroll] = useState(0), box = useRef(null), row = useRef(0), view = useViewer();
   const m = useMemo(() => matcher(o.filter), [o.filter]);
@@ -63,18 +64,20 @@ export function Log({ store }) {
     const el = box.current;
     if (!el) return;
     if (!row.current) { const ln = el.querySelector(".win .ln"); if (ln) row.current = ln.getBoundingClientRect().height || 18; }
-    if (o.follow) el.scrollTop = el.scrollHeight;
+    if (follow) el.scrollTop = el.scrollHeight;
   });
   const onScroll = e => {                                   // scrolling up pauses the follow
     const el = e.currentTarget;
-    if (!atEnd(el, 30) && o.follow) set({ follow: false });
+    if (!atEnd(el, 30) && follow) store.a.logFollow(false);
     if (!o.wrap) setScroll(el.scrollTop);
   };
   const times = on => { remember("flux-log-times", on ? "on" : "off"); row.current = 0; set({ times: on }); };
-  const check = (k, label, title, change = v => set({ [k]: v })) => html`<${Check} title=${title} checked=${o[k]} onChange=${change}>${label}<//>`;
+  // a toggle chip, as the page's other toggles (Results' Pareto focus): pressed is on
+  const chip = (k, label, title, change = v => set({ [k]: v })) => html`<button type="button" class=${cx("small chip", o[k] && "on")} aria-pressed=${String(!!o[k])}
+    title=${title} onClick=${() => change(!o[k])}>${label}</button>`;
   const raw = L.past ? `${ctx.base}/log/raw?run_id=${enc(store.s.startId)}&download=false${ctx.q}` : `${ctx.base}/log/raw${ctx.qs || "?"}${ctx.qs ? "&" : ""}download=false`;
   return html`<${Card} cls="log-card"><${ViewerFrame} v=${view} title="Log"><div onviewerresize=${() => { row.current = 0; setScroll(box.current?.scrollTop || 0); }}>
-    <div class="toolbar">${check("follow", "follow", null, v => { set({ follow: v }); })}${check("wrap", "wrap")}${check("problems", "problems only")}${check("times", "times", "Each line's time", times)}
+    <div class="toolbar">${chip("wrap", "Wrap", "Wrap long lines")}${chip("problems", "Problems", "Only the lines that say a problem")}${chip("times", "Times", "Each line's time", times)}
       <input placeholder="filter (text or /regex/)" class=${`filter${m?.bad ? " bad" : ""}`} value=${o.filter} onInput=${e => set({ filter: e.currentTarget.value })} />
       <span class="muted">${`${shown.length === total ? total : `${shown.length} of ${total}`} lines`}</span>
       <${Tools}><${ViewerTools} v=${view} title="Log" rawUrl=${raw} />${L.past ? "" : html`<${Tool} icon="download" label="Download" href=${`${ctx.base}/log/raw${ctx.qs}`} />`}<//>

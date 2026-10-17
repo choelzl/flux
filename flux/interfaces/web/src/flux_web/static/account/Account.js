@@ -28,7 +28,7 @@ function Agents({ st, myEnv }) {
   const { lg, said, panel, terminal } = useLogins();
   const offered = st.groups.filter(g => g.agent).map(g => g.agent);
   const panels = Object.fromEntries((lg?.agents || []).filter(a => offered.includes(a.id)).map(a => [a.id,
-    html`<div class="agent-panel"><h4 class="set-sub first">Connection</h4><div class="agent-login">${panel(a)}</div></div>`]));
+    html`<div class="agent-panel"><div class="agent-login">${panel(a)}</div></div>`]));
   const rest = (lg?.agents || []).filter(a => !offered.includes(a.id));
   const save = async values => { await api("/settings", { method: "PUT", body: { values } }); };     // D833: quiet, field by field
   const every = { tab: "All agents", el: html`<fieldset class="set-group"><legend>Variables for all runs and agents</legend>
@@ -45,15 +45,15 @@ function Agents({ st, myEnv }) {
 function Password() {
   const [pw, setPw] = useState("");
   const change = async () => { await api("/password", { method: "POST", body: { text: pw } }); setPw(""); toast("Password changed", "ok"); };
-  return html`<${Card} title="Password"><label class="stack">New password (10+)<input type="password" autocomplete="new-password" ...${bound(pw, setPw)} /></label>
-    <div class="form-actions"><${Act} onClick=${change}>Change<//></div><//>`;
+  return html`<${Card} title="Password"><label class="stack">New password, 10+ characters<input type="password" autocomplete="new-password" ...${bound(pw, setPw)} /></label>
+    <div class="form-actions"><${Act} cls="small" onClick=${change}>Change<//></div><//>`;
 }
 
 function Notifications() {
   const [p, setP] = useState(() => "Notification" in window ? Notification.permission : null);   // the browser's answer, once asked
   return html`<${Card} title="Notifications">${p === "granted" ? html`<p>Desktop notifications are on.</p>`
     : p === "denied" ? html`<p class="muted">Desktop notifications are blocked by this browser.</p>`
-    : p ? html`<${Act} onClick=${async () => setP(await Notification.requestPermission())}>Allow desktop notifications<//>` : ""}<//>`;
+    : p ? html`<${Act} cls="small" onClick=${async () => setP(await Notification.requestPermission())}>Allow desktop notifications<//>` : ""}<//>`;
 }
 
 export const Account = ({ st, myEnv, mine }) => html`<${PageHead} title="Account" sub=${`Logged in as ${me.name}`} />

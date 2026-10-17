@@ -26,7 +26,7 @@ const Key = ({ st, cls, ring }) => html`<svg viewBox="-6 -6 12 12" class="chart 
 /** The legend (D915): each group's colour and shape, then what the outlines say -- meets every requirement
     (filled), misses one (hollow), waits for a later stage (dashed), rejected (D1094) -- the decision's ring and,
     on the Pareto chart, the feasible front. Colour is never the only cue. */
-export function Legend({ S, front = false, pending = false, baseline = false, rejected = false }) {
+export function Legend({ S, front = false, pending = false, baseline = false, rejected = false, passes = false }) {
   const plain = { color: S.groups.length ? "var(--muted)" : "var(--accent)", shape: "circle" };   // D1094: the points' own colour when there are no groups
   const item = (key, label, extra = {}) => html`<span class="key-item" ...${extra}>${key}${label}</span>`;
   return html`<span class="legend groups">
@@ -37,6 +37,7 @@ export function Legend({ S, front = false, pending = false, baseline = false, re
     ${pending ? item(html`<${Key} st=${plain} cls="pending" />`, "pending") : ""}
     ${rejected ? item(html`<${Key} st=${plain} cls="rejected" />`, "rejected") : ""}
     ${item(html`<${Key} st=${plain} cls="accepted" ring />`, "decision")}
+    ${passes ? item(html`<svg viewBox="0 0 8 12" class="chart key" aria-hidden="true"><line x1="4" x2="4" y1="0" y2="12" class="pass" /></svg>`, "pass", { "data-pass": "true" }) : ""}
     ${front ? item(html`<svg viewBox="0 0 14 8" class="chart key wide" aria-hidden="true"><path d="M1,7L1,4L7,4L7,1L13,1" class="front" /></svg>`, "feasible front") : ""}</span>`;
 }
 /** A point's details (D914): which design, its piece, its standing and what it does not meet. */
@@ -51,6 +52,11 @@ export function niceTicks(lo, hi, n = 4) {
   const step = (f < 1.5 ? 1 : f < 3 ? 2 : f < 7 ? 5 : 10) * mag, out = [];
   for (let v = Math.ceil(lo / step) * step; v <= hi + step * 1e-9; v += step) out.push(Number(v.toPrecision(12)));
   return out.length >= 2 ? out : [lo, hi];
+}
+/** results-11: [lo, hi] widened to the round ticks around it, not below `floor` (0 for a measure never negative). */
+export function niceSpan(lo, hi, floor = -Infinity) {
+  const t = niceTicks(lo, hi), step = t.length > 1 ? t[1] - t[0] : 0;
+  return step > 0 ? [Math.max(floor, Math.floor(lo / step) * step), Math.ceil(hi / step) * step] : [lo, hi];
 }
 /** D1094: the two ends of a time axis, as far as they differ -- a day apart gives dates, minutes the time,
     seconds apart the seconds; the same words twice are said once. */

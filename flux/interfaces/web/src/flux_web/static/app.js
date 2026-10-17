@@ -29,7 +29,7 @@ function App() {
   const [at, setAt] = useState({ n: 0, page: html`<${Card}><${Skeleton} lines=${7} /><//>`, here: location.hash || "#/", view: null });
   useLayoutEffect(() => { show = next => setAt(a => ({ ...a, ...next })); }, []);
   return html`<header class="top"><a class="brand" href="#/" aria-label="Flux, your loops"><${Logo} size=${24} /><span>flux</span></a>
-      <nav id="nav"><${Nav} here=${at.here} /></nav><span id="who"><${Who} /></span></header>
+      <nav id="nav"><${Nav} here=${at.here} /></nav><span id="who"><${Who} here=${at.here} /></span></header>
     <div id="impersonation" hidden=${!at.view}><${Impersonation} view=${at.view} /></div>
     <main id="main" key=${at.n}>${at.page}</main>
     <${Offline} /><${Toasts} /><${Dialogs} />`;

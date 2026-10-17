@@ -4,7 +4,7 @@
 // on its card at the top (D1131); while the loop runs, a note to it.
 
 import { Ago, Card, Empty, html, Notice, Skeleton, useEffect, useLayoutEffect, useRef, useState } from "../view.js";
-import { api, loopApi, toast } from "../ui.js";
+import { api, loopApi, reportedTokens, toast } from "../ui.js";
 import { dur } from "../format.js";
 import { me } from "../state.js";
 import { AgentPick } from "../components/AgentPick.js";
@@ -12,7 +12,7 @@ import { restoreScroll, scrollState } from "../scroll.js";
 import { Act } from "../components/Act.js";
 import { Bin } from "../components/Bin.js";
 import { Markdown } from "../components/Markdown.js";
-import { AgentTurn } from "../live/inspector/Chat.js";
+import { AgentTurn, turnFacts } from "../live/inspector/Chat.js";
 import { FullscreenHead, openModal } from "../components/Modal.js";
 import { usePoll } from "../components/Load.js";
 import { Pill, Tag } from "../components/Tone.js";
@@ -31,7 +31,15 @@ function AskAgent({ a, name }) {
   if (!got) return html`<${Skeleton} lines=${3} />`;
   if (got.error && !got.steps) return html`<${Notice} tone="bad" what="Not read" why=${got.error} />`;
   const read = (file, start, count) => loopApi(name).api(`/steps?file=${encodeURIComponent(file)}&start=${start}&count=${count}`);
-  return html`<${AgentTurn} id=${`ask:${name}:${a.id}`} fields=${got} running=${!!got.running} t0=${a.started} t1=${a.ended} steps=${read} />`;
+  return html`<${AgentTurn} id=${`ask:${name}:${a.id}`} fields=${got} running=${!!got.running} t0=${a.started} t1=${a.ended} steps=${read} facts=${askFacts(got)} />`;
+}
+/** The answer's facts, as the Agents tab says a turn's (turnFacts): its status, exit, tokens and tool calls -- the agent
+    is in the dialog's title. The tool calls are counted from its steps when it kept them all. */
+function askFacts(got) {
+  const [tin, tout] = reportedTokens(got["tokens (reported)"]) || [null, null], steps = Array.isArray(got.steps) ? got.steps : [];
+  const whole = steps.length && Number(got["steps total"] ?? steps.length) === steps.length;
+  return turnFacts({ status: got.running ? "answering" : got.status, exit: got.exit, tin, tout,
+    tools: whole ? steps.filter(x => x.k !== "text" && x.k !== "think").length : null });
 }
 /** Thinking & commands: a dialog over most of the screen (a phone's whole screen). */
 function showAgent(a, name) {
@@ -39,17 +47,21 @@ function showAgent(a, name) {
     <div class="agent-dlg-body"><${AskAgent} a=${a} name=${name} /></div>`, { cls: "dlg agent-dlg", label: "Thinking & commands", onCancel: () => m.close() });
 }
 
-/** A question and its answer. */
+/** A question and its answer; under the answer one row of quiet actions: Thinking & commands, Reply. */
 function Turn({ a, t, open }) {
+  const reply = t.canAsk && !a.running && a.answer, thinking = a.author && a.author !== "model";
+  const think = html`<button type="button" class="small ask-thinking" data-ask-thinking=${a.id} onClick=${() => t.thinking(a)}>Thinking & commands</button>`;
   return html`<div class="ask-turn" data-ask-turn=${a.id}>
     <div class="ask-message ask-user"><div class="ask-meta"><strong>${a.by}</strong> · <${Ago} t=${a.started} /></div><p>${a.question}</p></div>
     <div class="ask-message ask-agent"><div class="ask-meta"><strong>${a.author}</strong>${a.ended ? ` · ${dur(a.ended - a.started)}` : ""}</div>
-      ${a.running ? html`<div class="row"><${Pill} tone="run">Reading<//>${t.mine || a.by === me.name ? html`<${Act} cls="small" onClick=${() => t.stop(a)}>Stop<//>` : ""}</div>`
+      ${a.running ? html`<div class="row ask-running"><${Pill} tone="run">Reading<//>${t.mine || a.by === me.name ? html`<${Act} cls="small" onClick=${() => t.stop(a)}>Stop<//>` : ""}${
+          thinking ? html`<span class="grow" />${think}` : ""}</div>`
         : a.answer ? html`<${Markdown} text=${a.answer} />` : html`<${Empty} text="No answer." />`}
-      ${a.author && a.author !== "model" ? html`<div class="ask-turn-actions"><button type="button" class="small ask-thinking" data-ask-thinking=${a.id} onClick=${() => t.thinking(a)}>Thinking & commands</button></div>` : ""}
       ${(a.log || []).length ? html`<details class="ask-output" data-ask-output=${a.id} open=${open.get(a.id) || false} onToggle=${e => open.set(a.id, e.currentTarget.open)}><summary>Activity</summary>
         <pre class="log small author-log" data-ask-log=${a.id}>${a.log.join("\n")}</pre></details>` : ""}
-      ${t.canAsk && !a.running && a.answer ? html`<div class="ask-turn-actions"><button type="button" class="small ask-reply" disabled=${t.busy} data-reply-to=${a.id} onClick=${() => t.replyTo(a)}>Reply</button></div>` : ""}</div></div>`;
+      ${!a.running && (reply || thinking) ? html`<div class="ask-turn-actions">${thinking ? think : ""}${
+        reply ? html`<button type="button" class="small ask-reply" disabled=${t.busy} data-reply-to=${a.id}
+          title=${t.busy ? "One ask at a time: the running one answers first" : null} onClick=${() => t.replyTo(a)}>Reply</button>` : ""}</div>` : ""}</div></div>`;
 }
 
 /** A conversation: its turns; D990 folded or not; Reply to its latest; removed by whoever may. */

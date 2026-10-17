@@ -19,7 +19,7 @@ export function Applications({ r }) {
   return html`<${Card} title="Applications folder"><p class="muted"><span class="mono">${r.root}</span></p>
     <${Table} cls="list" heads=${["Application", "Statement", { label: "Size", num: true }, ""]}>
       ${r.applications.map(a => html`<tr key=${a.name}><td><strong>${a.name}</strong><div class="mono muted small">${a.document}</div></td>
-        <td class="muted small app-what">${a.statement}</td><td class="num mono">${bytes(a.size)}</td>
+        <td class="muted small app-what"><span class="app-statement" title=${a.statement}>${a.statement}</span></td><td class="num mono">${bytes(a.size)}</td>
         <td class="right"><div class="actions end">${a.loop ? html`<a class="btn small primary" href=${`#/app/${enc(a.name)}`}>Open</a>
           ${a.linked ? html`<${Act} cls="small" onClick=${() => use(a, true)}>Refresh<//>` : html`<span class="muted small" title="Another loop has it">name taken</span>`}`
           : html`<${Act} cls="small primary" onClick=${() => use(a, false)}>Use<//>`}</div></td></tr>`)}<//><//>`;

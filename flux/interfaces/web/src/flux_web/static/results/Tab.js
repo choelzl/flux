@@ -16,10 +16,13 @@ import { Graphs } from "./Graphs.js";
 import { compare } from "./Compare.js";
 import { useLoop } from "../loop/context.js";
 import { Pill, Tag } from "../components/Tone.js";
+import { Status } from "../components/Status.js";
 import { Tool } from "../components/Head.js";
 import { Table } from "../components/Table.js";
+import { shortName } from "./names.js";
+import { objectiveText } from "./objective.js";
 
-const own = (ctx, n) => String(n) === ctx.name ? "whole" : String(n).startsWith(`${ctx.name}#`) ? String(n).slice(ctx.name.length) : String(n);
+const own = (ctx, n) => shortName(ctx.name, n);
 
 /** D1094: the designs only their checks judged -- refused there, or passed with no stage measuring them
     (chosen on its checks): apart from the measured, one line each. */
@@ -31,7 +34,7 @@ export function Checked({ r }) {
   return html`<${Card} title=${`Checked, not measured (${rows.length})`} cls="checked-card"><${Table} cls="list compact checked-designs" heads=${["Design", "Checks", "Why", "When"]}>
     ${rows.map(u => html`<tr key=${u.name} class=${u.verdict === "failed" ? "failed" : ""}>
       <td class="mono" title=${u.name}>${u.name === chosen ? "★ " : ""}${own(ctx, u.name)}</td>
-      <td><${Pill} tone=${u.verdict === "failed" ? "bad" : u.verdict === "rejected" ? "warn" : "ok"}>${u.verdict === "failed" ? "failed" : u.verdict === "rejected" ? "rejected" : "passed"}<//>${u.name === chosen ? " · chosen" : ""}</td>
+      <td><${Status} small status=${u.verdict === "failed" || u.verdict === "rejected" ? u.verdict : "passed"} />${u.name === chosen ? " · chosen" : ""}</td>
       <td class="small">${(u.why || "").split("\n")[0] || "—"}</td><td class="muted small">${u.when ? html`<${Ago} t=${Date.parse(u.when) / 1000} />` : ""}</td></tr>`)}<//><//>`;
 }
 
@@ -85,14 +88,14 @@ export function ResultsTab({ r, view }) {
       if (row) row.scrollIntoView({ block: "nearest" }); else root.current?.querySelector(`${view === "graphs" ? ".graphs" : ".split.results"} .detail-card`)?.scrollIntoView({ block: "nearest" });
     });
   };
-  const detail = open ? html`<${DesignDetail} key=${keyOf(open)} d=${open} fmt=${num} reload=${reload} />` : html`<div class="detail"><${Empty} text="Select a design." /></div>`;
+  const detail = open ? html`<${DesignDetail} key=${keyOf(open)} d=${open} label=${names.get(open)} fmt=${num} reload=${reload} />` : html`<div class="detail"><${Empty} text="Select a design." /></div>`;
   return html`<${ViewerFrame} v=${full} title="Results"><div ref=${root}>
-    <${Card} cls="objective-card" title="Objective" meta=${`${r.objectives}${r.total > r.designs.length ? ` · newest ${r.designs.length} of ${r.total}` : ""}`}
+    <${Card} cls="objective-card" title="Objective" meta=${`${objectiveText(r)}${r.total > r.designs.length ? ` · newest ${r.designs.length} of ${r.total}` : ""}`}
         tools=${html`<${ViewerTools} v=${full} title="Results" rawUrl=${`${base}/results${qs}${qs ? "&" : "?"}raw=true`} />${r.answer ? html`<${Tool} icon="download" label="Answer (JSON)" href=${`/api/apps/${enc(name)}/file?path=runs/answer.json&download=1${q}`} />` : ""}
           <${Tool} icon="report" label="Report" href=${`${base}/report${qs}`} target="_blank" rel="noopener" />`}>
       <${DecisionLine} r=${r} names=${names} comparison=${comparison} onPick=${pick} /><${Invalidated} r=${r} reload=${reload} /><//>
     ${seen.has("results") ? html`<div key="results" hidden=${view === "graphs"}><div class="split results"><${Card}><${ResultsTable} t=${{ r, names, unit, fmt: num, comparison, columns, values }} selected=${open && keyOf(open)}
-            onOpen=${setOpen} onCompare=${pair => compare(ctx, r, pair, directions, num)} /><//><${Card} cls="detail-card">${detail}<//></div>
+            onOpen=${setOpen} onCompare=${pair => compare(ctx, r, pair, directions, num, names)} /><//><${Card} cls=${open ? "detail-card" : "detail-card no-pick"}>${detail}<//></div>
         <${Checked} r=${r} /></div>` : null}
-    ${seen.has("graphs") ? html`<div key="graphs" hidden=${view !== "graphs"}><${Graphs} r=${r} directions=${directions} onPick=${pick} detail=${detail} /></div>` : null}</div><//>`;
+    ${seen.has("graphs") ? html`<div key="graphs" hidden=${view !== "graphs"}><${Graphs} r=${r} directions=${directions} onPick=${pick} detail=${open ? detail : null} /></div>` : null}</div><//>`;
 }

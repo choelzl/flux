@@ -44,10 +44,19 @@ function Permissions({ u, catalog, v, set }) {
 const editPermissions = async (u, catalog) => {
   const choice = await dialog(`${u.name}'s permissions`, ({ v, set }) => html`<${Permissions} u=${u} catalog=${catalog} v=${v} set=${set} />`, [["Cancel", null],
     ...(u.role === "admin" ? [] : [["Save", v => Object.fromEntries(Object.keys(catalog.permissions).map(k => [k, !!v[k]])), "primary"]])], { ...u.permissions });
-  if (!choice) return;
+  if (!choice) return null;
   await api(`/users/${enc(u.name)}`, { method: "PATCH", body: { permissions: choice } });
   u.permissions = choice; toast(`${u.name}'s permissions saved`, "ok");
+  return choice;
 };
+
+/** What a user may do, said on the button that changes it ("2 of 7", the list on hover): "Select" said nothing. */
+function PermissionsButton({ u, catalog }) {
+  const [p, setP] = useState(u.permissions || {}), all = Object.keys(catalog.permissions);
+  const on = u.role === "admin" ? all : all.filter(k => p[k]);
+  return html`<${Act} cls="small nowrap" title=${on.length ? on.map(k => catalog.permissions[k]).join("\n") : "None"} aria-label=${`${u.name}'s permissions`}
+    onClick=${async () => { const got = await editPermissions(u, catalog); if (got) setP(got); }}>${u.role === "admin" ? "all" : `${on.length} of ${all.length}`}<//>`;
+}
 
 /** D833: how many of their loops may run at once, saved as it changes; empty, the server's default. */
 function Limit({ u, limits, def }) {
@@ -92,25 +101,24 @@ export function Users({ users, use, res, catalog }) {
   const link = async u => { const got = await api(`/users/${enc(u.name)}/link`, { method: "POST" }); await linkDialog(u.name, got.token, got.kind); };
   const cols = [
     { label: "User", key: u => u.name, asc: true }, { label: "Group", key: u => u.group, asc: true }, { label: "Permissions" },
-    { label: "Running limit", key: u => limits[u.name], title: "Loops running at once; empty: the server's default" },
+    { label: "Limit", key: u => limits[u.name], title: "Loops running at once; empty: the server's default" },
     { label: "Loops", key: u => useOf(u.name).loops, num: true }, { label: "Turns", key: u => useOf(u.name).turns, num: true },
     { label: "Time", key: u => useOf(u.name).seconds || null, num: true },
-    { label: "Tokens in → out", key: u => { const x = useOf(u.name); return x.counted ? [x.tokens_in, x.tokens_out] : null; }, num: true },
+    { label: "Tokens", title: "Tokens in → out", key: u => { const x = useOf(u.name); return x.counted ? [x.tokens_in, x.tokens_out] : null; }, num: true },
     { label: "Cost", key: u => useOf(u.name).cost_usd || null, num: true },
     { label: "Last active", key: u => u.last_active || null, num: true, title: "Their latest login, action or run" },   // D942
     { label: "" }];
   const row = u => { const x = useOf(u.name); return html`<tr data-user=${u.name}>
-    <td class="strong">${u.name}${u.pending ? html`<${Pill} small title="Password not set yet">invited<//>` : ""}</td>
-    <td>${u.name === me.name ? html`<${Tag}>${u.group}<//>` : html`<${GroupSelect} groups=${catalog.groups} value=${u.group_id} label=${`${u.name}'s group`} onChange=${to => setGroup(u, to)} />`}
-      ${u.disabled ? html`<${Pill} tone="bad">disabled<//>` : ""}</td>
-    <td><${Act} cls="small" title=${`Select ${u.name}'s permissions`} aria-label=${`Select ${u.name}'s permissions`} onClick=${() => editPermissions(u, catalog)}>Select<//></td>
+    <td class="strong"><span class="user-name">${u.name}${u.pending ? html`<${Pill} small title="Password not set yet">invited<//>` : ""}${u.disabled ? html`<${Pill} small tone="bad">disabled<//>` : ""}</span></td>
+    <td>${u.name === me.name ? html`<${Tag}>${u.group}<//>` : html`<${GroupSelect} groups=${catalog.groups} value=${u.group_id} label=${`${u.name}'s group`} onChange=${to => setGroup(u, to)} />`}</td>
+    <td><${PermissionsButton} u=${u} catalog=${catalog} /></td>
     <${Limit} u=${u} limits=${limits} def=${def} />
-    <td class="num mono">${String(x.loops ?? "")}</td><td class="num mono">${String(x.turns ?? "")}</td><td class="num mono">${x.seconds ? dur(x.seconds) : ""}</td>
-    <td class="num mono" title=${x.partial ? `${plural(x.partial, "turn")} with incomplete usage` : ""}>${x.counted ? `${fmtTok(x.tokens_in)} → ${fmtTok(x.tokens_out)}` : "—"}</td>
+    <td class="num mono">${String(x.loops ?? "—")}</td><td class="num mono">${String(x.turns ?? "—")}</td><td class="num mono nowrap">${x.seconds ? dur(x.seconds) : "—"}</td>
+    <td class="num mono nowrap" title=${x.partial ? `${plural(x.partial, "turn")} with incomplete usage` : ""}>${x.counted ? `${fmtTok(x.tokens_in)} → ${fmtTok(x.tokens_out)}` : "—"}</td>
     <td class="num mono">${x.cost_usd ? `$${x.cost_usd.toFixed(2)}` : "—"}</td>
-    <td class="num">${u.last_active ? html`<${Ago} t=${u.last_active} />` : html`<span class="muted">never</span>`}</td>
-    <td class="right"><div class="actions end">${u.name !== me.name ? html`<${Act} cls="small" title=${`View Flux as ${u.name} (read-only)`} disabled=${u.disabled || u.pending} onClick=${() => viewAs(u)}>View as<//>` : ""}
-      <${Act} cls="small" onClick=${() => able(u)}>${u.disabled ? "Enable" : "Disable"}<//>
+    <td class="num nowrap">${u.last_active ? html`<${Ago} t=${u.last_active} />` : html`<span class="muted">never</span>`}</td>
+    <td class="right"><div class="actions end user-actions">${u.name !== me.name ? html`<${Act} cls="small" title=${`View Flux as ${u.name} (read-only)`} disabled=${u.disabled || u.pending} onClick=${() => viewAs(u)}>View as<//>
+      <${Act} cls="small" onClick=${() => able(u)}>${u.disabled ? "Enable" : "Disable"}<//>` : ""}
       <${Act} cls="small" title="One-time link; replaces the last one" onClick=${() => link(u)}>${u.pending ? "New invite link" : "Reset link"}<//></div></td></tr>`; };
   // D926: sorted by its headers (a menu on a phone); a row is moved, never rebuilt -- an edit or a pending save stays
   return html`<${Card} title="Users"><${SortableTable} memo="flux-sort-users" cols=${cols} rows=${users} row=${row} keyOf=${u => u.name} cls="list users" />

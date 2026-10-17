@@ -35,16 +35,17 @@ export function Sandbox({ r }) {
   // D833: saved as they change
   const { box, mark } = useAutosave(() => api("/admin/sandbox", { method: "PUT", body: { network: v.network, allow: list(v.allow), endpoints: v.endpoints,
     path: list(v.path), login_path: v.login_path, home_seed: list(v.home_seed) } }));
-  const text = (id, k, rows, ph) => html`<textarea id=${id} rows=${rows} placeholder=${ph} class="mono" ...${bound(v[k], x => set({ [k]: x }))} />`;
+  // a list as tall as it is (one line more, to add to), never cut mid-line under a scrollbar
+  const text = (id, k, rows, ph) => html`<textarea id=${id} rows=${Math.max(rows, v[k].split("\n").length + 1)} placeholder=${ph} class="mono" ...${bound(v[k], x => set({ [k]: x }))} />`;
   const adds = r.login_path.filter(d => !r.path.includes(d));
-  return html`<div ...${box}>${r.sandboxed ? "" : html`<${Notice} tone="warn" what="This server runs without the sandbox" why="(--no-sandbox): none of this applies." />`}
+  return html`<div ...${box}>${r.sandboxed ? "" : html`<${Notice} tone="warn" what="This server runs without the sandbox (--no-sandbox)" why="none of this applies." />`}
     <${Card} title="Network"><p class="muted">Open: any host. Allowlist: the hosts below. A loop's Settings may add hosts.</p>
       <label class="stack">Mode<${Select} id="sb-net" value=${v.network === "allowlist" ? "allowlist" : "open"} onChange=${network => set({ network })}
         options=${[["open", "open"], ["allowlist", "allowlist"]]} /></label>
       <div class="sb-allow" hidden=${v.network !== "allowlist"}><label class="stack">Allowed, one per line: host (with subdomains), *.domain, IP or CIDR
           ${text("sb-allow", "allow", 5, "localai.example.org\n*.anthropic.com\n10.0.0.0/8\n192.168.1.20")}</label>
         <${Check} id="sb-ep" checked=${v.endpoints} onChange=${endpoints => set({ endpoints })}>also the model endpoints' hosts<//></div><//>
-    <${Card} title="PATH"><p class="muted">Mounted read-only.</p>
+    <${Card} title="Path"><p class="muted">Mounted read-only.</p>
       <details><summary class="muted">${`Server PATH: ${r.path.length} directories`}</summary><pre class="val small">${r.path.join("\n")}</pre></details>
       <${Check} id="sb-login" checked=${v.login_path} onChange=${login_path => set({ login_path })}>${`add ${r.home}'s login PATH`}${adds.length ? `: ${adds.join(", ")}` : " (adds nothing)"}<//>
       <label class="stack">plus these, first${text("sb-path", "path", 3, "/opt/tools/bin")}</label><//>

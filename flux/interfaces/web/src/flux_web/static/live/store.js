@@ -14,7 +14,7 @@ export const NO_PASS = Symbol("no pass");
 
 export function createStore(ctx) {
   const s = {
-    startId: "current", pass: "current", following: true, limit: 200,
+    startId: "current", pass: "current", following: true, logFollow: true, limit: 200,
     boxView: null, passView: NO_PASS, choice: null, chainPass: undefined, openBox: null,
     folded: new Set(), opened: new Set(), allTries: new Set(),
     history: null, problem: null, notes: {}, goals: [], record: [], names: [ctx.name], tests: [],
@@ -67,6 +67,8 @@ export function createStore(ctx) {
       if (s.following) { s.following = false; pinPass(s.selected); now(); return; }
       s.boxView = null; s.pass = "current"; s.following = true; s.passView = NO_PASS; s.folded.clear(); s.reveal = true; now();
     },
+    /** The Log's Follow: its end kept in view; scrolling up stops it. */
+    logFollow(on) { if (s.logFollow !== on) { s.logFollow = on; now(); } },
     /** D1126: one reads the task in hand (a fold opened, scrolled up): following stops, as its button does. */
     pause() { if (!s.following) return; s.following = false; pinPass(s.selected); now(); },
     locate() { unfoldTo(s.selected); s.reveal = true; now(); },

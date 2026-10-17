@@ -6,16 +6,23 @@ import { api, appHref, dialog, loopApi } from "../ui.js";
 import { Act } from "../components/Act.js";
 import { useLoad } from "../components/Load.js";
 import { Failed } from "../components/Tone.js";
+import { useLoop } from "./context.js";
 
 export const Reading = ({ lines = 7 }) => html`<${Card}><${Skeleton} lines=${lines} /><//>`;
 
-/** `start()` for whoever may run it, disabled while an agent writes the problem (`writing`: why); without a
-    document, the way to have an agent write one. */
-export const NotRun = ({ info, name, mine, start, writing = "" }) => html`<${Card}>${info.document
-  ? html`<${Empty} text="Not run yet." action=${start ? html`<${Act} cls="small primary" disabled=${!!writing} title=${writing || null} onClick=${start}>Start<//>` : null} />`
+/** `start()` for whoever may run it, disabled while an agent writes the problem (`writing`: why); none where the
+    page's head has its Start (Live); `text` what is said; without a document, the way to have an agent write one. */
+export const NotRun = ({ info, name, mine, start, writing = "", text = "Not run yet." }) => html`<${Card}>${info.document
+  ? html`<${Empty} text=${text} action=${start ? html`<${Act} cls="small primary" disabled=${!!writing} title=${writing || null} onClick=${start}>Start<//>` : null} />`
   : html`<${Empty} text="No problem document yet." action=${mine ? html`<a class="btn small" href=${`${appHref(info.owner, name)}/settings/problem/agent`}>Have an agent write it</a>` : null} />`}<//>`;
 
-export const NoResults = () => html`<${Card}><${Empty} text="No results yet." /><//>`;
+/** results-18: why there is nothing -- never run, or stopped before its first design (why: on the Overview). */
+export function NoResults() {
+  const ctx = useLoop(), st = ctx.st || {};
+  const over = html`<button type="button" class="small" onClick=${() => ctx.goTab("Overview")}>Overview</button>`;
+  return html`<${Card}>${st.failed ? html`<${Empty} text="Stopped before any design: why is on the Overview." action=${over} />`
+    : !st.running && !st.last_active ? html`<${Empty} text="Not run yet." />` : html`<${Empty} text="No results yet." />`}<//>`;
+}
 
 function CheckOut({ url }) {
   const read = useLoad(() => api(url, { method: "POST" }), url), r = read.got?.d;      // D1149: a failure said, with Retry

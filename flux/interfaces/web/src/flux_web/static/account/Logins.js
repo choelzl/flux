@@ -7,7 +7,7 @@ import { html, useEffect, useRef, useState } from "../view.js";
 import { api, enc, toast, when } from "../ui.js";
 import { restoreScroll, scrollState } from "../scroll.js";
 import { Act } from "../components/Act.js";
-import { MECHANISM, VERIFIED } from "../admin/Agents.js";
+import { AgentStates, MECHANISM, VERIFIED } from "../admin/Agents.js";
 import { usePoll } from "../components/Load.js";
 import { Pill, Said, Failed } from "../components/Tone.js";
 
@@ -59,15 +59,15 @@ function AgentLogin({ a, test, login }) {
   const c = a.connection || { mechanism: "none", said: "" }, v = a.verified || { state: "untested" };
   const ver = a.testing ? ["run", "testing"] : v.state === "ready" && v.by === "admin" ? ["ok", "ready (tested by admin)"] : VERIFIED[v.state] || VERIFIED.untested;   // D935
   const pill = s => VERIFIED[s] || VERIFIED.untested;
-  return html`<div class="agent-conn" data-agent=${a.id}><dl class="agent-states">
-      <dt>Installation</dt><dd><${Pill} tone=${a.program ? "ok" : "bad"}>${a.program ? "installed" : "missing"}<//></dd>
-      <dt>Connection</dt><dd><${Pill} tone=${c.mechanism === "none" ? "none" : "ok"}>${MECHANISM[c.mechanism] || c.mechanism}<//><span class="muted small">${c.said}</span>
-        ${Object.keys(a.fields || {}).length ? html`<span class="muted small agent-sources">${Object.entries(a.fields).map(([f, x]) => `${FIELD_WORD[f] || f}: ${x.source}`).join(" · ")}</span>` : ""}</dd>
-      <dt>Verification</dt><dd><${Pill} tone=${ver[0]} title=${v.when ? `tested ${when(v.when)}` : ""}>${ver[1]}<//>
-        ${v.state === "ready" && v.when ? html`<span class="muted small">${when(v.when)}</span>` : ""}${v.state === "failed" && v.said ? html`<${Said} tone="bad" cls="small">${v.said}<//>` : ""}
-        ${v.state === "changed" ? html`<span class="muted small">endpoint, model or credential changed since test</span>` : ""}</dd></dl>
+  return html`<div class="agent-conn" data-agent=${a.id}><${AgentStates}
+      install=${{ tone: a.program ? "ok" : "bad", words: a.program ? "installed" : "missing" }}
+      conn=${{ tone: c.mechanism === "none" ? "none" : "ok", words: MECHANISM[c.mechanism] || c.mechanism, said: c.said,
+        extra: Object.keys(a.fields || {}).length ? html`<span class="muted small agent-sources">${Object.entries(a.fields).map(([f, x]) => `${FIELD_WORD[f] || f}: ${x.source}`).join(" · ")}</span>` : null }}
+      verify=${{ tone: ver[0], words: ver[1], title: v.when ? `tested ${when(v.when)}` : "",
+        said: v.state === "ready" && v.when ? when(v.when) : v.state === "changed" ? "endpoint, model or credential changed since test" : "",
+        extra: v.state === "failed" && v.said ? html`<${Said} tone="bad" cls="small">${v.said}<//>` : null }}
+      test=${() => test(a)} testing=${a.testing} />
     ${(a.conflicts || []).length || (a.unused || []).length ? html`<ul class="small hint-line agent-notes">${[...(a.conflicts || []), ...(a.unused || [])].map(x => html`<li>${x}</li>`)}</ul>` : ""}
-    <div class="actions">${a.testing ? html`<span class="muted small">testing…</span>` : html`<${Act} cls="primary small" title="Ask one short question" onClick=${() => test(a)}>Test<//>`}</div>
     ${(a.loops || []).length ? html`<div class="small"><span class="muted">Loops that override it:</span><ul class="agent-loops">${a.loops.map(x => html`<li key=${x.loop}><span class="mono">${x.loop}</span>
       <${Pill} tone=${pill(x.state)[0]}>${pill(x.state)[1]}<//>${a.testing ? "" : html` <${Act} cls="small" title="Configured differently there" onClick=${() => test(a, x.loop)}>Test for this loop<//>`}</li>`)}</ul></div>` : ""}
     ${a.tested?.steps?.length ? html`<details key="tested" class="set-fold"><summary>Last test</summary><ul class="agent-steps small">${a.tested.steps.map(s => html`<li key=${s.step} class=${s.ok ? "" : "bad"}>

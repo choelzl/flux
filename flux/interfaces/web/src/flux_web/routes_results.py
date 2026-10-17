@@ -51,6 +51,27 @@ def journal_messages(path: str, off: int, ino: int, since: float, kind: str = "e
 PARTS = ("events", "live", "log")
 
 
+
+def _objective_list(objectives: Any) -> list[dict[str, Any]]:
+    """The objectives as the pages draw and say them (results-21: one template, overview/objective.js)."""
+    return [{"metric": o.metric, "direction": o.direction, "goal": o.goal, "stage": o.stage, "unit": o.unit,
+             **({"keep": o.keep} if o.keep is not None else {}), **({"balance": True} if getattr(o, "balance", False) else {})}
+            for o in objectives]
+
+
+def _document_objectives(w: Any, name: str) -> dict[str, Any]:
+    """The objectives the loop's document says, for a loop with no record yet; {} when it does not load."""
+    from flux_loop.objective import Objectives
+
+    from .configure import views
+
+    try:
+        normal = views(w.path(name, w.meta(name).get("document") or ""))["normal"] or {}
+        objectives = Objectives.from_doc(normal.get("objectives") or [])
+    except Exception:  # noqa: BLE001 -- a document that does not load says so on its own page
+        return {}
+    return {"objectives": objectives.describe(), "objective_list": _objective_list(objectives)} if objectives else {}
+
 def register(app: FastAPI, ctx: SimpleNamespace) -> None:
     """The results' routes, every read through the guards `ctx` holds (D888)."""
     store, runs = ctx.store, ctx.runs
@@ -609,7 +630,7 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
             queue = queue_all(record, cid, body.on)
         finally:
             record.close()
-        store.audit(user.name, "queued an idea" if body.on else "unqueued an idea", f"{owner or user.name}/{name}: all")
+        store.audit(user.name, "queued an idea" if body.on else "unqueued an idea", f"{owner or user.name}/{name}: all", loop=(owner or user.name, name))
         said = (f"Queued {len(queue) - before} untested ideas: the next {len(queue)} passes test them" if body.on and len(queue) > before
                 else "Every untested idea was queued already" if body.on else f"Took {before} ideas off the queue")
         return {"ok": said, "queue": queue}
@@ -627,7 +648,7 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
             raise HTTPException(404, str(exc)) from exc
         finally:
             record.close()
-        store.audit(user.name, "queued an idea" if body.on else "unqueued an idea", f"{owner or user.name}/{name}: {ident}")
+        store.audit(user.name, "queued an idea" if body.on else "unqueued an idea", f"{owner or user.name}/{name}: {ident}", loop=(owner or user.name, name))
         where = queue.index(ident) + 1 if ident in queue else None
         said = "Taken off the queue" if not where else "Queued: the next pass tests it" if where == 1 else f"Queued: {where} in line"
         return {"ok": said, "queue": queue}
@@ -664,7 +685,7 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
             record.invalidate(cid, seqs, reason=reason, by=user.name, names=[body.name])
         finally:
             record.close()
-        store.audit(user.name, "invalidated a design", f"{owner or user.name}/{name}: {body.name} -- {reason}"[:500])
+        store.audit(user.name, "invalidated a design", f"{owner or user.name}/{name}: {body.name} -- {reason}"[:500], loop=(owner or user.name, name))
         return {"ok": f"{body.name} invalidated: its {plural(len(seqs), 'row')} no longer count", "trials": len(seqs)}
 
     @app.post("/api/apps/{name}/results/reevaluate")
@@ -716,7 +737,7 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
                 record.invalidate(cid, [t.seq for t in rows], reason=reason, by=user.name, names=[body.name])
         finally:
             record.close()
-        store.audit(user.name, "rejected a result", f"{owner or user.name}/{name}: {body.name} -- {reason}"[:500])
+        store.audit(user.name, "rejected a result", f"{owner or user.name}/{name}: {body.name} -- {reason}"[:500], loop=(owner or user.name, name))
         said = f"{body.name} rejected"
         if again and live:
             said += ": the running loop measures it again before its next pass (R)"
@@ -736,7 +757,7 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
                 raise HTTPException(404, "no such rejection")
         finally:
             record.close()
-        store.audit(user.name, "restored a rejected result", f"{owner or user.name}/{name}: rejection {body.id}")
+        store.audit(user.name, "restored a rejected result", f"{owner or user.name}/{name}: rejection {body.id}", loop=(owner or user.name, name))
         return {"ok": "restored: it counts again"}
 
     @app.post("/api/apps/{name}/results/restore")
@@ -747,7 +768,7 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
                 raise HTTPException(404, "no such invalidation")
         finally:
             record.close()
-        store.audit(user.name, "restored a design", f"{owner or user.name}/{name}: invalidation {body.id}")
+        store.audit(user.name, "restored a design", f"{owner or user.name}/{name}: invalidation {body.id}", loop=(owner or user.name, name))
         return {"ok": "restored: its rows count again"}
 
     @app.get("/api/apps/{name}/results")
@@ -760,7 +781,7 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
         cid = selected_campaign(run, campaign)
         until = start_end(name, user, owner, start_id, run)
         if not cid or not os.path.exists(run["db"]):
-            return {"campaign": None}
+            return {"campaign": None, **_document_objectives(_w, name)}      # results-22: the document's, before any run
         rep = load(run["db"], cid, until=until)
         from .results import designs, thin
 
@@ -790,8 +811,7 @@ def register(app: FastAPI, ctx: SimpleNamespace) -> None:
             invalidated = record.invalidations(cid)                 # D1001: by hand, with why
         finally:
             record.close()
-        objective_list = [{"metric": o.metric, "direction": o.direction, "goal": o.goal, "stage": o.stage, "unit": o.unit}
-                          for o in rep.objectives]                     # for the Overview's charts (D692)
+        objective_list = _objective_list(rep.objectives)                 # for the Overview's charts (D692)
         return {"campaign": cid, "objectives": rep.objectives.describe(), "objective_list": objective_list, "rows": rows,
                 "rows_total": len(rep.rows),
                 "passes": [{"when": w, "conclusion": c} for w, c in rep.passes], "passes_begun": rep.begun, "notes": rep.notes,

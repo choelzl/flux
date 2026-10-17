@@ -1339,8 +1339,10 @@ def _about(exe: str, env: dict[str, str]) -> str:
             _VERSIONS[exe] = (r.stdout.strip().splitlines() or [""])[0][:60] if r.returncode == 0 else ""
         except (OSError, subprocess.TimeoutExpired):
             _VERSIONS[exe] = ""
-    version = _VERSIONS[exe]
-    return ", ".join(x for x in (model, version and f"{Path(exe).name} {version}") if x)
+    version, name = _VERSIONS[exe], Path(exe).name
+    # a tool whose --version names itself ("codex 1.0", "codex-cli 0.46") is said as it says it, not "codex codex 1.0"
+    said = version if version.lower().startswith(name.lower()) else version and f"{name} {version}"
+    return ", ".join(x for x in (model, said) if x)
 
 
 _CODE = re.compile(r"```.*?```", re.S)

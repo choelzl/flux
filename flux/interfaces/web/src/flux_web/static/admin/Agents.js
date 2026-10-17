@@ -20,6 +20,19 @@ import { Check } from "../components/Check.js";
 export const MECHANISM = { key: "API key", provider: "provider config", login: "interactive login", endpoint: "endpoint, no key", none: "not configured" };
 export const VERIFIED = { untested: ["none", "untested"], ready: ["ok", "ready"], failed: ["bad", "failed"], changed: ["warn", "changed since test"] };
 const HOME_PH = { opencode: ".config/opencode", claude: ".claude/settings.json", codex: ".codex/config.toml" };
+// where each kind keeps its login, for the example (it said ".local/share/nga/auth.json" on every tab)
+const LOGIN_PH = { opencode: ".local/share/opencode/auth.json", claude: ".claude/.credentials.json", codex: ".codex/auth.json" };
+
+/** Review of Oct 17: an agent's three states, one block in Admin › Agents and Account › Agents alike (D924) --
+    Installation, Connection, Verification, each a pill, what it rests on, and more (`extra`); Test on the
+    Verification row when there is something to test (`test`), none while it runs (its pill says so). A row: {tone, words,
+    said, extra, cls}. */
+export function AgentStates({ install, conn, verify, test = null, testing = false, testTitle = "Ask one short question", children }) {
+  const row = (label, x, kids = null) => html`<dt>${label}</dt><dd class=${x.cls || null}><${Pill} tone=${x.tone} title=${x.title || null}>${x.words}<//>${
+    x.said ? html`<span class="muted small">${x.said}</span>` : ""}${x.extra || ""}${kids || ""}</dd>`;
+  return html`<dl class="agent-states">${row("Installation", install)}${row("Connection", conn)}${row("Verification", verify,
+      testing ? null : test ? html`<${Act} cls="small primary" title=${testTitle} onClick=${test}>Test<//>` : null)}${children || ""}</dl>`;
+}
 const lines = a => (a || []).join("\n");
 const list = text => text.split(/[\n,]/).map(x => x.trim()).filter(Boolean);
 
@@ -86,26 +99,27 @@ function AgentPanel({ a, version, askOff }) {
   const field = (k, ph, mono = true) => html`<input id=${`ag-${a.id}-${k}`} placeholder=${ph} class=${mono ? "mono" : null} autocomplete="off" ...${set(k)} />`;
   const area = (k, rows, ph) => html`<textarea id=${`ag-${a.id}-${k === "login_files" ? "creds" : k}`} rows=${rows} class="mono" placeholder=${ph} ...${set(k)} />`;
   return html`<div class="agent-panel" data-agent=${a.id} data-label=${a.label}>
-    <div class="agent-found small"><${Pill} tone=${a.found ? "ok" : "bad"}>${a.found ? "found" : "not found"}<//><${Tag}>${a.builtin ? "built in" : a.kind}<//>
-      <span class="muted">in a document: <code>${a.id}</code>${a.builtin ? "" : html` <${Act} cls="small" onClick=${() => rename(a)}>Rename<//>`}</span>
-      <span class="mono muted">${a.found ? html`${a.found}<span class="agent-version">${version ? " · " + version : ""}</span>`
-        : a.builtin ? `${a.bin || a.id} is not on the runs' PATH: not offered to users` : `${a.bin ? a.bin + " is not there or not runnable" : "no program yet"}: not offered to users`}</span>
-      ${failed.length ? html`<${Said} tone="bad">${`test failed for ${failed.join(", ")}`}<//>` : ""}${changed.length ? html`<${Said} tone="warn">${`changed since test for ${changed.join(", ")}`}<//>` : ""}
-      ${rest.mark}</div>
-    <dl class="agent-states"><dt>Connection</dt><dd><${Pill} tone=${c.mechanism === "none" ? "none" : "ok"}>${c.mechanism === "none" ? "each user's own" : MECHANISM[c.mechanism] || c.mechanism}<//>
-        <span class="muted small">${c.mechanism === "none" ? "no shared key or provider: each user logs in or sets a key on their Account" : c.said}</span></dd>
-      ${c.mechanism === "none" || !a.found ? "" : html`<dt>Verification</dt><dd class="agent-server-test"><${Pill} tone=${ver[0]}>${ver[1]}<//>
-        <span class="muted small">${!st.shared ? "each user tests on their Account" : st.state === "ready" ? `for users without own settings · ${when(st.when)}` : "a pass counts for users without own settings"}</span>
-        ${st.state === "failed" && st.said ? html`<${Said} tone="bad" cls="small">${st.said}<//>` : ""}
-        <${Act} cls="small" title="Ask one short question with the server's config" onClick=${() => test(a)}>Test<//></dd>`}
-      ${(a.conflicts || []).length || (a.unused || []).length ? html`<dt>Said</dt><dd><ul class="small hint-line agent-notes">${[...(a.conflicts || []), ...(a.unused || [])].map(x => html`<li>${x}</li>`)}</ul></dd>` : ""}</dl>
+    <${AgentStates}
+      install=${{ tone: a.found ? "ok" : "bad", words: a.found ? "installed" : "missing", cls: "agent-found small", extra: html`<${Tag}>${a.builtin ? "built in" : a.kind}<//>
+        <span class="muted">in a document: <code>${a.id}</code>${a.builtin ? "" : html` <${Act} cls="small" onClick=${() => rename(a)}>Rename<//>`}</span>
+        <span class="mono muted">${a.found ? html`${a.found}<span class="agent-version">${version ? " · " + version : ""}</span>`
+          : a.builtin ? `${a.bin || a.id} is not on the runs' PATH: not offered to users` : `${a.bin ? a.bin + " is not there or not runnable" : "no program yet"}: not offered to users`}</span>
+        ${failed.length ? html`<${Said} tone="bad">${`test failed for ${failed.join(", ")}`}<//>` : ""}${changed.length ? html`<${Said} tone="warn">${`changed since test for ${changed.join(", ")}`}<//>` : ""}
+        ${rest.mark}` }}
+      conn=${{ tone: c.mechanism === "none" ? "none" : "ok", words: MECHANISM[c.mechanism] || c.mechanism,
+        said: c.mechanism === "none" ? "no shared key or provider: each user logs in or sets a key on their Account" : c.said }}
+      verify=${c.mechanism === "none" || !a.found ? { tone: "none", words: "untested", said: a.found ? "each user tests on their Account" : "nothing to test" }
+        : { tone: ver[0], words: ver[1], cls: "agent-server-test", said: !st.shared ? "each user tests on their Account" : st.state === "ready" ? `for users without own settings · ${when(st.when)}` : "a pass counts for users without own settings",
+          extra: st.state === "failed" && st.said ? html`<${Said} tone="bad" cls="small">${st.said}<//>` : null }}
+      test=${c.mechanism === "none" || !a.found ? null : () => test(a)} testTitle="Ask one short question with the server's config">
+      ${(a.conflicts || []).length || (a.unused || []).length ? html`<dt>Said</dt><dd><ul class="small hint-line agent-notes">${[...(a.conflicts || []), ...(a.unused || [])].map(x => html`<li>${x}</li>`)}</ul></dd>` : ""}<//>
     <div class="grid-2 set-fields" ...${named.box}><label class="stack">${a.builtin ? "Program (path or name on PATH)" : "Program (path)"}${field("bin", a.builtin ? a.id : "/path/to/its/program")}</label>
       <label class="stack">Name shown${field("label", a.id, false)}</label></div>
     <${AskBox} who=${a.id} name=${a.label} off=${askOff} />
     <details class="set-fold"><summary>Login and files<span class="muted small">${nMore ? ` · ${nMore} set` : " · none"}</span></summary>
       <div class="grid-2 set-fields" ...${rest.box}><label class="stack">Login command${field("login", a.login_default)}</label>
-        <label class="stack">Extra arguments${field("args", "none")}</label>
-        <label class="stack" title="Marks a user logged in">Login files (if not usual)${area("login_files", 1, "its usual; e.g. .local/share/nga/auth.json")}</label>
+        <label class="stack">Extra arguments${field("args", "not set")}</label>
+        <label class="stack" title="Marks a user logged in">Login files (if not usual)${area("login_files", 1, `its usual${LOGIN_PH[a.kind] ? `, e.g. ${LOGIN_PH[a.kind]}` : ""}`)}</label>
         <label class="stack">Home starts with (paths in the server account's home)${area("home", 2, HOME_PH[a.kind] || "")}</label>
         <label class="stack">Hosts needed under an allowlist${area("hosts", 2, "auth.example.com")}</label></div></details>
     ${a.builtin ? "" : html`<div class="form-actions"><${Act} cls="danger small" onClick=${() => remove(a)}>Remove<//></div>`}</div>`;

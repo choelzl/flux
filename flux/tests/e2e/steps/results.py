@@ -60,7 +60,11 @@ def flows(r):
             r.check("long diagonal labels are shortened without losing their endings or accessible names", b.js("const th = document.querySelector('th[data-label=another_long_measurement_for_throughput]'), label = th.querySelector('button'); return label.textContent.length <= 20 && label.textContent.endsWith('throughput') && label.getAttribute('aria-label') === 'another_long_measurement_for_throughput' && document.querySelector('table.designs thead').getBoundingClientRect().height < 160"))
             b.click("table.designs tbody input[type=checkbox]")
             r.check("results are always compact regardless of the old preference, with no toggle", b.js("const t = document.querySelector('table.designs'), name = t.querySelector('.table-design-name'); return !document.querySelector('.compact-table') && getComputedStyle(name).maxWidth !== 'none' && t.querySelectorAll('th').length === 9 && t.getBoundingClientRect().width <= t.parentElement.clientWidth + 1"))
-            r.check("status badges remain accessible; units and metadata stay in tooltips", b.js("const badge = document.querySelector('table.designs .verdict-badge'), name = document.querySelector('table.designs .table-design-name').closest('td'); return badge.getAttribute('aria-label') === 'accepted' && !!badge.querySelector('.g-ok') && name.title.includes('long_measurement_stage') && name.title.includes('2026-10-06') && document.querySelector('table.designs td.num').title.includes('µm²')"))
+            r.check("results-1: a long name is cut in its middle only, its end ('details') kept in sight, the whole on hover",
+                    b.js("const n = document.querySelector('table.designs .table-design-name'), h = n.querySelector('.mid-h'), t = n.querySelector('.mid-t');"
+                         " return !!t && t.textContent.endsWith('details') && t.getBoundingClientRect().width > 0 && h.scrollWidth > h.clientWidth && n.title.endsWith('implementation-details')"))
+            r.check("results-9: more than four measurements: headers turned", b.js("return !document.querySelector('table.designs').classList.contains('flat-heads')"))
+            r.check("status badges remain accessible; units and metadata stay in tooltips", b.js("const badge = document.querySelector('table.designs .verdict-badge'), name = document.querySelector('table.designs .table-design-name').closest('td'); return badge.textContent.trim() === 'accepted' && !!badge.querySelector('.g-ok') && name.title.includes('long_measurement_stage') && name.title.includes('2026-10-06') && document.querySelector('table.designs td.num').title.includes('µm²')"))
             r.check("measurement cells are plain values without checkmarks or repeated units", b.js("return [...document.querySelectorAll('table.designs td.num')].every(td => /^[-+0-9.e]+$/.test(td.textContent.trim())) && !document.querySelector('table.designs .measurement-verdict, table.designs .measurement-unit')"))
             r.check("passing and failing measurements use distinct colors and explicit tooltip status", b.js("const good = document.querySelector('table.designs td.meets'), bad = document.querySelector('table.designs td.misses'); return getComputedStyle(good).color !== getComputedStyle(bad).color && good.title.includes('meets the limit') && bad.title.includes('misses the limit')"))
             b.click(".bar .relative-values")
@@ -129,7 +133,7 @@ def flows(r):
             b.cmd("WebDriver:SetWindowRect", {"width": 1280, "height": 900})
             b.click(".bar .relative-values")
             r.page("#/app/sw", "document.querySelector('.best-n')", "Decision's best designs")
-            r.check("Decision is always compact, with a separate status column", b.js("return !document.querySelector('.compact-table') && !!document.querySelector('.best-n .measurement-label') && document.querySelector('.best-n .table-design-name').scrollWidth > document.querySelector('.best-n .table-design-name').clientWidth && document.querySelector('.best-n td.status-column').querySelector('.verdict-badge') && document.querySelector('.best-n .table-design-name').closest('td').title.includes('long_measurement_stage')"))
+            r.check("Decision is always compact, with a separate status column", b.js("return !document.querySelector('.compact-table') && !!document.querySelector('.best-n .measurement-label') && document.querySelector('.best-n .table-design-name .mid-h').scrollWidth > document.querySelector('.best-n .table-design-name .mid-h').clientWidth && document.querySelector('.best-n td.status-column').querySelector('.verdict-badge') && document.querySelector('.best-n .table-design-name').closest('td').title.includes('long_measurement_stage')"))
             r.check("Decision retains every measurement column with readable shortened headers", b.js("const table = document.querySelector('.best-n'); return table.querySelectorAll('th.measurement-head').length === 6 && [...table.querySelectorAll('th.measurement-head')].some(th => th.title === 'another_long_measurement_for_throughput' && th.textContent.endsWith('throughput'))"))
             r.check("Decision shares relative preference and uses the complete measured population", b.js("return document.querySelector('.best-table-head .relative-values').getAttribute('aria-pressed') === 'true' && [...document.querySelectorAll('.best-n td.num')].some(td => td.textContent === '-22.5%' && td.title.includes('baseline (w-baseline'))"))
             b.shot(r.shots / "compact-decision.png", full=True)
@@ -175,15 +179,15 @@ def flows(r):
              " : window.__labelFetch(u, o); return 1", single)
         try:
             r.page("#/app/sw/results", "document.querySelector('table.designs')", "short design IDs")
-            r.check("single-design tables omit the app name and display complete IDs", b.js("return [...document.querySelectorAll('table.designs .table-design-name')].map(s => s.textContent).join() === '#42,#43,#baseline' && [...document.querySelectorAll('table.designs .design-id')].every(s => getComputedStyle(s).maxWidth === 'none' && s.scrollWidth <= s.clientWidth + 1)"))
+            r.check("single-design tables omit the app name and display complete IDs", b.js("return [...document.querySelectorAll('table.designs .table-design-name')].map(s => s.textContent).join() === '#42,#43,#baseline' && [...document.querySelectorAll('table.designs .design-id')].every(s => s.scrollWidth <= s.clientWidth + 1 && [...s.children].every(c => c.scrollWidth <= c.clientWidth + 1))"))
             r.check("short design labels preserve full tooltips and accessible names", b.js("const b = document.querySelector('table.designs .open-design'); return b.title.includes('sw-a-very-long-application-name#42') && b.getAttribute('aria-label') === b.title && b.closest('td').title.includes('sw-a-very-long-application-name#42')"))
             b.click("table.designs .open-design")
             b.wait("document.querySelector('.detail-head h2')", what="the original design opened")
-            r.check("opening a short ID still requests and displays the original design", b.js("return new URL(window.__labelRequest, location.origin).searchParams.get('design') === 'sw-a-very-long-application-name#42' && document.querySelector('.detail-head h2').textContent === 'sw-a-very-long-application-name#42'"))
+            r.check("opening a short ID requests the original design and heads it as the table names it, the whole name on hover (results-8)", b.js("const h = document.querySelector('.detail-head h2'); return new URL(window.__labelRequest, location.origin).searchParams.get('design') === 'sw-a-very-long-application-name#42' && h.textContent === '#42' && h.title === 'sw-a-very-long-application-name#42'"))
             r.page("#/", "document.querySelector('#main table.list, #main .empty')", "home before part labels")
             b.js("window.__labelFixture = arguments[0]; return 1", fixture)
             r.page("#/app/sw/results", "document.querySelector('table.designs')", "short labels with parts")
-            r.check("mixed designs show part#ID without brackets or repeated part subtitles", b.js("return [...document.querySelectorAll('table.designs .table-design-name')].map(s => s.textContent).join() === 'whole#42,whole#43,decoder#44,decoder#45,encoder#46,encoder#47,whole#baseline' && !document.querySelector('table.designs .table-part')"))
+            r.check("mixed designs show part#ID without brackets or repeated part subtitles", b.js("return [...document.querySelectorAll('table.designs .table-design-name')].map(s => s.textContent).join() === 'whole#42,whole#43,whole#baseline,decoder#44,decoder#45,encoder#46,encoder#47' && !document.querySelector('table.designs .table-part')"))
             r.check("Design sorting orders the displayed parts and IDs", b.js("document.querySelector('th[data-label=Design] button').click(); return [...document.querySelectorAll('table.designs .table-design-name')].map(s => s.textContent).slice(0, 2).join() === 'decoder#44,decoder#45'"))
             r.page("#/app/sw", "document.querySelector('.best-n')", "short Decision table labels")
             r.check("Decision and Results share the same complete design labels", b.js("return [...document.querySelectorAll('.best-n .table-design-name')].every(s => /^(whole|decoder|encoder)#/.test(s.textContent) && !s.textContent.includes('[') && s.scrollWidth <= s.clientWidth + 1 && s.title.includes('#'))"))
@@ -389,7 +393,8 @@ def flows(r):
           const baseline = plot(rows.filter(d => d.baseline), true);
           rows[0].stages.screen = {x: 10, y: 30}; rows[1].stages.screen = {x: 5, y: 20};
           const stage = plot(rows, true, 'screen');
-          done({full, focus, single: [Number(point.getAttribute('cx')), Number(point.getAttribute('cy')), /NaN|Infinity/.test(single.innerHTML)],
+          const axis = single.querySelector('line.axis');      // results-12: the plot's left edge follows its widest tick: its middle, not a fixed x
+          done({full, focus, single: [Math.round(Number(point.getAttribute('cx')) - (Number(axis.getAttribute('x1')) + Number(axis.getAttribute('x2'))) / 2), Number(point.getAttribute('cy')), /NaN|Infinity/.test(single.innerHTML)],
             none: [none.querySelector('.pareto-focus-said').textContent, !!none.querySelector('.on-front'), /NaN|Infinity/.test(none.innerHTML)],
             baseline: [baseline.querySelectorAll('.baseline-ref').length, /NaN|Infinity/.test(baseline.innerHTML)],
             stage: [...stage.querySelectorAll('.on-front')].map(p => p.dataset.name)});
@@ -397,7 +402,7 @@ def flows(r):
         r.check("Focus fits only the scoped front, excluding distant designs, baselines and goals", focused.get("focus", {}).get("front") == ["a", "b"]
                 and focused["focus"]["span"] > 400 and focused["focus"]["ySpan"] > 200 and focused["full"]["span"] < 1
                 and focused["focus"]["badOutside"] and focused["focus"]["clipped"] and focused["focus"]["all"] == focused["full"]["all"] == 5, focused)
-        r.check("Focus handles a single zero-valued front, unavailable fronts, baselines and stage changes", focused.get("single") == [304, 140, False]
+        r.check("Focus handles a single zero-valued front, unavailable fronts, baselines and stage changes", focused.get("single") == [0, 140, False]
                 and focused["none"] == [" · full range (no feasible front)", False, False] and focused["baseline"] == [2, False]
                 and focused["stage"] == ["b"], focused)
         b.click(".pareto-focus")
@@ -416,7 +421,7 @@ def flows(r):
         said = b.wait("(document.querySelector('#main .graphs .detail-card h2') || {}).textContent", timeout=10, what="the point's design")
         r.check("a plot point opens its design's detail in Graphs (D916)", said == "w-bad", said)
         b.js("document.querySelector('#main .graphs').__e2e = 1; return 1")
-        r.button("Results", ".subrow .subtabs")
+        r.button("Designs", ".subrow .subtabs")
         b.wait("document.querySelector('#main table.designs')", timeout=10)
         r.check("back in Results the same design stays selected (D916)", b.js(
             "return (document.querySelector('#main .split.results .detail-card h2') || {}).textContent === 'w-bad'"
@@ -449,7 +454,7 @@ def flows(r):
         best = b.js(f"return [...{card}.querySelectorAll('figure')].map(f => [f.querySelector('.best-said').textContent, !!f.querySelector('path.best')])", "Improvement by design")
         r.check("before a feasible design, no best line (D914)", all(x == ["No feasible design yet", False] for x in best), str(best))
 
-        r.button("Results", ".subrow .subtabs")
+        r.button("Designs", ".subrow .subtabs")
         b.wait("document.querySelector('table.designs')", what="Results to hide a column")
         r.page("#/app/sw/settings", "document.querySelector('.measurement-options')", "graph measurement Preferences")
         b.click('.measurement-options input[data-metric="area_um2"]')
@@ -476,7 +481,7 @@ def flows(r):
         r.check("graph preferences restore from the server with browser storage cleared", b.js(preferences) == expected, str(b.js(preferences)))
         r.preferences()
         r.check("Pareto Focus is remembered across a full browser reload", b.js("return document.querySelector('.pareto-focus').getAttribute('aria-pressed') === 'true' && window.__savedResults.graphs.paretoFocus === true"))
-        r.button("Results", ".subrow .subtabs")
+        r.button("Designs", ".subrow .subtabs")
         b.wait("document.querySelector('table.designs')", what="remembered columns after reload")
         r.check("hidden columns survive a full browser reload while all rows remain visible", b.js("return document.querySelectorAll('table.designs tbody tr').length === 7 && document.querySelectorAll('table.designs th.measurement-head').length === 1 && !document.querySelector('th[data-label=area_um2]') && document.querySelector('.show-hidden-columns').textContent === 'Hidden 1'"))
         b.click(".show-hidden-columns")
@@ -499,7 +504,22 @@ def flows(r):
         r.preferences(reset=True)
         r.preferences(patch={"graphs": {"x": "removed", "y": "removed", "paretoStage": "removed", "timeStage": "removed", "metrics": ["removed"], "scope": "removed"}})
         r.page("#/app/sw/results/graphs", "document.querySelector('#main svg.chart.pareto')", "obsolete graph settings")
-        r.check("removed metrics, stages and scopes fall back to usable defaults", b.js(preferences) == [["fmax_mhz", "area_um2", ""], "", ["area_um2"], "Whole"], str(b.js(preferences)))
+        r.check("removed metrics, stages and scopes fall back to usable defaults", b.js(preferences) == [["fmax_mhz", "area_um2", ""], "", ["area_um2"], "whole"], str(b.js(preferences)))
+        # results-14: one measured metric -- no Pareto card, Improvement the row's width; no design card until a point is picked
+        one = json.loads(payload)
+        one["metrics"] = ["area_um2"]
+        for d in one["designs"]:
+            d["numbers"] = {k: v for k, v in d["numbers"].items() if k == "area_um2"}
+            d["stages"] = {st: {k: v for k, v in n.items() if k == "area_um2"} for st, n in d["stages"].items()}
+        r.page("#/", "document.querySelector('#main table.list, #main .empty')", "home before a one-metric loop")
+        b.js(stub, False, json.dumps(one))
+        r.page("#/app/sw/results/graphs", "document.querySelector('#main svg.best-chart')", "one metric's graphs")
+        r.check("one metric: no Pareto card, Improvement takes the row, no empty design card (results-14)", b.js(
+            "const hs = [...document.querySelectorAll('#main .graphs .card h2')].map(h => h.textContent); const c = document.querySelector('#main .graphs .charts');"
+            " return !hs.includes('Pareto front') && hs.includes('Improvement by design') && !c.classList.contains('grid-2') && !document.querySelector('#main .graphs .detail-card')"))
+        r.check("a time-like axis never goes below 0, its ticks round (results-11)", b.js(
+            "const t = [...document.querySelectorAll('#main svg.best-chart text.tick')].map(x => x.textContent).filter(x => /^-?[0-9.]+$/.test(x)).map(Number); return t.length > 1 && Math.min(...t) >= 0"))
+        b.js(stub, False, payload)
         b.js("localStorage.removeItem('flux-results:[\"bob\",\"bob\",\"sw\"]'); return 1")
         r.preferences(reset=True)
         r.clean("graphs")
@@ -547,9 +567,15 @@ def flows(r):
             try:
                 r.page(f"#/app/{name}/results/ideas", "document.querySelector('.ideas-table')", "Ideas")
                 r.check("Ideas is accessible before any measured design", b.js("return document.querySelector('.subtabs .on').textContent === 'Ideas' && document.querySelectorAll('.ideas-table > tbody > tr').length === 2"))
+                r.check("results-31: no heading repeating the sub-tab; 'measured' explained on its state", b.js("const v = document.querySelector('.ideas-view').closest('.card'); return !v.querySelector('h2') && [...document.querySelectorAll('.ideas-table td [title]')].some(x => x.textContent.trim().endsWith('measured') && x.title.includes('evidence'))"))
+                widths = "[...document.querySelectorAll('.ideas-table > thead th')].map(th => Math.round(th.getBoundingClientRect().width))"
+                before = b.js(f"return {widths}")
                 r.check("idea notes render literally and pending ideas stay untested", b.js("return !document.querySelector('.ideas-view img') && document.querySelector('.ideas-table').textContent.includes(arguments[0]) && document.querySelector('.ideas-table').textContent.includes('Not tested yet')", title))
                 b.click(".ideas-table .idea-evidence")
                 r.check("idea history opens in a full-width row under the idea, with failures, passes and measured numbers (D1145)", b.js("const row = document.querySelector('.ideas-table > tbody > tr.idea-evals-row'), td = row && row.cells[0]; return td.colSpan === 4 && td.getBoundingClientRect().width > 0.9 * document.querySelector('.ideas-table').getBoundingClientRect().width && row.textContent.includes('incorrect corner case') && row.textContent.includes('cycles 8') && [...document.querySelectorAll('.idea-evaluations tbody tr')].map(r => r.cells[0].textContent).join(',') === '1,2,3'"))
+                after = b.js(f"return {widths}")             # in proportion: a scroll bar may come with the taller page
+                r.check("results-29: opening evaluations keeps the columns' widths; when as 'ago', the date on hover", all(abs(x / sum(after) - y / sum(before)) < 0.01 for x, y in zip(after, before))
+                        and b.js("const t = document.querySelector('.idea-evaluations time'); return !!t && t.textContent.endsWith('ago') && !document.querySelector('.idea-evaluations').textContent.includes('T10:')"), f"{before} {after}")
                 if os.environ.get("FLUX_E2E_SHOTS"):
                     b.shot(os.path.join(os.environ["FLUX_E2E_SHOTS"], "ideas-evaluations.png"))
                 r.check("a long evaluation neither widens the notebook nor shows every number and its whole error at once (D1042)", b.js(
@@ -566,6 +592,7 @@ def flows(r):
                 r.button("Close", "dialog.fullscreen-view")
                 b.cmd("WebDriver:SetWindowRect", {"width": 480, "height": 900})
                 r.check("notebook tables scroll within their view on a narrow screen", b.js("return document.documentElement.scrollWidth <= innerWidth + 2"))
+                r.check("results-3: on a phone an idea is a card, its hypothesis the card's width, no word broken", b.js("const tr = document.querySelector('.ideas-table > tbody > tr'), h = tr.cells[1]; return getComputedStyle(tr).display === 'grid' && h.getBoundingClientRect().width > 0.8 * tr.getBoundingClientRect().width && getComputedStyle(h).overflowWrap !== 'anywhere'"))
                 b.cmd("WebDriver:SetWindowRect", {"width": 1280, "height": 900})
                 b.js("window.__ideasData.ideas.push({id:'idea-next', part:'core', title:'Another alternative', hypothesis:'Try a different structure', test:'', status:'proposed', evaluations:[]}); return 1")
                 r.button("Refresh")
@@ -601,7 +628,8 @@ def flows(r):
                 r.button("Refresh")
                 b.wait("document.querySelector('.ideas-table')", what="first recorded idea")
                 b.click(".ideas-table .idea-evidence")
-                r.check("zero measurements display and older trials tolerate missing pass numbers", b.js("return document.querySelector('.idea-evaluations tbody tr').cells[0].textContent === '—' && document.querySelector('.idea-evaluations').textContent.includes('cycles 0')"))
+                got = b.js("const t = document.querySelector('.idea-evaluations'); return [t.querySelector(':scope > tbody > tr').cells[0].textContent, [...t.querySelectorAll('th')].map(th => th.textContent), t.textContent.includes('cycles 0')]")
+                r.check("zero measurements display; no Pass column when no evaluation has one (results-5)", got[0] == "d#1" and "Pass" not in got[1] and got[2], str(got))
                 b.js("window.__ideasNavigationDeferred = true; return 1")
                 r.button("Refresh")
                 b.wait("!!window.__ideasNavigationRelease", what="delayed notebook request")
