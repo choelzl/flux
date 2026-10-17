@@ -330,7 +330,7 @@ class AgentOrchestrator:
         if self.coding is not None:
             return self._decide_by_agent(problem, state, what, head, choices, schema)
         prompt = "\n".join(l for l in head if l)
-        with _phase(f"orchestrate: {what}", why=", ".join(choices), absorb=True) as out:
+        with _phase(f"orchestrate: {what}", why=", ".join(choices), absorb=True, box="search", step=what) as out:
             try:
                 reply = _ask(state, prompt, schema,
                              tools=orchestrator_tools(problem, state) if state.request.tools or "orchestrate" in (state.request.agent or ()) else None).text
@@ -365,7 +365,7 @@ class AgentOrchestrator:
         read = [f"STANDINGS:\n{tools['standings'].run({})}", f"PICKS SO FAR:\n{tools['decisions'].run({})}"]
         lines = [ln for ln in head if ln and not ln.startswith(("You have tools:", "Reply with ONLY JSON"))]
         # D1012: the agent's turn under its own `orchestrate:` task, as the model's is -- not a stray agent at the top
-        with _phase(f"orchestrate: {what}", why=", ".join(choices), absorb=True) as out:
+        with _phase(f"orchestrate: {what}", why=", ".join(choices), absorb=True, box="search", step=what) as out:
             doc = box_turn("orchestrate", self.coding, "\n".join(lines + read), schema, state, problem=problem,
                            home=str(getattr(getattr(problem, "task", None), "home", "") or ""),
                            check=lambda d: _off_menu(d, choices, schema))

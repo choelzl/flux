@@ -148,7 +148,9 @@ def measure_many(problem: Problem, state: LoopState, cands: list[Candidate], sta
     # A stage nothing declares as modelled is treated as measured, as in the record.
     kind = "analytical" if stage in problem.analytic_stages() else "simulation"
     t0 = time.monotonic()
-    with _phase(f"{kind}: {stage}", why=f"{len(cands)} design{'' if len(cands) == 1 else 's'}") as out:
+    # D1094: the built-in gate stage of a loop with no measure stage counts the checks' failures -- the checks' work
+    with _phase(f"{kind}: {stage}", why=f"{len(cands)} design{'' if len(cands) == 1 else 's'}", box="check" if stage == "gate" else "measure",
+                step=stage, design=cands[0].name if len(cands) == 1 else None) as out:
         out["candidates"] = ", ".join(c.name for c in cands)
         hits, runs = state.cache_hits, state.tool_runs
         got = list(problem.measure_batch(list(cands), stage, state) or [])
@@ -159,6 +161,9 @@ def measure_many(problem: Problem, state: LoopState, cands: list[Candidate], sta
             f"{c.name}: " + (", ".join(f"{k}={v:g}" if isinstance(v, (int, float)) else f"{k}={v!s:.80}"
                                        for k, v in m.items()) if isinstance(m, dict) and m else "could not measure")
             for c, m in zip(cands, got))
+        # (D1233) the same numbers as data, by design: what the page reads, the text above what people read
+        out["metrics"] = {c.name: {k: v for k, v in m.items() if isinstance(v, (int, float)) and not isinstance(v, bool)}
+                          for c, m in zip(cands, got) if isinstance(m, dict)}
     seconds = round(time.monotonic() - t0, 3)
     prov = stamp(seconds=seconds, batch=(len(cands) if len(cands) > 1 else None))
     if len(got) != len(cands):
@@ -204,7 +209,7 @@ def _judged(problem: Problem, state: LoopState, got: Scored) -> None:
     measurement again: a stage's run is what it is."""
     from .rejection import reject
 
-    with _phase("critique: measurement", why=f"{got.name}@{got.stage}", absorb=True) as out:
+    with _phase("critique: measurement", why=f"{got.name}@{got.stage}", absorb=True, box="measure", design=got.name, step="critique") as out:
         c = problem.critique("measurement", got, state)
         out["verdict"] = "no objection" if c.ok else f"REJECTED: {c.why}"
         out["rejected"] = not c.ok                        # D1075: a critic\'s rejection is guidance, "!" -- not a failed step
@@ -230,7 +235,7 @@ def _estimated(problem: Problem, state: LoopState, cands: list[Candidate], stage
     run: list[Candidate] = []
     made: dict[int, dict[str, Any]] = {}
     count = state.estimates.setdefault(stage, {"skipped": 0, "measured": 0})
-    with _phase(f"estimate: {stage}", why=f"{len(cands)} design{'' if len(cands) == 1 else 's'}") as out:
+    with _phase(f"estimate: {stage}", why=f"{len(cands)} design{'' if len(cands) == 1 else 's'}", box="measure", step=f"estimate {stage}") as out:
         for cand, (est, why) in zip(cands, judged):
             if est is None:
                 run.append(cand)
@@ -352,7 +357,7 @@ class Ahead:
         kind = "analytical" if stage in problem.analytic_stages() else "simulation"
 
         def work() -> dict[str, Any] | None:
-            with _phase(f"{kind}: {stage} (ahead: {part} alone)", why="while the model writes the next part"):
+            with _phase(f"{kind}: {stage} (ahead: {part} alone)", why="while the model writes the next part", box="measure", step=stage, design=cand.name):
                 return problem.measure(cand, stage, state)
 
         from flux_profile import carried

@@ -47,8 +47,8 @@ def test_passes_run_in_waves_tagged_then_one_decision_over_all(tmp_path, monkeyp
     assert seen[-1][1] == 0 and len(seen) == 6, "then one pass that only decides, over what all of them recorded"
     assert "\n── passes 4–5 at once ──" in said and any("the decision, over every pass" in s for s in said)
     ev = read_events(str(tmp_path / "events.jsonl"))[0]
-    tags = sorted(e["params"].get("pass") or 0 for e in ev if e["ev"] == "start")
-    assert tags == [0, 1, 2, 3, 4, 5], "each pass's phases carry its number; the decision's none"
+    tags = sorted(e["tags"].get("pass") for e in ev if e["ev"] == "start")
+    assert tags == [1, 2, 3, 4, 5, 6], "each pass's phases carry its number; the decision over all of them its own (D1233)"
     marks = [json.loads(e["why"]) for e in ev if e["ev"] == "mark" and e["name"] == "pass"]
     assert marks[-1] == {"n": 6, "conclude": True} and {"n": 4, "explore": 0, "together": [4, 5]} in marks
 

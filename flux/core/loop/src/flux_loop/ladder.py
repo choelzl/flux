@@ -163,7 +163,7 @@ def route(problem: "Problem", stage: str, scored: list, state: "LoopState") -> l
             for op in parts:                                     # D498: every part on its own, cached
                 if op in known or state.admitted.get(op) is None:
                     continue
-                with _phase(f"screen: {op} alone", why="its own numbers, cached by artifact") as out:
+                with _phase(f"screen: {op} alone", why="its own numbers, cached by artifact", box="measure", step=f"screen {op}") as out:
                     m = measure_alone(problem, state.admitted[op], state)
                     out["measured"] = (", ".join(f"{k} {x:.4g}" for k, x in m.items() if isinstance(x, (int, float)))
                                        if m else "could not be measured")
@@ -217,7 +217,7 @@ def pipeline_sweep(problem: "Problem", ladder: Ladder, part: str, proto: str, st
     goal = o1.goal_at(alone_stage(problem), problem.stages()) if o1 is not None else None      # the goal on the parts' stage (D522)
     stage_alone = alone_stage(problem)
     best: tuple[float, Candidate, Any] | None = None
-    with _phase(f"pipeline: {part}", why="register stages by logic level, each measured") as out:
+    with _phase(f"pipeline: {part}", why="register stages by logic level, each measured", box="design", step="pipeline") as out:
         def make(k: int):
             """In a worker (D525): the count transpiled, built, judged and measured -- no cache
             write, no record row, no state; those are `take`'s, on the caller's thread."""
@@ -345,7 +345,7 @@ def take(problem: "Problem", part: str, code: str, depth: float, d0: int, state:
 
     state.prototypes[part] = code
     _record_prototype(state, part, code, Verdict(True, depth, f"0 over, logic depth {depth:g} (from {d0}; {how})"), ok=True)
-    with _phase(f"generate: transpile {part}", why="shallower prototype, at the part's register count") as out:
+    with _phase(f"generate: transpile {part}", why="shallower prototype, at the part's register count", box="design") as out:
         out["prototype"] = code[:6000]
         cand = problem.transpile(code, part, state)
         if cand is not None:

@@ -26,6 +26,12 @@ _LISTENER = None
 _PRIMARY = None                        # the TUI's (set_listener)
 _EXTRA: list = []                      # others beside it: the run's journal (D683)
 _TAGS = threading.local()              # D739: what this thread works on (a part), on every phase it starts
+#: (D1233) the facts a phase says about its work -- given as a phase's params (`box="check"`) they are tags: the
+#: phase's own and every phase started inside it (on this thread or one it hands work to, `carried`)
+TAG_KEYS = ("box", "pass", "part", "design", "step", "try", "worker")
+#: (D1233) what a phase's end says of how its work came out, read from its output
+END_KEYS = ("outcome", "not reached", "failed at")
+_OUTS = threading.local()              # the open phases' outputs on this thread (`said`)
 
 
 class _Tee:
@@ -169,6 +175,20 @@ def progress(**fields) -> None:
         lis.phase_update(top[2], top[0], dict(fields))
     except Exception:  # noqa: BLE001 -- the instrument never fails the run
         pass
+
+
+def _outs() -> list[dict]:
+    if not hasattr(_OUTS, "stack"):
+        _OUTS.stack = []
+    return _OUTS.stack
+
+
+def said(**fields) -> None:
+    """(D1233) Facts for the output of the innermost phase open on this thread, read at its end -- what
+    code inside the block found (the checks a gate never reached) without the block's `out` in hand."""
+    outs = _outs()
+    if outs and fields:
+        outs[-1].update(fields)
 
 
 def _tags() -> dict:
@@ -336,6 +356,10 @@ def phase(name: str, why: str = "", quiet: bool = False, absorb: bool = False, i
     if host is not None:
         yield from _inline(host, name, why, params)
         return
+    own = {k: params[k] for k in TAG_KEYS if k in params and params[k] not in (None, "")}
+    before = getattr(_TAGS, "tags", None)
+    if own:                                    # (D1233) a phase's tags are its inner phases' too
+        _TAGS.tags = {**(before or {}), **own}
     lis = _LISTENER
     token = None
     if lis is not None:
@@ -361,10 +385,16 @@ def phase(name: str, why: str = "", quiet: bool = False, absorb: bool = False, i
     frame = {"token": token, "output": output, "used": False, "lis": lis} if absorb and token is not None else None
     if frame is not None:
         frames.append(frame)
+    outs = _outs()
+    outs.append(output)
     try:
         yield output
         failed = bool(output.pop("failed", False))     # D1046: a phase that ended but failed (a check that found failures)
     finally:
+        if outs and outs[-1] is output:
+            outs.pop()
+        if own:
+            _TAGS.tags = before
         if frame is not None and frames and frames[-1] is frame:
             frames.pop()
         if pending is not None:
@@ -396,6 +426,10 @@ def _inline(host: dict, name: str, why: str, params: dict):
     wrapper's token, its output into the wrapper's output."""
     host["used"] = True
     lis, token = host["lis"], host["token"]
+    own = {k: params[k] for k in TAG_KEYS if k in params and params[k] not in (None, "")}
+    before = getattr(_TAGS, "tags", None)
+    if own:                                    # (D1233) the turn's worker is the wrapper's, and its inner phases'
+        _TAGS.tags = {**(before or {}), **own}
     if lis is not None:
         _call(lis, "phase_params", token, {**params, "turn": name, **({"turn why": why} if why else {})})
     t0 = time.perf_counter()
@@ -404,9 +438,15 @@ def _inline(host: dict, name: str, why: str, params: dict):
         stack.append((name, t0, token))         # its live updates are the wrapper's
         path = tuple(n for n, _t, _k in stack)
     output: dict = {}
+    outs = _outs()
+    outs.append(output)
     try:
         yield output
     finally:
+        if outs and outs[-1] is output:
+            outs.pop()
+        if own:
+            _TAGS.tags = before
         with _LOCK:
             stack = _stack()
             if stack and stack[-1][0] == name:

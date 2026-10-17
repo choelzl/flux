@@ -346,7 +346,7 @@ def _reload(problem: Problem, state: LoopState, parts: list[str] | None = None) 
                 # Re-verified, like an admitted part (D468): a prototype passed under an older
                 # check is not verified under today's.
                 sg = None if key == "*" else key
-                with _phase(f"records: re-verify prototype {key}", why="0 over, today's rules") as out:
+                with _phase(f"records: re-verify prototype {key}", why="0 over, today's rules", box="setup", step="prototype re-verified") as out:
                     out["prototype"] = (c["artifact"] or "")[:6000]
                     try:
                         from .prototype import check_for

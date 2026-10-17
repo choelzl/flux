@@ -129,13 +129,11 @@ def _wave(run: Callable[[Any, Any], Any], request: Any, feedback: Any, nums: lis
     import contextvars
     import threading
 
-    from flux_profile import tagged
-
     outs: list[Any] = [None] * len(nums)
     errs: list[BaseException | None] = [None] * len(nums)
 
     def one(j: int, i: int) -> None:
-        with carrying(run_mark), tagged(**{"pass": i}):
+        with carrying(run_mark), _pass(i):
             try:
                 outs[j] = run(request, feedback)
             except BaseException as exc:  # noqa: BLE001 -- said on the caller's thread
@@ -153,6 +151,13 @@ def _wave(run: Callable[[Any, Any], Any], request: Any, feedback: Any, nums: lis
     return outs
 
 
+def _pass(n: float):
+    """(D1233) Every task of pass `n` says its pass: the page reads it, not the marks around it."""
+    from flux_profile import tagged
+
+    return tagged(**{"pass": int(n) if float(n).is_integer() else n})
+
+
 def _remeasure_between(run: Callable[[Any, Any], Any], request: Any, feedback: Any, n: int, say: Callable[[str], None]) -> None:
     """D1043: before the next pass, the R pass when a rejection standing on the record asks for a
     measurement again -- by hand while the loop ran, or before it started. Not a pass of its own: the
@@ -164,7 +169,8 @@ def _remeasure_between(run: Callable[[Any, Any], Any], request: Any, feedback: A
         return
     mark("pass", n=n + 0.5, remeasure=True)
     say(f"\n── R: {plural(len(asked), 'rejected design')} measured again ──")
-    run(dataclasses.replace(request, remeasure=True, baseline=False, baseline_only=False, explore=0), feedback)
+    with _pass(n + 0.5):
+        run(dataclasses.replace(request, remeasure=True, baseline=False, baseline_only=False, explore=0), feedback)
 
 
 def run_passes(run: Callable[[Any, Any], Any], request: Any, *, passes: int | None = None, feedback: Any = None,
@@ -189,21 +195,21 @@ def run_passes(run: Callable[[Any, Any], Any], request: Any, *, passes: int | No
         if getattr(request, "reevaluate", False) or getattr(request, "reevaluate_of", 0):   # D988, D1007: one pass over the record, then rest
             mark("pass", n=1, reevaluate=True)
             say("\n── re-evaluation: every design on record, checked and measured again ──")
-            out = run(dataclasses.replace(request, baseline=False, baseline_only=False, explore=0), feedback)
+            with _pass(1):
+                out = run(dataclasses.replace(request, baseline=False, baseline_only=False, explore=0), feedback)
             mark("ended", why="re-evaluation done")
             return out
         if getattr(request, "remeasure", False):            # D1043: at rest, an R pass alone, then rest
             mark("pass", n=0.5, remeasure=True)
             say("\n── R: the rejected designs, measured again ──")
-            out = run(dataclasses.replace(request, baseline=False, baseline_only=False, explore=0), feedback)
+            with _pass(0.5):
+                out = run(dataclasses.replace(request, baseline=False, baseline_only=False, explore=0), feedback)
             mark("ended", why="re-measure done")
             return out
         if getattr(request, "baseline", False):
-            from flux_profile import tagged
-
             mark("pass", n=0, baseline=True)
             say("\n── pass 0: baseline, no agent edits or repairs ──")
-            with tagged(**{"pass": 0}):
+            with _pass(0):
                 out = run(dataclasses.replace(request, explore=0, steps=0), feedback)
             if getattr(request, "baseline_only", False):
                 mark("ended", why="baseline pass done")
@@ -220,7 +226,8 @@ def run_passes(run: Callable[[Any, Any], Any], request: Any, *, passes: int | No
             k = min(width, cap - n) if cap else width
             if k <= 1:
                 mark("pass", n=n + 1, explore=rests)
-                out = run(dataclasses.replace(request, explore=rests), feedback)
+                with _pass(n + 1):
+                    out = run(dataclasses.replace(request, explore=rests), feedback)
             else:
                 nums = list(range(n + 1, n + k + 1))
                 for i in nums:
@@ -236,7 +243,8 @@ def run_passes(run: Callable[[Any, Any], Any], request: Any, *, passes: int | No
                 if together:                        # D747: one decision over what every pass recorded
                     mark("pass", n=n + 1, conclude=True)
                     say("\n── the decision, over every pass ──")
-                    out = run(dataclasses.replace(request, explore=0, steps=0), feedback)
+                    with _pass(n + 1):
+                        out = run(dataclasses.replace(request, explore=0, steps=0), feedback)
                 return out
             nxt = min(width, cap - n) if cap else width
             said = f"passes {n + 1}–{n + nxt} at once" if nxt > 1 else f"pass {n + 1}"

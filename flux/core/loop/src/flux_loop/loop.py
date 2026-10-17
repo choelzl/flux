@@ -75,7 +75,7 @@ def run_loop(problem: Problem, request: LoopRequest, *, proposer: Any | None = N
     state = LoopState(request=request, say=say, proposer=proposer, feedback=feedback,
                       started=time.monotonic(), depth=depth)
     state.__dict__["workbench"] = str(getattr(getattr(problem, "task", None), "workbench", "") or "")   # D677: every box agent's
-    with _phase("gate: tools", why="refuse loudly before spending anything", quiet=True) as out:
+    with _phase("gate: tools", why="refuse loudly before spending anything", quiet=True, box="setup", step="tools ready") as out:
         missing = (getattr(problem, "baseline_tools_missing", problem.tools_missing)()
                    if request.baseline else problem.tools_missing())
         out["verdict"] = ("MISSING: " + ", ".join(missing)) if missing else "every tool the problem names is on PATH"
@@ -84,7 +84,7 @@ def run_loop(problem: Problem, request: LoopRequest, *, proposer: Any | None = N
         raise RuntimeError(f"{', '.join(missing)} not on PATH")
     # The "input/problem valid?" node (D463): a target no stage measures or a constraint
     # nothing can check is a mis-posed run.
-    with _phase("gate: the problem", why="is what was asked answerable", quiet=True) as out:
+    with _phase("gate: the problem", why="is what was asked answerable", quiet=True, box="setup", step="problem answerable") as out:
         wrong = problem.validate(request)
         out["verdict"] = ("NOT ANSWERABLE: " + "; ".join(wrong)) if wrong else "answerable as posed"
         out["request"] = _describe_request(request)
@@ -92,7 +92,7 @@ def run_loop(problem: Problem, request: LoopRequest, *, proposer: Any | None = N
         raise RuntimeError("this problem cannot be answered as posed: " + "; ".join(wrong))
     if not request.baseline and getattr(getattr(problem, "task", None), "flow", {}).get("validate") not in (None, "rules"):
         # D556: the box's model half -- advisory, said and kept, never a gate
-        with _phase("validate: the model reads the document", why="objections before a step is spent") as out:
+        with _phase("validate: the model reads the document", why="objections before a step is spent", box="setup", step="the document read") as out:
             objections = list(problem.objections(state) or [])
             out["verdict"] = ("OBJECTS: " + "; ".join(objections)) if objections else "no objection"
         for line in objections:
@@ -174,13 +174,13 @@ def run_loop(problem: Problem, request: LoopRequest, *, proposer: Any | None = N
     searching = _search_session(problem, state)     # D738: the search lives across passes
     if searching is not None:
         _reload_measured(problem, state)     # D682: before the walk's first step reads what is measured
-    with _phase("propose: decompose", why="parts this pass works on", quiet=True) as out:
+    with _phase("propose: decompose", why="parts this pass works on", quiet=True, box="setup", step="parts") as out:
         goals: list[str] = _work(state, problem.decompose(state))
         out["parts"] = _describe_parts(goals, problem, state)
     for round_ in range(_rounds(problem, request, "decomposition")):
         if not goals:
             break
-        with _phase("critique: decomposition", why=f"round {round_ + 1}", absorb=True) as out:
+        with _phase("critique: decomposition", why=f"round {round_ + 1}", absorb=True, box="setup", step="the division") as out:
             c = problem.critique("decomposition", list(goals), state)
             out["verdict"] = "the division stands" if c.ok else f"SENT BACK: {c.why}"
             out["rejected"] = not c.ok                    # D1075: a critic\'s rejection is guidance, "!" -- not a failed step
@@ -189,7 +189,7 @@ def run_loop(problem: Problem, request: LoopRequest, *, proposer: Any | None = N
             break
         say(f"  critique of the division: {c.why[:200]}; dividing again")
         state.lessons.append(f"[critique] division {round_ + 1} sent back: {c.why[:200]}")
-        with _phase("propose: decompose", why=f"after critique {round_ + 1}") as out:
+        with _phase("propose: decompose", why=f"after critique {round_ + 1}", box="setup", step="parts") as out:
             goals = _work(state, problem.decompose(state, critique=c.why))
             out["parts"] = _describe_parts(goals, problem, state)
             out["objection answered"] = c.why
@@ -203,15 +203,15 @@ def run_loop(problem: Problem, request: LoopRequest, *, proposer: Any | None = N
         todo = [] if "*" in state.admitted else [None]
     hunting = searching is not None
     if depth == 0 and getattr(problem, "digesting", lambda: False)():   # D771: the papers digested in the Setup, before the Reading (D774)
-        with _phase("knowledge: digest", why="library papers, each once") as out:
+        with _phase("knowledge: digest", why="library papers, each once", box="setup", step="papers") as out:
             out.update(problem.digest(state) or {})
     if depth == 0 and callable(getattr(problem, "bench_readme", None)) and getattr(getattr(problem, "task", None), "workbench", ""):
-        with _phase("knowledge: workbench", why="its README, when it changed", quiet=True) as out:     # D1114
+        with _phase("knowledge: workbench", why="its README, when it changed", quiet=True, box="setup", step="workbench") as out:     # D1114
             out.update(problem.bench_readme(state) or {})
     if depth == 0:            # a sub-loop does not own the live panels (D455)
         _publish(problem, state, todo, goals, "resumed", searching=hunting)
         _publish_mentor(problem, state)
-    with _phase(f"knowledge: prepare {problem.name}", why="suite, inputs, cache", quiet=True) as out:
+    with _phase(f"knowledge: prepare {problem.name}", why="suite, inputs, cache", quiet=True, box="setup", step="inputs") as out:
         details = problem.prepare(state)
         if isinstance(details, dict):                  # D487: what was prepared, in the task pane
             out.update({k: (str(v) if len(str(v)) <= 6000 else str(v)[:6000] + f"…(+{len(str(v)) - 6000} chars)")
@@ -247,12 +247,12 @@ def run_loop(problem: Problem, request: LoopRequest, *, proposer: Any | None = N
     state.drain()
 
     if state.fresh:          # something changed after the last climb (or nothing climbed yet)
-        with _phase("evaluation", why="measured designs through the stages", quiet=not state.scored):   # D1053: nothing measured, nothing to evaluate
+        with _phase("evaluation", why="measured designs through the stages", quiet=not state.scored, box="measure"):   # D1053: nothing measured, nothing to evaluate
             _climb(problem, state, goals)
     from .boxes import flush_turns
 
     flush_turns(state)
-    with _phase("decide", why="choice among the measured designs", quiet=not state.scored) as chose:   # D1053: nothing measured, nothing to choose
+    with _phase("decide", why="choice among the measured designs", quiet=not state.scored, box="choose") as chose:   # D1053: nothing measured, nothing to choose
         out = _conclude(problem, state, goals)
         # D1061: the critic rejected every pick -- nothing chosen: the choice failed, as its critiques did
         chose["failed"] = getattr(out, "decision", None) is None and "rejected" in str(getattr(out, "decided_by", "") or "")
@@ -428,7 +428,7 @@ def _run_steps(problem: Problem, state: LoopState, searching: "_SearchSession | 
                     state.stopped = state.stopped or "nothing left to do"
                     break
                 state.step = step + 1
-                with _phase("evaluation", why="measured designs through the stages", quiet=not state.scored):   # D1053: nothing measured, nothing to evaluate
+                with _phase("evaluation", why="measured designs through the stages", quiet=not state.scored, box="measure"):   # D1053: nothing measured, nothing to evaluate
                     _climb(problem, state, goals)
                 step += 1
                 if state.depth == 0:
@@ -452,7 +452,7 @@ def _run_steps(problem: Problem, state: LoopState, searching: "_SearchSession | 
             elif kind == "batch":
                 # The DSE box, whole (D546, D547): the policy's proposal and the batch through
                 # the gate and first stage, so the generator's own time is attributed here.
-                with _phase("DSE: batch", why="the points this pass tries") as out:
+                with _phase("DSE: batch", why="the points this pass tries", box="search") as out:
                     # D738: one pass, one design (or `budget.batch` of them): the search picks
                     # between passes, from what the last ones measured
                     batch = searching.take(max(1, int(request.batch or 1) - carried), state)
@@ -647,7 +647,7 @@ def _direction(problem: Problem, state: LoopState) -> Improve | None:
     state.drain()                           # D1023: the notes before the pass decides; the design brief leads with them
     menu: list[tuple[str, str]] = []
     if getattr(getattr(problem, "task", None), "scope", None) or type(problem).scope_list is not Problem.scope_list:
-        with _phase("orchestrate: scope list", quiet=True) as out:
+        with _phase("orchestrate: scope list", quiet=True, box="search", step="scope list") as out:
             menu = problem.scope_list(state)
             out["scopes"] = len(menu)
     pick, why, scope = decide(problem, state, cand, said, menu=menu)     # D1042: the orchestrator's question leads with every note
@@ -671,7 +671,7 @@ def _next_kind(problem: Problem, state: LoopState, waiting: list, live: bool) ->
         + (["batch"] if live else [])
     if len(kinds) <= 1:
         return kinds[0] if kinds else "part"
-    with _phase("propose: what next", why=", ".join(kinds)) as out:
+    with _phase("propose: what next", why=", ".join(kinds), box="choose") as out:
         out["choices"] = (f"improve: {plural(len(state.improve), 'design')} an evaluator sent back; " if state.improve else "") \
             + (f"part: {', '.join(str(w) for w in waiting if w is not None)} still to prove; " if waiting else "") \
             + ("batch: candidates from the search" if live else "")
@@ -713,7 +713,7 @@ def _improve_step(problem: Problem, state: LoopState, item: Improve) -> list[Sco
     if not item.again:
         ps.sessions.clear()                 # D669: an improve is a new job, a new agent ...
     try:
-        with _phase(f"generation: improve {item.candidate.name}", why=item.stage) as out:
+        with _phase(f"generation: improve {item.candidate.name}", why=item.stage, box="design", design=item.candidate.name) as out:
             out["dse"] = pick
             out["hypothesis"] = why
             if item.scope:
@@ -741,7 +741,7 @@ def _improve_step(problem: Problem, state: LoopState, item: Improve) -> list[Sco
         _record_trial(state, item.candidate, item.subgoal, None, error=reason)
         return []
     reused = getattr(problem, "gate_ran", lambda c: False)(cand)     # D1060: its check passed on this text: no second run, a note
-    with _phase("test: gate", why=cand.name, quiet=reused) as out:
+    with _phase("test: gate", why=cand.name, quiet=reused, box="check", design=cand.name, step="gate") as out:
         verdict = _judge(problem, built, cand, item.subgoal, state)
         out["failed"] = not verdict.ok                 # D1053: a gate that refused the design failed
     state.judged += 1
@@ -789,7 +789,7 @@ def _scope_check(problem: Problem, state: LoopState, item: Improve, cand: Candid
     scope is clean or its steps are spent."""
     from .ledger import Kind
 
-    with _phase(f"test: scope {item.scope}", why=cand.name) as out:
+    with _phase(f"test: scope {item.scope}", why=cand.name, box="check", design=cand.name, step=f"scope {item.scope}") as out:
         got = problem.scope_check(item.scope, cand, state)
         if got is None:
             out["said"] = "no scope check"
@@ -953,7 +953,7 @@ def _search_step(problem: Problem, state: LoopState, batch: list[Candidate]) -> 
     and the measured `state.scored`."""
     say = state.say
     admitted: list[Candidate] = []
-    with _phase("test: gate", why=_designs(len(batch))) as gate:
+    with _phase("test: gate", why=_designs(len(batch)), box="check", step="gate", design=batch[0].name if len(batch) == 1 else None) as gate:
         for cand in batch:
             sg = cand.subgoal
             try:
@@ -1040,7 +1040,7 @@ def _pick(problem: Problem, state: LoopState, todo: list, goals: list[str], huma
     elif not ask:
         sg, method = menu[0], ""                 # D569: the parts drafted beside the picked one, in the menu's order
     else:
-        with _phase("propose: plan", why=f"{len(menu)} on the menu") as out:
+        with _phase("propose: plan", why=f"{len(menu)} on the menu", box="plan") as out:
             out["menu"] = ", ".join(str(g) for g in menu if g is not None)
             out["proven"] = ", ".join(sorted(k for k in state.admitted if k != "*")) or "none yet"
             best = {k: v for k, v in state.best.items() if k in menu}
@@ -1064,7 +1064,7 @@ def _pick(problem: Problem, state: LoopState, todo: list, goals: list[str], huma
     say(f"plan: attempt {tag}" + (f" via {method}" if method else "")
         + (f" ({len(state.admitted)}/{len(goals)} proven)" if goals else ""))
     if key not in state.plans:
-        with _phase(f"propose: brief {tag}", why="once per part", part=sg or "", quiet=True) as out:
+        with _phase(f"propose: brief {tag}", why="once per part", part=sg or "", quiet=True, box="design", step="brief") as out:
             try:
                 state.plans[key] = dict(problem.plan_part(sg, state) or {})
                 for k, v in state.plans[key].items():
@@ -1091,7 +1091,7 @@ def _draft(problem: Problem, state: LoopState, sg: str | None, method: str, huma
     `problem.generate` runs it. Safe on a worker thread (D569): it writes only its own part's
     entries of the state and the record."""
     tag = sg or problem.name
-    with _phase(f"generation: {tag}", why=method or "drafts, each checked, repaired when it fails") as out:
+    with _phase(f"generation: {tag}", why=method or "drafts, each checked, repaired when it fails", box="design") as out:
         got = problem.generate(sg, method, state, human)
         out["failed"] = got[0] is None              # D1054: no design came of it -- the design failed, not "!"
         if got[0] is None and got[2]:
@@ -1118,7 +1118,7 @@ def _admit(problem: Problem, state: LoopState, todo: list, goals: list[str], sg:
         return
     state.fail_streak[key] = 0
     reused = getattr(problem, "gate_ran", lambda c: False)(cand)     # D1060: its check passed on this text: no second run, a note
-    with _phase(f"test: judge {tag}", why=cand.name, quiet=reused) as out:
+    with _phase(f"test: judge {tag}", why=cand.name, quiet=reused, box="check", design=cand.name, step="judge") as out:
         verdict = _judge(problem, built, cand, sg, state)
         out["verdict"] = f"{'ADMITTED' if verdict.ok else 'refused'}, score {verdict.score:g}"
         if not verdict.ok:
@@ -1127,7 +1127,7 @@ def _admit(problem: Problem, state: LoopState, todo: list, goals: list[str], sg:
             out["why"] = verdict.why
     state.judged += 1
     if verdict.ok and _rounds(problem, request, "candidate"):
-        with _phase(f"critique: {tag}", why=cand.name, absorb=True) as out:
+        with _phase(f"critique: {tag}", why=cand.name, absorb=True, box="check", design=cand.name, step="critique") as out:
             c = problem.critique("candidate", cand, state)
             out["verdict"] = "no objection" if c.ok else f"REJECTED: {c.why}"
             out["rejected"] = not c.ok                    # D1075: a critic\'s rejection is guidance, "!" -- not a failed step
@@ -1357,7 +1357,7 @@ def _calibrate(problem: Problem, state: LoopState, cheap: str, costly: str) -> N
         return
     if not found:
         return
-    with _phase("calibrate", why=f"{costly} against {cheap}", quiet=True):
+    with _phase("calibrate", why=f"{costly} against {cheap}", quiet=True, box="measure", step="calibrate"):
         for b in found:
             state.bias[(b.stage, b.metric)] = b
             state.say(f"  {b.render()}")
@@ -1470,14 +1470,14 @@ def _conclude(problem: Problem, state: LoopState, goals: list[str]) -> LoopResul
         _note_once(state, f"{plural(len(rejected), 'result')} rejected, not chosen: " + ", ".join(sorted({s.name for s in rejected}))[:300])
         if not pool:
             return _result(problem, state, None, "every measured design was rejected", [], [])
-    with _phase("frontier", why=f"{len(pool)} on {reached}", quiet=True):
+    with _phase("frontier", why=f"{len(pool)} on {reached}", quiet=True, box="choose", step="frontier"):
         front = list(problem.frontier(pool, state))
-    with _phase("decide", why=f"{len(pool)} in the pool" + (f", {len(rejected)} rejected" if rejected else "")) as out:   # D1094: the rows it shows
+    with _phase("decide", why=f"{len(pool)} in the pool" + (f", {len(rejected)} rejected" if rejected else ""), box="choose") as out:   # D1094: the rows it shows
         pick, decided_by, closest, unmet, standing, ranked_by = _decide(problem, state, pool, stages, out)
     rounds = _rounds(problem, request, "decision")
     while pick is not None and rounds > 0:
         rounds -= 1
-        with _phase("critique: decision", why=pick.name, absorb=True) as out:
+        with _phase("critique: decision", why=pick.name, absorb=True, box="choose", design=pick.name, step="critique") as out:
             c = problem.critique("decision", pick, state)
             out["verdict"] = "no objection" if c.ok else f"REJECTED: {c.why}"
             out["rejected"] = not c.ok                    # D1075: a critic\'s rejection is guidance, "!" -- not a failed step
@@ -1492,7 +1492,7 @@ def _conclude(problem: Problem, state: LoopState, goals: list[str]) -> LoopResul
         if not pool:
             pick, decided_by, closest, unmet = None, "every measured design was rejected", None, []
             break
-        with _phase("decide", why=f"again, without {pick.name}") as out:
+        with _phase("decide", why=f"again, without {pick.name}", box="choose") as out:
             pick, decided_by, closest, unmet, standing, ranked_by = _decide(problem, state, pool, stages, out)
         if rounds == 0 and pick is not None:
             _note_once(state, f"the critic's rounds ran out: {pick.name} stands without its review")

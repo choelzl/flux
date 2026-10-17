@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, Any, Callable
 from .tools import Checked, hops_summary
 from .gradient import Gradient
 from .model import _ask, _compose, _json
-from .observe import _phase
+from .observe import _phase, _try
 from .provenance import stamp, turn_cost
 from .patch import apply_patch, parse_patch, patch_schema
 from .types import LoopState, StageNames, Verdict
@@ -459,7 +459,7 @@ def _prototype_stage(problem: Problem, subgoal: str | None, state: LoopState,
         # Resume (D480): the best refused prototype on record is the starting point. It is
         # re-checked today (D488), since the recorded report reflects the rules of its day.
         sc, code, why = seed
-        with _phase(f"records: re-describe prototype {tag}", why=f"{sc:g} over on record") as out:
+        with _phase(f"records: re-describe prototype {tag}", why=f"{sc:g} over on record", box="setup", step="prototype re-described") as out:
             out["prototype"] = code[:6000]
             try:
                 v = check_for(proto, state, subgoal)(code)
@@ -488,198 +488,200 @@ def _prototype_stage(problem: Problem, subgoal: str | None, state: LoopState,
     state.say(f"  prototype {tag}: {sized} budget -- {budget} attempts, +{patience} per new best, at most {cap}")
     attempt = -1
     while attempt + 1 < budget:
-        attempt += 1
-        previous_code = code
-        parts = []
-        name = (proto.extra or {}).get("name", "python")         # the prototype's language, in the reply shape
-        help_lines = [(PROTOTYPE_FIRST_HELP if code is None else PROTOTYPE_HELP).replace("complete python", f"complete {name}"),
-                      TOOLS_HELP if req.tools else ""]
-        if agent is not None:
-            help_lines = []           # the agent writes the file; the loop checks it
-        if code is None:
-            # the method the planning step chose for this part
-            plan_line = (f"YOUR PLAN for {tag}, from your planning step: {method.strip()}"
-                         if method and method.strip() else "")
-            parts += [human or "", first_prompt, plan_line, *help_lines]
-        elif agent is not None:
-            parts += [f"Your prototype for {tag} was refused:\n\n{last_err}",
-                      "The prototype is already in the file named below: edit or replace it to test a reasoned hypothesis. "
-                      "Do not run it: the loop checks it and comes back with the result.",
-                      reminder_for(proto, subgoal, state)]
-        else:
-            numbered = "\n".join(f"{i + 1:4d} | {ln}" for i, ln in enumerate(code.splitlines()))
-            parts += [f"Your prototype for {tag} was refused:\n\n{last_err}",
-                      "Use edits (find must match exactly once) or a new prototype, whichever best tests "
-                      "your hypothesis. Structural changes are allowed before this approach stalls.",
-                      reminder_for(proto, subgoal, state),
-                      *help_lines,
-                      f"Current prototype (line numbers for reading only):\n\n{numbered}"]
-        from .direction import begin, guidance
+        with _try(state, subgoal) as tried:
+            attempt += 1
+            previous_code = code
+            parts = []
+            name = (proto.extra or {}).get("name", "python")         # the prototype's language, in the reply shape
+            help_lines = [(PROTOTYPE_FIRST_HELP if code is None else PROTOTYPE_HELP).replace("complete python", f"complete {name}"),
+                          TOOLS_HELP if req.tools else ""]
+            if agent is not None:
+                help_lines = []           # the agent writes the file; the loop checks it
+            if code is None:
+                # the method the planning step chose for this part
+                plan_line = (f"YOUR PLAN for {tag}, from your planning step: {method.strip()}"
+                             if method and method.strip() else "")
+                parts += [human or "", first_prompt, plan_line, *help_lines]
+            elif agent is not None:
+                parts += [f"Your prototype for {tag} was refused:\n\n{last_err}",
+                          "The prototype is already in the file named below: edit or replace it to test a reasoned hypothesis. "
+                          "Do not run it: the loop checks it and comes back with the result.",
+                          reminder_for(proto, subgoal, state)]
+            else:
+                numbered = "\n".join(f"{i + 1:4d} | {ln}" for i, ln in enumerate(code.splitlines()))
+                parts += [f"Your prototype for {tag} was refused:\n\n{last_err}",
+                          "Use edits (find must match exactly once) or a new prototype, whichever best tests "
+                          "your hypothesis. Structural changes are allowed before this approach stalls.",
+                          reminder_for(proto, subgoal, state),
+                          *help_lines,
+                          f"Current prototype (line numbers for reading only):\n\n{numbered}"]
+            from .direction import begin, guidance
 
-        begin(problem, state, subgoal)
-        prompt = (_compose(guidance(problem, state, subgoal), *parts, prefix) if agent is not None
-                  else _compose(prefix, guidance(problem, state, subgoal), *parts))
-        checked = Checked() if req.tools and agent is None else None   # what the turn's own checks measured (D505)
-        t_attempt = time.monotonic()
-        answer = None
-        with _phase(f"generate: prototype {tag}", why=f"attempt {attempt + 1}", absorb=True) as turn_out:
-            try:
-                if agent is not None:
-                    reply = problem.prototype_agent_turn(agent, prompt, code, last_err, subgoal, state)
-                    turn_out["by"] = f"agent:{agent.tool}"
-                else:
-                    tools = problem.tools(subgoal, state, "prototype", checked) if req.tools else None
-                    answer = _ask(state, prompt, first_schema if code is None else schema, tools=tools)
-                    reply = answer.text
-            except Exception as exc:  # noqa: BLE001
-                return None, f"prototype turn did not run ({exc})"
-            if checked is not None and checked.attempts:
-                turn_out["checked in the turn"] = "\n".join(
-                    f"{i + 1}. {'PASSES' if v.ok else f'score {v.score:g}'}" for i, (_c, v) in enumerate(checked.attempts))
-        _trace(state, key, attempt + 1, prompt=prompt, reply=reply,
-               hops=(hops_summary(answer.hops) or None) if answer is not None else None)
-        ran = 0
-        new = _parse_prototype(reply, (proto.extra or {}).get("marker", "def design"))
-        if checked is not None and checked.best is not None:
-            best_code, best_v = checked.best
-            if best_v.ok and new != best_code:
-                # a check that PASSED inside the turn is the answer, whatever came after it
-                state.say(f"  prototype {tag}: a prototype checked inside the turn passes; taking it")
-                new = best_code
-            elif new is None and parse_patch(reply)[0] is None:
-                # nothing usable submitted, but the turn measured something: its best is the attempt
-                state.say(f"  prototype {tag}: the reply carried no prototype; the best the turn "
-                          f"checked ({best_v.score:g}) is the attempt")
-                new = best_code
-        dropped_note = ""
-        if new is not None:
-            measured_in_turn = checked is not None and checked.verdict_for(new) is not None
-            # The rewrite refusal (D501) does not apply to a text the turn already measured.
-            refusal = (prefers_edits(proto, subgoal, state, grad.best_score)
-                       if code and not measured_in_turn and not _mostly_same(code, new) else None)
-            doc = _json(reply)
-            if refusal and isinstance(doc, dict) and "REWRITE" in str(doc.get("why", "")).upper():
-                refusal = None                              # the model says the approach is wrong
-            if refusal:
-                # D501: a rewrite next to a nearly-right text is refused before it runs.
-                last_err = _unrun(last_err, f"your NEW prototype was not run: {refusal}")
-                continue
-            dropped = _dropped_definitions(code, new) if code else []
-            if dropped:
-                # A rewrite that dropped tables it still uses gets them back, with a note (D501).
-                new = _restore_dropped(code, new, dropped)
-                dropped_note = (f"\n(your NEW prototype dropped the module-level definitions of "
-                                f"{', '.join(dropped)} while still using them; the previous text's "
-                                "were put back before your functions -- keep them, or send edits instead)")
-            code = new
-        elif code is not None:
-            edits, _why = parse_patch(reply)
-            if edits is None:
+            begin(problem, state, subgoal)
+            prompt = (_compose(guidance(problem, state, subgoal), *parts, prefix) if agent is not None
+                      else _compose(prefix, guidance(problem, state, subgoal), *parts))
+            checked = Checked() if req.tools and agent is None else None   # what the turn's own checks measured (D505)
+            t_attempt = time.monotonic()
+            answer = None
+            with _phase(f"generate: prototype {tag}", why=f"attempt {attempt + 1}", absorb=True, step="prototype") as turn_out:
+                try:
+                    if agent is not None:
+                        reply = problem.prototype_agent_turn(agent, prompt, code, last_err, subgoal, state)
+                        turn_out["by"] = f"agent:{agent.tool}"
+                    else:
+                        tools = problem.tools(subgoal, state, "prototype", checked) if req.tools else None
+                        answer = _ask(state, prompt, first_schema if code is None else schema, tools=tools)
+                        reply = answer.text
+                except Exception as exc:  # noqa: BLE001
+                    return None, f"prototype turn did not run ({exc})"
+                if checked is not None and checked.attempts:
+                    turn_out["checked in the turn"] = "\n".join(
+                        f"{i + 1}. {'PASSES' if v.ok else f'score {v.score:g}'}" for i, (_c, v) in enumerate(checked.attempts))
+            _trace(state, key, attempt + 1, prompt=prompt, reply=reply,
+                   hops=(hops_summary(answer.hops) or None) if answer is not None else None)
+            ran = 0
+            new = _parse_prototype(reply, (proto.extra or {}).get("marker", "def design"))
+            if checked is not None and checked.best is not None:
+                best_code, best_v = checked.best
+                if best_v.ok and new != best_code:
+                    # a check that PASSED inside the turn is the answer, whatever came after it
+                    state.say(f"  prototype {tag}: a prototype checked inside the turn passes; taking it")
+                    new = best_code
+                elif new is None and parse_patch(reply)[0] is None:
+                    # nothing usable submitted, but the turn measured something: its best is the attempt
+                    state.say(f"  prototype {tag}: the reply carried no prototype; the best the turn "
+                              f"checked ({best_v.score:g}) is the attempt")
+                    new = best_code
+            dropped_note = ""
+            if new is not None:
+                measured_in_turn = checked is not None and checked.verdict_for(new) is not None
+                # The rewrite refusal (D501) does not apply to a text the turn already measured.
+                refusal = (prefers_edits(proto, subgoal, state, grad.best_score)
+                           if code and not measured_in_turn and not _mostly_same(code, new) else None)
+                doc = _json(reply)
+                if refusal and isinstance(doc, dict) and "REWRITE" in str(doc.get("why", "")).upper():
+                    refusal = None                              # the model says the approach is wrong
+                if refusal:
+                    # D501: a rewrite next to a nearly-right text is refused before it runs.
+                    last_err = _unrun(last_err, f"your NEW prototype was not run: {refusal}")
+                    continue
+                dropped = _dropped_definitions(code, new) if code else []
+                if dropped:
+                    # A rewrite that dropped tables it still uses gets them back, with a note (D501).
+                    new = _restore_dropped(code, new, dropped)
+                    dropped_note = (f"\n(your NEW prototype dropped the module-level definitions of "
+                                    f"{', '.join(dropped)} while still using them; the previous text's "
+                                    "were put back before your functions -- keep them, or send edits instead)")
+                code = new
+            elif code is not None:
+                edits, _why = parse_patch(reply)
+                if edits is None:
+                    if ran:
+                        continue
+                    last_err = _unrun(last_err, "your reply carried neither a prototype nor edits (prose, or a turn "
+                                      "that ended in its tool calls)")
+                    continue
+                patched, perr = apply_patch(code, edits)
+                if patched is None:
+                    if perr == prev_reject:
+                        last_err = _unrun(last_err, f"the patch was rejected twice identically: {perr}; send a new prototype")
+                        prev_reject = None
+                    else:
+                        prev_reject = perr
+                        last_err = _unrun(last_err, f"your patch was rejected: {perr}")
+                    continue
+                code = patched
+            else:
                 if ran:
                     continue
-                last_err = _unrun(last_err, "your reply carried neither a prototype nor edits (prose, or a turn "
-                                  "that ended in its tool calls)")
+                last_err = _unrun("", "your reply carried no prototype")
                 continue
-            patched, perr = apply_patch(code, edits)
-            if patched is None:
-                if perr == prev_reject:
-                    last_err = _unrun(last_err, f"the patch was rejected twice identically: {perr}; send a new prototype")
-                    prev_reject = None
+            bind_code(state, subgoal, code, _json(reply), previous=previous_code or "")
+            with _phase(f"test: prototype {tag}", why=f"attempt {attempt + 1}", box="check", step="prototype") as out:
+                v = checked.verdict_for(code) if checked is not None else None     # measured in the turn already
+                if v is None:
+                    v = check_for(proto, state, subgoal)(code)
                 else:
-                    prev_reject = perr
-                    last_err = _unrun(last_err, f"your patch was rejected: {perr}")
-                continue
-            code = patched
-        else:
-            if ran:
-                continue
-            last_err = _unrun("", "your reply carried no prototype")
-            continue
-        bind_code(state, subgoal, code, _json(reply), previous=previous_code or "")
-        with _phase(f"test: prototype {tag}", why=f"attempt {attempt + 1}") as out:
-            v = checked.verdict_for(code) if checked is not None else None     # measured in the turn already
-            if v is None:
-                v = check_for(proto, state, subgoal)(code)
-            else:
-                out["measured"] = "inside the turn, by the model's own check call"
-            if checked is not None and checked.best is not None and not v.ok:
-                # The turn checked something better than it submitted: take the turn's best (D506).
-                b_code, b_v = checked.best
-                if math.isfinite(b_v.score) and (not math.isfinite(v.score) or b_v.score < v.score) and b_code != code:
-                    out["submitted"] = f"score {v.score:g}; the turn had checked {b_v.score:g} -- taking that"
-                    state.say(f"  prototype {tag}: the reply scores {v.score:g} but the turn checked "
-                              f"{b_v.score:g}; the best of the turn is the attempt")
-                    bind_code(state, subgoal, b_code, {}, previous=code)
-                    code, v = b_code, b_v
-            out["verdict"] = f"{'PASSES' if v.ok else 'refused'}, score {v.score:g}"
-            if v.why:
-                out["why"] = v.why
-        if dropped_note:
-            v = Verdict(v.ok, v.score, (v.why or "") + dropped_note, v.payload)
-        _trace(state, key, attempt + 1, code=code,
-               verdict=f"{'PASSES' if v.ok else 'refused'}, score {v.score:g}\n{v.why or ''}")
-        # A check may hand back a rewritten prototype (the family's chosen member with its knobs
-        # bound, D479): that concrete text is what is stored, recorded and transpiled.
-        bound = (v.payload or {}).get("prototype") if isinstance(v.payload, dict) else None
-        if isinstance(bound, str) and bound.strip():
-            bind_code(state, subgoal, bound, {}, previous=code)
-            code = bound
-        last = (code, v)
-        if v.ok:
-            state.say(f"  PROTOTYPE {tag} passes: 0 over on the full domain "
-                      f"(attempt {attempt + 1}); transcribing to the target next")
-            state.prototypes[key] = code
-            state.part(subgoal).sessions.pop("prototype", None)   # D669: the agent's prototype job is done
-            _record_prototype(state, subgoal, code, v, ok=True, reply=answer,
-                              seconds=round(time.monotonic() - t_attempt, 3))
-            return code, ""
-        trend, is_best = grad.observe(v.score, code, key=code,
-                                      failure=problem.describe_failure(subgoal, v))
-        if is_best:
-            state.say(f"  prototype {tag}: score {v.score:g} (best so far)")
-            if patience and math.isfinite(v.score):
-                grown = min(cap, max(budget, attempt + 1 + patience))
-                if grown > budget:
-                    state.say(f"  prototype {tag}: still improving at attempt {attempt + 1}; the pass "
-                              f"continues to {grown} attempts (at most {cap})")
-                    budget = grown
-            # Record a new best at once (D491), so a run stopped mid-pass resumes from it.
-            if math.isfinite(v.score) and (seed is None or v.score < seed[0]):
-                _record_prototype(state, subgoal, code, v, ok=False, reply=answer, seconds=round(time.monotonic() - t_attempt, 3))
-        if math.isfinite(v.score):
-            unmeasured = 0
-            state.proto_best[key] = min(state.proto_best.get(key, (float("inf"), "", "")),
-                                        (float(v.score), code, problem.describe_failure(subgoal, v)),
-                                        key=lambda e: e[0])
-            try:                                       # the results table's "trying" row, live
-                from .observe import refresh_standings
+                    out["measured"] = "inside the turn, by the model's own check call"
+                if checked is not None and checked.best is not None and not v.ok:
+                    # The turn checked something better than it submitted: take the turn's best (D506).
+                    b_code, b_v = checked.best
+                    if math.isfinite(b_v.score) and (not math.isfinite(v.score) or b_v.score < v.score) and b_code != code:
+                        out["submitted"] = f"score {v.score:g}; the turn had checked {b_v.score:g} -- taking that"
+                        state.say(f"  prototype {tag}: the reply scores {v.score:g} but the turn checked "
+                                  f"{b_v.score:g}; the best of the turn is the attempt")
+                        bind_code(state, subgoal, b_code, {}, previous=code)
+                        code, v = b_code, b_v
+                out["verdict"] = f"{'PASSES' if v.ok else 'refused'}, score {v.score:g}"
+                if v.why:
+                    out["why"] = v.why
+            if dropped_note:
+                v = Verdict(v.ok, v.score, (v.why or "") + dropped_note, v.payload)
+            _trace(state, key, attempt + 1, code=code,
+                   verdict=f"{'PASSES' if v.ok else 'refused'}, score {v.score:g}\n{v.why or ''}")
+            # A check may hand back a rewritten prototype (the family's chosen member with its knobs
+            # bound, D479): that concrete text is what is stored, recorded and transpiled.
+            bound = (v.payload or {}).get("prototype") if isinstance(v.payload, dict) else None
+            if isinstance(bound, str) and bound.strip():
+                bind_code(state, subgoal, bound, {}, previous=code)
+                code = bound
+            last = (code, v)
+            tried.update(outcome="passed" if v.ok else "check failed", why="" if v.ok else str(v.why or f"score {v.score:g}").split("\n")[0][:300])
+            if v.ok:
+                state.say(f"  PROTOTYPE {tag} passes: 0 over on the full domain "
+                          f"(attempt {attempt + 1}); transcribing to the target next")
+                state.prototypes[key] = code
+                state.part(subgoal).sessions.pop("prototype", None)   # D669: the agent's prototype job is done
+                _record_prototype(state, subgoal, code, v, ok=True, reply=answer,
+                                  seconds=round(time.monotonic() - t_attempt, 3))
+                return code, ""
+            trend, is_best = grad.observe(v.score, code, key=code,
+                                          failure=problem.describe_failure(subgoal, v))
+            if is_best:
+                state.say(f"  prototype {tag}: score {v.score:g} (best so far)")
+                if patience and math.isfinite(v.score):
+                    grown = min(cap, max(budget, attempt + 1 + patience))
+                    if grown > budget:
+                        state.say(f"  prototype {tag}: still improving at attempt {attempt + 1}; the pass "
+                                  f"continues to {grown} attempts (at most {cap})")
+                        budget = grown
+                # Record a new best at once (D491), so a run stopped mid-pass resumes from it.
+                if math.isfinite(v.score) and (seed is None or v.score < seed[0]):
+                    _record_prototype(state, subgoal, code, v, ok=False, reply=answer, seconds=round(time.monotonic() - t_attempt, 3))
+            if math.isfinite(v.score):
+                unmeasured = 0
+                state.proto_best[key] = min(state.proto_best.get(key, (float("inf"), "", "")),
+                                            (float(v.score), code, problem.describe_failure(subgoal, v)),
+                                            key=lambda e: e[0])
+                try:                                       # the results table's "trying" row, live
+                    from .observe import refresh_standings
 
-                refresh_standings(state, f"{tag} attempt {attempt + 1}")
-            except Exception:  # noqa: BLE001
-                pass
-        else:
-            unmeasured += 1
-            state.say(f"  prototype {tag}: not measurable -- {(v.why or 'refused')[:90]}")
-            if unmeasured >= req.prototype_unmeasured_stop and grad.best is None:
-                # Nothing has measured and refusals keep coming: stop the pass early (D480).
-                _record_prototype(state, subgoal, code, v, ok=False, reply=answer, seconds=round(time.monotonic() - t_attempt, 3))
-                return None, (f"{unmeasured} attempts in a row refused before their test "
-                              f"({(v.why or 'refused')[:120]}); the pass stops here")
-            if unmeasured >= req.prototype_unmeasured_stop and grad.best is not None:
-                # Drift (D484): a best on hand but repeated unmeasurable rewrites. End the pass
-                # and record the best as the seed for the next pass's fresh context.
-                _record_prototype(state, subgoal, grad.best[1],
-                                  Verdict(False, grad.best_score, grad.best_failure or last_err), ok=False)
-                return None, (f"{unmeasured} unmeasurable rewrites in a row after reaching "
-                              f"{grad.best_score:g}; the pass stops here and the next resumes from "
-                              "that best")
-        failure = problem.describe_failure(subgoal, v)
-        if grad.revert_due(code):
-            state.say(f"  prototype {tag}: the tolerance for worsening edits is spent; backtracking")
-            code, note = grad.revert()
-            trend += note
-            failure = grad.revert_failure() or failure  # the landing text's own failures (D484/D504)
-        last_err = f"{trend}\n{failure}"
+                    refresh_standings(state, f"{tag} attempt {attempt + 1}")
+                except Exception:  # noqa: BLE001
+                    pass
+            else:
+                unmeasured += 1
+                state.say(f"  prototype {tag}: not measurable -- {(v.why or 'refused')[:90]}")
+                if unmeasured >= req.prototype_unmeasured_stop and grad.best is None:
+                    # Nothing has measured and refusals keep coming: stop the pass early (D480).
+                    _record_prototype(state, subgoal, code, v, ok=False, reply=answer, seconds=round(time.monotonic() - t_attempt, 3))
+                    return None, (f"{unmeasured} attempts in a row refused before their test "
+                                  f"({(v.why or 'refused')[:120]}); the pass stops here")
+                if unmeasured >= req.prototype_unmeasured_stop and grad.best is not None:
+                    # Drift (D484): a best on hand but repeated unmeasurable rewrites. End the pass
+                    # and record the best as the seed for the next pass's fresh context.
+                    _record_prototype(state, subgoal, grad.best[1],
+                                      Verdict(False, grad.best_score, grad.best_failure or last_err), ok=False)
+                    return None, (f"{unmeasured} unmeasurable rewrites in a row after reaching "
+                                  f"{grad.best_score:g}; the pass stops here and the next resumes from "
+                                  "that best")
+            failure = problem.describe_failure(subgoal, v)
+            if grad.revert_due(code):
+                state.say(f"  prototype {tag}: the tolerance for worsening edits is spent; backtracking")
+                code, note = grad.revert()
+                trend += note
+                failure = grad.revert_failure() or failure  # the landing text's own failures (D484/D504)
+            last_err = f"{trend}\n{failure}"
     if grad.best is not None:
         _record_prototype(state, subgoal, grad.best[1], Verdict(False, grad.best_score, grad.best_failure or last_err),
                           ok=False)

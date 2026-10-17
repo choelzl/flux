@@ -300,6 +300,7 @@ class LoopState:
     depth: int = 0                                                  # 0 = the top-level pass
     best: dict[str, tuple[float, Candidate, str]] = field(default_factory=dict)
     attempts: dict[str, int] = field(default_factory=dict)
+    tries: dict[str, int] = field(default_factory=dict)     # (D1233) a part's tries this pass, across its design runs
     fail_streak: dict[str, int] = field(default_factory=dict)
     scored: list[Scored] = field(default_factory=list)
     pool: list[Candidate] = field(default_factory=list)   # batches: gate-admitted, in order

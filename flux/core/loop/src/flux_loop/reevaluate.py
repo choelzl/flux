@@ -51,7 +51,7 @@ def run_reevaluate(problem, state):
     of = int(getattr(state.request, "reevaluate_of", 0) or 0)
     if of:
         return _reevaluate_these(problem, state, of)
-    with _phase("records: invalidate", why="record's checks and measurements become history") as out:
+    with _phase("records: invalidate", why="record's checks and measurements become history", box="setup", step="record invalidated") as out:
         trials = store.trials(cid)
         designs = designs_on_record(store, cid)
         through = max((t.seq for t in trials), default=0)
@@ -151,7 +151,7 @@ def _measure_again(problem, state, designs):
     for i, cand in enumerate(designs, 1):
         sg = cand.subgoal
         try:
-            with _phase(f"test: {cand.name}", why=f"design {i} of {len(designs)}, re-evaluated") as out:
+            with _phase(f"test: {cand.name}", why=f"design {i} of {len(designs)}, re-evaluated", box="check", design=cand.name) as out:
                 built = problem.build(cand, sg, state)            # as the baseline: built, then judged
                 verdict = _judge(problem, built, cand, sg, state)
                 out["verdict"] = "passed" if verdict.ok else verdict.why
@@ -178,7 +178,7 @@ def _measure_again(problem, state, designs):
             failed += 1
     state.stopped = f"re-evaluated {plural(len(designs), 'design')}: {passed} passed today's checks, {failed} did not"
     state.say(f"  {state.stopped}")
-    with _phase("decide", why="choice among the designs measured again"):
+    with _phase("decide", why="choice among the designs measured again", box="choose"):
         result = (_conclude(problem, state, []) if state.scored and state.on_stage
                   else _result(problem, state, None, state.stopped, [], []))
     if state.depth == 0:

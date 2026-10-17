@@ -2,19 +2,42 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from contextlib import contextmanager
+from typing import TYPE_CHECKING, Any, Iterator
 
 from .types import LoopState, StageNames
 
 if TYPE_CHECKING:  # pragma: no cover
     from .problem import Problem
 
-__all__ = ["_phase", "_publish", "_publish_mentor"]
+__all__ = ["_phase", "_publish", "_publish_mentor", "_try"]
 
 def _phase(name: str, why: str = "", quiet: bool = False, **params: Any):
     from flux_profile import phase
 
     return phase(name, why=why, quiet=quiet, **params)
+
+
+@contextmanager
+def _try(state: LoopState, subgoal: str | None, design: str = "") -> Iterator[dict[str, Any]]:
+    """(D1233) One try at a part's design: its draft and the checks after it, numbered across the pass's
+    design runs of the part (as Live has always numbered them). Every task in it says its try; the block
+    says how it came out in the dict it is given (`outcome`: passed, check failed, not built, no design, and
+    `why`)."""
+    from flux_profile import tagged
+
+    key = subgoal or "*"
+    tries = getattr(state, "tries", None)
+    if tries is None:                       # a stand-in state (a test's)
+        tries = {}
+        try:
+            state.tries = tries
+        except AttributeError:
+            pass
+    n = tries[key] = tries.get(key, 0) + 1
+    out: dict[str, Any] = {}
+    with tagged(**{"try": n, "box": "design", **({"design": design} if design else {})}):
+        yield out
 
 
 def _publish_mentor(problem: Problem, state: LoopState) -> None:
@@ -27,7 +50,7 @@ def _publish_mentor(problem: Problem, state: LoopState) -> None:
         return
     # D981: reading the knowledge and the record back takes time (the library's first read takes
     # seconds); like all the loop's work it is a task's time, not a gap between tasks
-    with _phase("knowledge: mentor", why="knowledge and record, read back for the mentor panel", quiet=True):
+    with _phase("knowledge: mentor", why="knowledge and record, read back for the mentor panel", quiet=True, box="setup", step="mentor"):
         sections = _mentor_sections(problem, state)
     publish("mentor", {"sections": sections})
 

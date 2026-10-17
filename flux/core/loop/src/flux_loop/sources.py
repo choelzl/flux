@@ -22,7 +22,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Protocol, Sequence, runtime_checkable
 
-from .observe import _phase
+from .observe import _phase, _try
 from .types import BuildError, Candidate, LoopState
 from .words import plural
 
@@ -138,64 +138,73 @@ def iterate(problem: Any, source: Source, subgoal: str | None, state: LoopState,
     say = state.say
     seen: set[str] = set()
     for index in range(rounds):
-        state.attempts[key] = state.attempts.get(key, 0) + 1
-        attempt = Attempt(subgoal=subgoal, state=state, index=index, prior=prior,
-                          failure=failure, brief=brief)
-        with _phase(f"generation: {source.name} draft {index + 1}", why=tag, absorb=True):
-            try:
-                cand, why = source.draft(attempt)
-            except Exception as exc:  # noqa: BLE001 -- a source that raises is a refusal
-                return None, None, f"{source.name} failed: {exc!s:.200}"
-        if cand is None:
-            return None, None, why or failure or f"{source.name} produced no candidate"
-        sign = _signature(cand)
-        if sign in seen:
-            # The same text cannot pass a check it has just failed: stop and name the source.
-            return None, None, (f"{source.name} produced the same design again after "
-                                f"{plural(index, 'failure')}: {failure!s:.200}")
-        seen.add(sign)
-        if source.name.startswith("agent:"):
-            from .novelty import twin, twin_said
+        with _try(state, subgoal) as tried:
+            state.attempts[key] = state.attempts.get(key, 0) + 1
+            attempt = Attempt(subgoal=subgoal, state=state, index=index, prior=prior,
+                              failure=failure, brief=brief)
+            with _phase(f"generation: {source.name} draft {index + 1}", why=tag, absorb=True):
+                try:
+                    cand, why = source.draft(attempt)
+                except Exception as exc:  # noqa: BLE001 -- a source that raises is a refusal
+                    tried.update(outcome="no design", why=f"{source.name} failed: {exc!s:.200}")
+                    return None, None, f"{source.name} failed: {exc!s:.200}"
+            if cand is None:
+                tried.update(outcome="no design", why=(why or failure or f"{source.name} produced no candidate")[:300])
+                return None, None, why or failure or f"{source.name} produced no candidate"
+            tried["design"] = cand.name
+            sign = _signature(cand)
+            if sign in seen:
+                tried.update(outcome="not built", why="the same design again")
+                # The same text cannot pass a check it has just failed: stop and name the source.
+                return None, None, (f"{source.name} produced the same design again after "
+                                    f"{plural(index, 'failure')}: {failure!s:.200}")
+            seen.add(sign)
+            if source.name.startswith("agent:"):
+                from .novelty import twin, twin_said
 
-            again = twin(state, cand)
-            if again is not None:                   # D839: a design measured already, refused before it is built
-                failure, prior = twin_said(again), cand
-                if state.part(subgoal).dse in ("explore", "variations"):
-                    # A measured repeat is not this experiment's repair seed. Ask afresh,
-                    # carrying the comparison numbers without inlining that design's code.
-                    prior = None
-                    state.part(subgoal).sessions.clear()
-                    brief = f"{brief}\n\n{failure}".strip()
-                say(f"  {source.name}: {cand.name} is {again.candidate.name} again, already measured; asking for a different one")
+                again = twin(state, cand)
+                if again is not None:                   # D839: a design measured already, refused before it is built
+                    tried.update(outcome="not built", why=f"the same as {again.candidate.name}, measured already")
+                    failure, prior = twin_said(again), cand
+                    if state.part(subgoal).dse in ("explore", "variations"):
+                        # A measured repeat is not this experiment's repair seed. Ask afresh,
+                        # carrying the comparison numbers without inlining that design's code.
+                        prior = None
+                        state.part(subgoal).sessions.clear()
+                        brief = f"{brief}\n\n{failure}".strip()
+                    say(f"  {source.name}: {cand.name} is {again.candidate.name} again, already measured; asking for a different one")
+                    continue
+            # D1046: the build and the check are one task -- the checks it ran under it, failing when they failed
+            with _phase(f"test: check {cand.name}", why=source.name, box="check", design=cand.name, step="check") as checked:
+                try:
+                    built = problem.build(cand, subgoal, state)
+                except BuildError as exc:
+                    built, fails, text = None, None, str(exc)
+                    checked.update(failed=True, verdict="did not build", why=text[:600])
+                else:
+                    fails, text = problem.fast_check(built, cand, subgoal, state)
+                    checked["verdict"] = f"{fails} failing" if fails else "passed"
+                    if fails:
+                        checked.update(failed=True, why=(text or "")[:600])
+            if built is None:
+                tried.update(outcome="check failed", why="did not build", **{"failed at": "build"})
+                from .ideas import record_failure
+
+                record_failure(state, cand, "build", text)
+                failure, prior = text, cand
+                say(f"  {source.name}: {cand.name} did not build ({failure!s:.80})")
                 continue
-        # D1046: the build and the check are one task -- the checks it ran under it, failing when they failed
-        with _phase(f"test: check {cand.name}", why=source.name) as checked:
-            try:
-                built = problem.build(cand, subgoal, state)
-            except BuildError as exc:
-                built, fails, text = None, None, str(exc)
-                checked.update(failed=True, verdict="did not build", why=text[:600])
-            else:
-                fails, text = problem.fast_check(built, cand, subgoal, state)
-                checked["verdict"] = f"{fails} failing" if fails else "passed"
-                if fails:
-                    checked.update(failed=True, why=(text or "")[:600])
-        if built is None:
+            if not fails:
+                tried["outcome"] = "passed"
+                if index:
+                    say(f"  {source.name}: {cand.name} passes after {plural(index, 'repair')}")
+                return cand, built, ""
+            failure, prior = text or f"{plural(fails, 'failure')}", cand
+            tried.update(outcome="check failed", why=str(failure).split("\n")[0][:300])
             from .ideas import record_failure
 
-            record_failure(state, cand, "build", text)
-            failure, prior = text, cand
-            say(f"  {source.name}: {cand.name} did not build ({failure!s:.80})")
-            continue
-        if not fails:
-            if index:
-                say(f"  {source.name}: {cand.name} passes after {plural(index, 'repair')}")
-            return cand, built, ""
-        failure, prior = text or f"{plural(fails, 'failure')}", cand
-        from .ideas import record_failure
-
-        record_failure(state, cand, "fast-check", failure, fails)
-        say(f"  {source.name}: {cand.name} has {plural(fails, 'failure')} on the check")
+            record_failure(state, cand, "fast-check", failure, fails)
+            say(f"  {source.name}: {cand.name} has {plural(fails, 'failure')} on the check")
     return None, None, (f"{source.name}: no design passed its check in {plural(rounds, 'try', 'tries')}; "
                         f"last: {failure!s:.200}")
 

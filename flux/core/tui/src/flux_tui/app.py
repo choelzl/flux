@@ -100,8 +100,12 @@ class _PhaseTasks:
     def __init__(self, bus: EventBus) -> None:
         self._bus = bus
 
+    #: (D1233) the facts the engine tags every phase with are the web's to read; the rows show what a task was given
+    _TAGS = ("box", "design", "step", "try", "worker")
+
     def phase_start(self, name: str, why: str, params: dict) -> int:
-        return self._bus.task_start(name, kind="tool", why=why, params=params)
+        return self._bus.task_start(name, kind="tool", why=why,
+                                    params={k: v for k, v in (params or {}).items() if k not in self._TAGS})
 
     def phase_end(self, token: int, name: str, seconds: float, failed: bool,
                   output: dict | None = None) -> None:

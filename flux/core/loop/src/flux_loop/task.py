@@ -195,8 +195,14 @@ class PromptProblem(PrototypeMixin, MeasureMixin, KnowledgeMixin, DraftMixin, Pa
                     "point": _write_point(path, point),
                     "part": "", "python": sys.executable, "home": self.task.home or ".",
                     "failure": "", "attempt": "1"}
-            run = self._run(tuple(cmd), subs, self.task.gate.timeout_s, "generate")
-            if not run.ok or not path.is_file():
+            from .observe import _try
+
+            with _try(state, None, design=name) as tried:     # (D1233) a point's design is a try of the pass
+                run = self._run(tuple(cmd), subs, self.task.gate.timeout_s, "generate")
+                ok = run.ok and path.is_file()
+                tried.update(outcome="drafted" if ok else "no design",
+                             why="" if ok else f"the generator exited {run.returncode}" if not run.ok else f"the generator wrote no {path.name}")
+            if not ok:
                 tail = ((run.stdout or "") + "\n" + (run.stderr or "")).strip()[-300:]
                 state.say(f"  {name}: the generator " + (f"exited {run.returncode}" if not run.ok
                                                          else f"wrote no {path.name}") + (f": {tail}" if tail else ""))
@@ -519,9 +525,16 @@ class PromptProblem(PrototypeMixin, MeasureMixin, KnowledgeMixin, DraftMixin, Pa
         from .toollock import tool_slot
 
         who = subs.get("name") or ""                   # D709: the task says which candidate
+        # (D1233) what the command is for, as tags: the design it runs on, the check or stage it is (a
+        # generator is the Design's work wherever it runs -- a sweep's point inside the Search)
+        word = what.split(":")[0].split(" ")[0]
+        tags = {"design": who or None,
+                "step": what[len("stage "):] if what.startswith("stage ") else None if word in ("generate", "baseline") else what,
+                **({"box": "design"} if word == "generate" else {"box": "check"} if what == "stage gate" else {})}
         with tool_slot(self.task.home or ".", int(self.task.budget.get("tools_at_once") or 0), what):   # D1004
             return run_tool(_substitute(cmd, subs), cwd=subs["workdir"], timeout_s=timeout_s,
-                            what=f"{what} {who}" if who and who not in what else what, judge=judge)
+                            what=f"{what} {who}" if who and who not in what else what, judge=judge,
+                            tags={k: v for k, v in tags.items() if v})
 
     def _scope_run(self, which: str, state: LoopState, scope: str = "", artifact: str = "") -> Any:
         """`flow.orchestrate.scope`'s `list`, `brief` or `check` run from the pass's folder (D1022): its run, or
@@ -583,16 +596,22 @@ class PromptProblem(PrototypeMixin, MeasureMixin, KnowledgeMixin, DraftMixin, Pa
         after it not run; a check exiting 3 (any non-zero for a `build` check) raises BuildError.
         The score is the failures plus CHECK_WEIGHT per check not reached, so a design stopped
         earlier ranks worse whatever its count."""
+        from flux_profile import said
+
         gate = self.task.gate
         for i, check in enumerate(gate):
             run = self._run(check.run, subs, check.timeout_s, check.name, judge=lambda r, c=check: _count_failures(c, r)[0])
             at = f"failed at {check.name}: " if len(gate) > 1 else ""
+            # (D1233) the check it stopped at, and those it never ran, said on the task that ran them
+            stopped = {"failed at": check.name, "not reached": [c.name for c in gate[i + 1:]]}
             if run.returncode == BUILD_FAILED or (check.builds and not run.ok):
+                said(**stopped)
                 text = ((run.stdout or "") + "\n" + (run.stderr or "")).strip()[-4000:]
                 raise BuildError((f"did not build at {check.name}: " if len(gate) > 1 else "")
                                  + (text or f"{check.name} exited {run.returncode}"))
             fails, text = _count_failures(check, run)
             if fails:
+                said(**stopped)
                 return fails + CHECK_WEIGHT * (len(gate) - 1 - i), at + text
         return 0, ""
 

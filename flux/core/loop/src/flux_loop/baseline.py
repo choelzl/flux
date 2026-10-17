@@ -55,7 +55,7 @@ def _provided_metrics(problem, state):
     for stage in problem.stages():
         if stage not in stages:
             continue
-        with _phase(f"measure: {stage}", why="provided baseline values; no tool run") as out:
+        with _phase(f"measure: {stage}", why="provided baseline values; no tool run", box="measure", step=stage) as out:
             metrics = stages[stage]
             state.scored.append(Scored(cand, stage, metrics, {"supplied": True}))
             if state.records is not None:
@@ -98,7 +98,7 @@ def run_baseline(problem, state):
         state.say(f"  {line}")
         state.lessons.append(line)
         _merge_decision_history(problem, state)
-        with _phase("knowledge: baseline reused", why="unchanged inputs; checks and measurements skipped"):
+        with _phase("knowledge: baseline reused", why="unchanged inputs; checks and measurements skipped", box="setup", step="baseline reused"):
             result = outcome()
         result.provenance["baseline_reused"] = True
         if state.depth == 0:
@@ -113,10 +113,10 @@ def run_baseline(problem, state):
         if provided:
             cand = _provided_metrics(problem, state)
         else:
-            with _phase("knowledge: baseline", why="unchanged file, preparation command, or current project") as out:
+            with _phase("knowledge: baseline", why="unchanged file, preparation command, or current project", box="setup", step="baseline") as out:
                 cand = problem.baseline_candidate(state)
                 out["source"] = "current project" if cand.meta.get("baseline_workspace") else "unchanged artifact"
-            with _phase("test: baseline", why="no repairs or agent edits") as out:
+            with _phase("test: baseline", why="no repairs or agent edits", box="check", step="baseline") as out:
                 built = problem.build(cand, None, state)
                 verdict = _judge(problem, built, cand, None, state)
                 out["verdict"] = "passed" if verdict.ok else verdict.why
@@ -146,7 +146,7 @@ def run_baseline(problem, state):
                                            "admitted": {k: c.to_record() for k, c in state.admitted.items()}})
     # Save pass 0 as a reference, then retain the campaign's search decision.
     _merge_decision_history(problem, state)
-    with _phase("decide: baseline", why="retain the best measured search design; pass 0 is a reference"):
+    with _phase("decide: baseline", why="retain the best measured search design; pass 0 is a reference", box="choose"):
         result = outcome()
     if state.depth == 0:
         _publish(problem, state, [], [], state.stopped, searching=False)

@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any
 from .gradient import Gradient, gate_score
 from .novelty import twin, twin_said
 from .model import _ask, _compose
-from .observe import _phase
+from .observe import _phase, _try
 from .patch import apply_patch, parse_patch
 from .prototype import _prototype_stage
 from .types import BuildError, Candidate, LoopState
@@ -86,7 +86,7 @@ def _generate_with_model(problem: Problem, subgoal: str | None, method: str,
         # Transpiled, not transcribed (D478): the prototype is the design and translating it is
         # mechanical, so the model is not asked to (it lost widths, signs and shifts). The gate
         # proves bit-exactness; a mismatch is reported as a transpiler defect.
-        with _phase(f"generate: transpile {tag}", why="verified prototype, no model") as out:
+        with _phase(f"generate: transpile {tag}", why="verified prototype, no model", box="design") as out:
             out["prototype"] = state.prototypes[key][:6000]
             try:
                 cand = problem.transpile(state.prototypes[key], subgoal, state)
@@ -97,7 +97,7 @@ def _generate_with_model(problem: Problem, subgoal: str | None, method: str,
                 out["error"] = str(exc)[:600]
                 cand = None
         if cand is not None:
-            with _phase(f"test: build {tag}", why=cand.name) as out:
+            with _phase(f"test: build {tag}", why=cand.name, box="check", design=cand.name, step="build") as out:
                 try:
                     built = problem.build(cand, subgoal, state)
                     out["built"] = "ok"
@@ -150,125 +150,136 @@ def _generate_with_model(problem: Problem, subgoal: str | None, method: str,
     last_good: str | None = prior.artifact if prior else None
     broke = 0
     for attempt in range(attempts + 1):
-        tools = problem.tools(subgoal, state, "generate") if req.tools else None
-        if mode == "patch" and cand is not None and req.patching:
-            with _phase(f"repair: {tag}", why=f"attempt {attempt + 1}"):
-                try:
-                    p, sch = wrap(problem.patch_prompt(subgoal, _shown(cand), last_err, state))
-                    if state.part(subgoal).dse not in ("refine", "finetune"):
-                        p += "\nA full replacement is also allowed when it tests a plausible improvement. Reply with {\"artifact\": \"<complete text>\", \"why\": \"<hypothesis>\"} instead of edits."
-                        if sch is not None:
-                            sch = {**sch, "properties": {**sch.get("properties", {}), "artifact": {"type": "string"}},
-                                   "anyOf": [{"required": ["edits"]}, {"required": ["artifact"]}]}
-                            sch.pop("required", None)
-                    reply = _ask(state, p, sch, tools=tools).text
-                except Exception as exc:  # noqa: BLE001
-                    return None, None, f"patcher did not run ({exc})"
-            edits, pwhy = parse_patch(reply)
-            if edits is None and state.part(subgoal).dse not in ("refine", "finetune"):
-                replacement, reason = problem.parse_design(reply, subgoal)
-                if replacement is not None:
-                    edits, pwhy = [{"find": cand.artifact, "replace": replacement.artifact}], "full replacement: " + reason
-            if edits is None:
-                state.say(f"  patch unusable ({pwhy}); rewriting {tag} instead")
+        with _try(state, subgoal) as tried:
+            tools = problem.tools(subgoal, state, "generate") if req.tools else None
+            if mode == "patch" and cand is not None and req.patching:
+                with _phase(f"repair: {tag}", why=f"attempt {attempt + 1}"):
+                    try:
+                        p, sch = wrap(problem.patch_prompt(subgoal, _shown(cand), last_err, state))
+                        if state.part(subgoal).dse not in ("refine", "finetune"):
+                            p += "\nA full replacement is also allowed when it tests a plausible improvement. Reply with {\"artifact\": \"<complete text>\", \"why\": \"<hypothesis>\"} instead of edits."
+                            if sch is not None:
+                                sch = {**sch, "properties": {**sch.get("properties", {}), "artifact": {"type": "string"}},
+                                       "anyOf": [{"required": ["edits"]}, {"required": ["artifact"]}]}
+                                sch.pop("required", None)
+                        reply = _ask(state, p, sch, tools=tools).text
+                    except Exception as exc:  # noqa: BLE001
+                        tried.update(outcome="no design", why=f"patcher did not run ({exc!s:.200})")
+                        return None, None, f"patcher did not run ({exc})"
+                edits, pwhy = parse_patch(reply)
+                if edits is None and state.part(subgoal).dse not in ("refine", "finetune"):
+                    replacement, reason = problem.parse_design(reply, subgoal)
+                    if replacement is not None:
+                        edits, pwhy = [{"find": cand.artifact, "replace": replacement.artifact}], "full replacement: " + reason
+                if edits is None:
+                    tried.update(outcome="not built", why=f"patch unusable ({pwhy})")
+                    state.say(f"  patch unusable ({pwhy}); rewriting {tag} instead")
+                    mode = "design"
+                    prompt, schema = wrap(problem.rewrite_prompt(subgoal, _shown(cand), last_err, state))
+                    continue
+                patched, perr = apply_patch(cand.artifact, edits)
+                if patched is None:
+                    tried.update(outcome="not built", why=f"patch rejected: {perr}")
+                    if perr == prev_reject:
+                        state.say(f"  patch rejected twice identically ({perr}); rewriting "
+                                  f"{tag} instead")
+                        mode = "design"
+                        prompt, schema = wrap(problem.rewrite_prompt(subgoal, _shown(cand), last_err, state))
+                        prev_reject = None
+                        continue
+                    prev_reject = perr
+                    last_err = f"{last_err}\n(previous patch rejected: {perr})"
+                    state.say(f"  patch rejected: {perr}")
+                    continue
+                state.say(f"  patched {tag}: {plural(len(edits), 'edit')} -- {pwhy}")
+                cand, tnote = problem.apply_tools(subgoal, cand.with_artifact(patched), reply,
+                                                  state)
+                if tnote:
+                    last_err = tnote
+            else:
+                with _phase(f"generate: {tag}", why=f"attempt {attempt + 1}", absorb=True,
+                            structured=req.structured) as out:
+                    try:
+                        reply = _ask(state, prompt, schema, tools=tools).text
+                    except Exception as exc:  # noqa: BLE001
+                        out["error"] = str(exc)[:600]
+                        tried.update(outcome="no design", why=f"generator did not run ({exc!s:.200})")
+                        return None, None, f"generator did not run ({exc})"
+                    cand, why = problem.parse_design(reply, subgoal)
+                    if cand is not None and key in state.prototypes:
+                        from .golden_proto import insert_tables
+
+                        fns = _prototype_tables(problem, state, key)[0]
+                        if fns:
+                            cand = cand.with_artifact(insert_tables(cand.artifact, fns))
+                    out["parsed"] = cand.name if cand is not None else f"unparseable: {why}"
+                if cand is None:
+                    tried.update(outcome="not built", why=f"unparseable: {why}" if why else "unparseable")
+                    last_err = why or "unparseable"
+                    prompt, schema = fresh(None)
+                    continue
+                cand, tnote = problem.apply_tools(subgoal, cand, reply, state)
+                if tnote:
+                    last_err = tnote
+            from .ideas import bind, record_failure
+            from .model import _json
+
+            bind(state, cand, _json(reply))
+            again = twin(state, cand)
+            if again is not None:                       # D839: a design measured already, refused before it is built
+                tried.update(outcome="not built", why=f"the same as {again.candidate.name}, measured already", design=cand.name)
+                state.say(f"  {tag}: {cand.name} is {again.candidate.name} again, already measured; asking for a different one")
+                last_err = twin_said(again)
                 mode = "design"
                 prompt, schema = wrap(problem.rewrite_prompt(subgoal, _shown(cand), last_err, state))
                 continue
-            patched, perr = apply_patch(cand.artifact, edits)
-            if patched is None:
-                if perr == prev_reject:
-                    state.say(f"  patch rejected twice identically ({perr}); rewriting "
-                              f"{tag} instead")
-                    mode = "design"
-                    prompt, schema = wrap(problem.rewrite_prompt(subgoal, _shown(cand), last_err, state))
-                    prev_reject = None
-                    continue
-                prev_reject = perr
-                last_err = f"{last_err}\n(previous patch rejected: {perr})"
-                state.say(f"  patch rejected: {perr}")
-                continue
-            state.say(f"  patched {tag}: {plural(len(edits), 'edit')} -- {pwhy}")
-            cand, tnote = problem.apply_tools(subgoal, cand.with_artifact(patched), reply,
-                                              state)
-            if tnote:
-                last_err = tnote
-        else:
-            with _phase(f"generate: {tag}", why=f"attempt {attempt + 1}", absorb=True,
-                        structured=req.structured) as out:
+            built = None
+            with _phase(f"test: build {tag}", why=cand.name, box="check", design=cand.name, step="build") as out:
                 try:
-                    reply = _ask(state, prompt, schema, tools=tools).text
-                except Exception as exc:  # noqa: BLE001
-                    out["error"] = str(exc)[:600]
-                    return None, None, f"generator did not run ({exc})"
-                cand, why = problem.parse_design(reply, subgoal)
-                if cand is not None and key in state.prototypes:
-                    from .golden_proto import insert_tables
-
-                    fns = _prototype_tables(problem, state, key)[0]
-                    if fns:
-                        cand = cand.with_artifact(insert_tables(cand.artifact, fns))
-                out["parsed"] = cand.name if cand is not None else f"unparseable: {why}"
-            if cand is None:
-                last_err = why or "unparseable"
-                prompt, schema = fresh(None)
-                continue
-            cand, tnote = problem.apply_tools(subgoal, cand, reply, state)
-            if tnote:
-                last_err = tnote
-        from .ideas import bind, record_failure
-        from .model import _json
-
-        bind(state, cand, _json(reply))
-        again = twin(state, cand)
-        if again is not None:                       # D839: a design measured already, refused before it is built
-            state.say(f"  {tag}: {cand.name} is {again.candidate.name} again, already measured; asking for a different one")
-            last_err = twin_said(again)
-            mode = "design"
-            prompt, schema = wrap(problem.rewrite_prompt(subgoal, _shown(cand), last_err, state))
-            continue
-        built = None
-        with _phase(f"test: build {tag}", why=cand.name) as out:
-            try:
-                built = problem.build(cand, subgoal, state)
-                out["built"] = "ok"
-            except BuildError as exc:
-                record_failure(state, cand, "build", str(exc))
-                last_err = str(exc)[:600]
-                out["error"] = str(exc)[:4000]
-                out["failed"] = True
-        if built is None:
-            broke += 1
-            if broke >= max(1, req.revert_after) and last_good and last_good != cand.artifact:
-                state.say(f"  reverting {tag} to the last version that built; that edit "
-                          "path is not converging")
-                cand = cand.with_artifact(last_good)
-                last_err = ("your edits broke the build and could not be fixed; the "
-                            "text has been REVERTED to the last version that built. "
-                            "Make a DIFFERENT, smaller change.")
-                broke = 0
-        else:
-            last_good, broke = cand.artifact, 0
-            fails, summary = problem.fast_check(built, cand, subgoal, state)
-            if fails == 0:
-                state.say(f"  {tag} passes the check; handing it to the gate")
-                return cand, built, ""
-            record_failure(state, cand, "fast-check", summary or f"{plural(fails, 'failure')}", fails)
-            # the trend: did the last edit help, by how much, and where it stands against the best
-            trend, is_best = grad.observe(fails, (cand, built), key=cand.artifact, failure=summary)
-            if is_best:
-                state.say(f"  {tag}: {plural(gate_score(fails), 'check failure')} (best so far)")
-            if grad.revert_due(cand.artifact):
-                # too many regressions in a row: back to the best attempt, and say so
-                state.say(f"  {tag}: the tolerance for worsening edits is spent; backtracking "
-                          f"(best {gate_score(grad.best_score)} failing)")
-                (cand, _built), note = grad.revert()
-                last_good = cand.artifact
-                trend += note
-                summary = grad.revert_failure() or summary   # the landing text's own failures
-            last_err = f"{trend}\n{summary}"
-        mode = "patch" if req.patching else "design"
-        if mode == "design":
-            prompt, schema = wrap(problem.rewrite_prompt(subgoal, _shown(cand), last_err, state))
+                    built = problem.build(cand, subgoal, state)
+                    out["built"] = "ok"
+                except BuildError as exc:
+                    record_failure(state, cand, "build", str(exc))
+                    last_err = str(exc)[:600]
+                    out["error"] = str(exc)[:4000]
+                    out["failed"] = True
+            tried["design"] = cand.name
+            if built is None:
+                tried.update(outcome="check failed", why="did not build", **{"failed at": "build"})
+                broke += 1
+                if broke >= max(1, req.revert_after) and last_good and last_good != cand.artifact:
+                    state.say(f"  reverting {tag} to the last version that built; that edit "
+                              "path is not converging")
+                    cand = cand.with_artifact(last_good)
+                    last_err = ("your edits broke the build and could not be fixed; the "
+                                "text has been REVERTED to the last version that built. "
+                                "Make a DIFFERENT, smaller change.")
+                    broke = 0
+            else:
+                last_good, broke = cand.artifact, 0
+                fails, summary = problem.fast_check(built, cand, subgoal, state)
+                if fails == 0:
+                    tried["outcome"] = "passed"
+                    state.say(f"  {tag} passes the check; handing it to the gate")
+                    return cand, built, ""
+                record_failure(state, cand, "fast-check", summary or f"{plural(fails, 'failure')}", fails)
+                tried.update(outcome="check failed", why=(summary or plural(fails, "failure")).split("\n")[0][:300])
+                # the trend: did the last edit help, by how much, and where it stands against the best
+                trend, is_best = grad.observe(fails, (cand, built), key=cand.artifact, failure=summary)
+                if is_best:
+                    state.say(f"  {tag}: {plural(gate_score(fails), 'check failure')} (best so far)")
+                if grad.revert_due(cand.artifact):
+                    # too many regressions in a row: back to the best attempt, and say so
+                    state.say(f"  {tag}: the tolerance for worsening edits is spent; backtracking "
+                              f"(best {gate_score(grad.best_score)} failing)")
+                    (cand, _built), note = grad.revert()
+                    last_good = cand.artifact
+                    trend += note
+                    summary = grad.revert_failure() or summary   # the landing text's own failures
+                last_err = f"{trend}\n{summary}"
+            mode = "patch" if req.patching else "design"
+            if mode == "design":
+                prompt, schema = wrap(problem.rewrite_prompt(subgoal, _shown(cand), last_err, state))
     if grad.best is not None:
         state.say(f"  {tag}: budget spent; sending the best attempt ({gate_score(grad.best_score)} "
                   "failing) to the gate")

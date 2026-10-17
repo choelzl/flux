@@ -296,3 +296,73 @@ def test_a_generation_that_made_no_design_says_why():
     finally:
         flux_profile.clear_listener()
     assert seen == [("generation: x", True, {"error": "nothing built in 5 tries 0 failing of 0"})]
+
+
+def test_a_phase_says_its_facts_as_tags_its_inner_phases_and_workers_too(tmp_path):
+    """(D1233) The page guessed a task's box, design and check from its name and its words; the engine says
+    them. A phase's tag params (`box`, `design`, `step`, `try`, `worker`...) are tags on its start, and on every
+    phase inside it -- a worker's too -- apart from its inputs; its end's outcome, the check it stopped at and
+    those it never reached are tags of its end. The journal says its format."""
+    from flux_loop.pool import run_parallel
+
+    j = attach(str(tmp_path / "run"))
+    try:
+        with flux_profile.phase("test: build x", why="x#1", box="check", design="x#1", step="build", command="make") as out:
+            def one(i):
+                with flux_profile.phase("tool:check.py", why="test x#1", step=f"t{i}"):
+                    return i
+
+            run_parallel(range(2), one, 2)
+            flux_profile.said(**{"failed at": "t1", "not reached": ["t2"]})
+            out["exit"] = 1
+        with flux_profile.phase("knowledge: mentor", quiet=True, box="setup", step="mentor"):
+            pass
+        with flux_profile.phase("decide"):
+            pass
+    finally:
+        flux_profile.remove_listener(j)
+        from flux_loop import journal as J
+
+        J._ATTACHED.clear()
+    events, _ = read_events(str(tmp_path / "run" / "events.jsonl"))
+    assert events[0]["ev"] == "hello" and events[0]["format"] == 2
+    starts = {e["name"]: e for e in events if e["ev"] == "start"}
+    build, tools = starts["test: build x"], [e for e in events if e["ev"] == "start" and e["name"] == "tool:check.py"]
+    assert build["tags"] == {"box": "check", "design": "x#1", "step": "build"} and build["params"] == {"command": "make"}
+    assert len(tools) == 2 and all(t["tags"]["box"] == "check" and t["tags"]["design"] == "x#1" for t in tools)
+    assert sorted(t["tags"]["step"] for t in tools) == ["t0", "t1"], "a tag of its own wins over the one it inherits"
+    end = next(e for e in events if e["ev"] == "end" and e["name"] == "test: build x")
+    assert end["tags"] == {"failed at": "t1", "not reached": ["t2"]} and end["output"] == {"exit": 1}
+    note = next(e for e in events if e["ev"] == "note")
+    assert note["tags"] == {"box": "setup", "step": "mentor"}
+    assert "tags" not in starts["decide"], "the tags end with their phase"
+
+
+def test_every_task_of_a_run_says_its_box_and_its_pass(tmp_path, monkeypatch):
+    """(D1233) A real run (the digits example, a scripted model): every task and note says its box and its pass,
+    the first pass's too (it has no mark); a draft and the checks after it say their try."""
+    from flux_cli.main import main
+
+    monkeypatch.setenv("FLUX_TRACE_ROOT", str(tmp_path / "traces"))
+    digits = Path(__file__).resolve().parents[2] / "core/loop/examples/digits/problem.json"
+    good = "\n".join(str(i) for i in range(10)) + "\n"
+    replies = tmp_path / "replies.json"
+    replies.write_text(json.dumps([json.dumps({"artifact": "0\n1\n"}), json.dumps({"artifact": good})]))
+    try:
+        assert main(["task", "run", str(digits), "--db", str(tmp_path / "d.db"), "--replies", str(replies), "--passes", "2"]) == 0
+    finally:
+        from flux_loop import journal as J
+
+        for lis in list(J._ATTACHED.values()):
+            flux_profile.remove_listener(lis)
+        J._ATTACHED.clear()
+    path = next((tmp_path / "traces").rglob("events.jsonl"))
+    events, _ = read_events(str(path))
+    assert events[0].get("format") == 2
+    tasks = [e for e in events if e["ev"] in ("start", "note")]
+    assert tasks and all(e.get("tags", {}).get("box") in ("setup", "plan", "search", "design", "check", "measure", "choose")
+                         for e in tasks), [e["name"] for e in tasks if not e.get("tags", {}).get("box")]
+    assert {e["tags"].get("pass") for e in tasks} >= {1}, "the first pass is said, though never marked"
+    assert all(e["tags"].get("pass") in (1, 2) for e in tasks)
+    drafts = [e for e in tasks if e["name"].split(":")[0] in ("generate", "repair")]
+    assert drafts and all(isinstance(e["tags"].get("try"), int) for e in drafts)

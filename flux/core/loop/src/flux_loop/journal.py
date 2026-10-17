@@ -24,8 +24,34 @@ from typing import Any
 __all__ = ["Journal", "TAIL", "attach", "compact", "read_events", "window_start"]
 
 TAIL = 4000
+#: (D1233) the journal's format: 2 -- every task says its facts (`tags`: box, pass, design, step, try, worker,
+#: part; at its end outcome, not reached, failed at). A journal without it is older: `journal_migrate` brings it up.
+FORMAT = 2
 _ATTACHED: dict[str, "Journal"] = {}
 _ATTACHING = threading.Lock()
+
+
+def _split(params: dict | None, keys: tuple[str, ...]) -> tuple[dict, dict]:
+    """(D1233) A phase's params as (its inputs, its tags): the facts the engine tags a task with are said
+    apart from what it was given."""
+    params = dict(params or {})
+    tags = {k: params[k] for k in keys if k in params and params[k] not in (None, "")}
+    for k in tags:
+        if k not in _ALSO_INPUTS:
+            del params[k]
+    return params, tags
+
+
+#: the tags a page before format 2 read among the inputs (its pass, D747; its part, D739): kept there too
+_ALSO_INPUTS = ("pass", "part")
+
+
+def _tag_keys() -> tuple[tuple[str, ...], tuple[str, ...]]:
+    try:
+        from flux_profile import END_KEYS, TAG_KEYS
+    except ImportError:  # an older flux_profile: no tags
+        return (), ()
+    return TAG_KEYS, END_KEYS
 
 
 def _cut(value: Any) -> Any:
@@ -133,13 +159,15 @@ class Journal:
             stack = self._stacks.setdefault(threading.get_ident(), [])
             parent = stack[-1] if stack else self._adopted.get(threading.get_ident())
             stack.append(pid)
-        given = _cut(params or {})
+        params, tags = _split(params, _tag_keys()[0])
+        given = _cut(params)
         # The agent's exact input is saved once at start, before it can time out or be interrupted.
         # Output updates remain bounded; shortening a prompt would hide its original instructions.
-        if name.startswith("agent:") and isinstance((params or {}).get("prompt"), str):
+        if name.startswith("agent:") and isinstance(params.get("prompt"), str):
             given["prompt"] = params["prompt"]
         self._write({**({"t": round(started, 3)} if started is not None else {}),
-                     "ev": "start", "id": pid, "parent": parent, "name": name, "why": _cut(why), "params": given})
+                     "ev": "start", "id": pid, "parent": parent, "name": name, "why": _cut(why), "params": given,
+                     **({"tags": _cut(tags)} if tags else {})})
         return pid
 
     def phase_begun(self, name: str, why: str, params: dict, started: float) -> int:
@@ -154,7 +182,9 @@ class Journal:
         """D1047: a quiet step that went well and fast -- a note on the task it ran in, not a task."""
         with self._lock:
             parent = self._parent()
-        self._write({"ev": "note", "parent": parent, "name": name, "why": _cut(why), "output": _capped(output or {})})
+        _params, tags = _split(params, _tag_keys()[0])
+        self._write({"ev": "note", "parent": parent, "name": name, "why": _cut(why), "output": _capped(output or {}),
+                     **({"tags": _cut(tags)} if tags else {})})
 
     def phase_after(self, name: str, why: str, params: dict, seconds: float, failed: bool, output: dict) -> None:
         """D1047: a quiet step that failed or took its time -- a task after all, written at its end."""
@@ -162,17 +192,20 @@ class Journal:
             self._n += 1
             pid, parent = self._n, self._parent()
         now = time.time()
+        params, tags = _split(params, _tag_keys()[0])
+        output, ends = _split(output, _tag_keys()[1])
         self._write({"t": round(now - seconds, 3), "ev": "start", "id": pid, "parent": parent, "name": name, "why": _cut(why),
-                     "params": _cut(params or {})})
+                     "params": _cut(params), **({"tags": _cut(tags)} if tags else {})})
         self._write({"ev": "end", "id": pid, "name": name, "seconds": round(seconds, 3), "failed": bool(failed),
-                     "output": _capped(output or {})})
+                     "output": _capped(output), **({"tags": _cut(ends)} if ends else {})})
 
     def phase_params(self, token: int, params: dict) -> None:
         """D1050: inputs a wrapper takes in from the one turn it holds -- the prompt whole, as at an agent's start."""
-        given = _cut(params or {})
-        if isinstance((params or {}).get("prompt"), str):
+        params, tags = _split(params, _tag_keys()[0])
+        given = _cut(params)
+        if isinstance(params.get("prompt"), str):
             given["prompt"] = params["prompt"]
-        self._write({"ev": "params", "id": token, "params": given})
+        self._write({"ev": "params", "id": token, "params": given, **({"tags": _cut(tags)} if tags else {})})
 
     def phase_update(self, token: int, name: str, output: dict) -> None:
         with self._lock:
@@ -186,8 +219,9 @@ class Journal:
                 stack.pop()
         with self._lock:
             had = self._live["updates"].pop(str(token), None) is not None
+        output, ends = _split(output, _tag_keys()[1])
         self._write({"ev": "end", "id": token, "name": name, "seconds": round(seconds, 3), "failed": bool(failed),
-                     "output": _capped(output or {})})
+                     "output": _capped(output), **({"tags": _cut(ends)} if ends else {})})
         if had:
             self._touch_live()
 
@@ -219,7 +253,7 @@ def attach(run_dir: str) -> Journal:
                 remove_listener(_ATTACHED.pop(old))
             os.makedirs(run_dir, exist_ok=True)
             j = _ATTACHED[run_dir] = Journal(os.path.join(run_dir, "events.jsonl"))
-            j._write({"ev": "hello", "pid": os.getpid()})
+            j._write({"ev": "hello", "pid": os.getpid(), "format": FORMAT})
             j._write_live()                              # D761: a new start's live state begins empty
             add_listener(j)
     return j
