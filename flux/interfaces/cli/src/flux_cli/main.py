@@ -186,7 +186,7 @@ def build_parser() -> argparse.ArgumentParser:
     ask_p.add_argument("--replies", default=None, help="Scripted replies (a JSON list) for the loop's model: no model.")
     ask_p.add_argument("--author-replies", default=None, help="Scripted replies for a model author (tests, dry runs).")
     ask_p.add_argument("--no-sandbox", action="store_true",
-                       help="Run on this machine, not in the Docker sandbox (also FLUX_SANDBOX=0).")
+                       help="Run on this machine, not in the container sandbox (Podman or Docker; also FLUX_SANDBOX=0).")
     ask_p.set_defaults(func=cmd_ask)
 
     task_p = subparsers.add_parser(
@@ -257,7 +257,7 @@ def build_parser() -> argparse.ArgumentParser:
     run_p.add_argument("--no-prototype", action="store_true", help="No prototype stage: the target directly.")
     run_p.add_argument("--no-patching", action="store_true", help="Repair by rewrite, not by edits.")
     run_p.add_argument("--no-sandbox", action="store_true",
-                       help="Run on this machine, not in the Docker sandbox (also FLUX_SANDBOX=0).")
+                       help="Run on this machine, not in the container sandbox (Podman or Docker; also FLUX_SANDBOX=0).")
     run_p.set_defaults(func=cmd_task_run)
 
     rep_p = subparsers.add_parser("report", help="How a campaign moved: frontier evolution, hypervolume, best-so-far, the parts.")

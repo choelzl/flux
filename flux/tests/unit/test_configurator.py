@@ -441,6 +441,28 @@ def test_the_librarys_choices_load_and_read_back(tmp_path):
         assert (st["knowledgeFiles"], st["knowledgeText"], st["knowledgeSheet"]) == ("rtl/, golden.py", "Widths are 8 bits.", "method.md")
 
 
+def test_a_bare_off_key_reads_back_as_off(tmp_path):
+    """YAML reads an unquoted `off:` key as false (JSON's key "false" in the configurator): `skills: {off: [..]}`
+    and `flow.knowledge: {off: true}` read back as the `off` written, and the document written again is the same loop."""
+    home = tmp_path / "bare"
+    (home / "skills" / "s1").mkdir(parents=True)
+    (home / "skills" / "s1" / "SKILL.md").write_text("---\nname: s1\ndescription: how\n---\nDo it.\n")
+    (home / "problem.yaml").write_text("statement: Make it.\nlanguage: python\nflow:\n  test: 'true'\n"
+                                       "  knowledge:\n    off: true\n    hidden: [secret]\nskills:\n  off: [s1]\n")
+    v = views(home / "problem.yaml")
+    assert v["error"] == "", v["error"]
+    back = subprocess.run(["node", "-e", READ_JS, str(ASSETS / "crafter-model.js"), str(ASSETS / "tools.json")],
+                          input=json.dumps({"raw": v["raw"], "normal": v["normal"]}, default=str), capture_output=True, text=True, timeout=60)
+    assert back.returncode == 0, back.stderr
+    got = json.loads(back.stdout)
+    assert not got["kept"], got["kept"]
+    assert got["state"]["skillsOff"] == ["s1"] and got["state"]["hidden"] == ["secret"], got["state"]
+    (home / "problem.yaml").write_text(got["yaml"])
+    again = load_task(str(home / "problem.yaml"))
+    assert again.skills_off == ("s1",) and not again.knowledge, got["yaml"]
+    assert again.to_dict()["flow"]["knowledge"] == {"off": True, "hidden": ["secret"]}, got["yaml"]
+
+
 AGENT_JS = r"""
 const c = require(process.argv[1]);
 c.setCatalog(JSON.parse(require("fs").readFileSync(process.argv[2], "utf8")));
@@ -807,8 +829,8 @@ def test_the_loaders_refusal_names_the_loops_files_and_no_decisions(tmp_path):
 
     loop = tmp_path / "users/bob/apps/x"
     loop.mkdir(parents=True)
-    said = loader_says(f"{loop}/problem.yaml: flow.critique is a critic (D1040; `flux migrate` moves it), see (D12, D13).", loop)
-    assert said == "problem.yaml: flow.critique is a critic (`flux migrate` moves it), see.", said
+    said = loader_says(f"{loop}/problem.yaml: flow.critique is a critic (D1040; `flux task migrate` moves it), see (D12, D13).", loop)
+    assert said == "problem.yaml: flow.critique is a critic (`flux task migrate` moves it), see.", said
     (loop / "problem.yaml").write_text("statement: x\nlanguage: python\nflow:\n  test: fluxpreset golden {artifact} --golden {home}/golden.py\n")
     err = views(loop / "problem.yaml")["error"]
     assert str(tmp_path) not in err and "Check a Python design with `fluxpreset cases" in err and "Check them with" not in err, err

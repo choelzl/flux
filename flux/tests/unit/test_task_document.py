@@ -442,6 +442,19 @@ def test_the_flow_block_folds_into_the_rig_and_reads_back():
     assert box(plain, "calibrate").startswith("calibrate: on")
 
 
+def test_a_bare_off_key_in_flow_knowledge_is_off():
+    """YAML reads `flow.knowledge: {off: true}` with its key false: read as the `off` it was written as."""
+    import yaml
+
+    said = yaml.safe_load("knowledge:\n  off: true\n")["knowledge"]
+    assert said == {False: True}
+    task = TaskSpec.from_dict(_flow_doc({"knowledge": said}))
+    assert task == TaskSpec.from_dict(_flow_doc({"knowledge": {"off": True}})) == TaskSpec.from_dict(_flow_doc({"knowledge": "off"}))
+    assert task.to_dict()["flow"]["knowledge"] == "off" and TaskSpec.from_dict(task.to_dict()) == task
+    hidden = TaskSpec.from_dict({**_flow_doc({"knowledge": {False: True, "hidden": ["secret"]}})})
+    assert hidden.to_dict()["flow"]["knowledge"] == {"off": True, "hidden": ["secret"]}
+
+
 @pytest.mark.parametrize("flow, more, message", [
     ({"test": {"agent": "claude"}}, {}, "never delegated"),       # D775: flow.test is the gate itself
     ({"measure": {"agent": "claude"}}, {}, "never delegated"),

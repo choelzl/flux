@@ -1925,7 +1925,18 @@
     return undefined;
   }
 
+  /** YAML reads a bare `off` key as false, which arrives here as the key "false" (JSON) or false itself:
+      `skills: {off: [..]}`, `flow.knowledge: {off: true}` -- each map's such key read as `off`, at every depth. */
+  function offKeys(v) {
+    if (Array.isArray(v)) return v.map(offKeys);
+    if (!v || typeof v !== "object") return v;
+    var out = {};
+    Object.keys(v).forEach(function (k) { out[k === "false" && !("off" in v) ? "off" : k] = offKeys(v[k]); });
+    return out;
+  }
+
   function fromDoc(raw, normal, cat) {
+    raw = offKeys(raw);
     var asWritten = raw || {};
     raw = unlifted(raw || {}); normal = unlifted(normal) || raw;
     var s = base(), kept = [], notes = [];

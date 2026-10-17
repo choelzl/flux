@@ -71,6 +71,17 @@ def test_skills_turned_off_one_by_one_or_all(tmp_path, said, own, agents):
     assert load_task(str(again)).skills_off == task.skills_off
 
 
+def test_a_bare_off_key_is_off_though_yaml_reads_it_as_false(tmp_path):
+    """YAML reads an unquoted `off:` key as false: `skills: {off: [..]}` is read as written, and written back."""
+    path = _loop(tmp_path)
+    path.write_text("statement: Make it.\nlanguage: python\nflow:\n  test: 'true'\nskills:\n  off: [s1]\n")
+    assert yaml.safe_load(path.read_text())["skills"] == {False: ["s1"]}
+    task = load_task(str(path))
+    assert task.skills_off == ("s1",) and _names(PromptProblem(task).skill_list()) == []
+    assert task.to_dict()["skills"]["off"] == ["s1"]
+    assert "'off':" in yaml.safe_dump(task.to_dict()), "written back as an `off` key, quoted"
+
+
 @pytest.mark.parametrize("said", [{"of": ["x"]}, {"off": "  "}, {"off": [1]}, 3])
 def test_a_wrong_skills_setting_is_the_documents_error(tmp_path, said):
     with pytest.raises(TaskError, match="skills"):

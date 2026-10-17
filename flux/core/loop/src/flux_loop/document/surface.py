@@ -203,7 +203,7 @@ def _critics_said(raw: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
     """D1040: each box's `critic:` taken out of it -- the flow without them, and the critics by box."""
     if "critique" in raw:
         raise TaskError("flow.critique is a critic on each box it judges: `critic: model` under orchestrate, test, "
-                        "measure or select (D1040; `flux migrate` moves it)")
+                        "measure or select (D1040; `flux task migrate` moves it)")
     critics: dict[str, Any] = {}
     out = dict(raw)
     for box, value in raw.items():
@@ -220,6 +220,16 @@ def _critics_said(raw: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
     return out, critics
 
 
+def _off_keys(v: Any) -> Any:
+    """YAML reads a bare `off` key as false: `skills: {off: [..]}`, `flow.knowledge: {off: true}` -- each map's
+    false key read as the `off` it was written as (a quoted 'off' beside it wins), at every depth."""
+    if isinstance(v, dict):
+        return {("off" if k is False and "off" not in v else k): _off_keys(x) for k, x in v.items()}
+    if isinstance(v, list):
+        return [_off_keys(x) for x in v]
+    return v
+
+
 def _lift(doc: dict[str, Any]) -> dict[str, Any]:
     """D775: each box's own settings, said under `flow`, read into the fields the loop keeps:
     `flow.test` the gate, `flow.measure` the stages (a map: a stage's name to its command or its
@@ -227,6 +237,7 @@ def _lift(doc: dict[str, Any]) -> dict[str, Any]:
     and who digests it, `flow.select` its finalists. The fields themselves are not a document's keys."""
     if doc.get("_lifted"):
         return doc
+    doc = _off_keys(doc)
     strict = not doc.get("_inherited")                     # an inherited parent's fields are the loop's already
     if strict:
         said = sorted(set(doc) & _LIFTED_KEYS)
