@@ -18,6 +18,15 @@ flux serve                      # http://127.0.0.1:8765/
 `flux user add` and `flux serve` must name the same data folder; both print it. Run them as the
 user who should own the loops' files.
 
+- **Data:** the data folder holds `flux-web.db`, `secret.key` (which encrypts keys and
+  secrets) and every user's loops under `users/<name>/apps/`. Back up `flux-web.db` and
+  `secret.key` together (**Admin › Maintenance** can) and the loop folders separately.
+- **Limits:** a loop holds up to 100,000 files and 8 GB; one upload, 900 files and 256 MB.
+- **Restarts:** a restarted server finds its running loops again; their containers keep
+  running while it is down. `scripts/install-service.py` (from `flux/`) installs it as a user
+  service that restarts only the server on updates.
+- **Slow requests** (over 0.5 s; `FLUX_SLOW_S` sets it) are logged as `flux serve: slow: ...`.
+
 ## Accounts
 
 `flux user` manages accounts from the server's machine:
@@ -57,7 +66,7 @@ own, it uses its own configuration and login ([Models and agents](../guide/model
 
 | Tab | What it holds |
 |---|---|
-| **Loops** | Every user's loops; pause new starts, stop or restart them all after their pass |
+| **Loops** | Every user's loops; pause new starts, stop or restart them all after their pass; documents of an earlier form, with **Migrate all** |
 | **Insights** | Failed starts and agent Tests, usage and cost by user and agent, endpoints, refused hosts, the audit trail |
 | **Applications** | The bundled loops; **Use** copies one as your loop |
 | **Resources** | CPUs, memory and disks over time, the sandbox containers, each loop's disk and caches |

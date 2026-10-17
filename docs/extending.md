@@ -10,7 +10,7 @@ tool commands. Every section below changes one part of the loop.
 ## 1. The problem document (stable)
 
 A `*.problem.yaml` says what to make, how a candidate is refused, how it is measured, what
-better means and how the search goes. The [document reference](../website/docs/guide/parameters.md)
+better means and how the search goes. The [Document reference](https://choelzl.github.io/flux/guide/parameters/)
 lists every key and command format; `flux task check DOC` loads a document and says what it will do. A different
 question is a copy of the document with different `statement`, `params`, `objectives`, `budget`
 or `flow`. A changed ask opens its own record.

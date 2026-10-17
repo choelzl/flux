@@ -5,8 +5,8 @@ candidate is checked, how it is measured, what "better" means, and how the searc
 loop generates candidates (a model writes them, a script renders them from knobs, or a coding
 agent writes them), gates each one, measures the survivors stage by stage and decides.
 
-The complete reference, with every key's values and every command's arguments and output format, is
-`website/docs/guide/parameters.md` in the repository.
+The complete reference, with every key's values, is `website/docs/guide/parameters.md` in the
+repository; every command's arguments and output format are in `website/docs/reference/commands.md`.
 
 ## Keys
 

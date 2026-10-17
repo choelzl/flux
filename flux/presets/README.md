@@ -24,5 +24,5 @@ carries no copy of them (D968). Each is `{python} -m flux_presets.<module> ...` 
 | `bench` | `DESIGN.py --call f --args "(1000,)" --runs 5` | `time_ms= time_min_ms= time_spread_ms=` |
 | `champsim` | `build\|check\|run\|stats ARTIFACT --traces DIR ...` | `geomean_speedup=` |
 
-`flux tools` lists them as the catalog's checks and stages; the document reference
-(website/docs/guide/parameters.md) has each one's contract.
+`flux tools` lists them as the catalog's checks and stages; the site's
+[Presets](https://choelzl.github.io/flux/reference/presets/) page has each one's contract.

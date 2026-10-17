@@ -32,5 +32,5 @@ Where things are:
 | `records.py`, `report.py`, `ops.py` | the campaign record and its reload, `flux report`, `flux status/stop` |
 | `author.py`, `agent.py`, `skills.py` | `flux ask`, coding agents, skills |
 
-The command line is `flux` (`interfaces/cli`); see `docs/usage-guide.md`,
+The command line is `flux` (`interfaces/cli`); see the [CLI reference](https://choelzl.github.io/flux/reference/cli/),
 `docs/extending.md` and `docs/architecture.md` at the repository root.

@@ -51,6 +51,40 @@ FLUX_REMOTE_API_KEY_FILE=~/.config/flux/server.key
 
 Keep keys in the environment or the web app's settings, never in a loop's document.
 
+## Recipes
+
+**Ollama on this machine:**
+
+```bash
+ollama pull qwen3:4b                  # any tag; then
+export FLUX_LLM_MODEL=qwen3:4b
+flux task run flux/applications/primes --passes 1     # from the repository root
+```
+
+A large model on a CPU takes minutes per turn; use a GPU, or a smaller model for small
+problems. For an Ollama on another machine, set `OLLAMA_BASE_URL=http://HOST:11434`.
+
+**A server of your own** (LocalAI, vLLM, llama.cpp's server): set `FLUX_REMOTE_BASE_URL`,
+`FLUX_REMOTE_MODEL` and, if it checks keys, `FLUX_REMOTE_API_KEY`, as above. Raise
+`FLUX_LLM_TIMEOUT_S` (for example to `1800`) for long turns with tools.
+
+**OpenRouter:** `FLUX_LLM_REMOTE=1`, `OPENROUTER_API_KEY`, and `FLUX_REMOTE_MODEL` set to an
+OpenRouter model id. With `FLUX_LLM_REMOTE=1` and no `FLUX_REMOTE_BASE_URL`, Flux asks OpenRouter.
+
+**OpenCode on a server of your own:** in OpenCode's configuration
+(`~/.config/opencode/opencode.json`), read the key as `"apiKey": "{env:FLUX_AGENT_API_KEY}"`
+and set `FLUX_OPENCODE_API_KEY` (in flux.env, or OpenCode's card in the web app). Tell OpenCode
+the model's real limits, and keep a thinking model's reasoning short, or it can end turn after
+turn on an empty reply:
+
+```json
+"models": {"MODEL": {"limit": {"context": 58112, "output": 16384},
+                     "options": {"reasoningEffort": "low"}}}
+```
+
+and `"timeout": 1800000` in the provider's `options`. OpenCode's own prompt and tools take about
+10,000 tokens of the window.
+
 ## Coding agents
 
 An agent must be installed and logged in where Flux runs (inside the sandbox, with its own
@@ -58,7 +92,8 @@ home: `flux login --home ... -- claude /login`, or the web app's **Account › A
 one with:
 
 ```bash
-flux agent test claude          # its program and login; --live also asks it one short question
+flux agent test claude          # its program and login
+flux agent test claude --live   # also one short question
 ```
 
 | Variable | What it does |

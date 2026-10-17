@@ -74,7 +74,7 @@ To set them once for this machine, put the same lines (without `export`) in
 `~/.config/flux/flux.env`; keep the key in a file of its own and name it with
 `FLUX_REMOTE_API_KEY_FILE=~/.config/flux/my.key`. A variable set in the shell still wins.
 
-[docs/models.md](docs/models.md) has recipes and coding-agent setup.
+[Models and agents](https://choelzl.github.io/flux/guide/models/) has recipes and coding-agent setup.
 
 ## What it can do
 
@@ -147,7 +147,7 @@ You can also copy a folder from `flux/applications/`, including its local tool c
 the statement, contract and scripts to make it yours. Prefer a
 form? The [Loop crafter](https://choelzl.github.io/flux/guide/loop-crafter/): fill in a form, get
 a `problem.yaml`. Step by step: [docs/tutorial.md](docs/tutorial.md). Every key and every command's format:
-[document reference](website/docs/guide/parameters.md).
+[Document reference](https://choelzl.github.io/flux/guide/parameters/).
 
 ## Long runs
 
@@ -176,13 +176,14 @@ keep API keys in the environment, never in a document.
 
 ## Documentation
 
-- [docs/tutorial.md](docs/tutorial.md): a problem of your own, step by step.
-- [docs/usage-guide.md](docs/usage-guide.md): every command and option.
-- [docs/cookbook.md](docs/cookbook.md): which recipe for which problem.
+The user documentation is the site, [choelzl.github.io/flux](https://choelzl.github.io/flux/): install, the first
+loop, the guides, the web app and the reference (every key, preset and command).
+
+- [docs/tutorial.md](docs/tutorial.md): a problem of your own with a golden model, step by step.
 - [docs/extending.md](docs/extending.md): your own checker, search policy or search command.
-- [docs/models.md](docs/models.md): models and coding agents.
-- [docs/architecture.md](docs/architecture.md), [docs/glossary.md](docs/glossary.md),
-  [docs/decisions.md](docs/decisions.md): how it is built, the words, the design decisions.
+- [docs/architecture.md](docs/architecture.md), [docs/usage-guide.md](docs/usage-guide.md),
+  [docs/decisions.md](docs/decisions.md): how it is built, how parts of it work inside, the
+  design decisions.
 - [flux/README.md](flux/README.md): the code layout and the tests;
   [CONTRIBUTING.md](CONTRIBUTING.md): how to contribute.
 

@@ -31,7 +31,7 @@ flux selftest                 # PASS/FAIL per check: tools, a sweep, the model s
 
 Point Flux at a model first: a local or remote Ollama (`FLUX_LLM_MODEL`, `OLLAMA_BASE_URL`), or
 any OpenAI-compatible server (`FLUX_REMOTE_BASE_URL`, `FLUX_REMOTE_MODEL`,
-`FLUX_REMOTE_API_KEY`). [models.md](models.md) has the recipes.
+`FLUX_REMOTE_API_KEY`). [Models and agents](https://choelzl.github.io/flux/guide/models/) has the recipes.
 
 ## 1. Start from a template
 
@@ -108,7 +108,7 @@ turns it off, for plain logic like an adder), and that is what matters for a num
 like this one. The model first writes the algorithm as Python `design(x)` on integers. It is checked on every one of the
 65,536 inputs in about a second, and the loop then writes the SystemVerilog from it, bit for
 bit. Asking a model for that RTL directly rarely passes. Every key a document may use, and what each command must print, is in the
-[document reference](../website/docs/guide/parameters.md).
+[Document reference](https://choelzl.github.io/flux/guide/parameters/).
 
 ## 4. Check it
 
@@ -194,7 +194,7 @@ the architectures, `fine` moved `chunk` and raised fmax from 3,166 to 3,577 MHz,
 asked the model. With the template's `steps: 1` only the first phase runs.
 The bundled `applications/adder16` starts from a script-driven sweep. The policies are `sweep`,
 `gradient`, `anneal`, `genetic`, `montecarlo`, `pareto` and `model` (the model proposes). The
-[cookbook](cookbook.md) says which suits which space.
+[Recipes](https://choelzl.github.io/flux/guide/cookbook/) says which suits which space.
 
 ## 9. Other kinds of problem
 

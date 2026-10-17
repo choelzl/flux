@@ -29,7 +29,7 @@ Long runs detach: `flux run -- flux task run DOC ...`, then `flux status`, `flux
 An *author* (the model, or a coding agent with `--author opencode|claude|codex`) turns a prompt
 and its files into a problem document and the files it names, checked before anything runs
 ([D586](decisions.md)); the loop runs it and the author revises it from the report. The author
-writes the *problem*, never the design. Options are in [usage-guide.md](usage-guide.md).
+writes the *problem*, never the design. Options are in the [CLI reference](https://choelzl.github.io/flux/reference/cli/#flux-ask).
 
 ## Coding agents as the generator
 
@@ -55,7 +55,7 @@ a question, `questions:` says who answers: nobody (`decide`, the default), the l
 or the `operator` at the TUI ([D585](decisions.md)). With `budget.prototype: true` the agent
 writes the Python prototype instead; the loop checks it with `python -m flux_loop.golden_proto` and spells the
 RTL ([D618](decisions.md)). The agent writes and never runs: the loop compiles, tests and
-measures, and brings a failure back to the agent's session ([D673](decisions.md)). [models.md](models.md) covers the agents' own configuration.
+measures, and brings a failure back to the agent's session ([D673](decisions.md)). [Models and agents](https://choelzl.github.io/flux/guide/models/) covers the agents' own configuration.
 
 ## An outside agent driving Flux
 
@@ -196,4 +196,4 @@ formats other than AsciiDoc (AMBA/JEDEC/PCIe/I2C need a paid licence, [D31](deci
 
 ## The CLI
 
-Every command and option is in [usage-guide.md](usage-guide.md).
+Every command and option is in the [CLI reference](https://choelzl.github.io/flux/reference/cli/).

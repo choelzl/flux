@@ -2,19 +2,19 @@
 
 The Flux tool itself: the loop, the tools it calls, the applications and the command line.
 This page is for working on Flux. To use it, start at the [repository README](../README.md);
-the words are defined in [the glossary](../docs/glossary.md), the loop's design in
+the words are defined in [the glossary](https://choelzl.github.io/flux/reference/glossary/), the loop's design in
 [architecture.md](../docs/architecture.md), and the reason behind each choice in
 [the design log](../docs/decisions.md).
 
 | to | read |
 |---|---|
 | run a problem, start your own, run long campaigns | [the repository README](../README.md) |
-| pick a recipe: tuning, sweeps, models writing designs | [cookbook.md](../docs/cookbook.md) |
-| every document key, every command's format | [document reference](../website/docs/guide/parameters.md) |
+| pick a recipe: tuning, sweeps, models writing designs | [Recipes](https://choelzl.github.io/flux/guide/cookbook/) |
+| every document key, every command's format | [Document reference](https://choelzl.github.io/flux/guide/parameters/), [Commands](https://choelzl.github.io/flux/reference/commands/) |
 | a policy, a world, a role of your own | [extending.md](../docs/extending.md) |
-| models, servers and coding agents | [models.md](../docs/models.md) |
+| models, servers and coding agents | [Models and agents](https://choelzl.github.io/flux/guide/models/) |
 | drive Flux from a script or an agent | [agent-surface.md](../docs/agent-surface.md) |
-| every command and option | [usage-guide.md](../docs/usage-guide.md) |
+| every command and option | [CLI reference](https://choelzl.github.io/flux/reference/cli/); how parts work inside: [usage-guide.md](../docs/usage-guide.md) |
 
 ## Layout
 

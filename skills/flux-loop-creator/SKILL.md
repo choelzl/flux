@@ -14,8 +14,8 @@ The authoritative references, in the checkout (read the one you need before writ
 unusual; never guess a key, unknown keys are refused):
 
 - `flux/core/loop/src/flux_loop/author_reference.md` -- the short form and the golden-model rules.
-- `website/docs/guide/parameters.md` -- every key, default and placeholder (generated from code,
-  guarded by a unit test, so it is current).
+- `website/docs/guide/parameters.md` -- every key and default, and `website/docs/reference/commands.md`
+  -- every placeholder and command contract (checked against the code by a unit test, so they are current).
 - `references/keys.md` beside this file -- the keys you reach for most, condensed.
 - `references/examples.md` beside this file -- three worked loops of different shapes.
 

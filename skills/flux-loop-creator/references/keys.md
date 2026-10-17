@@ -1,6 +1,7 @@
 # problem.yaml keys, condensed
 
-The full, current list is `website/docs/guide/parameters.md` (generated from the code). This
+The full, current list is `website/docs/guide/parameters.md`, with the placeholders and command
+contracts in `website/docs/reference/commands.md` (checked against the code). This
 file is the subset you need most often; defaults in parentheses.
 
 ## Top level

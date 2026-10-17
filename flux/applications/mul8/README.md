@@ -21,7 +21,7 @@ OpenSTA, the screen) and `--stage place` (OpenROAD, the numbers the report quote
 ## Run it
 
 It needs a model: the design is written by it. See "Choose a model" in the
-[usage guide](../../../docs/usage-guide.md) (a local Ollama by default, or any
+[Models and agents](https://choelzl.github.io/flux/guide/models/) (a local Ollama by default, or any
 OpenAI-compatible server). From `flux/`:
 
 ```bash

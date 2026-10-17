@@ -1,8 +1,8 @@
 # Architecture overview
 
 How Flux is built: the loop, the principles it follows, and the layers of code under it. For
-the commands, see [usage-guide.md](usage-guide.md). For the directory tree and the packages,
-see [`flux/README.md`](../flux/README.md). For terms, see [glossary.md](glossary.md). The
+the commands, see the [CLI reference](https://choelzl.github.io/flux/reference/cli/). For the directory tree and the packages,
+see [`flux/README.md`](../flux/README.md). For terms, see the [glossary](https://choelzl.github.io/flux/reference/glossary/) and [glossary.md](glossary.md). The
 reason behind each choice is in the design log, [decisions.md](decisions.md); the code cites
 its entries as D-numbers.
 

@@ -56,7 +56,7 @@ start with:
   flux task check <folder>
   flux task run <folder>
   flux ask "what you want" --file spec.pdf
-docs: README.md and docs/usage-guide.md
+docs: https://choelzl.github.io/flux/
 ```
 
 ## flux log

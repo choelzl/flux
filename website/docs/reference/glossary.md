@@ -37,6 +37,9 @@ under `out/`. When none meets every limit, the closest is reported, not decided.
 **Record.** The SQLite file a loop writes, `out/<id>.db`: every design, check, measurement and
 refusal, with where it came from. A rerun reuses it.
 
+**Campaign.** The command line's word for one line of work inside a record, named after the
+loop. `--campaign` on `flux report`, `flux stop` and the others picks one; by default, the latest.
+
 **Objective, limit, preference.** An objective is a metric and a direction. With a `goal` it
 is a **limit** (at least or at most a value); without one it is a **preference**, compared in
 the order written.

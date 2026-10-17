@@ -1,7 +1,7 @@
 # interfaces/cli — the `flux` command
 
 The `flux` command: the loop's commands (`flux ask`, `flux task check|run|migrate`, `flux run`/
-`status`/`stop`/`attach`, `flux report`; see [docs/usage-guide.md](../../../docs/usage-guide.md)
+`status`/`stop`/`attach`, `flux report`; see the [CLI reference](https://choelzl.github.io/flux/reference/cli/)
 and `flux --help`). An RTL document's tools are the application's own `python rtl.py
 test|measure`.
 

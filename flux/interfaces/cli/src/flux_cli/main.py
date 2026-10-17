@@ -24,7 +24,7 @@ def build_parser() -> argparse.ArgumentParser:
                     "proposes designs, real tools check and measure them, the loop decides and keeps a record.",
         epilog="start with:\n  flux new myloop            (the baseline to fill in)\n"
                "  flux task check <folder>\n  flux task run <folder>\n"
-               "  flux ask \"what you want\" --file spec.pdf\ndocs: README.md and docs/usage-guide.md",
+               "  flux ask \"what you want\" --file spec.pdf\ndocs: https://choelzl.github.io/flux/",
         formatter_class=argparse.RawDescriptionHelpFormatter)
     subparsers = parser.add_subparsers(
         dest="command", required=True, title="commands",

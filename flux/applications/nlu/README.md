@@ -36,8 +36,8 @@ nix develop --command flux task run applications/nlu/ops/exp      # one operator
 ```
 
 It needs Claude Code (`flux agent test claude --live`); another drafter is one line in
-`problem.yaml` (`generate: opencode`, or `model` for the configured model -- see "Choose a
-model" in the [usage guide](../../../docs/usage-guide.md)). The record is `applications/nlu/out/nlu.db`, one
+`problem.yaml` (`generate: opencode`, or `model` for the configured model -- see
+[Models and agents](https://choelzl.github.io/flux/guide/models/)). The record is `applications/nlu/out/nlu.db`, one
 campaign per operator (`nlu/exp`, ...) -- an operator run alone resumes the same one. Another
 ask -- a 2-ULP budget, a 1 GHz clock, other operators -- is a copy of the folder (its name is its
 id) with those changed.

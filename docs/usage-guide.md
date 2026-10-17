@@ -1,21 +1,20 @@
-# Usage guide: the commands
+# Usage guide: notes for contributors
 
-Every `flux` command and what it is for. Run them from `flux/` inside `nix develop` (or after
-`pip install -e ./flux`; see the [repository README](../README.md)). The terms are in the
-[glossary](glossary.md). Other pages cover the rest:
+The user documentation is on the site: [Install](https://choelzl.github.io/flux/start/install/),
+[First loop](https://choelzl.github.io/flux/guide/tutorial/), [Run, stop, resume](https://choelzl.github.io/flux/guide/run/),
+[Write a loop with an agent](https://choelzl.github.io/flux/start/ask/), the [Document reference](https://choelzl.github.io/flux/guide/parameters/)
+and every command's options in the [CLI reference](https://choelzl.github.io/flux/reference/cli/). This page keeps how
+some of it works inside: what a contributor, or someone debugging a run, needs beyond them.
 
 | to | read |
 |---|---|
-| choose and configure a model or a coding agent | [models.md](models.md) |
-| pick a recipe for your problem | [cookbook.md](cookbook.md) |
-| every key of a problem document, every command's format | [document reference](../website/docs/guide/parameters.md) |
 | drive Flux from a script or an agent | [agent-surface.md](agent-surface.md) |
-| use the web interface | [web.md](web.md) |
 | extend it: a policy, a search command, a role | [extending.md](extending.md) |
+| the structure | [architecture.md](architecture.md) |
 
 ## Environment
 
-The model's variables are in [models.md](models.md). The others:
+The model's variables are on the site ([Models and agents](https://choelzl.github.io/flux/guide/models/)). The others:
 
 | variable | what it does | default |
 |---|---|---|
@@ -23,144 +22,7 @@ The model's variables are in [models.md](models.md). The others:
 | `FLUX_TRACE_ROOT` | where each pass writes its prompts, replies and checked prototypes | `$TMPDIR/flux-traces` |
 | `FLUX_OPENROAD_THREADS` | threads for one OpenROAD run | the cores / 4, at most 16 |
 
-## Check the install
-
-```bash
-flux selftest [--full] [--no-model] [--model NAME]
-```
-
-Runs, in a temporary directory: a command-driven sweep, the tools on PATH, the model server,
-a problem the model writes, and a coding agent on PATH; `--full`
-adds the README's first run. Prints PASS, FAIL or SKIP per check; exits 1 when one fails.
-
-## Start a problem
-
-```bash
-flux new NAME                                           # a blank loop to configure
-flux ask "what you want" --file spec.pdf                 # an author writes the problem for you
-flux ask --tui                                           # the same, from a setup screen
-```
-
-- `flux new NAME` writes a loop's baseline (D825): `NAME/problem.yaml` with every part present and what goes there,
-  a README of what each part of the folder is for, an empty `library/` (`--dir D`: into `D/NAME/`) -- nothing of a case.
-  Copy a folder from `flux/applications/` for an existing application, including its check and
-  measurement scripts. The [cookbook](cookbook.md) explains the different loop shapes.
-- `flux ask` has an author (the model by default, or `--author opencode|claude|codex`) write
-  the document and its files into `./out/ask_<slug>/`. It checks the document, runs it, and
-  gives the author the report to revise for the next pass. Options: `--no-run` (write and
-  check only), `--passes N`, `--screen-only`, `--dir DIR`, `--skill DIR`, `--questions operator` (an agent
-  author may ask one question, answered as a line in `runs/author/inbox.jsonl` within `--wait-s`), `--hidden PATH`
-  (a path in the folder hidden from AI: the author may not read it, the document gets it in
-  `flow.knowledge.hidden`). An agent
-  author gets the skills `flux-loop-creator` and `flux-loop-commands`, reads the bundled loops, and writes
-  `decisions.json` (each decision's step and one-line reason) beside the document. The setup screen
-  (`--tui`, or no prompt) takes the prompt, the files, the author and the passes; with
-  "review first" on, you read the checked problem and type `run`, `stop`, or a note.
-
-Checks and measurements that Flux ships are its presets (D968): `fluxpreset golden`,
-`fluxpreset rtl lint|measure`, `fluxpreset prog`, `fluxpreset bench` and `fluxpreset champsim`
-(the [document reference](../website/docs/guide/parameters.md#built-in-tools) lists them). Older
-loops that carry their own `rtl.py` or `champsim.py` keep working. Declare each measurement
-stage's `metrics` and `needs` explicitly, and set the design `language`.
-
-## The problem document
-
-A problem is a folder; its document is `problem.yaml` in it, and the folder's name is the
-problem's id -- the name of its record (`out/<id>.db`) -- so the document has no `id:` (D786).
-To ask something else, copy the folder -- or write `NAME.problem.yaml` beside `problem.yaml`:
-another problem of the same loop, with the same id and its own record `out/<id>.NAME.db` (D787).
-With several that load, `flux task run FOLDER` asks which (with no terminal it lists them; name
-the file to run one), and the web's Start dialog has a picker, each choice checked before it starts. A document says what to make (`statement`, `contract`, `language`), what better means
-(`objectives`), how much to spend (`budget`), and, under `flow`, each box of the loop -- who
-works it and its own settings (D775):
-
-```yaml
-language: systemverilog
-flow:
-  orchestrate:                                   # the search, its space and where it starts
-    policy: sweep
-    space: {arch: [ripple, kogge_stone], block: [2, 4, 8]}
-  generate: {command: "{python} {home}/gen.py {artifact} {arch} {block}"}
-  test: "fluxpreset golden {artifact} --golden {home}/golden.py" # the gate
-  measure:                               # the stages, by name, cheapest first
-    screen:
-      command: "fluxpreset rtl measure {artifact} --stage synth --clock-ps 300"
-      metrics: [fmax_mhz, area_um2, power_w, cell_count]
-      needs: [yosys, openroad]
-    confirm:
-      command: "fluxpreset rtl measure {artifact} --stage place --clock-ps 300"
-      metrics: [fmax_mhz, area_um2, power_w, cell_count]
-      needs: [yosys, openroad]
-      timeout_s: 1800
-  knowledge: {files: [spec.md], agent: opencode}   # what is read; who digests the papers
-  select: {finalists: 2}
-```
-
-There is no `world:` or `hooks:` (D803): what a document cannot say is a command beside it -- a search (`orchestrate: {command: "... {history} {state} {params}"}`, D799), sub-loops in folders whose parent's `generate` composes them (`{parts}`, D801) -- a parent's `generate` that is a model or an agent (`generate: claude`) drafts for them instead, inherited like any box (D804). A search is the orchestrator's (D797): `orchestrate: {policy: sweep, space: {...}}` -- there is no `dse:`; the record's lessons are `knowledge: {lessons: mined}` and `brief` is gone (D796). Every box says who works it the same way (D795): a word (`rules`, `model`, `off`), an agent's name (`critique: claude`), or, only to give it options, `{by: claude, session: pass, ...the box's settings}` (D830: the name alone otherwise -- `plan: opencode`). Knowledge says who digests its papers as `digest:` and who writes lessons as `lessons:`, by name too: `knowledge: {files: [spec.md], digest: claude, lessons: mined}`. `flow.test` is a map by name like `flow.measure` (`lint: ...`, `golden: {run: ..., timeout_s: 300}`; a check named `build` refuses on any non-zero exit, D789). `parts` is a list of names or a map from each name to what it is (D792). The measurement cache is always on and keyed on the stage's command, the scripts it names and the params (D790); there is no `cache:`, `workbench:`, `joiner:` or `max_parts:`. `flow.knowledge: off` turns the library off; `flow.calibrate: off` the calibration. This is the
-only layout (D783): a top-level `gate:`, `stages:`, `space:`, `seeds:` or `knowledge:` is a key a
-document does not have, and `budget` takes no `finalists` or `calibrate`. A document of an earlier form
-is brought to this one by `flux task migrate FOLDER [--write]`, or by an admin from Admin › Loops' "Migrate documents of an earlier form" (D811, D816):
-each change said, a result written only when it loads, the original kept as `<file>.orig`; a `world:`,
-`hooks:` or an `evaluator:` stage is said for a person to rewrite as commands, and a `workload:` key
-or a mined `calibration:` source is dropped (D954).
-
-## Check and run a problem
-
-For a variable set of timing tests, declare a dictionary metric:
-
-```yaml
-flow:
-  test: 'true'
-  measure:
-    bench:
-      command: '{python} {home}/bench.py {artifact}'
-      metrics:
-        - {name: timings, type: dict, direction: minimize, unit: ms}
-objectives:
-  - {metric: timings.parse}  # inherits minimize and ms
-```
-
-The script can print `timings={"parse": 12.5, "compile": null}` or a JSON object such as
-`{"timings": {"parse": 12.5, "compile": null}}`. JSON can span several lines, with diagnostic
-output before or after it. Keys name individual tests; each inherits the parent's numeric type,
-direction and unit. Omitted tests, null, empty and non-finite values stay unmeasured, while zero
-remains a measurement. Records and caches use names such as `timings.parse`; objectives,
-cutoffs and supplied baseline values can use the same names. The parent (`timings`) reports
-the mean of its available finite tests by default. Set `aggregate` to `mean`, `median`, `min`,
-`max`, `sum` or `none`; no finite tests means no aggregate measurement. Objectives can use
-either the aggregate or a named test. Missing a required objective measurement still uses the
-loop's normal eligibility rules. In the crafter, a custom measurement's **+ Dictionary** button
-adds the parent name, direction, unit and aggregate choice.
-
-```bash
-flux task check DOC          # DOC: the folder, or its problem.yaml; what it needs, what it will skip; runs nothing
-flux task run DOC            # runs until stopped (Ctrl-C, flux stop, q in the TUI)
-```
-
-`task check` lists the parts, the roles each can be switched to, the stages and their
-tools, and refuses a document that asks for what nothing measures.
-
-`task run` options:
-
-| option | what it does |
-|---|---|
-| `--passes N` | stop after N passes (default: the document's `budget.passes`, else until stopped) |
-| `--steps N`, `--repair N` | work items per pass; repair attempts per draft |
-| `--screen-only` | stop the chain at the first stage |
-| `--db FILE`, `--out FILE` | the record (default `out/<id>.db` beside the document); the decided artifact |
-| `--json FILE` | also write the answer as JSON: the decision, the front, the refusals |
-| `--tui` | the terminal screen: tasks, timing, results, log, feedback (`f` types a note) |
-| `--model NAME`, `--think`, `--num-predict N`, `--no-structured` | the model's name, reasoning on every turn, output tokens per turn, plain decoding |
-| `--role ROLE=NAME` | switch who fills one role (`--role orchestrator=rules`) |
-| `--agent tools\|orchestrate\|plan\|all` | let the model use tools in its turns, pick the next step, or plan the pass |
-| `--plan FILE` | follow a loop plan document |
-| `--tool-hops N`, `--hop-share F`, `--patience N` | tool rounds per turn; a tool round's share of the window; prototype turns granted per new best |
-| `--regenerate PART...` | draft these parts again instead of resuming them |
-| `--no-prototype`, `--no-patching` | no prototype stage; repair by rewriting, not by edits |
-| `--skill DIR` | add a skill folder |
-| `--replies FILE` | scripted model replies (what the tests use) |
-
-A run resumes from its record: what was measured is never paid for twice.
+## How a search works between passes
 
 **A search works between passes** (D738). A design is named by its settings (D743): a value that
 is a word stands alone, any other carries its knob (`list_sieve-wheel=1`). With `flow.orchestrate` and its `space`, a pass tries one design, the
@@ -172,16 +34,7 @@ take many designs at once). A new run starts the search again from its record.
 the next N start once all of them ended, and the run ends with one decision over every pass. On a server
 an admin allows it per loop (Advanced › Allow parallel work); otherwise passes run one at a time.
 
-## Long runs and records
-
-```bash
-flux run -- flux task run DOC     # start detached; the log goes under the trace root
-flux status DB                    # is it running, since when, how many passes
-flux attach DB                    # follow its log
-flux stop DB                      # stop at the end of the pass (--now interrupts)
-flux report DB                    # an HTML report beside the record: the front per pass, the best so far
-flux log DB                       # every model and agent turn: prompt, reply, tool calls, errors
-```
+## Papers and their digests
 
 **Papers.** A loop reads a library: the shared one (`flux/mentor/knowledge/library`, or `FLUX_LIBRARY`) and
 its own (D791): `library/` beside its document (papers and references, in any subfolders; `flux ask`
@@ -214,6 +67,8 @@ the loop uses its saved intent or explanation when available. Repair turns still
 draft so the agent can fix it. These passes start independently of earlier best designs and cached
 prototypes, while keeping those candidates on record. Variations develop distinct alternatives using
 intent and measured trade-offs, rather than starting with the incumbent's implementation.
+
+## The ideas notebook
 
 **Ideas notebook.** Each campaign retains hypotheses and alternative ideas alongside its trials.
 On later passes, drafting and prototype prompts include a bounded notebook summary: untested
@@ -285,15 +140,6 @@ machine.
   - **Docker's** daemon is root, and the `docker` group is root-equivalent on the machine.
 - **Stopping:** `flux status` and `flux stop --now` find a sandboxed run by its container.
 
-## The web interface
-
-`flux serve` is a shared server with accounts where each user creates, configures, starts and
-follows their loops live; [web.md](web.md) is its reference, page by page.
-
-```bash
-flux user add ada --admin && flux serve   # http://127.0.0.1:8765/
-```
-
 ## RTL tools
 
 The commands an RTL document names as its gate and stages:
@@ -327,3 +173,4 @@ result = run_loop(PromptProblem(task), request_for(task, db="adder16.db"), propo
 
 What a document cannot say is a command beside it -- a check, a measurement, a search
 (`orchestrate: {command}`), a composition -- ([extending.md](extending.md)).
+

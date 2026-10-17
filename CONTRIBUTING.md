@@ -23,7 +23,7 @@ number and a short entry under "Since the fold" in docs/decisions.md: the decisi
 
 ## Where to change what
 
-- A new problem is a document, not code: `flux new`, then [docs/cookbook.md](docs/cookbook.md).
+- A new problem is a document, not code: `flux new`, then the site's [Recipes](https://choelzl.github.io/flux/guide/cookbook/).
 - A search policy, a world or a role of your own can live beside the document, with no change
   to Flux ([docs/extending.md](docs/extending.md)).
 - The loop itself: `flux/core/loop/README.md` maps the modules.
