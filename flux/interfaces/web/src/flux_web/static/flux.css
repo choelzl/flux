@@ -200,7 +200,7 @@ body:has(dialog[open]) button.busy:not(dialog *)::after { display: none; }
 @media (prefers-reduced-motion: no-preference) { .g.spin, button.busy::after, button.asked::after { animation: g-spin .9s linear infinite; } @keyframes g-spin { to { transform: rotate(360deg); } } }
 
 /* ---- pills: a state in a line -- its glyph and its word; a label without a state is a quiet pill with none */
-.pill, .tag { display: inline-flex; align-items: center; gap: 5px; padding: 1px 9px; border-radius: var(--radius-pill); font-size: var(--fs-sm); font-weight: 500; line-height: 18px;
+.pill, .tag { display: inline-flex; align-items: baseline; gap: 5px; padding: 1px 9px; border-radius: var(--radius-pill); font-size: var(--fs-sm); font-weight: 500; line-height: 18px;
         white-space: nowrap; margin-right: 4px; color: var(--t, var(--muted)); text-transform: none; letter-spacing: normal;   /* lowercase in a heading too */
         border: 1px solid color-mix(in srgb, var(--t, var(--muted)) 32%, transparent); background: color-mix(in srgb, var(--t, var(--muted)) 9%, transparent); }
 /* D1108: a tag -- a label that is not a state: no glyph, neutral; tinted by its kind (--k: an agent's pink, a box's
@@ -210,7 +210,16 @@ body:has(dialog[open]) button.busy:not(dialog *)::after { display: none; }
 button.tag { cursor: pointer; } button.tag.kind:hover { background: color-mix(in srgb, var(--k) 30%, var(--panel)); }
 .tag.count { font: 600 var(--fs-xs)/16px var(--mono); padding: 0 6px; flex-shrink: 0; }
 .pill { padding-left: 6px; }
-.pill.icon { padding: 1px 4px; }
+/* a pill's baseline is its words' (align-items: baseline above), its glyph centred beside them: an inline-flex box's
+   baseline is its first item's, and the spinner (an empty ring) has none but its bottom edge -- "running" rode ~3px
+   above "asks" and a tag in the same row. The ring's zero-width space gives it a text baseline where it stands alone. */
+.pill > .g { align-self: center; }
+.loop-state > .pill, .loop-state > .tag { margin-block: 2px; }      /* a row's pills wrapped: a line between, not touching */
+.g.spin::before { content: "\200b"; }
+.pill.icon { padding: 1px 4px; align-items: center; }
+/* a status said by its glyph alone (components/Status.js bare): a table's narrow status column */
+.status-bare { display: inline-grid; place-items: center; color: var(--t); cursor: default; }      /* on the row's baseline, as its glyph's */
+.status-bare > .g { width: 14px; height: 14px; font-size: var(--fs-sm); }
 .pill b { font-weight: 650; font-variant-numeric: tabular-nums; }
 @keyframes pulse { 50% { opacity: .35; } }
 
@@ -576,6 +585,10 @@ table.designs td { white-space: nowrap; }
 .result-table-surface td.name-cell { width: 100%; max-width: 0; min-width: 16ch; }
 .result-table-surface td.name-cell .open-design { max-width: calc(100% - 1.6em); display: inline-flex; }
 .result-table-surface .table-design-name { max-width: 100%; }
+/* the decision's star after its name or id (the name shortened first, the star kept) */
+.result-table-surface td.name-cell { white-space: nowrap; }
+.result-table-surface td.name-cell .star, .checked-designs .star { margin-left: .35em; font-family: var(--sans); font-size: var(--fs-md, 1em); }
+.result-table-surface td.name-cell > .table-design-name:has(+ .star) { max-width: calc(100% - 1.6em); }
 .result-table-surface table.flat-heads .measurement-footer { margin-top: 3px; }
 .result-table-surface td.num .none { color: var(--muted); }
 /* results-9: a few measurements: their raw names side by side, not turned */
@@ -1696,6 +1709,9 @@ td.cleared s { color: var(--muted); }
   .loops-grid > tbody > tr > td.blank { display: none !important; }
   .loops-grid > tbody > tr > td.loop-main-measurements > div { display: inline-block; white-space: nowrap; margin-right: 10px; }
   .loops-grid > tbody > tr > td[data-label]::before { min-width: 5.5em !important; }
+  /* the column's "(started / pass)" is its header's key, too long for a card's label: "Activity", the ages whole */
+  .loops-grid > tbody > tr > td.loop-activity::before { content: "Activity" !important; }
+  .loops-grid > tbody > tr > td.loop-activity { white-space: nowrap; }
   /* D1232: the user on the first line, "cy / cy_sweep" */
   .loops-grid.loops-who > tbody > tr { grid-template-columns: auto minmax(0, 1fr) auto; }
   .loops-grid.loops-who > tbody > tr > td { grid-column: 1 / span 2; }

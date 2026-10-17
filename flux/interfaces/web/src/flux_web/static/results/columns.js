@@ -97,9 +97,9 @@ export function MeasurementHeader({ text, button = null, arrow = null, children 
 const VERDICTS = new Set(["accepted", "pending", "rejected", "failed"]);
 const verdictOf = v => VERDICTS.has(v) ? v : "failed";
 
-/** A table's verdict: the shared status pill, small, its reason on hover. */
+/** A table's verdict: the shared status's glyph alone, the word and its reason on hover. */
 export function VerdictBadge({ verdict, reason = "" }) {
-  return html`<${Status} small status=${verdictOf(verdict)} cls="verdict-badge" title=${reason ? `${verdictOf(verdict)}: ${reason}` : null} />`;
+  return html`<${Status} bare status=${verdictOf(verdict)} cls="verdict-badge" title=${reason ? `${verdictOf(verdict)}: ${reason}` : null} />`;
 }
 
 /** D1090: a critic's rejection is "rejected · critic"; a person's keeps the name. */

@@ -186,7 +186,7 @@ export function lines(rows, v) {
     const lastTry = kind === "design" ? (tries || (lone ? [lone] : null) || triesOfRun(last)).at(-1) : null, made1 = lastTry ? madeBy(lastTry) : "";   // D1061
     const failing = kind === "check" ? [firstFailing(last), notReached(last).length ? `${notReached(last).join(", ")} not run` : ""].filter(Boolean).join(" · ") : "";   // D1061; D1065
     const decided = kind === "choose" ? all.map(n => n.output?.decision).filter(Boolean).at(-1) : "";   // D1063
-    const picked1 = decided ? (ended(nodes) ? `${N.short(decided)} rejected` : `★ ${N.short(decided)}`) : "";
+    const picked1 = decided ? (ended(nodes) ? `${N.short(decided)} rejected` : `${N.short(decided)} ★`) : "";
     const what = staged ? `${stepOf(staged) || String(staged.name).split(":")[1].trim()}${designOf(staged) ? ` ${N.short(designOf(staged))}` : ""} · ${numbersOf(staged, goals)}`
       : planned ? `picked ${planned}` : kind === "plan" ? "" : picked1 || [made1 || rest(last), failing].filter(Boolean).join(" · ");
     const ai = all.some(n => isAI(n) || aiOf.has(n.id)), crit = all.some(isCritique), rejected = all.some(rejectedBy);

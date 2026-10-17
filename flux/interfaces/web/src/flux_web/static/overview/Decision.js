@@ -40,8 +40,8 @@ function BestTable({ r, n, comparison, unit }) {
       <tr><th /><th>Design</th><th class="status-column">Status</th>
         ${metrics.map(m => html`<th class=${`num measurement-head${hid(m)}${dict.get(m) || ""}`} aria-label=${m} title=${`${m}${unit[m] ? " (" + unit[m] + ")" : ""}`}><${MeasurementHeader} text=${labels.get(m)} /></th>`)}</tr>`}>
       ${top.map((d, i) => html`<tr class=${`clickable ${d.verdict}`} onClick=${() => ctx.goTab("Results")}>
-        <td class="muted">${d.decision ? "★" : String(i + 1)}</td>
-        <td class="mono name-cell" title=${`${d.name} · ${d.shown}${d.last ? " · " + d.last : ""}`}><${MidName} cls=${`table-design-name${(d.base || d.name).includes("#") ? " design-id" : ""}`} text=${names.get(d)} title=${d.name} /></td>
+        <td class="muted">${String(i + 1)}</td>
+        <td class="mono name-cell" title=${`${d.name} · ${d.shown}${d.last ? " · " + d.last : ""}`}><${MidName} cls=${`table-design-name${(d.base || d.name).includes("#") ? " design-id" : ""}`} text=${names.get(d)} title=${d.name} />${d.decision ? html`<span class="star" title="decision">★</span>` : ""}</td>
         <td class="status-column"><${VerdictBadge} verdict=${d.verdict} reason=${d.why.join("; ")} /></td>
         ${metrics.map(m => { const ok = d.meets[m], display = measurementText(d, m, comparison, num, values.relative);
           return html`<td class=${`num mono${hid(m)}${dict.get(m) || ""}${ok === true ? " meets" : ok === false ? " misses" : ""}`}

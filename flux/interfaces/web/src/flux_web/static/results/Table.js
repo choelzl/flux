@@ -1,6 +1,6 @@
 // Flux web, results (D690, D1095): the designs as a table -- filtered by their standing, sorted by a header
 // (D929: a real button that says its order), grown by pages (D694), two ticked to compare; a row opens its
-// design. The decision (★) and the newest first, unless a column is chosen.
+// design. The decision (★ after its name) and the newest first, unless a column is chosen.
 
 import { cx, Empty, html, useLayoutEffect, useRef, useState } from "../view.js";
 import { dictionaryClasses, measurementLabels, measurementText } from "./preferences.js";
@@ -70,9 +70,8 @@ export function ResultsTable({ t, selected, onOpen, onCompare }) {
       ${shown.map(d => html`<tr key=${keyOf(d)} class=${`clickable ${d.verdict}${d.decision ? " decided" : ""}${keyOf(d) === selected ? " sel" : ""}`} onClick=${() => onOpen(d)}>
         <td class="pick"><${Check} bare title="compare" aria-label=${`Compare ${d.name}`} checked=${picked.some(p => keyOf(p) === keyOf(d))}
           onClick=${e => { e.stopPropagation(); tick(d, e.currentTarget.checked); }} onKeyDown=${e => { if (e.key === "Enter") { e.preventDefault(); e.currentTarget.click(); } }} /></td>
-        <td class="mono name-cell" title=${`${d.name} · ${d.shown}${d.last ? " · " + d.last : ""}`}>${d.decision ? html`<span class="star" title="decision">★ </span>` : ""}
-          <button type="button" class="link mono open-design" title=${`Open ${d.name}`} aria-label=${`Open ${d.name}`} onClick=${e => { e.stopPropagation(); onOpen(d); }}>
-            <${MidName} cls=${`table-design-name${(d.base || d.name).includes("#") ? " design-id" : ""}`} text=${names.get(d)} title=${d.name} /></button>
+        <td class="mono name-cell" title=${`${d.name} · ${d.shown}${d.last ? " · " + d.last : ""}`}><button type="button" class="link mono open-design" title=${`Open ${d.name}`} aria-label=${`Open ${d.name}`} onClick=${e => { e.stopPropagation(); onOpen(d); }}>
+            <${MidName} cls=${`table-design-name${(d.base || d.name).includes("#") ? " design-id" : ""}`} text=${names.get(d)} title=${d.name} /></button>${d.decision ? html`<span class="star" title="decision">★</span>` : ""}
           ${d.part && !(d.base || d.name).includes("#") ? html`<div class="muted small table-part" title=${d.part}>${d.part}</div>` : ""}</td>
         <td class="status-column"><${VerdictBadge} verdict=${d.verdict} reason=${d.why.join("; ")} /></td>
         ${metrics.map(m => cell(d, m))}</tr>`)}<//>

@@ -113,12 +113,12 @@ export function ChooseBody({ n, a, env }) {
   return html`<div class="task-inspector">
     ${refused ? html`<div class="alt-result bad" style="--k:var(--bad)"><span class="alt-big" title=${chosen}>${`✗ ${id(chosen)}`}</span>
         <span class="muted">${`picked, then rejected by the critic${rejected.get(chosen) ? `: ${rejected.get(chosen)}` : ""}`}</span></div>`
-      : chosen || said.decision ? html`<div class="alt-result ok" style=${`--k:${colorOf(n)}`}><span class="alt-big" title=${chosen || said.decision}>${`★ ${id(chosen || said.decision)}`}</span>
+      : chosen || said.decision ? html`<div class="alt-result ok" style=${`--k:${colorOf(n)}`}><span class="alt-big" title=${chosen || said.decision}>${`${id(chosen || said.decision)} ★`}</span>
         ${by ? html`<span class="muted">${by}</span>` : ""}</div>` : ""}
     ${shown ? html`<p class="muted small alt-pool">${shown}</p>` : ""}
     ${rows.length ? html`<${Table} cls="list compact alt-metrics" thead=${html`<tr><th>design</th>${cols.map(k => { const g = k === g0?.metric ? g0 : goals.find(x => x.metric === k), d = g === g0 ? dir : g?.direction; return html`<th class="num keep-case">${k}${d ? ` ${/max/i.test(d) ? "↑" : "↓"}` : ""}</th>`; })}</tr>`}>
       ${rows.map(([c, m, earlier]) => html`<tr class=${rejected.has(c) ? "alt-rejected" : c === chosen ? "alt-chosen" : ""} title=${rejected.has(c) ? `rejected by the critic: ${rejected.get(c)}` : ""}>
-        <td title=${c}>${rejected.has(c) ? [`✗ ${id(c)}`, html`<${Tag}>critic<//>`] : c === chosen ? `★ ${id(c)}` : id(c)}
+        <td title=${c}>${rejected.has(c) ? [`✗ ${id(c)}`, html`<${Tag}>critic<//>`] : c === chosen ? `${id(c)} ★` : id(c)}
           ${earlier ? html`<span class="muted small"> · an earlier pass</span>` : ""}</td>
         ${cols.map(k => html`<td class="num mono">${cell(m[k])}</td>`)}</tr>`)}<//>` : ""}
     ${n.kids.length ? html`<div class="alt-steps">${n.kids.map(x => html`<${StepRow} key=${x.id} x=${x} a=${a} N=${env.N} />`)}</div>` : ""}</div>`;

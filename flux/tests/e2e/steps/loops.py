@@ -257,7 +257,7 @@ def flows(r):
         r.page("#/", f"{tbl} && {names}.includes('N10')", "the loops, sortable")
         r.check("Loops has no Order menu: its headers sort (D926)", not b.js("return !!document.querySelector('#main .list-bar select')")
                 and b.js(f"return {tbl}.querySelectorAll('th button.th-sort').length") == 5, r.text()[:200])
-        r.check("the loops open on their newest activity (D926)", b.js(f"return {sorts}")["Activity"] == "descending", str(b.js(f"return {sorts}")))
+        r.check("the loops open on their newest activity (D926)", b.js(f"return {sorts}")["Activity (started / pass)"] == "descending", str(b.js(f"return {sorts}")))
         acts = b.js(f"return [...{tbl}.querySelectorAll('tbody tr')].map(tr => tr.children[2].textContent)")
         never = [i for i, a in enumerate(acts) if a == "—"]            # shell-10: "never run" is said once, by the state
         r.check("a loop never run is after every loop that ran (D926)", not never or never == list(range(never[0], len(acts))), str(acts))
@@ -570,6 +570,27 @@ def flows(r):
                 r.check("the Designs column names its counts: new accepted / accepted / measured (review shell-1)",
                         b.js("return document.querySelector('#main table.list th[data-label=Designs]')?.title || [...document.querySelectorAll('#main table.list th')].find(th => th.textContent.trim().startsWith('Designs'))?.title || ''")
                         == "new accepted (this start) / accepted / measured")
+                # one row's pills and tags on one line: running (its spinner), asks and an agent's tag share a top and a bottom;
+                # Activity says "2 h / 5 min" (since the start / since the pass), the full times in its title
+                b.js("const now = Date.now() / 1000; Object.assign(window.__controlState, {since: now - 7200, pass_since: now - 300, stop_requested: false, restart_requested: false, question: {text: 'which?'}, agents: ['claude']}); return 1")
+                r.page("#/new", "document.querySelector('#main')", "away from the list")
+                r.page("#/", "document.querySelector('#main table.list .loop-agent')", "a row asking, with its agent")
+                row_js = ("const tr = [...document.querySelectorAll('#main table.list tbody tr')].find(t => t.querySelector('.loop-agent')), s = tr.querySelector('td.loop-state'),"
+                          " a = tr.querySelector('td.loop-activity'); s.style.whiteSpace = 'nowrap'; const boxes = [...s.querySelectorAll('.pill, .tag')].map(x => x.getBoundingClientRect());"
+                          " return [[...s.querySelectorAll('.pill, .tag')].map(x => x.textContent.trim()), Math.max(...boxes.map(x => x.top)) - Math.min(...boxes.map(x => x.top)),"
+                          " Math.max(...boxes.map(x => x.bottom)) - Math.min(...boxes.map(x => x.bottom)), a.textContent.trim(), a.title,"
+                          " [...document.querySelectorAll('#main table.list th')].find(th => th.textContent.startsWith('Activity')).dataset.label]")
+                got = b.js(row_js)
+                r.check("running, asks and an agent's tag share one top and bottom in a row (within 1 px)",
+                        got[0] == ["running", "asks", "claude"] and got[1] <= 1 and got[2] <= 1, str(got))
+                r.check("Activity (started / pass): a running loop's \"2 h / 5 min\", the full times in its title",
+                        got[3] == "2 h / 5 min" and got[4].startswith("started ") and " · this pass since " in got[4] and got[5] == "Activity (started / pass)", str(got))
+                b.js("Object.assign(window.__controlState, {running: false, since: null, pass_since: null, question: null, agents: [], last_active: Date.now() / 1000 - 3 * 3600}); return 1")
+                r.page("#/new", "document.querySelector('#main')", "away from the list")
+                r.page("#/", "document.querySelector('#main table.list tbody tr')", "the loop at rest")
+                cell = b.js("const tr = [...document.querySelectorAll('#main table.list tbody tr')].find(t => t.textContent.includes(arguments[0])); const a = tr.querySelector('td.loop-activity'); return [a.textContent.trim(), a.title]", name)
+                r.check("Activity at rest: just its age (\"3 h\"), when in its title", cell[0] == "3 h" and cell[1].startswith("last active "), str(cell))
+                b.js("Object.assign(window.__controlState, {running: true, since: 1000, last_active: 1000}); return 1")
                 r.login("ada")
                 b.js("Object.assign(window.__controlState,{stop_requested:false,restart_requested:false}); return 1")
                 r.page("#/admin", "document.querySelector('.ctl-grid') && document.querySelector('table.list tbody tr')", "admin loop controls")
@@ -578,6 +599,8 @@ def flows(r):
                 b.wait(asked.replace("arguments[0]", "'Restarting…'"), what="admin row restart scheduled, said in the button")
                 r.check("admin row controls: the loop's owner, after the pass first, then \"Restarting…\" (D1006, D1018)",
                         b.js("return !window.__controlCalls.at(-1).now && window.__controlCalls.at(-1).owner==='bob'"))
+                tags = b.js("return [...document.querySelectorAll('#main table.list .loop-access')].map(x => x.textContent.trim())")
+                r.check("Admin › Loops: no \"can run\" beside a loop, running is an admin's default", "can run" not in tags, str(tags))
                 r.clean("loop controls")
             finally:
                 b.js("window.fetch=window.__controlFetch; return 1")

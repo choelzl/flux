@@ -88,7 +88,7 @@ def flows(r):
         r.check("the log has no problem arrows (D723)", not any(x in r.text() for x in ("◀ problem", "problem ▶")))
         r.page("#/", "[...document.querySelectorAll('#main tr')].some(t => t.textContent.includes('sw'))", "the loop list")
         row = b.js("const t = [...document.querySelectorAll('#main tr')].find(t => [...t.cells].some(c => c.textContent.trim() === 'sw')); return t ? [...t.cells].map(c => c.textContent.trim()) : null")
-        r.check("a running loop's row: its activity since when, no pass number, no Configure (D1147)", bool(row) and any(c.startswith("since ") and "pass" not in c for c in row)
+        r.check("a running loop's row: its activity as compact ages (started / pass), no pass number, no Configure (D1147)", bool(row) and any(re.fullmatch(r"(<1 min|\d+ (min|h|d))( / (<1 min|\d+ (min|h|d)))?", c) for c in row)
                 and not any("Configure" in c for c in row), str(row))
         r.page("#/app/sw/live", "document.querySelector('.alt-visual')", "Live again")
         # D758: a note to the running loop is said in the Talk drawer, from any tab, and listed there

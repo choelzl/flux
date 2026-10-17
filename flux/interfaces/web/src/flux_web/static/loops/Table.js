@@ -5,7 +5,7 @@
 import { Ago, Empty, html, useState } from "../view.js";
 import { enc } from "../ui.js";
 import { can, me, pageRefresh } from "../state.js";
-import { num } from "../format.js";
+import { num, when } from "../format.js";
 import { mainMeasurements, measurementText, relativeMeasurement } from "../results/preferences.js";
 import { startLoop, stopLoop, restartLoop } from "../loops.js";
 import { Act } from "../components/Act.js";
@@ -35,11 +35,14 @@ function LoopActions({ l, name, owner, href }) {
   return canRun ? html`<${Act} cls="small primary" onClick=${async () => { if (await startLoop(name, owner)) location.hash = href; }}>Start<//>` : null;
 }
 
-/** D1147: when a running loop started and when its current pass did (State says running, Designs the passes'
-    work); a loop at rest, when it was last active. */
+/** D1147: when a running loop started and when its current pass did -- "2 h / 5 min" (State says running, Designs
+    the passes' work); a loop at rest, how long since it was last active ("3 h"); never run "—". Compact ages, the
+    full times in the cell's title (activityTitle). */
 const Activity = ({ l }) => l.running
-  ? html`since <${Ago} t=${l.since} />${l.pass_since ? html`, last <${Ago} t=${l.pass_since} />` : ""}`
-  : l.last_active ? html`last <${Ago} t=${l.last_active} />` : html`<span class="muted">—</span>`;     // shell-10: "never run" is its state's
+  ? html`<${Ago} short t=${l.since} />${l.pass_since ? html`<span class="muted">${" / "}</span><${Ago} short t=${l.pass_since} />` : ""}`
+  : l.last_active ? html`<${Ago} short t=${l.last_active} />` : html`<span class="muted">—</span>`;     // shell-10: "never run" is its state's
+const activityTitle = l => l.running ? `started ${when(l.since)}${l.pass_since ? ` · this pass since ${when(l.pass_since)}` : ""}`
+  : l.last_active ? `last active ${when(l.last_active)}` : null;
 
 /** The decision's main measurements, met or missed, as the loop shows them (D837). */
 function Best({ l, name, owner }) {
@@ -63,7 +66,7 @@ export function LoopsTable({ loops, who = false, memo = "flux-sort-loops", empty
     ...(who ? [{ label: "User", key: l => l.owner || "", asc: true }] : []),
     { label: "Loop", key: l => l.name || l.app, asc: true },
     { label: "State", key: STATE_RANK },
-    { label: "Activity", key: l => l.running ? [1, l.since || 0] : l.last_active ? [0, l.last_active] : null },
+    { label: "Activity (started / pass)", key: l => l.running ? [1, l.since || 0] : l.last_active ? [0, l.last_active] : null },
     // new accepted (this start) / accepted / measured -- the last two the loop's Overview counts (one source, results.designs)
     { label: "Designs", key: l => sm(l).designs ? [sm(l).accepted_this_run || 0, sm(l).accepted || 0, sm(l).designs] : null, num: true,
       title: "new accepted (this start) / accepted / measured" },
@@ -72,12 +75,13 @@ export function LoopsTable({ loops, who = false, memo = "flux-sort-loops", empty
   const row = l => {
     const name = l.name || l.app, owner = l.owner && l.owner !== me.name ? l.owner : null, s = sm(l);
     const href = owner ? `#/u/${enc(owner)}/app/${enc(name)}` : `#/app/${enc(name)}`;
-    const access = !owner ? "" : l.perm === "edit" ? "can edit" : (l.can_run ?? me.role === "admin") ? "can run" : "watching";
+    // only what is unusual: one may edit a loop shared with one, or only watch it; running it (an admin's) is the default
+    const access = !owner ? "" : l.perm === "edit" ? "can edit" : (l.can_run ?? me.role === "admin") ? "" : "watching";
     return html`<tr class="clickable" onClick=${e => { if (!e.target.closest("a, button")) location.hash = href; }}>
       ${who ? html`<td class="loop-user">${l.owner || ""}</td>` : ""}
       <td class="loop-cell"><a href=${href} class="strong">${name}</a>${access ? html` <${Tag} cls="loop-access">${access}<//>` : ""}</td>
       <td class="loop-state"><${StatePill} st=${l} />${l.question ? html`<${Pill} tone="warn">asks<//>` : ""}${(l.agents || []).map(a => html`<${Tag} k="var(--agent)" cls="loop-agent">${a}<//>`)}</td>
-      <td class=${`muted loop-activity${!l.running && !l.last_active ? " blank" : ""}`}><${Activity} l=${l} /></td>
+      <td class=${`muted loop-activity${!l.running && !l.last_active ? " blank" : ""}`} title=${activityTitle(l)}><${Activity} l=${l} /></td>
       <td class=${`num mono loop-designs${s.designs ? "" : " blank"}`} title=${s.designs ? `${s.accepted_this_run || 0} accepted this start · ${s.accepted || 0} accepted of ${s.designs} measured in all` : null}>
         ${s.designs ? html`${String(s.accepted_this_run || 0)}<span class="muted">${` / ${s.accepted || 0} / ${s.designs}`}</span>` : html`<span class="muted">—</span>`}</td>
       <td class=${`mono loop-main-measurements${s.best ? "" : " blank"}`}>${s.best ? html`<${Best} l=${l} name=${name} owner=${owner} />` : html`<span class="muted">—</span>`}</td>

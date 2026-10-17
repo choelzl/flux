@@ -3,12 +3,15 @@
 /** When, as this browser writes a date and time. */
 export const when = (t) => t ? new Date(t * 1000).toLocaleString() : "";
 
-/** How long ago, in words: "just now", "5 min ago", "3 h ago", "2 d ago". */
-export function agoText(t) {
-  // each unit up to where it rounds to the next ("60 min ago" is "1 h ago", "24 h ago" "1 d ago")
+/** How long since, compact, for a narrow column: "<1 min", "5 min", "3 h", "2 d". */
+export function ageText(t) {
+  // each unit up to where it rounds to the next ("60 min" is "1 h", "24 h" "1 d")
   const s = Date.now() / 1000 - t, m = Math.round(s / 60), h = Math.round(s / 3600);
-  return s < 45 ? "just now" : m < 60 ? `${m} min ago` : h < 24 ? `${h} h ago` : `${Math.round(s / 86400)} d ago`;
+  return s < 45 ? "<1 min" : m < 60 ? `${m} min` : h < 24 ? `${h} h` : `${Math.round(s / 86400)} d`;
 }
+
+/** How long ago, in words: "just now", "5 min ago", "3 h ago", "2 d ago". */
+export const agoText = t => Date.now() / 1000 - t < 45 ? "just now" : `${ageText(t)} ago`;
 
 /** A duration: "4.2s", "3m 05s", "2h 10m". */
 export function dur(s) {

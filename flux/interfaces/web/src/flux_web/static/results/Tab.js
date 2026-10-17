@@ -33,7 +33,7 @@ export function Checked({ r }) {
   const chosen = String((r.passes || []).map(p => p.conclusion?.decision).filter(Boolean).at(-1) || "");
   return html`<${Card} title=${`Checked, not measured (${rows.length})`} cls="checked-card"><${Table} cls="list compact checked-designs" heads=${["Design", "Checks", "Why", "When"]}>
     ${rows.map(u => html`<tr key=${u.name} class=${u.verdict === "failed" ? "failed" : ""}>
-      <td class="mono" title=${u.name}>${u.name === chosen ? "★ " : ""}${own(ctx, u.name)}</td>
+      <td class="mono" title=${u.name}>${own(ctx, u.name)}${u.name === chosen ? html` <span class="star" title="decision">★</span>` : ""}</td>
       <td><${Status} small status=${u.verdict === "failed" || u.verdict === "rejected" ? u.verdict : "passed"} />${u.name === chosen ? " · chosen" : ""}</td>
       <td class="small">${(u.why || "").split("\n")[0] || "—"}</td><td class="muted small">${u.when ? html`<${Ago} t=${Date.parse(u.when) / 1000} />` : ""}</td></tr>`)}<//><//>`;
 }

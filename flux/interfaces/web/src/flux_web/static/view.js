@@ -4,7 +4,7 @@
 import { html, render } from "./vendor/htm-preact.module.js";
 import { options } from "./vendor/preact.module.js";
 import { useEffect, useLayoutEffect, useRef, useState } from "./vendor/hooks.module.js";
-import { agoText, when } from "./format.js";
+import { ageText, agoText, when } from "./format.js";
 import { Head } from "./components/Head.js";
 
 export { html, render };
@@ -53,11 +53,12 @@ export function Card({ title, meta, actions, tools, cls = "", children, ...rest 
 // page without being unmounted (a node replaced under it) is dropped at the tick, not kept.
 const ticking = new Set();
 setInterval(() => { for (const s of ticking) { if (s.ref.current?.isConnected) s.tick(); else ticking.delete(s); } }, 30000);
-/** When, in words ("5 min ago", the date on hover), kept current while it is on the page. */
-export function Ago({ t }) {
+/** When, in words ("5 min ago", the date on hover), kept current while it is on the page; `short` the age alone
+    ("5 min", format.js ageText), its date said by the cell it sits in. */
+export function Ago({ t, short = false }) {
   const ref = useRef(null), [, setN] = useState(0);
   useEffect(() => { const s = { ref, tick: () => setN(n => n + 1) }; ticking.add(s); return () => ticking.delete(s); }, []);
-  return t ? html`<time ref=${ref} title=${when(t)}>${agoText(t)}</time>` : null;
+  return !t ? null : short ? html`<time ref=${ref}>${ageText(t)}</time>` : html`<time ref=${ref} title=${when(t)}>${agoText(t)}</time>`;
 }
 
 /** D1102: a tone's glyph -- the turning ring for run, ✓ ! ✗ ○ for ok, warn, bad, none (drawn by the stylesheet, so
