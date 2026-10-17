@@ -30,6 +30,7 @@ import argparse
 import math
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -123,13 +124,14 @@ def e2e_shards(wanted: set[str] | None = None) -> list[tuple[list[str], bool]]:
            ([(sh, True) for sh in _deal(setup, n_setup, order)] if setup else [])
 
 
-def _e2e(steps: set[str] | None) -> list[tuple[str, list[str], dict[str, str]]]:
-    """(job, argv, env) per e2e shard: its steps, the setup or not, its own home (the first keeps the default one)."""
+def _e2e(steps: set[str] | None, homes: Path) -> list[tuple[str, list[str], dict[str, str]]]:
+    """(job, argv, env) per e2e shard: its steps, the setup or not, its own home in `homes` -- this run's: a run
+    starting deletes its home's files and browser profile, and two checks at once (two agents) on the same homes
+    broke each other's steps (a stand-in agent's program gone, a profile pulled from under its browser)."""
     if os.environ.get("FLUX_E2E_STEPS"):
-        return [("e2e", JOBS["e2e"], {})]
-    homes = Path.home() / "snap" / "firefox" / "common"     # where a snap Firefox may read its profile
+        return [("e2e", JOBS["e2e"], {} if os.environ.get("FLUX_E2E_HOME") else {"FLUX_E2E_HOME": str(homes / "e2e")})]
     return [(f"e2e{i}", JOBS["e2e"], {"FLUX_E2E_STEPS": ",".join(sh), **({"FLUX_E2E_SETUP": "1"} if setup else {}),
-                                      **({"FLUX_E2E_HOME": str(homes / f"flux-e2e-{i}")} if i else {})})
+                                      "FLUX_E2E_HOME": str(homes / f"e2e{i}")})
             for i, (sh, setup) in enumerate(e2e_shards(steps))]
 
 
@@ -236,16 +238,20 @@ def main(argv: list[str]) -> int:
     if picked is not None:
         print(f"running the areas {', '.join(picked)}: {len(units)} unit files, {len(steps)} e2e steps", flush=True)
     logs = Path(tempfile.mkdtemp(prefix="flux-check-"))
+    homes = None                                  # where a snap Firefox may read its profile; this run's alone
+    if "e2e" in wanted:
+        (Path.home() / "snap" / "firefox" / "common").mkdir(parents=True, exist_ok=True)
+        homes = Path(tempfile.mkdtemp(prefix="flux-check-", dir=Path.home() / "snap" / "firefox" / "common"))
     t0 = time.monotonic()
     plan = []
     for job in wanted:
         if job == "e2e":
-            plan += [] if steps is not None and not steps else _e2e(steps)
+            plan += [] if steps is not None and not steps else _e2e(steps, homes)
         elif job in ("unit", "heavy"):
             plan += [] if units is not None and not units else [(job, _pytest(job, units), {})]
         else:
             plan.append((job, JOBS[job], {}))
-    running = {}
+    running, env_of = {}, {job: env for job, _cmd, env in plan}
     for job, cmd, env in plan:
         fh = open(logs / f"{job}.log", "w")
         running[job] = (subprocess.Popen(cmd, cwd=HERE, stdout=fh, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
@@ -265,6 +271,8 @@ def main(argv: list[str]) -> int:
             print(f"{'ok  ' if ok else 'FAIL'} {job:6} {time.monotonic() - started:5.0f}s  {_said(job, text, ok)}", flush=True)
             if not ok:
                 failed.append(job)
+            elif "FLUX_E2E_HOME" in env_of[job]:
+                shutil.rmtree(env_of[job]["FLUX_E2E_HOME"], ignore_errors=True)   # a failed shard's kept: its shots
             del running[job]
         time.sleep(0.5)
     shards = sorted(logs.glob("e2e[0-9]*.log"))
@@ -276,6 +284,8 @@ def main(argv: list[str]) -> int:
     for job in failed:
         print(f"\n--- {job}: the end of {logs / (job + '.log')}")
         print("\n".join((logs / f"{job}.log").read_text(errors="replace").splitlines()[-30:]))
+    if homes is not None and not any(j.startswith("e2e") for j in failed):
+        shutil.rmtree(homes, ignore_errors=True)
     return 1 if failed else 0
 
 

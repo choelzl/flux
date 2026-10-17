@@ -395,7 +395,9 @@ def flows(r):
                 r.check("Start defaults to the current problem", b.js("return document.querySelector('dialog.dlg select').value === 'problem.yaml'"))
                 b.js("const pick = document.querySelector('dialog.dlg select'); pick.value = 'alternate.problem.yaml'; pick.dispatchEvent(new Event('change')); return 1")
                 r.dialog_button("Start")
-                b.wait("document.querySelector('.page-head .sub .mono')?.textContent === 'alternate.problem.yaml'", what="new problem in the task header")
+                # the header is drawn with the start's state, the address follows the Live tab an effect later (a frame)
+                b.wait("document.querySelector('.page-head .sub .mono')?.textContent === 'alternate.problem.yaml' && location.hash.endsWith('/live')",
+                       what="new problem in the task header, on Live", said="[document.querySelector('.page-head .sub .mono')?.textContent, location.hash]")
                 r.check("starting another problem updates the header without reloading", b.js("return window.__problemStarts.length === 1 && window.__problemStarts[0].document === 'alternate.problem.yaml' && location.hash.endsWith('/live')"))
                 r.button("Start", ".page-head")
                 b.wait("document.querySelector('dialog.dlg[open] select')", what="next problem picker")
