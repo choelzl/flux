@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Flux preview</title>
+<link rel="icon" type="image/svg+xml" href="../assets/app/logo.svg">
+<script>(function () { var m = matchMedia("(prefers-color-scheme: dark)"), set = function () { var t = null; try { t = localStorage.getItem("flux-theme"); } catch (e) {}
+  document.documentElement.dataset.theme = t === "light" || t === "dark" ? t : m.matches ? "dark" : "light"; };
+  set(); m.addEventListener("change", set); })();</script>
+<link rel="stylesheet" href="../assets/app/flux.css">
+<style>
+.lock { min-height: 100vh; display: grid; place-items: center; padding: 16px; box-sizing: border-box; background: var(--bg); }
+.lock-card { width: min(380px, 100%); box-sizing: border-box; padding: 24px; border: 1px solid var(--line); border-radius: var(--radius-lg, 14px);
+  background: var(--panel); box-shadow: var(--shadow-pop); color: var(--ink); font: 14px/1.5 var(--sans); }
+.lock-card h1 { display: flex; align-items: center; gap: 10px; margin: 0 0 6px; font-size: 20px; }
+.lock-card h1 img { width: 28px; height: 28px; }
+.lock-card p { margin: 0 0 16px; color: var(--muted); }
+.lock-card form { display: flex; flex-direction: column; gap: 10px; }
+.lock-card input { font: inherit; padding: 8px 10px; border: 1px solid var(--field-line, var(--line)); border-radius: var(--radius-sm, 6px); background: var(--panel); color: var(--ink); }
+.lock-card input:focus { outline: none; border-color: var(--accent); box-shadow: var(--focus-ring); }
+.lock-card button { font: inherit; font-weight: 600; padding: 8px 12px; border: 0; border-radius: var(--radius-sm, 6px); background: var(--accent-fill); color: var(--accent-ink); cursor: pointer; }
+.lock-card button:disabled { opacity: .6; cursor: default; }
+.lock-card [hidden] { display: none !important; }
+.lock-card .lock-say { min-height: 1.5em; margin: 0; color: var(--muted); }
+.lock-card .lock-say.bad { color: var(--bad); }
+.lock-card .lock-say:empty { min-height: 0; }
+</style>
+</head>
+<body>
+<main id="flux-lock" class="lock">
+<div class="lock-card">
+<h1><img src="../assets/app/logo.svg" alt="">Flux preview</h1>
+<p>The web app running in your browser on sample data. Enter the passphrase you were given to open it.</p>
+<form id="flux-lock-form" autocomplete="on" method="post" action="about:blank" onsubmit="event.preventDefault()">
+<input type="text" name="username" value="flux-preview" autocomplete="username" hidden>
+<input id="flux-lock-pass" type="password" name="password" autocomplete="current-password" aria-label="Passphrase" placeholder="Passphrase" required>
+<button type="submit">Open the preview</button>
+<p id="flux-lock-say" class="lock-say" role="status" aria-live="polite"></p>
+</form>
+</div>
+</main>
+<script type="application/json" id="flux-sealed">{"v": 1, "kdf": "PBKDF2-SHA256", "iter": 600000, "salt": "gU2yIDQ7pI/IQDYtyxKB4w==", "iv": "8ZWgjPxs8mwSLNo7", "cipher": "AES-256-GCM", "blob": "app.enc"}</script>
+<script>(function(){"use strict";var d="flux-preview-key",s=JSON.parse(document.getElementById("flux-sealed").textContent),i=document.getElementById("flux-lock-form"),a=document.getElementById("flux-lock-pass"),v=document.getElementById("flux-lock-say"),u=i.querySelector("button"),f=function(e){return Uint8Array.from(atob(e),function(t){return t.charCodeAt(0)})},b=function(e){for(var t="",r=0;r<e.length;r++)t+=String.fromCharCode(e[r]);return btoa(t)},o=function(e,t){v.textContent=e,v.className=t?"lock-say bad":"lock-say"},p=null,g=function(){return p||(p=fetch(new URL(s.blob,location.href)).then(function(e){if(!e.ok)throw new Error("the encrypted preview did not load ("+e.status+")");return e.arrayBuffer()}).catch(function(e){throw p=null,e}))};async function x(e){var t=await crypto.subtle.importKey("raw",new TextEncoder().encode(e),"PBKDF2",!1,["deriveBits"]),r=await crypto.subtle.deriveBits({name:"PBKDF2",hash:"SHA-256",salt:f(s.salt),iterations:s.iter},t,256);return new Uint8Array(r)}async function E(e){var t=await crypto.subtle.importKey("raw",e,"AES-GCM",!1,["decrypt"]),r=await crypto.subtle.decrypt({name:"AES-GCM",iv:f(s.iv)},t,await g()),h=await new Response(new Blob([r]).stream().pipeThrough(new DecompressionStream("gzip"))).text();return JSON.parse(h)}async function S(e){var t=document.createElement("style");t.textContent=e.css,document.head.append(t),document.getElementById("flux-lock").remove(),document.body.insertAdjacentHTML("beforeend",e.body);var r=new URL("data/",location.href).href,h=window.fetch.bind(window);window.fetch=function(n,l){var B=typeof n=="string"?n:n instanceof URL?n.href:n&&n.url,w=new URL(B,location.href).href;if(w.indexOf(r)===0){var C=decodeURIComponent(w.slice(r.length).split(/[?#]/)[0]),m=e.data[C];return Promise.resolve(m==null?new Response("",{status:404}):new Response(m,{headers:{"content-type":"application/json"}}))}return h(n,l)},e.classic.forEach(function(n){var l=document.createElement("script");l.textContent=n,document.head.append(l)}),globalThis.__fluxPreviewMeta=new URL(e.meta,location.href).href;var k=URL.createObjectURL(new Blob([e.module],{type:"text/javascript"}));await import(k)}async function y(e){var t=await E(e);try{sessionStorage.setItem(d,JSON.stringify({salt:s.salt,key:b(e)}))}catch{}await S(t)}if(!window.crypto||!crypto.subtle||typeof DecompressionStream>"u"){o("This browser cannot open the preview: it needs a current browser over https.",!0),u.disabled=a.disabled=!0;return}i.addEventListener("submit",async function(e){if(e.preventDefault(),!a.value){o("Enter the passphrase.",!0),a.focus();return}u.disabled=a.disabled=!0,o("Opening the preview…");try{await y(await x(a.value))}catch(t){u.disabled=a.disabled=!1,t&&t.name==="OperationError"?(o("That passphrase does not open the preview. Check it and try again.",!0),a.select()):o("The preview could not be opened: "+(t&&t.message||t),!0)}});var c=null;try{c=JSON.parse(sessionStorage.getItem(d)||"null")}catch{}c&&c.salt===s.salt?(i.hidden=!0,o("Opening the preview…"),y(f(c.key)).catch(function(){try{sessionStorage.removeItem(d)}catch{}i.hidden=!1,o(""),a.focus()})):a.focus()})();
+</script>
+</body>
+</html>

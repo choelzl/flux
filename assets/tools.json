@@ -1,0 +1,1491 @@
+[
+ {
+  "id": "python-test-script",
+  "role": "check",
+  "title": "Test script",
+  "what": "A Python script beside the document runs the design on known cases and prints `N failing`.",
+  "run": "{python} {script} {artifact}",
+  "params": {
+   "script": {
+    "label": "Script",
+    "default": "{home}/check.py",
+    "unit": ""
+   }
+  },
+  "needs": [],
+  "pass": "passes when it prints `0 failing`; exit 3 = did not build",
+  "languages": [
+   "python",
+   "text",
+   "ini",
+   "yaml",
+   "c",
+   "cpp"
+  ],
+  "kinds": [
+   "program",
+   "python",
+   "champsim",
+   "own"
+  ]
+ },
+ {
+  "id": "custom-check",
+  "role": "check",
+  "title": "Any command",
+  "what": "Any command; it prints `N failing` (or say `count_re` / `fail_re`), or its exit code decides.",
+  "run": "{command}",
+  "params": {
+   "command": {
+    "label": "Command",
+    "default": "",
+    "unit": ""
+   }
+  },
+  "needs": [],
+  "pass": "passes when it prints `0 failing`, or else exits 0; exit 3 = did not build",
+  "languages": [],
+  "kinds": [
+   "own"
+  ]
+ },
+ {
+  "id": "bench-script",
+  "role": "stage",
+  "title": "Timing script",
+  "what": "A Python script beside the document runs the design and prints `time_ms=...`.",
+  "run": "{python} {script} {artifact}",
+  "params": {
+   "script": {
+    "label": "Script",
+    "default": "{home}/bench.py",
+    "unit": ""
+   }
+  },
+  "metrics": {
+   "time_ms": "ms"
+  },
+  "needs": [],
+  "languages": [
+   "python",
+   "text",
+   "c",
+   "cpp"
+  ],
+  "kinds": [
+   "program",
+   "python"
+  ]
+ },
+ {
+  "id": "custom-stage",
+  "role": "stage",
+  "title": "Any command",
+  "what": "Any command; it prints `name=value` for each metric it measures, listed as the stage's `metrics`.",
+  "run": "{command}",
+  "params": {
+   "command": {
+    "label": "Command",
+    "default": "",
+    "unit": ""
+   }
+  },
+  "metrics": {},
+  "needs": [],
+  "languages": [],
+  "kinds": [
+   "own"
+  ]
+ },
+ {
+  "id": "python-accuracy",
+  "role": "stage",
+  "title": "Accuracy against a reference",
+  "what": "Calls the design's function and a reference on the same cases and reports how far apart they are: absolute, relative and ULP error.",
+  "run": "fluxpreset accuracy {artifact} --call {call} --reference {reference} --random {random}",
+  "params": {
+   "call": {
+    "label": "Function",
+    "default": "main",
+    "unit": ""
+   },
+   "reference": {
+    "label": "Reference (file:function)",
+    "default": "{home}/reference.py",
+    "unit": ""
+   },
+   "random": {
+    "label": "Random cases",
+    "default": 1000,
+    "unit": ""
+   }
+  },
+  "metrics": {
+   "max_abs_error": "",
+   "mean_abs_error": "",
+   "max_rel_error": "",
+   "mean_rel_error": "",
+   "max_ulp": ""
+  },
+  "needs": [],
+  "languages": [
+   "python"
+  ],
+  "kinds": [
+   "python"
+  ],
+  "short": "accuracy",
+  "preset_module": "accuracy",
+  "preset": true
+ },
+ {
+  "id": "asl-avs",
+  "role": "check",
+  "title": "The spec's AVS tests pass",
+  "what": "Runs a PTO-style spec unit's AVS tests with ASLRef, through the spec's own runner, from the spec kept in the application's folder. Each failing test a line, then the count.",
+  "run": "fluxpreset asl run {unit} --spec {home}/spec",
+  "params": {
+   "unit": {
+    "label": "Unit (id or mnemonic)",
+    "default": "TADD",
+    "unit": ""
+   }
+  },
+  "needs": [
+   "aslref"
+  ],
+  "pass": "passes when it prints `0 failing`; exit 3 = did not build",
+  "languages": [],
+  "kinds": [],
+  "short": "avs",
+  "preset_module": "asl",
+  "preset": true
+ },
+ {
+  "id": "python-bench",
+  "role": "stage",
+  "title": "Time a Python function",
+  "what": "Loads the design, calls one function with your arguments, times it over several runs.",
+  "run": "fluxpreset bench {artifact} --call {call} --args {args} --runs {runs}",
+  "params": {
+   "call": {
+    "label": "Function",
+    "default": "main",
+    "unit": ""
+   },
+   "args": {
+    "label": "Arguments (a Python literal)",
+    "default": "()",
+    "unit": ""
+   },
+   "runs": {
+    "label": "Runs",
+    "default": 5,
+    "unit": ""
+   }
+  },
+  "metrics": {
+   "time_ms": "ms"
+  },
+  "needs": [],
+  "languages": [
+   "python"
+  ],
+  "kinds": [
+   "python"
+  ],
+  "short": "bench",
+  "preset_module": "bench",
+  "preset": true
+ },
+ {
+  "id": "python-cases",
+  "role": "check",
+  "title": "Compare with a reference function",
+  "what": "Calls the design's function on cases (a JSON table, the reference's CASES, random inputs from its inputs(rng)) and compares each result with the reference function's or the expected value.",
+  "run": "fluxpreset cases {artifact} --call {call} --reference {reference} --random {random}",
+  "params": {
+   "call": {
+    "label": "Function",
+    "default": "main",
+    "unit": ""
+   },
+   "reference": {
+    "label": "Reference (file:function)",
+    "default": "{home}/reference.py",
+    "unit": ""
+   },
+   "random": {
+    "label": "Random cases",
+    "default": 100,
+    "unit": ""
+   }
+  },
+  "needs": [],
+  "pass": "passes when it prints `0 failing`; exit 3 = did not build",
+  "languages": [
+   "python"
+  ],
+  "kinds": [
+   "python"
+  ],
+  "short": "cases",
+  "preset_module": "cases",
+  "preset": true
+ },
+ {
+  "id": "c-cases",
+  "role": "check",
+  "title": "Compare a C function with a reference",
+  "what": "Builds the design as a shared library and calls one function (a scalar signature) on cases, each result compared with a Python reference function's or the expected value.",
+  "run": "fluxpreset ccases {artifact} --call {call} --sig {sig} --reference {reference} --random {random}",
+  "params": {
+   "call": {
+    "label": "Function",
+    "default": "main",
+    "unit": ""
+   },
+   "sig": {
+    "label": "Signature",
+    "default": "int(int)",
+    "unit": ""
+   },
+   "reference": {
+    "label": "Reference (file:function)",
+    "default": "{home}/reference.py",
+    "unit": ""
+   },
+   "random": {
+    "label": "Random cases",
+    "default": 100,
+    "unit": ""
+   }
+  },
+  "needs": [
+   "cc"
+  ],
+  "pass": "passes when it prints `0 failing`; exit 3 = did not build",
+  "languages": [
+   "c",
+   "cpp"
+  ],
+  "kinds": [
+   "program"
+  ],
+  "short": "cases",
+  "preset_module": "ccases",
+  "preset": true
+ },
+ {
+  "id": "champsim-build",
+  "role": "check",
+  "title": "Build the prefetcher into ChampSim",
+  "what": "Compiles a prefetcher header into ChampSim; reports the first compiler error.",
+  "run": "fluxpreset champsim build {artifact}",
+  "params": {},
+  "needs": [
+   "pythia"
+  ],
+  "pass": "passes when it builds; exit 3 = did not build",
+  "languages": [
+   "cpp"
+  ],
+  "kinds": [
+   "champsim"
+  ],
+  "short": "build",
+  "preset_module": "champsim",
+  "preset": true
+ },
+ {
+  "id": "champsim-check",
+  "role": "check",
+  "title": "Smoke-run the prefetcher",
+  "what": "Builds the prefetcher and runs it on one trace; refused when it issues no prefetches.",
+  "run": "fluxpreset champsim check {artifact} --traces {traces}",
+  "params": {
+   "traces": {
+    "label": "Trace folder",
+    "default": "{home}/traces",
+    "unit": ""
+   }
+  },
+  "needs": [
+   "pythia"
+  ],
+  "pass": "passes when it prints `0 failing`; exit 3 = did not build",
+  "languages": [
+   "cpp"
+  ],
+  "kinds": [
+   "champsim"
+  ],
+  "short": "smoke",
+  "preset_module": "champsim",
+  "preset": true
+ },
+ {
+  "id": "champsim-run",
+  "role": "stage",
+  "title": "Simulate on your traces (ChampSim)",
+  "what": "Runs an .ini or a prefetcher header on every trace; the geometric-mean IPC speed-up over no prefetcher.",
+  "run": "fluxpreset champsim run {artifact} --traces {traces} --warmup {warmup} --sim {sim}",
+  "params": {
+   "traces": {
+    "label": "Trace folder",
+    "default": "{home}/traces",
+    "unit": ""
+   },
+   "warmup": {
+    "label": "Warm-up",
+    "default": 10000000,
+    "unit": "instructions"
+   },
+   "sim": {
+    "label": "Simulated",
+    "default": 15000000,
+    "unit": "instructions"
+   }
+  },
+  "metrics": {
+   "geomean_speedup": ""
+  },
+  "needs": [
+   "pythia"
+  ],
+  "languages": [
+   "ini",
+   "cpp"
+  ],
+  "kinds": [
+   "champsim"
+  ],
+  "short": "sim",
+  "preset_module": "champsim",
+  "preset": true
+ },
+ {
+  "id": "champsim-stats",
+  "role": "stage",
+  "title": "Why the prefetcher wins (ChampSim)",
+  "what": "Runs it and the run without it on every trace: L2 misses per kilo-instruction with and without it, the share of misses it removed (coverage), and how many of its prefetches were used, late or useless.",
+  "run": "fluxpreset champsim stats {artifact} --traces {traces} --warmup {warmup} --sim {sim}",
+  "params": {
+   "traces": {
+    "label": "Trace folder",
+    "default": "{home}/traces",
+    "unit": ""
+   },
+   "warmup": {
+    "label": "Warm-up",
+    "default": 10000000,
+    "unit": "instructions"
+   },
+   "sim": {
+    "label": "Simulated",
+    "default": 15000000,
+    "unit": "instructions"
+   }
+  },
+  "metrics": {
+   "l2_mpki": "",
+   "l2_mpki_baseline": "",
+   "pf_coverage": "",
+   "pf_accuracy": "",
+   "pf_late": "",
+   "pf_useless": "",
+   "pf_issued_pki": "",
+   "geomean_speedup": ""
+  },
+  "needs": [
+   "pythia"
+  ],
+  "languages": [
+   "ini",
+   "cpp"
+  ],
+  "kinds": [
+   "champsim"
+  ],
+  "short": "stats",
+  "preset_module": "champsim",
+  "preset": true
+ },
+ {
+  "id": "complexity",
+  "role": "stage",
+  "title": "Source complexity",
+  "what": "Reads the design's source (any common language) and counts its lines of code, functions, cyclomatic complexity and tokens; nothing is built or run.",
+  "run": "fluxpreset complexity {artifact}",
+  "params": {},
+  "metrics": {
+   "loc": "",
+   "functions": "",
+   "cyclomatic_max": "",
+   "cyclomatic_mean": "",
+   "tokens": "",
+   "max_function_loc": ""
+  },
+  "needs": [],
+  "languages": [],
+  "kinds": [],
+  "short": "complexity",
+  "preset_module": "complexity",
+  "preset": true
+ },
+ {
+  "id": "complexity-limit",
+  "role": "check",
+  "title": "No function too complex",
+  "what": "Fails each function whose cyclomatic complexity is over the limit.",
+  "run": "fluxpreset complexity {artifact} --max-cyclomatic {max_cyclomatic}",
+  "params": {
+   "max_cyclomatic": {
+    "label": "Most branches per function",
+    "default": 15,
+    "unit": ""
+   }
+  },
+  "needs": [],
+  "pass": "passes when it prints `0 failing`; exit 3 = did not build",
+  "languages": [],
+  "kinds": [],
+  "short": "complexity",
+  "preset_module": "complexity",
+  "preset": true
+ },
+ {
+  "id": "derive",
+  "role": "stage",
+  "title": "Metrics from formulas",
+  "what": "Runs any measurement and adds metrics computed from its numbers, such as area times delay or throughput per watt.",
+  "run": "fluxpreset derive --expr {expr} -- {command}",
+  "params": {
+   "expr": {
+    "label": "Formula (name=expression)",
+    "default": "adp=area_um2*path_ps",
+    "unit": ""
+   },
+   "command": {
+    "label": "Measurement command",
+    "default": "",
+    "unit": ""
+   }
+  },
+  "metrics": {},
+  "needs": [],
+  "languages": [],
+  "kinds": [
+   "own"
+  ],
+  "short": "derive",
+  "preset_module": "derive",
+  "preset": true
+ },
+ {
+  "id": "extract",
+  "role": "stage",
+  "title": "Numbers out of any tool's output",
+  "what": "Runs your tool and reads its JSON, CSV or text output, printing the numbers you pick as name=value.",
+  "run": "fluxpreset extract --format {format} --pick {pick} -- {command}",
+  "params": {
+   "format": {
+    "label": "Format (json, csv, regex)",
+    "default": "json",
+    "unit": ""
+   },
+   "pick": {
+    "label": "Pick (source=name)",
+    "default": "value=metric",
+    "unit": ""
+   },
+   "command": {
+    "label": "Tool command",
+    "default": "",
+    "unit": ""
+   }
+  },
+  "metrics": {},
+  "needs": [],
+  "languages": [],
+  "kinds": [
+   "own"
+  ],
+  "short": "extract",
+  "preset_module": "extract",
+  "preset": true
+ },
+ {
+  "id": "rtl-golden",
+  "role": "check",
+  "title": "Test against a golden model",
+  "what": "Verilator runs the module on golden.py's vectors and counts the wrong outputs.",
+  "run": "fluxpreset golden {artifact} --golden {golden}",
+  "params": {
+   "golden": {
+    "label": "Golden model",
+    "default": "{home}/golden.py",
+    "unit": ""
+   }
+  },
+  "needs": [
+   "verilator"
+  ],
+  "pass": "passes when it prints `0 failing`; exit 3 = did not build",
+  "languages": [
+   "systemverilog",
+   "verilog"
+  ],
+  "kinds": [
+   "rtl"
+  ],
+  "short": "golden",
+  "preset_module": "golden",
+  "preset": true
+ },
+ {
+  "id": "ndf-contract",
+  "role": "check",
+  "title": "Every MUST clause covered and passing",
+  "what": "Reads a PTO-style spec unit's NDF clauses (the NDF tool, from the spec in the application's folder) and the AVS results `fluxpreset asl run --out` wrote: each MUST clause that failed or has no test is a line, then the count.",
+  "run": "fluxpreset ndf check {unit} --spec {home}/spec --results {results}",
+  "params": {
+   "unit": {
+    "label": "Unit (id or mnemonic)",
+    "default": "TADD",
+    "unit": ""
+   },
+   "results": {
+    "label": "AVS results (JSON)",
+    "default": "avs.json",
+    "unit": ""
+   }
+  },
+  "needs": [
+   "ndf"
+  ],
+  "pass": "passes when it prints `0 failing`; exit 3 = did not build",
+  "languages": [],
+  "kinds": [],
+  "short": "contract",
+  "preset_module": "ndf",
+  "preset": true
+ },
+ {
+  "id": "prog-size",
+  "role": "stage",
+  "title": "Program size",
+  "what": "Builds the program and reads its sections with `size`: text, data and bss bytes.",
+  "run": "fluxpreset prog size --build \"{build}\"",
+  "params": {
+   "build": {
+    "label": "Build command ({out}: the program)",
+    "default": "c++ -O2 -o {out} {artifact}",
+    "unit": ""
+   }
+  },
+  "metrics": {
+   "text_bytes": "B",
+   "data_bytes": "B",
+   "bss_bytes": "B"
+  },
+  "needs": [
+   "size"
+  ],
+  "infer_needs": true,
+  "languages": [
+   "c",
+   "cpp",
+   "python"
+  ],
+  "kinds": [
+   "program",
+   "python"
+  ],
+  "short": "size",
+  "preset_module": "prog",
+  "preset": true
+ },
+ {
+  "id": "prog-time",
+  "role": "stage",
+  "title": "Program run time",
+  "what": "Builds the program and times it over several runs (hyperfine when present).",
+  "run": "fluxpreset prog time --build \"{build}\" --run \"{run}\" --runs {runs} --warmup {warmup}",
+  "params": {
+   "build": {
+    "label": "Build command ({out}: the program)",
+    "default": "c++ -O2 -o {out} {artifact}",
+    "unit": ""
+   },
+   "run": {
+    "label": "Run command (empty: the built program)",
+    "default": "",
+    "unit": ""
+   },
+   "runs": {
+    "label": "Runs",
+    "default": 10,
+    "unit": ""
+   },
+   "warmup": {
+    "label": "Warm-up runs",
+    "default": 1,
+    "unit": ""
+   }
+  },
+  "metrics": {
+   "time_ms": "ms",
+   "time_ms_stddev": "ms",
+   "time_ms_min": "ms"
+  },
+  "needs": [],
+  "languages": [
+   "c",
+   "cpp",
+   "python"
+  ],
+  "kinds": [
+   "program",
+   "python"
+  ],
+  "short": "time",
+  "preset_module": "prog",
+  "preset": true
+ },
+ {
+  "id": "prog-count",
+  "role": "stage",
+  "title": "Instruction count (Valgrind)",
+  "what": "Builds the program and counts instructions and cache misses with Valgrind's cachegrind: deterministic.",
+  "run": "fluxpreset prog count --build \"{build}\" --run \"{run}\"",
+  "params": {
+   "build": {
+    "label": "Build command ({out}: the program)",
+    "default": "c++ -O2 -o {out} {artifact}",
+    "unit": ""
+   },
+   "run": {
+    "label": "Run command (empty: the built program)",
+    "default": "",
+    "unit": ""
+   }
+  },
+  "metrics": {
+   "instructions": "instr",
+   "d1_misses": "misses",
+   "ll_misses": "misses",
+   "branch_mispredicts": "mispredicts"
+  },
+  "needs": [
+   "valgrind"
+  ],
+  "infer_needs": true,
+  "languages": [
+   "c",
+   "cpp",
+   "python"
+  ],
+  "kinds": [
+   "program",
+   "python"
+  ],
+  "short": "count",
+  "preset_module": "prog",
+  "preset": true
+ },
+ {
+  "id": "prog-memory",
+  "role": "stage",
+  "title": "Program peak memory",
+  "what": "Builds the program and runs it: its peak resident memory as the kernel counts it, the most over the runs.",
+  "run": "fluxpreset prog memory --build \"{build}\" --run \"{run}\" --runs {runs}",
+  "params": {
+   "build": {
+    "label": "Build command ({out}: the program)",
+    "default": "c++ -O2 -o {out} {artifact}",
+    "unit": ""
+   },
+   "run": {
+    "label": "Run command (empty: the built program)",
+    "default": "",
+    "unit": ""
+   },
+   "runs": {
+    "label": "Runs",
+    "default": 3,
+    "unit": ""
+   }
+  },
+  "metrics": {
+   "peak_rss_kb": ""
+  },
+  "needs": [],
+  "languages": [
+   "c",
+   "cpp",
+   "python"
+  ],
+  "kinds": [
+   "program",
+   "python"
+  ],
+  "short": "memory",
+  "preset_module": "prog",
+  "preset": true
+ },
+ {
+  "id": "pto-check",
+  "role": "check",
+  "title": "The design matches the spec's ASL model",
+  "what": "Builds a pyCircuit design (pycircuit, the C++ model) and drives it with each unit's reference vectors -- the spec's own answers from ASLRef, cached per spec -- one wrong vector a line, then the count. The interface: `fluxpreset pto ops`.",
+  "run": "fluxpreset pto check {artifact} --units {units} --spec {home}/spec",
+  "params": {
+   "units": {
+    "label": "Units (mnemonics, comma-separated; all: every one)",
+    "default": "all",
+    "unit": ""
+   }
+  },
+  "needs": [
+   "pycircuit",
+   "aslref"
+  ],
+  "pass": "passes when it prints `0 failing`; exit 3 = did not build",
+  "languages": [
+   "python"
+  ],
+  "kinds": [],
+  "short": "spec",
+  "preset_module": "pto",
+  "preset": true
+ },
+ {
+  "id": "python-pytest",
+  "role": "check",
+  "title": "Run your pytest file",
+  "what": "Runs your pytest file with the design importable as `design`; counts the failing tests.",
+  "run": "fluxpreset pytest {artifact} --tests {tests}",
+  "params": {
+   "tests": {
+    "label": "Tests",
+    "default": "{home}/test_design.py",
+    "unit": ""
+   }
+  },
+  "needs": [],
+  "pass": "passes when it prints `0 failing`; exit 3 = did not build",
+  "languages": [
+   "python"
+  ],
+  "kinds": [
+   "python"
+  ],
+  "short": "pytest",
+  "preset_module": "pytest",
+  "preset": true
+ },
+ {
+  "id": "regress",
+  "role": "check",
+  "title": "No worse than a baseline",
+  "what": "Runs any measurement again and fails when a metric is worse than the recorded baseline by more than the tolerance.",
+  "run": "fluxpreset regress --baseline {baseline} --tol {tol} -- {command}",
+  "params": {
+   "baseline": {
+    "label": "Baseline (JSON)",
+    "default": "{home}/baseline.json",
+    "unit": ""
+   },
+   "tol": {
+    "label": "Tolerance",
+    "default": 5,
+    "unit": "%"
+   },
+   "command": {
+    "label": "Measurement command",
+    "default": "",
+    "unit": ""
+   }
+  },
+  "needs": [],
+  "pass": "passes when it prints `0 failing`; exit 3 = did not build",
+  "languages": [],
+  "kinds": [
+   "own"
+  ],
+  "short": "regress",
+  "preset_module": "regress",
+  "preset": true
+ },
+ {
+  "id": "repeat",
+  "role": "stage",
+  "title": "Median of several runs",
+  "what": "Runs any measurement several times and prints each metric's median and its spread, so one noisy run does not decide.",
+  "run": "fluxpreset repeat --n {n} -- {command}",
+  "params": {
+   "n": {
+    "label": "Runs",
+    "default": 5,
+    "unit": ""
+   },
+   "command": {
+    "label": "Measurement command",
+    "default": "",
+    "unit": ""
+   }
+  },
+  "metrics": {},
+  "needs": [],
+  "languages": [],
+  "kinds": [
+   "own"
+  ],
+  "short": "repeat",
+  "preset_module": "repeat",
+  "preset": true
+ },
+ {
+  "id": "rtl-lint",
+  "role": "check",
+  "title": "Lint for hardware defects",
+  "what": "Verilator's hardware defects only: latches, multiple drivers, combinational loops, blocking/non-blocking mixes, implicit nets; width and style warnings are not defects. It also refuses what does not parse.",
+  "run": "fluxpreset rtl lint {artifact}",
+  "params": {},
+  "needs": [
+   "verilator"
+  ],
+  "pass": "passes when it prints `0 failing`; exit 3 = did not parse",
+  "languages": [
+   "systemverilog",
+   "verilog"
+  ],
+  "kinds": [
+   "rtl"
+  ],
+  "short": "lint",
+  "preset_module": "rtl",
+  "preset": true
+ },
+ {
+  "id": "rtl-stat",
+  "role": "stage",
+  "title": "Area and cells (ASAP7)",
+  "what": "OpenROAD-flow-scripts' synthesis: the mapped cells' area; nothing timed, the cheapest screen.",
+  "run": "fluxpreset rtl measure {artifact} --stage stat --clock-ps {clock_ps}",
+  "params": {
+   "clock_ps": {
+    "label": "Clock period (the mapper's target)",
+    "default": 1000,
+    "unit": "ps"
+   }
+  },
+  "metrics": {
+   "area_um2": "um2",
+   "cell_count": "cells"
+  },
+  "needs": [
+   "yosys",
+   "openroad",
+   "make"
+  ],
+  "languages": [
+   "systemverilog",
+   "verilog"
+  ],
+  "kinds": [
+   "rtl"
+  ],
+  "short": "stat",
+  "preset_module": "rtl",
+  "preset": true
+ },
+ {
+  "id": "rtl-synth",
+  "role": "stage",
+  "title": "Synthesise and time (ASAP7)",
+  "what": "OpenROAD-flow-scripts to its floorplan: the netlist timed unplaced, seconds.",
+  "run": "fluxpreset rtl measure {artifact} --stage synth --clock-ps {clock_ps}",
+  "params": {
+   "clock_ps": {
+    "label": "Clock period",
+    "default": 1000,
+    "unit": "ps"
+   }
+  },
+  "metrics": {
+   "fmax_mhz": "MHz",
+   "area_um2": "um2",
+   "power_w": "W",
+   "cell_count": "cells",
+   "path_ps": "ps"
+  },
+  "needs": [
+   "yosys",
+   "openroad",
+   "make",
+   "sta"
+  ],
+  "languages": [
+   "systemverilog",
+   "verilog"
+  ],
+  "kinds": [
+   "rtl"
+  ],
+  "short": "synth",
+  "preset_module": "rtl",
+  "preset": true
+ },
+ {
+  "id": "rtl-place",
+  "role": "stage",
+  "title": "Place and time (ASAP7)",
+  "what": "OpenROAD-flow-scripts to detailed placement, timed with wire estimates: tens of seconds.",
+  "run": "fluxpreset rtl measure {artifact} --stage place --clock-ps {clock_ps}",
+  "params": {
+   "clock_ps": {
+    "label": "Clock period",
+    "default": 1000,
+    "unit": "ps"
+   }
+  },
+  "metrics": {
+   "fmax_mhz": "MHz",
+   "area_um2": "um2",
+   "power_w": "W",
+   "cell_count": "cells",
+   "path_ps": "ps"
+  },
+  "needs": [
+   "yosys",
+   "openroad",
+   "make",
+   "sta"
+  ],
+  "languages": [
+   "systemverilog",
+   "verilog"
+  ],
+  "kinds": [
+   "rtl"
+  ],
+  "short": "place",
+  "preset_module": "rtl",
+  "preset": true
+ },
+ {
+  "id": "rtl-route",
+  "role": "stage",
+  "title": "Route and time (ASAP7)",
+  "what": "OpenROAD-flow-scripts to routing: timing after global routing, minutes.",
+  "run": "fluxpreset rtl measure {artifact} --stage route --clock-ps {clock_ps}",
+  "params": {
+   "clock_ps": {
+    "label": "Clock period",
+    "default": 1000,
+    "unit": "ps"
+   }
+  },
+  "metrics": {
+   "fmax_mhz": "MHz",
+   "area_um2": "um2",
+   "power_w": "W",
+   "cell_count": "cells",
+   "path_ps": "ps"
+  },
+  "needs": [
+   "yosys",
+   "openroad",
+   "make",
+   "sta"
+  ],
+  "languages": [
+   "systemverilog",
+   "verilog"
+  ],
+  "kinds": [
+   "rtl"
+  ],
+  "short": "route",
+  "preset_module": "rtl",
+  "preset": true
+ },
+ {
+  "id": "rtl-cycles",
+  "role": "stage",
+  "title": "Clock cycles (Verilator)",
+  "what": "A clocked design run on golden.py's vectors, each started when the last is done: its latency in cycles (the most, the fewest) and the mean cycles per result.",
+  "run": "fluxpreset rtl cycles {artifact} --golden {golden}",
+  "params": {
+   "golden": {
+    "label": "Golden model",
+    "default": "{home}/golden.py",
+    "unit": ""
+   }
+  },
+  "metrics": {
+   "latency_cycles": "cycles",
+   "latency_min_cycles": "",
+   "cycles_per_result": ""
+  },
+  "needs": [
+   "verilator"
+  ],
+  "languages": [
+   "systemverilog",
+   "verilog"
+  ],
+  "kinds": [
+   "rtl"
+  ],
+  "short": "cycles",
+  "preset_module": "rtl",
+  "preset": true
+ },
+ {
+  "id": "rtl-equiv",
+  "role": "check",
+  "title": "Equal to a reference module",
+  "what": "Formal equivalence with Yosys (a miter of the two, proved by SAT; a clocked pair by induction): passes when they are equal for every input, else prints a counterexample.",
+  "run": "fluxpreset rtl equiv {artifact} --reference {reference}",
+  "params": {
+   "reference": {
+    "label": "Reference module",
+    "default": "{home}/reference.sv",
+    "unit": ""
+   }
+  },
+  "needs": [
+   "yosys"
+  ],
+  "pass": "passes when it prints `0 failing`; exit 3 = did not parse",
+  "languages": [
+   "systemverilog",
+   "verilog"
+  ],
+  "kinds": [
+   "rtl"
+  ],
+  "short": "equiv",
+  "preset_module": "rtl",
+  "preset": true
+ },
+ {
+  "id": "rtl-breakdown",
+  "role": "stage",
+  "title": "Where the area goes (ASAP7)",
+  "what": "OpenROAD-flow-scripts' synthesis, its cells grouped: sequential, adders, XORs, buffers and inverters, the rest of the logic; and the flops.",
+  "run": "fluxpreset rtl breakdown {artifact} --clock-ps {clock_ps}",
+  "params": {
+   "clock_ps": {
+    "label": "Clock period (the mapper's target)",
+    "default": 1000,
+    "unit": "ps"
+   }
+  },
+  "metrics": {
+   "area_seq_um2": "",
+   "area_arith_um2": "",
+   "area_xor_um2": "",
+   "area_buf_um2": "",
+   "area_logic_um2": "",
+   "flop_count": "",
+   "area_um2": "um2"
+  },
+  "needs": [
+   "yosys",
+   "openroad",
+   "make"
+  ],
+  "languages": [
+   "systemverilog",
+   "verilog"
+  ],
+  "kinds": [
+   "rtl"
+  ],
+  "short": "breakdown",
+  "preset_module": "rtl",
+  "preset": true
+ },
+ {
+  "id": "rtl-fmax",
+  "role": "stage",
+  "title": "Fastest clock that closes (ASAP7)",
+  "what": "A few OpenROAD-flow-scripts runs, each at the period the last one's slack says, until the fastest clock that closes timing at that stage is found: costly, and the honest fmax.",
+  "run": "fluxpreset rtl fmax {artifact} --stage {stage} --clock-ps {clock_ps} --steps {steps}",
+  "params": {
+   "stage": {
+    "label": "Stage (synth, place, route)",
+    "default": "synth",
+    "unit": ""
+   },
+   "clock_ps": {
+    "label": "First period tried",
+    "default": 1000,
+    "unit": "ps"
+   },
+   "steps": {
+    "label": "Runs at most",
+    "default": 6,
+    "unit": ""
+   }
+  },
+  "metrics": {
+   "fmax_closed_mhz": "",
+   "closed_period_ps": "ps"
+  },
+  "needs": [
+   "yosys",
+   "openroad",
+   "sta",
+   "make"
+  ],
+  "languages": [
+   "systemverilog",
+   "verilog"
+  ],
+  "kinds": [
+   "rtl"
+  ],
+  "short": "fmax",
+  "preset_module": "rtl",
+  "preset": true
+ },
+ {
+  "id": "rtl-power",
+  "role": "stage",
+  "title": "Power from the design's own switching (ASAP7)",
+  "what": "Verilator runs golden.py's vectors and records the switching; OpenROAD reads it on the synthesised or placed design and reports power: internal, switching, leakage.",
+  "run": "fluxpreset rtl power {artifact} --golden {golden} --stage {stage} --clock-ps {clock_ps}",
+  "params": {
+   "golden": {
+    "label": "Golden model",
+    "default": "{home}/golden.py",
+    "unit": ""
+   },
+   "stage": {
+    "label": "Stage (synth, place)",
+    "default": "place",
+    "unit": ""
+   },
+   "clock_ps": {
+    "label": "Clock period",
+    "default": 1000,
+    "unit": "ps"
+   }
+  },
+  "metrics": {
+   "power_w": "W",
+   "power_internal_w": "",
+   "power_switching_w": "",
+   "power_leakage_w": ""
+  },
+  "needs": [
+   "verilator",
+   "yosys",
+   "openroad",
+   "sta",
+   "make"
+  ],
+  "languages": [
+   "systemverilog",
+   "verilog"
+  ],
+  "kinds": [
+   "rtl"
+  ],
+  "short": "power",
+  "preset_module": "rtl",
+  "preset": true
+ },
+ {
+  "id": "rtl-energy",
+  "role": "stage",
+  "title": "Energy per result (ASAP7)",
+  "what": "The power the golden vectors' own switching draws, times the time one result takes (its measured cycles at the clock): energy per result and energy-delay product.",
+  "run": "fluxpreset rtl energy {artifact} --golden {golden} --stage {stage} --clock-ps {clock_ps}",
+  "params": {
+   "golden": {
+    "label": "Golden model",
+    "default": "{home}/golden.py",
+    "unit": ""
+   },
+   "stage": {
+    "label": "Stage (synth, place)",
+    "default": "place",
+    "unit": ""
+   },
+   "clock_ps": {
+    "label": "Clock period",
+    "default": 1000,
+    "unit": "ps"
+   }
+  },
+  "metrics": {
+   "energy_pj_per_result": "",
+   "edp_pj_ns": "",
+   "power_w": "W",
+   "cycles_per_result": ""
+  },
+  "needs": [
+   "verilator",
+   "yosys",
+   "openroad",
+   "sta",
+   "make"
+  ],
+  "languages": [
+   "systemverilog",
+   "verilog"
+  ],
+  "kinds": [
+   "rtl"
+  ],
+  "short": "energy",
+  "preset_module": "rtl",
+  "preset": true
+ },
+ {
+  "id": "rtl-path",
+  "role": "stage",
+  "title": "The critical path's anatomy (ASAP7)",
+  "what": "OpenROAD's worst path at the stage: how many cells it crosses, and how much of its delay is in the cells and how much in the wires -- whether to cut logic or wire.",
+  "run": "fluxpreset rtl path {artifact} --stage {stage} --clock-ps {clock_ps}",
+  "params": {
+   "stage": {
+    "label": "Stage (synth, place, route)",
+    "default": "place",
+    "unit": ""
+   },
+   "clock_ps": {
+    "label": "Clock period",
+    "default": 1000,
+    "unit": "ps"
+   }
+  },
+  "metrics": {
+   "path_ps": "ps",
+   "path_levels": "",
+   "path_cell_ps": "ps",
+   "path_wire_ps": "ps",
+   "slack_ps": "ps"
+  },
+  "needs": [
+   "yosys",
+   "openroad",
+   "sta",
+   "make"
+  ],
+  "languages": [
+   "systemverilog",
+   "verilog"
+  ],
+  "kinds": [
+   "rtl"
+  ],
+  "short": "path",
+  "preset_module": "rtl",
+  "preset": true
+ },
+ {
+  "id": "c-sanitize",
+  "role": "check",
+  "title": "Memory and undefined-behaviour errors",
+  "what": "Builds the program with AddressSanitizer and UndefinedBehaviorSanitizer and runs it: each memory error, leak or undefined behaviour it hits is a failure.",
+  "run": "fluxpreset sanitize --build \"{build}\" --run \"{run}\"",
+  "params": {
+   "build": {
+    "label": "Build command ({out}: the program)",
+    "default": "cc -O1 -o {out} {artifact}",
+    "unit": ""
+   },
+   "run": {
+    "label": "Run command (empty: the built program)",
+    "default": "",
+    "unit": ""
+   }
+  },
+  "needs": [
+   "cc"
+  ],
+  "pass": "passes when it prints `0 failing`; exit 3 = did not build",
+  "languages": [
+   "c",
+   "cpp"
+  ],
+  "kinds": [
+   "program"
+  ],
+  "short": "sanitize",
+  "preset_module": "sanitize",
+  "preset": true
+ },
+ {
+  "id": "scaling",
+  "role": "stage",
+  "title": "How time grows with size",
+  "what": "Times the program at doubling problem sizes and fits time ~ n^k: the exponent says how it scales (1 linear, 2 quadratic), the constant factor aside.",
+  "run": "fluxpreset scaling --start {start} -- {command}",
+  "params": {
+   "start": {
+    "label": "First size",
+    "default": 1000,
+    "unit": ""
+   },
+   "command": {
+    "label": "Run command ({n}: the size)",
+    "default": "{artifact} {n}",
+    "unit": ""
+   }
+  },
+  "metrics": {
+   "scaling_exponent": "",
+   "scaling_r2": "",
+   "time_at_max_ms": "",
+   "max_n": ""
+  },
+  "needs": [],
+  "languages": [],
+  "kinds": [
+   "own"
+  ],
+  "short": "scaling",
+  "preset_module": "scaling",
+  "preset": true
+ },
+ {
+  "id": "scaling-limit",
+  "role": "check",
+  "title": "Scales no worse than n^k",
+  "what": "Times the program at doubling sizes and fails when time grows faster than n to the given power.",
+  "run": "fluxpreset scaling --start {start} --max-exponent {max_exponent} -- {command}",
+  "params": {
+   "start": {
+    "label": "First size",
+    "default": 1000,
+    "unit": ""
+   },
+   "command": {
+    "label": "Run command ({n}: the size)",
+    "default": "{artifact} {n}",
+    "unit": ""
+   },
+   "max_exponent": {
+    "label": "Highest exponent",
+    "default": 1.5,
+    "unit": ""
+   }
+  },
+  "needs": [],
+  "pass": "passes when it prints `0 failing`; exit 3 = did not build",
+  "languages": [],
+  "kinds": [
+   "own"
+  ],
+  "short": "scaling",
+  "preset_module": "scaling",
+  "preset": true
+ },
+ {
+  "id": "systemc-translate",
+  "role": "check",
+  "title": "SystemC translates to RTL (ICSC)",
+  "what": "ICSC translates the SystemC module to SystemVerilog: passes when it does, and when the ports are the golden model's.",
+  "run": "fluxpreset systemc {artifact} --top {top} --golden {golden}",
+  "params": {
+   "top": {
+    "label": "Top module",
+    "default": "top",
+    "unit": ""
+   },
+   "golden": {
+    "label": "Golden model (its PORTS)",
+    "default": "{home}/golden.py",
+    "unit": ""
+   }
+  },
+  "needs": [],
+  "pass": "passes when it prints `0 failing`; exit 3 = did not translate",
+  "languages": [
+   "cpp",
+   "systemc"
+  ],
+  "kinds": [
+   "rtl"
+  ],
+  "short": "translate",
+  "preset_module": "systemc",
+  "preset": true
+ },
+ {
+  "id": "systemc-golden",
+  "role": "check",
+  "title": "SystemC against a golden model",
+  "what": "ICSC translates the SystemC module, then Verilator runs the RTL on golden.py's vectors.",
+  "run": "fluxpreset systemc {artifact} --top {top} --golden {golden} --then \"golden --golden {golden}\"",
+  "params": {
+   "top": {
+    "label": "Top module",
+    "default": "top",
+    "unit": ""
+   },
+   "golden": {
+    "label": "Golden model (its PORTS)",
+    "default": "{home}/golden.py",
+    "unit": ""
+   }
+  },
+  "needs": [
+   "verilator"
+  ],
+  "pass": "passes when it prints `0 failing`; exit 3 = did not translate",
+  "languages": [
+   "cpp",
+   "systemc"
+  ],
+  "kinds": [
+   "rtl"
+  ],
+  "short": "golden",
+  "preset_module": "systemc",
+  "preset": true
+ },
+ {
+  "id": "python-timebound",
+  "role": "check",
+  "title": "Within a time budget",
+  "what": "Times one call of the design's function on a large input and fails a design slower than the budget, before the costly benchmark.",
+  "run": "fluxpreset timebound {artifact} --call {call} --args {args} --max-ms {max_ms}",
+  "params": {
+   "call": {
+    "label": "Function",
+    "default": "main",
+    "unit": ""
+   },
+   "args": {
+    "label": "Arguments (a Python literal)",
+    "default": "()",
+    "unit": ""
+   },
+   "max_ms": {
+    "label": "Budget",
+    "default": 1000,
+    "unit": "ms"
+   }
+  },
+  "needs": [],
+  "pass": "passes when it prints `0 failing`; exit 3 = did not build",
+  "languages": [
+   "python"
+  ],
+  "kinds": [
+   "python"
+  ],
+  "short": "timebound",
+  "preset_module": "timebound",
+  "preset": true
+ }
+]

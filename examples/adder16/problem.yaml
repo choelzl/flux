@@ -1,0 +1,35 @@
+# A 16-bit adder swept over the architectures gen.py spells; no model, no world.
+#     flux task run applications/adder16 [--screen-only]
+
+statement: >-
+  An unsigned 16-bit adder (module `adder16`, inputs `a` and `b`, 17-bit sum `s`): the
+  smallest that makes 2900 MHz placed on ASAP7, chosen from the architectures gen.py spells.
+language: verilog
+
+flow:
+  orchestrate:
+    policy: sweep
+    space:
+      # one knob, six designs -- carry-select's block size is in its name
+      arch: [behavioral, ripple, carry_select_2, carry_select_4, carry_select_8, kogge_stone]
+  generate: {command: "{python} {home}/gen.py {artifact} {arch}"}
+  test: "fluxpreset golden {artifact} --golden {home}/golden.py"
+  measure:
+    screen:
+      command: "fluxpreset rtl measure {artifact} --stage synth --clock-ps 333"
+      metrics: [fmax_mhz, area_um2, power_w, cell_count]
+      needs: [yosys, openroad]
+    confirm:
+      command: "fluxpreset rtl measure {artifact} --stage place --clock-ps 333"
+      metrics: [fmax_mhz, area_um2, power_w, cell_count]
+      needs: [yosys, openroad]
+  select: {finalists: 2}
+  knowledge: off      #, no papers to read (no library/ here, no server library); off keeps out any added later, a project's too
+
+objectives:
+  - {metric: fmax_mhz, direction: maximize, goal: 2900}
+  - {metric: area_um2, direction: minimize}
+
+budget:
+  steps: 1
+  prototype: false
