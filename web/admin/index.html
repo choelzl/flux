@@ -1,0 +1,2845 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Flux searches for better designs: it makes them with a script, a model or a coding agent, checks and measures them with real tools, and decides from your objectives.">
+      
+      
+      
+        <link rel="canonical" href="https://choelzl.github.io/flux/web/admin/">
+      
+      
+        <link rel="prev" href="../groups/">
+      
+      
+        <link rel="next" href="../../preview/">
+      
+      
+      <link rel="icon" href="../../assets/app/logo.svg">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.6.23">
+    
+    
+      
+        <title>Server and admin - Flux</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.84d31ad4.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.06af60db.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/flux-theme.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#server-and-admin" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="Flux" class="md-header__button md-logo" aria-label="Flux" data-md-component="logo">
+      <svg class="flux-logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" aria-label="Flux"><g fill="currentColor"><rect x="78" y="8" width="16" height="28" rx="8"/><rect x="120" y="8" width="16" height="28" rx="8"/><rect x="162" y="8" width="16" height="28" rx="8"/><rect x="120" y="220" width="16" height="28" rx="8"/><rect x="162" y="220" width="16" height="28" rx="8"/><rect x="8" y="78" width="28" height="16" rx="8"/><rect x="8" y="120" width="28" height="16" rx="8"/><rect x="8" y="162" width="28" height="16" rx="8"/><rect x="220" y="78" width="28" height="16" rx="8"/><rect x="220" y="120" width="28" height="16" rx="8"/><rect x="220" y="162" width="28" height="16" rx="8"/></g><rect x="78" y="208" width="16" height="40" rx="8" fill="#f66824"/><g fill="none" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"><rect x="40" y="40" width="176" height="176" rx="32" stroke="currentColor"/><path d="M86 248V118A32 32 0 0 1 118 86H174" stroke="#f66824"/><path d="M128 248V146A18 18 0 0 1 146 128H166" stroke="currentColor"/></g></svg>
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Flux
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Server and admin
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/choelzl/flux" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    choelzl/flux
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../start/install/" class="md-tabs__link">
+          
+  
+  
+  Get started
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../guide/build-your-own/" class="md-tabs__link">
+          
+  
+  
+  Guides
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../" class="md-tabs__link">
+          
+  
+  
+  Web app
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../preview/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Preview app
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../guide/parameters/" class="md-tabs__link">
+          
+  
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="Flux" class="md-nav__button md-logo" aria-label="Flux" data-md-component="logo">
+      <svg class="flux-logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" aria-label="Flux"><g fill="currentColor"><rect x="78" y="8" width="16" height="28" rx="8"/><rect x="120" y="8" width="16" height="28" rx="8"/><rect x="162" y="8" width="16" height="28" rx="8"/><rect x="120" y="220" width="16" height="28" rx="8"/><rect x="162" y="220" width="16" height="28" rx="8"/><rect x="8" y="78" width="28" height="16" rx="8"/><rect x="8" y="120" width="28" height="16" rx="8"/><rect x="8" y="162" width="28" height="16" rx="8"/><rect x="220" y="78" width="28" height="16" rx="8"/><rect x="220" y="120" width="28" height="16" rx="8"/><rect x="220" y="162" width="28" height="16" rx="8"/></g><rect x="78" y="208" width="16" height="40" rx="8" fill="#f66824"/><g fill="none" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"><rect x="40" y="40" width="176" height="176" rx="32" stroke="currentColor"/><path d="M86 248V118A32 32 0 0 1 118 86H174" stroke="#f66824"/><path d="M128 248V146A18 18 0 0 1 146 128H166" stroke="currentColor"/></g></svg>
+    </a>
+    Flux
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/choelzl/flux" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    choelzl/flux
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Home
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    Get started
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            Get started
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../start/install/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Install
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/tutorial/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    First loop
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/loop-crafter/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Loop crafter
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../start/ask/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Write a loop with an agent
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    Guides
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            Guides
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/build-your-own/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Configure
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/loop-shape/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Search and agents
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/knowledge/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Knowledge, skills, hidden paths
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/parts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Split a larger design
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/cookbook/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Recipes
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/run/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Run, stop, resume
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/models/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Models and agents
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    Web app
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            Web app
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Tour
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../live/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Live
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../results/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Results
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../files/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Files and settings
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../chat/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Chat
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../groups/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Groups
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    Server and admin
+    
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    Server and admin
+    
+  </span>
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#run-a-server" class="md-nav__link">
+    <span class="md-ellipsis">
+      Run a server
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Run a server">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#loops-from-the-servers-machine" class="md-nav__link">
+    <span class="md-ellipsis">
+      Loops from the server's machine
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#agents-tests-from-the-servers-machine" class="md-nav__link">
+    <span class="md-ellipsis">
+      Agents' Tests from the server's machine
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#accounts" class="md-nav__link">
+    <span class="md-ellipsis">
+      Accounts
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Accounts">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-words" class="md-nav__link">
+    <span class="md-ellipsis">
+      The words
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#renames" class="md-nav__link">
+    <span class="md-ellipsis">
+      Renames
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#deletes" class="md-nav__link">
+    <span class="md-ellipsis">
+      Deletes
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#projects" class="md-nav__link">
+    <span class="md-ellipsis">
+      Projects
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Projects">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#loops-in-projects" class="md-nav__link">
+    <span class="md-ellipsis">
+      Loops in projects
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#your-account" class="md-nav__link">
+    <span class="md-ellipsis">
+      Your account
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#admin" class="md-nav__link">
+    <span class="md-ellipsis">
+      Admin
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Admin">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#thinking-by-default" class="md-nav__link">
+    <span class="md-ellipsis">
+      Thinking by default
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#resources" class="md-nav__link">
+    <span class="md-ellipsis">
+      Resources
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#maintenance" class="md-nav__link">
+    <span class="md-ellipsis">
+      Maintenance
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Maintenance">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#scheduled-changes" class="md-nav__link">
+    <span class="md-ellipsis">
+      Scheduled changes
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sandbox" class="md-nav__link">
+    <span class="md-ellipsis">
+      Sandbox
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Sandbox">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#allowlists" class="md-nav__link">
+    <span class="md-ellipsis">
+      Allowlists
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#proxy" class="md-nav__link">
+    <span class="md-ellipsis">
+      Proxy
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#chat" class="md-nav__link">
+    <span class="md-ellipsis">
+      Chat
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#environment-variables" class="md-nav__link">
+    <span class="md-ellipsis">
+      Environment variables
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#version" class="md-nav__link">
+    <span class="md-ellipsis">
+      Version
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../preview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Preview app
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    Reference
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            Reference
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/parameters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Document
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/search/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Searches
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/agents/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Agent options
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/commands/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Commands and placeholders
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/presets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Presets
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    CLI
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/refusals/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Common refusals
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/glossary/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Glossary
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#run-a-server" class="md-nav__link">
+    <span class="md-ellipsis">
+      Run a server
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Run a server">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#loops-from-the-servers-machine" class="md-nav__link">
+    <span class="md-ellipsis">
+      Loops from the server's machine
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#agents-tests-from-the-servers-machine" class="md-nav__link">
+    <span class="md-ellipsis">
+      Agents' Tests from the server's machine
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#accounts" class="md-nav__link">
+    <span class="md-ellipsis">
+      Accounts
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Accounts">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-words" class="md-nav__link">
+    <span class="md-ellipsis">
+      The words
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#renames" class="md-nav__link">
+    <span class="md-ellipsis">
+      Renames
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#deletes" class="md-nav__link">
+    <span class="md-ellipsis">
+      Deletes
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#projects" class="md-nav__link">
+    <span class="md-ellipsis">
+      Projects
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Projects">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#loops-in-projects" class="md-nav__link">
+    <span class="md-ellipsis">
+      Loops in projects
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#your-account" class="md-nav__link">
+    <span class="md-ellipsis">
+      Your account
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#admin" class="md-nav__link">
+    <span class="md-ellipsis">
+      Admin
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Admin">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#thinking-by-default" class="md-nav__link">
+    <span class="md-ellipsis">
+      Thinking by default
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#resources" class="md-nav__link">
+    <span class="md-ellipsis">
+      Resources
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#maintenance" class="md-nav__link">
+    <span class="md-ellipsis">
+      Maintenance
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Maintenance">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#scheduled-changes" class="md-nav__link">
+    <span class="md-ellipsis">
+      Scheduled changes
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sandbox" class="md-nav__link">
+    <span class="md-ellipsis">
+      Sandbox
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Sandbox">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#allowlists" class="md-nav__link">
+    <span class="md-ellipsis">
+      Allowlists
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#proxy" class="md-nav__link">
+    <span class="md-ellipsis">
+      Proxy
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#chat" class="md-nav__link">
+    <span class="md-ellipsis">
+      Chat
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#environment-variables" class="md-nav__link">
+    <span class="md-ellipsis">
+      Environment variables
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#version" class="md-nav__link">
+    <span class="md-ellipsis">
+      Version
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="server-and-admin">Server and admin<a class="headerlink" href="#server-and-admin" title="Permanent link">&para;</a></h1>
+<h2 id="run-a-server">Run a server<a class="headerlink" href="#run-a-server" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code>flux<span class="w"> </span>user<span class="w"> </span>add<span class="w"> </span>ada<span class="w"> </span>--admin<span class="w">       </span><span class="c1"># the first account, on the server's machine</span>
+flux<span class="w"> </span>serve<span class="w">                      </span><span class="c1"># http://127.0.0.1:8765/</span>
+</code></pre></div>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Effect</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--host HOST</code>, <code>--port PORT</code></td>
+<td>Where it listens (default <code>127.0.0.1:8765</code>); put a TLS proxy in front for others</td>
+</tr>
+<tr>
+<td><code>--secure-cookie</code></td>
+<td>Send the session cookie over HTTPS only, behind a TLS proxy</td>
+</tr>
+<tr>
+<td><code>--data DIR</code></td>
+<td>The server's data (default <code>$XDG_DATA_HOME/flux/web</code>): accounts, keys, every user's loops</td>
+</tr>
+<tr>
+<td><code>--max-running N</code></td>
+<td>Runs at once per user</td>
+</tr>
+<tr>
+<td><code>--no-sandbox</code></td>
+<td>Runs on the host, not sandboxed: for a single trusted user only</td>
+</tr>
+</tbody>
+</table>
+<p><code>flux user add</code> and <code>flux serve</code> must name the same data folder; both print it. Run them as the
+user who should own the loops' files.</p>
+<ul>
+<li><strong>Data:</strong> the data folder holds <code>flux-web.db</code>, <code>secret.key</code> (which encrypts keys and
+  secrets) and every user's loops under <code>users/&lt;name&gt;/apps/</code>. Back up <code>flux-web.db</code> and
+  <code>secret.key</code> together (<strong>Admin › Maintenance</strong> can) and the loop folders separately.</li>
+<li><strong>Limits:</strong> a loop holds up to 100,000 files and 8 GB; one upload, 900 files and 256 MB.</li>
+<li><strong>Restarts:</strong> a restarted server finds its running loops again; their containers keep
+  running while it is down. <code>scripts/install-service.py</code> (from <code>flux/</code>) installs it as a user
+  service that restarts only the server on updates, or as a system service
+  (<a href="../../guide/run/#user-or-system-service">User or system service</a>).</li>
+<li><strong>What changed, told to the pages</strong>: one server-sent stream per browser (<code>/api/changes</code>, shared by
+  its tabs) says which things changed -- a loop's state, results, notes, files, problem, settings,
+  answers, agents' turns; one's chats and logins; Admin's resources, maintenance and version -- and the
+  pages read those again. Writes through the server say so at once; a running loop's log writer tells
+  the server over its control socket that the log grew (the run itself never sees the socket); a loop
+  someone is looking at is watched on disk (Linux inotify), so an agent's or a hand's change shows in
+  under a second; elsewhere a look every 5 s, and a sweep of the running loops every 30 s for anything
+  missed. The stream sends a keep-alive line every 25 s (proxies drop silent connections) and is never
+  compressed or buffered (<code>X-Accel-Buffering: no</code> for nginx). A page reconnecting is told what changed
+  meanwhile; after a restart it reads everything again.</li>
+<li><strong>Slow requests</strong> (over 0.5 s; <code>FLUX_SLOW_S</code> sets it) are logged as <code>flux serve: slow: ...</code>,
+  with where their time went (sampled while they ran), and the latest 50 are listed in
+  <strong>Admin › Resources</strong> under <strong>Slow requests</strong>. <code>FLUX_SLOW_SAMPLE=0</code> turns the sampling off.</li>
+<li><strong>Before a login</strong> the server serves only the sign-in page (<code>/login</code>: the login, and the
+  invitation and reset links, <code>/#/invite/...</code>) and the few files it loads; <code>/</code> sends a browser
+  there, and every other page, script and stylesheet of the app answers 404 until there is a
+  session, checked on each request (a logout ends it at once; the page's files keep a session
+  they saw 5 s). The app's files are sent
+  <code>Cache-Control: private</code>, so a shared cache or proxy keeps none of them. The docs'
+  <a href="../../preview/">Preview</a> is not covered: it runs the whole app in the browser, by design
+  (minified, and sealed behind its passphrase on the published site).</li>
+<li><strong>The pages' files are kept by the browser</strong>: the page points at
+  <code>/static/v/&lt;version&gt;/...</code>, the version a hash of every file of the web app, and a browser keeps each
+  file a year without asking again. After an update the page names a new version, so a browser loads
+  the new files once and never mixes them with the old; a page left open goes on with its own version
+  (the last three stay served). The first load asks for every module at once (preloaded, not one
+  import after another) and gets the stylesheet in one file; the next ones ask for the page and its
+  data only. Answers sent whole (the API's JSON, the pages, the files) are gzipped for a browser that
+  asks; live streams, downloads and ranges are sent as they are. Through a link of 100 ms round
+  trips the loops page took 5.1 s every time; now about 4 s the first time after an update (the
+  browser's six connections at once: about 220 files) and 0.3-0.7 s after. The server learns that a
+  web file changed from the kernel (inotify): a file saved and the page reloaded shows the change at
+  once, and a page load costs no look at the files. A file changed by another machine sharing the
+  folder is not told, so restart the server after one; on a system without inotify the server looks
+  at the files at most once a second.</li>
+</ul>
+<h3 id="loops-from-the-servers-machine">Loops from the server's machine<a class="headerlink" href="#loops-from-the-servers-machine" title="Permanent link">&para;</a></h3>
+<p><code>flux web-loop</code> lists, starts, stops and reads the web's loops from a shell on the server's
+machine. It never runs a loop itself: it asks the running server, which starts and stops the run
+as its <strong>Start</strong> and <strong>Stop</strong> buttons do, with the same limits, pause, checks, audit and live pages.</p>
+<div class="highlight"><pre><span></span><code>flux<span class="w"> </span>web-loop<span class="w"> </span>ls<span class="w">                          </span><span class="c1"># every loop: owner/loop, state, last start, the agents its problem names</span>
+flux<span class="w"> </span>web-loop<span class="w"> </span>ls<span class="w"> </span>--user<span class="w"> </span>cedric
+flux<span class="w"> </span>web-loop<span class="w"> </span>start<span class="w"> </span>cedric/nlu<span class="w">            </span><span class="c1"># as the Start dialog: the last start's passes, else 1</span>
+flux<span class="w"> </span>web-loop<span class="w"> </span>start<span class="w"> </span>cedric/nlu<span class="w"> </span>--forever<span class="w">  </span><span class="c1"># until stopped; --passes N, --screen-only, --document F, --rerun-baseline</span>
+flux<span class="w"> </span>web-loop<span class="w"> </span>status<span class="w"> </span>cedric/nlu<span class="w">           </span><span class="c1"># running pass N or idle, the last start, the log's last lines (--lines N)</span>
+flux<span class="w"> </span>web-loop<span class="w"> </span>stop<span class="w"> </span>cedric/nlu<span class="w">             </span><span class="c1"># at the end of the pass; --now abandons it</span>
+</code></pre></div>
+<p>A loop is <code>USER/LOOP</code>, its owner first. Each request acts as the loop's owner: the run is theirs,
+on their running limit, and each audit line it writes ends "(by host)". The agents and models are
+the loop's problem's (its <code>flow</code>, Settings › Problem); a start takes only what the Start dialog
+takes. <code>--json</code> prints the server's answer; <code>--data</code> names the data folder, as for <code>flux user</code>.</p>
+<p>The server listens for it on a unix socket in the account's runtime folder, <code>$XDG_RUNTIME_DIR/flux/control-&lt;hash&gt;.sock</code> (one per data folder; <code>&lt;data&gt;/.server/control.sock</code> when there is no runtime folder),
+mode 0600, owned by the server's account; it is made each time <code>flux serve</code> starts (a socket
+left by a server that ended is replaced) and removed when it stops. With no server answering
+there, <code>flux web-loop</code> says the server is not running. <strong>The trust boundary is the data folder:</strong>
+whoever can open the socket can already read and change every account and loop in that folder,
+so is the server's admin; run <code>flux web-loop</code> as the account that runs <code>flux serve</code>.</p>
+<h3 id="agents-tests-from-the-servers-machine">Agents' Tests from the server's machine<a class="headerlink" href="#agents-tests-from-the-servers-machine" title="Permanent link">&para;</a></h3>
+<p>A start waits for each agent its problem names to have passed its <strong>Test</strong> for the loop's owner,
+of the configuration as it is now ("Codex not set up for cedric yet (its configuration changed
+since its Test)"). A new program for an agent (a Codex update) is a new configuration: every user
+who uses it needs a new Test. <code>flux web-agent</code> runs that Test for them, through the running server,
+as <code>flux web-loop</code> does:</p>
+<div class="highlight"><pre><span></span><code>flux<span class="w"> </span>web-agent<span class="w"> </span>ls<span class="w">                         </span><span class="c1"># each user's agents: ready, or needs Test and why; the last Test</span>
+flux<span class="w"> </span>web-agent<span class="w"> </span>ls<span class="w"> </span>codex<span class="w"> </span>--user<span class="w"> </span>cedric
+flux<span class="w"> </span>web-agent<span class="w"> </span><span class="nb">test</span><span class="w">                       </span><span class="c1"># every user, each agent they set up: one line each, ok or failed, its seconds</span>
+flux<span class="w"> </span>web-agent<span class="w"> </span><span class="nb">test</span><span class="w"> </span>codex<span class="w"> </span>--needed<span class="w">        </span><span class="c1"># only those whose gate is not ready; --jobs 2 for two at once</span>
+flux<span class="w"> </span>web-agent<span class="w"> </span><span class="nb">test</span><span class="w"> </span>codex<span class="w"> </span>--user<span class="w"> </span>cedric<span class="w">   </span><span class="c1"># one user (an agent named: tested even if never set up)</span>
+flux<span class="w"> </span>web-agent<span class="w"> </span><span class="nb">test</span><span class="w"> </span>codex<span class="w"> </span>--loop<span class="w"> </span>cedric/nlu<span class="w">   </span><span class="c1"># in that loop's context, its variables</span>
+</code></pre></div>
+<p>It is the same Test as <strong>Account › Agents</strong>' button: the server runs it in the user's own home
+with their own settings, variables and sandbox, and keeps the result as theirs; <code>flux web-agent</code>
+sees no credential. "Set up" is logged in, a key, endpoint, model or variable of their own for
+the agent, or tested before (the admin's Test of the server's configuration counts too); a
+disabled user is skipped unless named. The loops whose own variables
+run an agent otherwise, and that were tested in their context, are tested again in it. A Test ends
+by itself after 420 s and says why; a failed one says what the page says and makes the exit 1.
+Each Test is on the audit as the user's "agent test", ending "(by host)".</p>
+<p>A Test is not a loop's turn. It takes none of the agent's <strong>turns at once</strong> on its endpoint and
+waits for none, so it answers while loops hold every one. It does not count against the user's
+running limit, and it is not held by paused starts. It is not in the usage either (no loop's
+turn); a failed Test is listed on its own in <strong>Admin › Insights</strong>. <code>flux web-agent test</code> keeps its own two guards: it
+refuses a Test of an agent already being tested for that user ("Codex is being tested for cedric:
+wait for it"), and it runs at most two at once (<code>--jobs 2</code>).</p>
+<p><strong>Admin › Maintenance › Test agents</strong> runs the same Tests on a schedule (below).</p>
+<h2 id="accounts">Accounts<a class="headerlink" href="#accounts" title="Permanent link">&para;</a></h2>
+<p><code>flux user</code> manages accounts from the server's machine:</p>
+<div class="highlight"><pre><span></span><code>flux<span class="w"> </span>user<span class="w"> </span>add<span class="w"> </span>bob<span class="w"> </span>--invite<span class="w"> </span>--url<span class="w"> </span>https://flux.example<span class="w">   </span><span class="c1"># a link for bob to choose a password</span>
+flux<span class="w"> </span>user<span class="w"> </span>list
+flux<span class="w"> </span>user<span class="w"> </span>role<span class="w"> </span>bob<span class="w"> </span>admin
+flux<span class="w"> </span>user<span class="w"> </span>link<span class="w"> </span>bob<span class="w">                                      </span><span class="c1"># a password reset link</span>
+flux<span class="w"> </span>user<span class="w"> </span>rename<span class="w"> </span>bob<span class="w"> </span>robert<span class="w">                             </span><span class="c1"># everything of bob's, re-keyed</span>
+flux<span class="w"> </span>user<span class="w"> </span>delete<span class="w"> </span>robert<span class="w"> </span>--transfer-to<span class="w"> </span>cy<span class="w">                </span><span class="c1"># robert gone, his loops cy's (or --delete-loops)</span>
+</code></pre></div>
+<p>A link works once, for a week; there is no mail. In the app, <strong>Admin › Users</strong> does the same: a
+row per user with the <strong>Admin</strong>, <strong>Create</strong> and <strong>Run</strong> boxes, a <strong>Limits</strong> cell (how many of
+their loops run at once, empty for the server's default, and an <strong>Active</strong> switch: off disables
+the account, after asking), their groups as pills (<strong>×</strong> leaves one, <strong>+</strong> searches the others),
+<strong>Last active</strong>, their usage behind <strong>Show usage</strong>, and a <strong>⋯</strong> menu with <strong>View as</strong> (the app as
+they see it, read-only), a reset or invitation link, <strong>Rename…</strong> and <strong>Delete…</strong> (<a href="#deletes">Deletes</a>).
+Headers sort, and the order
+is remembered. <code>flux user role bob admin</code> makes bob an admin; <code>user</code> takes the flag away.</p>
+<p>A new password logs the user out everywhere: one set from a link, by <code>flux user passwd</code> or by an
+admin in the app ends all their sessions (for the last two, a notice tells the user at their next
+login); one changed on their own <strong>Account</strong> ends all but the session that changed it.</p>
+<ul>
+<li><strong>Admin</strong> is the user's own. An admin administers the server and may do anything with every
+  loop. An admin cannot clear their own Admin box; an admin has Create and Run.</li>
+<li><strong>Credentials are a group's.</strong> Each group is set to <strong>Server settings</strong> (runs use the server's
+  model, agent and variable settings beneath the user's own) or <strong>Own settings</strong> (members bring
+  their own settings and agent logins). A user gets the server's settings when <strong>any</strong> of their
+  groups gives them; in no such group, or in no group at all, they use their own. Admins follow
+  the same rule. A new group starts with own settings. Your <strong>Account</strong> names the group that
+  gives you the server's settings; <strong>Groups</strong> in the top bar shows it per group (<a href="../groups/">Groups</a>).</li>
+<li><strong>Groups:</strong> a user is in no group, one or several. <strong>Admin › Users › Groups</strong> lists each group
+  with its member count, its <strong>Credentials</strong>, their <strong>Effect</strong> (who gets the server's settings
+  through it, or through another group), <strong>Open projects give</strong> (the level its open projects give
+  its members unless a project says another; Asker by default), <strong>Rename…</strong> and <strong>Delete…</strong>. A group unrolls to
+  the member grid under its name: a row per member with a <strong>Level</strong> (see <a href="#the-words">the words</a>),
+  the <strong>Member</strong> column every member has, a box per word (hover a column's name for its meaning)
+  and <strong>×</strong> to remove them. The <strong>All members</strong> row on top gives a word to everyone or takes it
+  from everyone (a dash: some have it). <strong>+ Add people</strong> is under the table; a new member starts as
+  Member. On a phone a member is a block: the name and ×, the level, then the words three to
+  a line. A project's members and a loop's <strong>Sharing</strong> are the same grid.</li>
+<li><strong>Permissions of the account</strong>, whatever the groups: <strong>Create loops</strong> and <strong>Run loops and
+  agents</strong>. A user in no group still creates and runs their own loops.</li>
+<li><strong>A membership's words</strong> -- curate, manage, create (Member, Maintainer, Lead) -- act on the
+  group's projects, never on a loop: being in a group gives nothing on any loop (see
+  <a href="#the-words">the words</a>).</li>
+<li>Archive, reset, delete, rename and transfer stay with the owner and the admins. A loop is
+  reached in two ways only: its owner (or one with <strong>share</strong> on it) shares it with a user or a
+  group, or links it into a project. What someone may do with it is the union of their row, their
+  groups' rows and what the projects it is linked into give them. Ask and Run also need <strong>Run
+  loops and agents</strong>.</li>
+</ul>
+<h3 id="the-words">The words<a class="headerlink" href="#the-words" title="Permanent link">&para;</a></h3>
+<p>One vocabulary for loops, groups and projects (<code>GET /api/words</code> serves it): the <strong>loop words</strong>
+<strong>view</strong>, <strong>ask</strong>, <strong>edit</strong>, <strong>run</strong> act on loops -- one shared loop, or the loops linked into a
+project; <strong>share</strong> is a loop's own (whoever holds it chooses who else gets the loop, giving at most
+what they hold). The <strong>place words</strong> act on a group or a project: <strong>link</strong> (link one's own loops
+into a project), <strong>curate</strong> (review a project's knowledge, keep its library), <strong>manage</strong> (members,
+levels, access, title; rename, archive, delete) and, on a group only, <strong>create</strong> (make projects;
+the maker is the project's Lead).</p>
+<p>A loop is reached in two ways only: a <strong>share</strong> (to the person, or to a group of theirs), or being
+<strong>in a project</strong> it is linked into -- one of its members, with their level there, or a member of
+its group when the project opens to the group. A group membership carries no loop word: being in a
+group gives nothing on any loop by itself.</p>
+<table>
+<thead>
+<tr>
+<th>Place</th>
+<th>Words</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Loop share</td>
+<td>view · ask · edit · run · share</td>
+</tr>
+<tr>
+<td>Group membership</td>
+<td>curate · manage · create</td>
+</tr>
+<tr>
+<td>Project level</td>
+<td>view · ask · edit · run · link · curate · manage</td>
+</tr>
+<tr>
+<td>Global project level</td>
+<td>curate · manage</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Levels</strong> are one ladder in every place, cut to each place's words; a mix that matches no level
+reads <strong>Custom</strong>:</p>
+<table>
+<thead>
+<tr>
+<th>Level</th>
+<th>Words</th>
+<th>Loop</th>
+<th>Project</th>
+<th>Group</th>
+<th>Global project</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Member</td>
+<td>none</td>
+<td>--</td>
+<td>yes</td>
+<td>yes</td>
+<td>yes</td>
+</tr>
+<tr>
+<td>Viewer</td>
+<td>view</td>
+<td>yes</td>
+<td>yes</td>
+<td>--</td>
+<td>--</td>
+</tr>
+<tr>
+<td>Asker</td>
+<td>view · ask</td>
+<td>yes</td>
+<td>yes</td>
+<td>--</td>
+<td>--</td>
+</tr>
+<tr>
+<td>Contributor</td>
+<td>view · ask · edit · run · link</td>
+<td>yes (no link)</td>
+<td>yes</td>
+<td>--</td>
+<td>--</td>
+</tr>
+<tr>
+<td>Maintainer</td>
+<td>Contributor and curate, create (on a loop: view · ask · edit · run · share)</td>
+<td>yes</td>
+<td>yes</td>
+<td>curate · create</td>
+<td>curate</td>
+</tr>
+<tr>
+<td>Lead</td>
+<td>every word</td>
+<td>--</td>
+<td>yes</td>
+<td>curate · manage · create</td>
+<td>curate · manage</td>
+</tr>
+</tbody>
+</table>
+<p>A loop's levels stop at Maintainer; its <strong>Owner</strong> row is shown, never given. A word that acts on
+a loop brings view with it.</p>
+<p>Why a place has no box for a word (the grids leave these out):</p>
+<table>
+<thead>
+<tr>
+<th>Place</th>
+<th>Word</th>
+<th>Why not</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Loop share</td>
+<td>link</td>
+<td>covered by share: linking needs share on the loop (its owner has it) and link on the project</td>
+</tr>
+<tr>
+<td>Loop share</td>
+<td>curate</td>
+<td>a loop's record is not curated: what it teaches reaches a project's curators</td>
+</tr>
+<tr>
+<td>Loop share</td>
+<td>manage</td>
+<td>its owner's only (rename, transfer, archive, delete): the Owner row, never given</td>
+</tr>
+<tr>
+<td>Loop share</td>
+<td>create</td>
+<td>loops are made on the account (<strong>Create loops</strong>)</td>
+</tr>
+<tr>
+<td>Group membership</td>
+<td>view, ask, edit, run</td>
+<td>a loop is reached through a share or a project one is in, never a membership</td>
+</tr>
+<tr>
+<td>Group membership</td>
+<td>link</td>
+<td>linking is a project's word: its members' level, or its open level</td>
+</tr>
+<tr>
+<td>Group membership</td>
+<td>share</td>
+<td>a loop's own: a group never shares its members' loops onward</td>
+</tr>
+<tr>
+<td>Project level</td>
+<td>share</td>
+<td>a loop's own: a link is consent to the project only</td>
+</tr>
+<tr>
+<td>Project level</td>
+<td>create</td>
+<td>projects do not nest</td>
+</tr>
+<tr>
+<td>Global project level</td>
+<td>view</td>
+<td>its visibility gives it: everyone a public one, its members a private one</td>
+</tr>
+<tr>
+<td>Global project level</td>
+<td>ask, edit, run, link</td>
+<td>a global project gives nobody a word on its loops; who links is its join rule</td>
+</tr>
+</tbody>
+</table>
+<p>Who <strong>manages</strong> a group or a project gives anyone a level or words up to their own there; admins
+any. The open levels are set by the group's managers (a membership has no loop word to bound them)
+and by a project's own managers within their words.</p>
+<p><strong>What a group gives.</strong> On the loops linked into its projects, only what each project's <strong>group
+access</strong> says: <strong>invite</strong> (the default for a new project) gives nothing on its loops and is
+private: hidden from the group's members until they are added (its managers and curators see
+it); <strong>view</strong> gives every member view on it and its loops; <strong>open</strong> gives every member the
+project's <strong>open level</strong> (the group's default, Asker unless set, or the project's own) -- that
+level, nothing more. Its words reach every project of the group, whatever its access: curate
+curates them, manage manages them and the group's members, create makes projects.</p>
+<p><strong>Global projects.</strong> A global project is <strong>public</strong> (everyone sees it, its library and its
+knowledge) or <strong>private</strong> (only the members an admin or its managers add, and admins, see it;
+elsewhere it is not found). Its members hold only <strong>curate</strong> or <strong>manage</strong> (Member, Maintainer,
+Lead). Nobody sees another person's loops linked into it but admins and its managers; in a private
+one its members do not see the other members either. Who links loops into it is its join rule
+(everyone, or admins), and in a private one only its members. There is no curator group: a curator
+is a member with curate.</p>
+<h3 id="renames">Renames<a class="headerlink" href="#renames" title="Permanent link">&para;</a></h3>
+<p>Only an admin renames a user: <strong>Admin › Users</strong>, the row's <strong>⋯ › Rename…</strong> (or <code>flux user rename</code>).
+Everything that holds the name moves with it -- the user's folder (loops, chats, home), their
+sandbox caches, their loops' settings, variables, shares and result columns, the shares other
+owners gave them, their runs' paths, scheduled changes naming them, chats that focus on their
+loops, the questions they asked, their usage. It is refused while anything of theirs works: a
+run of their loops, an agent writing or answering about one, a chat answer, a login or an agent
+test. There are no redirects: links to the old name stop working, so everyone their loops are
+shared with is told once, with the new link, and so is the user. Their sessions stay; they log in
+with the new name from then on. The audit keeps the old name where it was written, with one
+"rename user" entry.</p>
+<p><strong>Admin › Users › Groups › Rename…</strong> renames a group; its members, their permissions and its
+shares stay (they are kept by the group's id), and its members are told. Names are one whatever
+their case; <code>_</code> is reserved and <code>/</code> is not allowed (a project is addressed <code>&lt;group&gt;/&lt;name&gt;</code>).</p>
+<h3 id="deletes">Deletes<a class="headerlink" href="#deletes" title="Permanent link">&para;</a></h3>
+<p><strong>Active</strong> off (in <strong>Limits</strong>) disables a user: logged out, unable to log in, everything kept.
+<strong>⋯ › Delete…</strong> is the hard one, for admins only. Its dialog says what the user holds -- their
+loops (and whom each is shared with), the projects only they manage, the loops shared with them,
+their groups and sessions -- and asks where their loops go: <strong>transferred</strong> to another user (each
+moves as a transfer does, with its files, record, runs and projects; its shares cleared; a name the
+other user already has becomes <code>&lt;loop&gt;-&lt;user&gt;</code>, shown before you confirm) or <strong>deleted</strong> (as the
+loop's own Delete). Then their account goes with everything kept for them: sessions, invites,
+notifications, memberships, project levels, the shares to them, their own model settings, variables
+and agents' keys, their Overview layout, scheduled changes for them, their folder (chats, home,
+agents' logins) and sandbox caches. The audit keeps their name where it was written, with one
+"delete user" entry; the usage log, transcripts and others' chats stay as history. It is refused
+while a loop of theirs runs or anything of theirs works (as a rename), for yourself and for the
+last enabled admin; you type their name to confirm. Whom their loops were shared with is told,
+and so is the user who got them. <code>flux user delete NAME --transfer-to USER</code> (or <code>--delete-loops</code>)
+does the same from the server's machine.</p>
+<p><strong>Groups › Delete…</strong> is refused while the group has a project, archived ones too: the dialog lists
+them, each a link to its page to delete it. Otherwise it says the members, the loops shared with
+the group and, first, the members who
+get the server's settings through this group alone: they change to their own. You type its name to
+confirm; its memberships, the loop shares made to it and its settings go, and its members are told.
+Its members keep their accounts and loops.</p>
+<h3 id="projects">Projects<a class="headerlink" href="#projects" title="Permanent link">&para;</a></h3>
+<p>Think of a group as an organisation and a project as one of its repositories: the project has its own members,
+and loops are linked into it. A project belongs to one group, addressed <code>&lt;group&gt;/&lt;name&gt;</code>, or is <strong>global</strong>,
+addressed <code>_/&lt;name&gt;</code> and shown "global / …". Names are letters, digits, <code>-</code> and <code>_</code>, one per group whatever their
+case; titles are free. The <a href="../groups/">Groups</a> page lists a group's projects and makes new ones, and each
+project has <a href="../groups/#a-projects-page">a page of its own</a>: its loops and its members. The API (<code>/api/projects</code>, <code>/api/groups/mine</code>) and <code>flux project</code> on the server's
+machine manage them:</p>
+<div class="highlight"><pre><span></span><code>flux<span class="w"> </span>project<span class="w"> </span>create<span class="w"> </span>hw/nlu<span class="w"> </span>--title<span class="w"> </span><span class="s2">"NLU operators"</span><span class="w">                    </span><span class="c1"># --access invite|view|open (invite)</span>
+flux<span class="w"> </span>project<span class="w"> </span>create<span class="w"> </span>_/techniques<span class="w"> </span>--visibility<span class="w"> </span>private<span class="w"> </span>--join<span class="w"> </span>admins<span class="w">  </span><span class="c1"># global: admins only (public by default)</span>
+flux<span class="w"> </span>project<span class="w"> </span>member<span class="w"> </span>_/techniques<span class="w"> </span>cy<span class="w"> </span>maintainer<span class="w">                        </span><span class="c1"># a global project's: member, maintainer (curate) or lead (curate, manage)</span>
+flux<span class="w"> </span>project<span class="w"> </span>access<span class="w"> </span>_/techniques<span class="w"> </span>public<span class="w">                               </span><span class="c1"># a global project's visibility: public or private</span>
+flux<span class="w"> </span>project<span class="w"> </span>member<span class="w"> </span>hw/nlu<span class="w"> </span>bob<span class="w"> </span>contributor<span class="w">                            </span><span class="c1"># a level, or view,ask,link ... or none (a Member)</span>
+flux<span class="w"> </span>project<span class="w"> </span>member<span class="w"> </span>hw/nlu<span class="w"> </span>bob<span class="w"> </span>remove
+flux<span class="w"> </span>project<span class="w"> </span>access<span class="w"> </span>hw/nlu<span class="w"> </span>open<span class="w"> </span>viewer<span class="w">                                </span><span class="c1"># what the group's members get: open, at Viewer (group: the group's)</span>
+flux<span class="w"> </span>project<span class="w"> </span>rename<span class="w"> </span>hw/nlu<span class="w"> </span>nlu-ops<span class="w">                                    </span><span class="c1"># the old address stops working</span>
+flux<span class="w"> </span>project<span class="w"> </span>archive<span class="w"> </span>hw/nlu-ops<span class="w">                                       </span><span class="c1"># --undo unarchives</span>
+flux<span class="w"> </span>project<span class="w"> </span>list<span class="w"> </span>--all
+flux<span class="w"> </span>project<span class="w"> </span>delete<span class="w"> </span>hw/nlu-ops<span class="w"> </span>--yes
+</code></pre></div>
+<p><strong>Levels</strong> are <a href="#the-words">the words'</a> ladder cut to a project's words (view, ask, edit, run, link, curate,
+manage); the one who makes a project is its Lead. A <strong>Member</strong> (no words) sees the project and its members,
+nothing more. <strong>Group access</strong>, per project, says what the group's members get without being its members:
+<strong>invite</strong> (private: hidden from them until they are added, but for the members whose group membership curates or manages; the default for a new project), <strong>view</strong> (they view it and its loops; every
+project made before reads so) or <strong>open</strong> (each gets its open level, nothing more). There is no
+joining: a project's own members are added by those who manage it; anyone may leave a project.</p>
+<p>What someone may do with a project is the union of: what its group access gives, their membership of its group
+(curate and manage on every project of the group), their own level as its member, and a global project's view
+(everyone a public one, its members a private one). Rights only add up:
+nobody loses a right because of a project. Admins may do everything. Members with <strong>create</strong> make the group's projects; only
+admins make global ones and choose whether each is <strong>public</strong> or <strong>private</strong> and who may link loops into them; a
+global project's members (curate or manage) are added by admins and its managers. Archiving hides a project
+from the lists and freezes it until it is unarchived. Every change is in the audit.</p>
+<p><strong>Admin › Users › Projects</strong> lists every project, the groups' and the global ones, archived ones too: its title (a
+link to its page) and address, its group, how many loops are linked into it, how many members it has and the size of
+its library. A global project's <strong>Visibility</strong> (Public or Private) and <strong>Who links loops</strong> (everyone, admins only)
+are set in its row; each row's <strong>⋯</strong> opens it, renames it, archives or unarchives it, deletes it. <strong>New
+global project</strong> is under the list. <code>GET /api/admin/projects</code> answers the list.</p>
+<p>A project's <strong>library</strong> (<code>&lt;data&gt;/projects/&lt;group-id&gt;/&lt;name&gt;/library/</code>, written only by the server) is browsed and
+changed from its page as a loop's files are, through <code>/api/projects/&lt;group&gt;/&lt;name&gt;/library</code> (what it holds, what one may
+do), <code>.../library/files</code>, <code>.../file</code> (GET, PUT, DELETE), <code>.../item</code>, <code>.../item/size</code>, <code>.../move</code>, <code>POST .../files</code>,
+<code>PUT</code>/<code>DELETE .../part</code> and <code>.../hidden</code>. View browses; edit, curate or manage changes; manage hides paths from the
+agents (kept on the project, in the database and its <code>project.json</code>). Paths stay inside it, links are never followed
+or made, a zip holding a link is refused; it holds what a loop may (100,000 files, 8 GB). No loop reads it yet.</p>
+<h4 id="loops-in-projects">Loops in projects<a class="headerlink" href="#loops-in-projects" title="Permanent link">&para;</a></h4>
+<p>A loop is in no project, one or several, in an order its owner sets. Linking a loop is its owner's consent;
+the project's roles then decide. Only its owner (or an admin) links it: into a group's project where they hold
+<strong>link</strong>, or into a global project (anyone -- a private one's members only -- unless its join rule is <strong>admins</strong>);
+an archived project takes none.</p>
+<ul>
+<li>On every loop linked into a group's project, each of its members gets their roles' loop words -- <strong>view</strong>,
+  <strong>ask</strong>, <strong>edit</strong>, <strong>run</strong> -- and the group's members what its access gives (view, or the open level). This adds
+  to what shares give, never takes away (a group membership gives no loop word); ask and run still need the account's <strong>Run loops and agents</strong>;
+  curate, link and manage stay the project's. An archived project gives none until unarchived.</li>
+<li>A <strong>global</strong> project gives nobody any right on a loop. A user sees only their own loops in it; admins and its
+  managers see every one.</li>
+<li>Each link keeps an <strong>extraction</strong> consent: whether what its runs teach may be extracted for the project's
+  knowledge (kept for when extraction comes). On by default for a group's project, the owner's to switch; off for
+  a global one, where only an admin or one of its managers turns it on and the owner may turn it off.</li>
+</ul>
+<p>A loop renamed or transferred keeps its projects; a loop deleted leaves them; a project deleted lets its loops go
+and tells their owners. The API is <code>GET /api/apps/&lt;loop&gt;/projects?owner=&lt;owner&gt;</code> and <code>PUT</code> the same path with the
+whole ordered list, <code>[{"project": "hw/nlu", "extract": true}]</code> (left out, <code>extract</code> keeps what it was, or the
+default); <code>POST /api/projects/&lt;group&gt;/&lt;name&gt;/loops</code> links one of one's loops, <code>PUT</code> and <code>DELETE</code> on
+<code>.../loops/&lt;owner&gt;/&lt;loop&gt;</code> change its learning or take it out; each project in <code>/api/projects</code> lists its loops,
+and each loop in the loop lists its projects. On the server's machine:</p>
+<div class="highlight"><pre><span></span><code>flux<span class="w"> </span>project<span class="w"> </span>loop<span class="w"> </span>bob/adder<span class="w">                          </span><span class="c1"># its projects, in order</span>
+flux<span class="w"> </span>project<span class="w"> </span>loop<span class="w"> </span>bob/adder<span class="w"> </span><span class="nb">set</span><span class="w"> </span>hw/nlu<span class="w"> </span>_/techniques<span class="w">  </span><span class="c1"># exactly these, in this order (none: no project)</span>
+flux<span class="w"> </span>project<span class="w"> </span>loop<span class="w"> </span>bob/adder<span class="w"> </span>add<span class="w"> </span>hw/dsp<span class="w">               </span><span class="c1"># one more, last</span>
+flux<span class="w"> </span>project<span class="w"> </span>loop<span class="w"> </span>bob/adder<span class="w"> </span>extract<span class="w"> </span>hw/nlu<span class="w"> </span>off
+flux<span class="w"> </span>project<span class="w"> </span>loop<span class="w"> </span>bob/adder<span class="w"> </span>remove<span class="w"> </span>hw/dsp
+flux<span class="w"> </span>project<span class="w"> </span>loops<span class="w"> </span>hw/nlu<span class="w">                            </span><span class="c1"># the project's loops</span>
+</code></pre></div>
+<h2 id="your-account">Your account<a class="headerlink" href="#your-account" title="Permanent link">&para;</a></h2>
+<p><strong>Account</strong> holds your <strong>Agents</strong> (each agent's login, <strong>Test</strong>, model and variables), your
+usage, your password, desktop notifications, and the <strong>Overview layout</strong> used on every loop; a
+line names your groups and links to the <a href="../groups/">Groups</a> page.
+Changing the password asks for the current one (wrong ones count and lock as a login's do) and
+logs out your other sessions.</p>
+<p>An agent is used only once its <strong>Test</strong> passed for whoever starts the loop. A Test runs at once,
+whatever your loops hold: it waits for no turns at once and no running limit
+(<a href="#agents-tests-from-the-servers-machine">Agents' Tests</a>). A login runs the
+agent's own login command in the sandbox, in a small terminal; Claude Code's token is stored
+encrypted and never shown again. An agent never runs on FluxAgent: without settings of its
+own, it uses its own configuration and login (<a href="../../guide/models/">Models and agents</a>).</p>
+<h2 id="admin">Admin<a class="headerlink" href="#admin" title="Permanent link">&para;</a></h2>
+<p><a class="shot-link" href="../../assets/web/admin-agents-light.webp" data-only="light"><img alt="Admin › Agents: FluxAgent and each agent's settings" src="../../assets/web/admin-agents-light.webp#only-light" /></a>
+<a class="shot-link" href="../../assets/web/admin-agents-dark.webp" data-only="dark"><img alt="Admin › Agents: FluxAgent and each agent's settings" src="../../assets/web/admin-agents-dark.webp#only-dark" /></a></p>
+<table>
+<thead>
+<tr>
+<th>Tab</th>
+<th>What it holds</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Loops</strong></td>
+<td>Every user's loops (a loop is archived from its own settings); pause new starts, stop or restart them all after their pass; documents of an earlier form, with <strong>Migrate all</strong></td>
+</tr>
+<tr>
+<td><strong>Insights</strong></td>
+<td>Failed starts and agent Tests, usage and cost by user and agent (the <a href="../groups/#the-collector">knowledge collector</a>'s calls as their loop's), endpoints, refused hosts, the audit trail</td>
+</tr>
+<tr>
+<td><strong>Resources</strong></td>
+<td>CPUs, memory and disks over time, the sandbox containers, each loop's disk and caches</td>
+</tr>
+<tr>
+<td><strong>Maintenance</strong></td>
+<td>Scheduled clean-up tasks, each on or off, with <strong>Run now</strong>; scheduled changes of a setting</td>
+</tr>
+<tr>
+<td><strong>Sandbox</strong></td>
+<td>Limits (CPUs, memory, processes, scratch: a default and a maximum), the network (open, or an allowlist), the PATH directories mounted, what every user's home starts with</td>
+</tr>
+<tr>
+<td><strong>Agents</strong></td>
+<td>FluxAgent and each agent: program, login, model and key, seconds per turn, token prices, turns at once on its endpoint (every loop's turns; an agent's Test takes none), whether Ask may use it, <a href="#thinking-by-default">thinking by default</a>; <strong>+ Add agent</strong></td>
+</tr>
+<tr>
+<td><strong>Chat</strong></td>
+<td>What users may use in Chat (the tab, network beyond the base allowlist, the workbench, loop access), the hosts a chat may also reach, overrides per group and user (<a href="#chat">Chat</a>)</td>
+</tr>
+<tr>
+<td><strong>Users</strong></td>
+<td>Users, groups and permissions, invitations, <strong>View as</strong>; <strong>Projects</strong>: every project</td>
+</tr>
+<tr>
+<td><strong>Version</strong></td>
+<td>The commit the server runs, updates waiting on <code>origin/main</code>, <strong>Update</strong> and <strong>Roll back</strong> (<a href="#version">Version</a>)</td>
+</tr>
+</tbody>
+</table>
+<p>Keys are stored encrypted and never shown again. With nothing set, runs use the machine's own
+configuration (<code>~/.config/flux/flux.env</code>, and each agent's own).</p>
+<p>An agent's panel says its program as runs find it, with its version, or what was looked for
+("claude is not on the runs' PATH"); users are offered only agents whose program is found -- in the chat,
+Ask, New loop › Agent and the configurator's agent menus, where one a document names that is not found
+shows <em>(not available)</em>. An agent
+added under a name of its own runs its kind's program unless its <strong>Program</strong> (or <code>FLUX_&lt;NAME&gt;_BIN</code>)
+names another -- what the built-in agent of its kind runs, said as "/…/claude (claude's)" -- and its
+login, Test and runs use that program too.</p>
+<h4 id="thinking-by-default">Thinking by default<a class="headerlink" href="#thinking-by-default" title="Permanent link">&para;</a></h4>
+<p>Each agent's panel in <strong>Admin › Agents</strong>, and FluxAgent's, says whether it <strong>Thinks by
+default</strong>: where a loop's box does not say (<code>think:</code> beside <code>by: flux</code> or an agent, an agent's <code>effort:</code>,
+<a href="../../guide/parameters/#thinking">Thinking</a>) and as the <strong>Think</strong> switch of a chat's composer
+starts for it (<a href="../chat/#the-page">Chat</a>). An agent also has the effort it works at <strong>when
+thinking</strong> and <strong>when not</strong>, from the levels its kind takes (Claude Code <code>--effort</code>, Codex
+<code>model_reasoning_effort</code>, OpenCode <code>--variant</code>); <em>its own</em> adds no flag. FluxAgent has its own
+four efforts -- <code>low</code>, <code>medium</code>, <code>high</code>, <code>max</code>: thinking, tool rounds and answer length at once
+(<a href="../chat/#the-page">Chat</a>); <em>built in</em> is <code>high</code> thinking and <code>medium</code> not.</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>Thinks by default</th>
+<th>Effort when thinking</th>
+<th>when not</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Each agent</td>
+<td>on</td>
+<td>its own (no flag)</td>
+<td>its kind's lowest (<code>low</code>, or <code>minimal</code>)</td>
+</tr>
+<tr>
+<td>FluxAgent</td>
+<td>off</td>
+<td>built in (<code>high</code>)</td>
+<td>built in (<code>medium</code>)</td>
+</tr>
+</tbody>
+</table>
+<p>Untouched, loops run exactly as they did: agents with no effort flag, FluxAgent answering straight.
+A loop's box worked by FluxAgent takes an effort only when one is said: its <code>effort:</code>, or one picked
+here -- the built-in levels leave its requests (its tool turns, its output) as they were.
+What wins, first to last: a chat's <strong>Think</strong>, the loop's box, this default. Saved at once and
+audited (<em>thinking by default</em>); a run, a chat or an ask started afterwards takes it.</p>
+<h3 id="resources">Resources<a class="headerlink" href="#resources" title="Permanent link">&para;</a></h3>
+<p>The tab is read again when what it shows changes (a loop starts or ends, a container is stopped, the
+minute's sample of the machine), at most every 5 s. <strong>Sandbox containers</strong> lists every container the
+sandbox runs, with its
+CPU, memory and processes; the page shows the list as last read and the engine is asked again in
+the background, so a busy engine never holds the page. Each loop's disk is measured in the
+background too: after a start-up, and again when a size is ten minutes old (until then the size
+measured before is shown). <strong>Whose</strong> says what each one is: a loop's (its link; <strong>Stop</strong> ends
+the loop after its pass, <strong>View</strong> opens the loop whose author or Talk uses it), <strong>Chat · user</strong>
+(a user's chat sandbox; <em>kept</em> when it stays between answers, each answer running in it named
+under it), <strong>Login · user</strong> or <strong>Agent test · user</strong>. Its state says <em>answering</em> or <em>kept,
+idle</em> for a chat's. <strong>Stop</strong> on a chat's stops the answers running in it, each saying it was
+stopped, and removes it: the user's next message starts a fresh one. A container no process runs
+any more is <em>left behind</em>, with <strong>Kill</strong>; the scheduled clean-up removes those itself, never one
+a loop, a login, a test or a chat still uses.</p>
+<p><strong>Slow requests</strong> lists the latest 50 answers that took longer than <code>FLUX_SLOW_S</code> (0.5 s) since
+the server started, the newest first: the request (its method and path, without the query), how
+long it took and when, and the status when it failed. These are the same lines as the server's
+log (<code>flux serve: slow: ...</code>), so you can find the slow page without the log. The list is empty
+after a restart.</p>
+<p>Under each request, folded, is <strong>where its time went</strong>: while a request runs past the limit, the
+server looks at what every thread is doing every 10 ms. The fold names the place most of those
+looks found the request at (a file, line and function: the innermost first, then Flux's own code
+outward) and how many of the looks it took, the next places after it, and <strong>Also busy
+meanwhile</strong>: other threads that were working at the same time (a background job, another request),
+which slow a request down without being part of it. When the request had not reached its own code
+yet, the fold says what held it: <em>before its handler</em> and where (its sign-in being checked), <em>the
+event loop busy</em> and where, <em>waiting for a worker thread: all N taken</em> (every worker serving other
+requests), else <em>waiting: not in its handler</em> (its body, a guard). The log line says
+the same in short: <code>... 0.93 s; at &lt;place&gt; (94% of 63 samples); also busy: &lt;thread&gt; at &lt;place&gt;</code>.
+Nothing is looked at while no request is past the limit, so this costs nothing the rest of the
+time.</p>
+<h3 id="maintenance">Maintenance<a class="headerlink" href="#maintenance" title="Permanent link">&para;</a></h3>
+<p>The scheduled tasks clean scratch and leftover containers, compact the databases, condense
+run logs, prune old records and agent folders, alert when a disk fills, and back up the
+server's database. <strong>Bring task journals up to date</strong> converts journals written by an older
+Flux, so Live can read them. Two tasks act on a loop's record, off the schedule by default:
+<strong>Re-Evaluate</strong> asks one loop's next start to measure the pending designs again (its boxes add
+pass 0, the failed designs, or every design), and <strong>Show hidden evaluations</strong> shows again what an older Flux's invalidation
+hid, on one loop or every loop at rest (see <a href="../results/#invalidate-re-evaluate-show-hidden">Results</a>). Running loops are never touched, archived loops only by the checks,
+compaction and journal updates, and every run is audited.</p>
+<p><strong>Invalidate all</strong> (every design of a loop set aside) is not a maintenance task: it cannot be
+run over the loops, on one loop from here, or on a schedule. It is the loop's own, in its
+<strong>Settings › Maintenance</strong>, and asks first. A server that had it scheduled forgets that
+schedule when it starts; its past runs stay in <strong>History</strong>.</p>
+<p><strong>Test agents</strong> (off until turned on; e.g. daily at a time) runs the Tests <code>flux web-agent test</code>
+runs by default, through the same code: each user's agents they set up (logged in, a key of their
+own, or tested before; disabled users left out), and their loops' Tests in their context. Ticked
+(<strong>the server's shared configurations too</strong>, on by default), it also runs Admin › Agents' <strong>Test</strong> of
+the server's own configuration of each agent that has a shared endpoint or credential, as the admin
+who asked (a schedule's: the first admin). Each result is kept as that Test's, so a start's gate
+reads it, and is on the audit as the user's "agent test", ending "(by maintenance)". <strong>Tests at
+once</strong> is 1 or 2 (2 by default). A Test takes no turn at once on its endpoint and no running-loop
+limit, as above. A Test already running (a button's, the daily retest) is left and said "being
+tested already". The task's result says each Test, failed first: whose, which agent, ok or why
+not, its seconds; its <strong>Edit</strong> dialog lists the last run's Tests one per row. One failed Test
+makes the run failed. A user whose Test passed before and fails now is told, as the daily retest
+tells them. Nothing of a configuration's values is shown or kept.</p>
+<p>Maintenance has three tabs, each with a filter box and chips that narrow its rows:</p>
+<table>
+<thead>
+<tr>
+<th>Tab</th>
+<th>What it lists</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Tasks</strong></td>
+<td>The built-in tasks: running first, then queued, failed, done and off. Chips: Running, Queued, Failed, Off</td>
+</tr>
+<tr>
+<td><strong>Scheduled changes</strong></td>
+<td>Your scheduled changes (below), soonest next run first. A chip per setting or kind</td>
+</tr>
+<tr>
+<td><strong>History</strong></td>
+<td>Every run of a task or a change, newest first: what, when, by whom (the schedule, the server's start-up, or an admin's Run now), how long it took and its result. Chips: Failed, Scheduled changes, Run now. The last 1000 runs are kept</td>
+</tr>
+</tbody>
+</table>
+<p>On a phone each row is two or three lines: its name with its buttons, then its schedule and
+last run, then its result.</p>
+<p>One task runs at a time. <strong>Run now</strong> (the ▶ button on each row; on every loop, or on one) runs the task at once when
+nothing else runs; otherwise it joins a queue, first come first run, and the row says
+<em>queued · 2nd</em> with <strong>Cancel</strong>. Asking again for a task already queued or running adds
+nothing. Scheduled runs join the same queue. A running task shows a spinner and how long it
+has run. The queue lives in the server's memory: a restart drops it, and the schedule asks
+again. Resetting, renaming, transferring or archiving a loop is still refused while a task
+runs, never between two.</p>
+<p>A task runs <strong>every</strong> so many minutes, hours or days, or <strong>daily at</strong> a time on the days
+picked, or on a cron expression (the same form as a scheduled change's, below). A task at a
+time of day runs once when its time comes; a time already past when it is set waits for its
+next day.</p>
+<h4 id="scheduled-changes">Scheduled changes<a class="headerlink" href="#scheduled-changes" title="Permanent link">&para;</a></h4>
+<p>A scheduled change does one thing at a time of day. <strong>+ Scheduled change</strong> asks first for its
+kind, then that kind's fields, then when:</p>
+<table>
+<thead>
+<tr>
+<th>Kind</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Turns at once</strong></td>
+<td>Sets one endpoint limit: <strong>turns at once</strong> of an agent's endpoint, or <strong>requests at once</strong> of FluxAgent (the limits under <strong>Admin › Agents</strong>), checked as that form checks it: a whole number, <code>0</code> for no limit. An agent's Test takes no turn</td>
+</tr>
+<tr>
+<td><strong>Pause starts</strong></td>
+<td>Pauses new starts with a reason (up to 200 characters), or resumes them. Running loops go on. While paused, starts, owners' restarts, <strong>Restart all</strong> and a pending restart after a pass are refused with the reason</td>
+</tr>
+<tr>
+<td><strong>Running limit</strong></td>
+<td>A user's running-loops limit (0–64, or <em>default</em>), or the server's default (0–64, or <em>default</em>: the <code>--max-running</code> flag). New starts only</td>
+</tr>
+<tr>
+<td><strong>Stop loops</strong></td>
+<td>Stops the running loops after their pass: every loop, one user's, or one loop. <strong>Now</strong> (off by default) stops them at once, the current pass abandoned</td>
+</tr>
+<tr>
+<td><strong>Start a loop</strong></td>
+<td>Starts one loop as its owner, with the options of its last start, for 1–1000 passes or until stopped. Refused, and shown as a failed run, when the loop is gone or archived, its owner is disabled or may not run loops, starts are paused, the owner is at their limit, or it already runs</td>
+</tr>
+</tbody>
+</table>
+<p>When is <strong>daily at</strong> a time on the days picked, or, under <strong>Advanced: cron expression</strong>, five
+cron fields: minute, hour, day of the month, month, day of the week. <code>*/15 9-17 * * 1-5</code> means
+every 15 minutes from 09:00 to 17:59 on weekdays. The form says the schedule in words and its
+next times. Times are the server's own, and its time zone is shown beside the field.</p>
+<p>For example, to leave the shared endpoint to people by day and give it to the loops by night,
+add two changes to Claude Code's turns at once:</p>
+<table>
+<thead>
+<tr>
+<th>Change</th>
+<th>When</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Claude Code turns at once → 1</td>
+<td>daily at 08:00, Mon–Fri</td>
+</tr>
+<tr>
+<td>Claude Code turns at once → 4</td>
+<td>daily at 20:00, every day</td>
+</tr>
+</tbody>
+</table>
+<p>A night of runs, for example, takes three changes, every day: <strong>Start a loop</strong> at 20:00 until
+stopped, <strong>Pause starts</strong> at 20:05 with the reason <em>nightly runs</em> (no one else starts one), and
+<strong>Stop loops</strong> at 07:00, every loop after its pass, with <strong>Pause starts</strong> set to <em>Resume starts</em>
+at 07:30.</p>
+<p>Each change is a row with its schedule, next run, last run and result, <strong>Run now</strong> (▶, queued like
+any task), and <strong>Edit…</strong>, <strong>Turn off</strong>/<strong>Turn on</strong> and <strong>Delete…</strong> in its menu. A change takes
+effect at the next turn of every loop, running loops too. Lowering the limit stops no running
+turn: running turns finish, and new turns wait until fewer than the new limit run.</p>
+<p>A stop or a start happens at its time only: one missed while the server was down is not done
+when it starts. The pause, each user's limit and the default limit are settings. When the server starts,
+each setting gets the value of whichever of its changes came last
+(at or before now), so a server that was down at 20:00 still has the night's value. If two
+changes of one setting were both missed, only the later one is applied. Adding, editing and
+deleting changes is audited, and so is every change made. A run that found the value already
+set is not recorded. The audit reads, for example, <em>scheduled: Claude Code turns at once → 4
+(was 1)</em>.</p>
+<h3 id="sandbox">Sandbox<a class="headerlink" href="#sandbox" title="Permanent link">&para;</a></h3>
+<p>Every run is sandboxed unless a loop's <strong>Settings › Preferences › Advanced (admins)</strong> says
+otherwise. The network is open, or an allowlist of hosts, domains and address ranges; HTTP(S)
+goes through the server's <a href="#proxy">proxy</a>, and raw TCP/UDP is a per-loop choice. The command line's
+equivalents are <code>FLUX_SANDBOX_NET=allowlist</code>, <code>FLUX_SANDBOX_ALLOW</code> and
+<code>FLUX_SANDBOX_RAW_NETWORK=1</code> (<a href="../../guide/run/#sandbox">Sandbox</a>).</p>
+<h4 id="allowlists">Allowlists<a class="headerlink" href="#allowlists" title="Permanent link">&para;</a></h4>
+<p>Every allowlist (the sandbox's, Chat's, a loop's extra hosts, an agent's hosts and
+<code>FLUX_SANDBOX_ALLOW</code>) reads the same way:</p>
+<table>
+<thead>
+<tr>
+<th>Entry</th>
+<th>Allows</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>dl.acm.org</code></td>
+<td>that host only</td>
+</tr>
+<tr>
+<td><code>*.acm.org</code> or <code>.acm.org</code></td>
+<td>acm.org <strong>and</strong> every subdomain (dl.acm.org, www.acm.org, a.b.acm.org)</td>
+</tr>
+<tr>
+<td><code>10.0.0.0/8</code>, <code>192.168.1.20</code>, <code>::1</code></td>
+<td>the addresses in the range, or that address</td>
+</tr>
+<tr>
+<td><code>localhost</code></td>
+<td>this machine (127.0.0.1, ::1)</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li>Separate entries by new lines, commas, semicolons or spaces. <code>#</code> starts a comment to the end of
+  the line.</li>
+<li>Case, a trailing dot and a port do not count (<code>DL.ACM.org.:443</code> is <code>dl.acm.org</code>); a pasted URL
+  keeps its host.</li>
+<li><code>*</code> alone is refused: choose <strong>open</strong> (or Chat's <strong>Open</strong>) instead.</li>
+<li>Saved, the list is kept one entry per line, and the page says how it reads, for example
+  <em>Understood as: acm.org and its subdomains · arxiv.org only</em>.</li>
+<li>A page that redirects to another domain (a sign-in or a CDN host) is refused by that host's
+  name. <strong>Recently blocked</strong> under the list names the hosts refused lately; a click adds one.
+  The agent's error says the same: <em>flux sandbox: refused www.acm.org (not on the network
+  allowlist -- add www.acm.org or *.acm.org)</em>.</li>
+<li>Lists kept before this rule, when a name also allowed its subdomains, were rewritten once as
+  <code>*.name</code>, so they reach what they reached.</li>
+</ul>
+<p><strong>Limits</strong> restrict every sandbox the server starts: a loop's runs and checks, a loop's Chat, Chat
+answers, the author agent, agent Tests and logins. For CPUs, memory, processes and scratch <code>/tmp</code>:</p>
+<ul>
+<li><strong>Default</strong> is what a sandbox gets when its loop sets none.</li>
+<li><strong>Maximum</strong> is the most a loop may ask for. A higher ask is clamped to it, never refused, and
+  a loop that sets nothing is held to it too. The run's log says <em>memory 8g clamped to 1g by
+  the server</em>.</li>
+<li><strong>Empty</strong> is no limit (processes: 4096).</li>
+</ul>
+<p>CPUs are a positive number such as <code>2</code> or <code>0.5</code>, at most this machine's count. Memory and scratch
+are sizes with a unit, such as <code>512m</code> or <code>4g</code>; memory is at most this machine's RAM. The page
+shows both. A change is audited (<em>sandbox limits</em>). It applies to sandboxes started after it;
+running ones keep their limits. A loop's <strong>Advanced (admins)</strong> shows the server's default and
+maximum under each field, and <em>clamped to 1g by the server</em> when its value is above the maximum.
+On a server started with <code>--no-sandbox</code>, the limits are shown read only.</p>
+<h4 id="proxy">Proxy<a class="headerlink" href="#proxy" title="Permanent link">&para;</a></h4>
+<p><strong>Proxy</strong> is what runs, agents, Chat, logins and the author agent reach the network through, and
+Flux's own calls to the model endpoints. It applies with or without the sandbox.</p>
+<ul>
+<li><strong>From the host</strong> (the default) takes the first place that names one: the server's environment,
+  <code>/etc/environment</code>, <code>/etc/environment.d/*.conf</code> and <code>~/.config/environment.d/*.conf</code>, then what
+  the server user's login shell exports (a <code>systemd</code> service often has none of a profile's). The
+  page says which, for example <em>From /etc/environment: HTTP http://proxy:3128 · not for .corp.example.org</em>.</li>
+<li><strong>Set here</strong> takes an HTTP proxy, an HTTPS proxy (each <code>http://host:port</code>, with
+  <code>user:password@</code> if it asks) and a <em>not through it</em> list, read like an allowlist (new lines,
+  commas, semicolons or spaces; <code>#</code> comments): a host, <code>.domain</code> or <code>*.domain</code> (it and its
+  subdomains), an IP or a CIDR. Empty fields are no proxy. Switching to <em>set here</em> starts from the
+  host's values.</li>
+<li>Credentials are stored encrypted and shown as <code>http://***@proxy:3128</code>; a URL left as shown keeps
+  them. They never appear on a command line: a sandbox gets them in its variables file.</li>
+<li>The server and an open sandbox get <code>HTTP_PROXY</code>, <code>HTTPS_PROXY</code> and <code>NO_PROXY</code> in both cases, <code>localhost</code>,
+  <code>127.0.0.1</code> and <code>::1</code> always added to <code>NO_PROXY</code>. An allowlisted sandbox keeps its own proxy
+  (localhost only in its <code>NO_PROXY</code>), which reaches allowed hosts through this one, directly for
+  those its <em>not through it</em> list names.</li>
+<li><em>In effect</em> says the proxy and where it came from. A change is audited (<em>sandbox proxy</em>, the
+  credentials masked) and applies to what starts after it: running loops keep theirs.</li>
+</ul>
+<h3 id="chat">Chat<a class="headerlink" href="#chat" title="Permanent link">&para;</a></h3>
+<p><strong>Admin › Chat</strong> says what users may use in <a href="../chat/">Chat</a>. The admin allows features; each user
+then switches them on or off per chat, within what is allowed.</p>
+<table>
+<thead>
+<tr>
+<th>Feature</th>
+<th>Allowed</th>
+<th>Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Chat tab</strong></td>
+<td>The user has Chat in the top bar. Off, every other feature is off too.</td>
+<td>on</td>
+</tr>
+<tr>
+<td><strong>Network beyond the base allowlist</strong></td>
+<td>A chat may also reach the hosts listed under <strong>Network beyond the base allowlist</strong>, or any host when it is <strong>Open</strong>.</td>
+<td>off</td>
+</tr>
+<tr>
+<td><strong>Workbench</strong></td>
+<td>A chat may read and write the user's workbench.</td>
+<td>on</td>
+</tr>
+<tr>
+<td><strong>Loop access</strong></td>
+<td>A chat may read the user's loops, their own and those shared with them, read-only.</td>
+<td>on</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li><strong>For everyone</strong> sets the server's value. <strong>Overrides</strong> sets a value per group and per user:
+  <strong>as above</strong>, <strong>on</strong> or <strong>off</strong>. A user's value beats their groups', which beat the
+  server's; of a user's groups, one that turns a feature off wins. <strong>Add a user</strong> adds a user's
+  row.</li>
+<li>A chat always has the sandbox's base allowlist (<a href="#sandbox">Sandbox</a>): the hosts listed there,
+  the agents' hosts and the model endpoints. Agents need it, so there is no "off". Allowed with
+  no hosts listed and not <strong>Open</strong>, the feature stays off, and users see why. On a server whose
+  sandbox network is open, chats have the open network.</li>
+<li>The hosts beyond the base are an allowlist (<a href="#allowlists">Allowlists</a>): <code>*.acm.org</code> lets a chat
+  reach acm.org and all its subdomains. <strong>Recently blocked</strong> names the hosts chats were refused
+  lately.</li>
+<li>A feature that is off is greyed in the user's chat, with the reason: <em>turned off by the admin
+  on this server</em>, <em>for the group …</em>, or <em>for you</em>.</li>
+<li>Changes apply from each chat's next message. They are audited (<em>chat permissions</em>), as are
+  chats made and deleted (<em>chat created</em>, <em>chat deleted</em>).</li>
+</ul>
+<p><strong>Limits per answer</strong> bound a coding agent's answer: <strong>Minutes</strong> (default 8, 1 to 60) and <strong>Tool
+calls</strong> (default 40, 5 to 400). An answer ends sooner when it is done: once the agent has written
+its answer (or its question) and then goes quiet, repeats itself, or only updates its plan. An
+answer stopped at a limit keeps what the agent wrote; with nothing written it fails, saying which
+limit it reached. FluxAgent has no such limit: it reads with its tools (at most 20 rounds of
+calls) and then answers.</p>
+<p><strong>Attached files</strong> bound the files a user attaches to a message, in Chat and in a loop's Chat:
+<strong>MB a file</strong> (default 50, 1 to 2048) and <strong>Files a message</strong> (default 10, 1 to 50). Any type is
+kept as it is: in the user's workbench (<code>uploads/</code>) or with the answer
+(<a href="../chat/#attached-files">Chat › Attached files</a>).</p>
+<p>How <strong>Think</strong> starts in each composer is each agent's and FluxAgent's own:
+<a href="#thinking-by-default">thinking by default</a>, in <strong>Admin › Agents</strong>. (A server where Chat's earlier
+<em>Think on by default</em> was ticked has FluxAgent thinking by default.)</p>
+<p>Each answer runs as a loop's Chat answers do: in the sandbox, under the server's <a href="#sandbox">limits</a>, with the
+user's model and agent settings, and the agents offered for Ask (<strong>Admin › Agents</strong>).</p>
+<p><strong>Sandbox</strong> sets how long a user's chat sandbox is <strong>kept idle</strong> (minutes, default 30, 0 to 240).
+A user's answers run in one sandbox, started by their first message and kept between messages,
+so the next answer starts sooner (about a second instead of two on an idle server); it ends once
+no answer has run in it for this long. Several chats of the user share it, and so do answers
+written at the same time, under one set of <a href="#sandbox">limits</a>. What an agent keeps between
+answers is in the user's home and workbench, as before, never only in the sandbox. <strong>0</strong> gives
+each answer a sandbox of its own.</p>
+<p>A sandbox is started again when what it is started with changes: these settings (the network
+beyond the base, its hosts), the sandbox's (limits, network, PATH, the proxy), the agents' and
+the model's settings, and, when the server restarts, Flux's code or the server's environment.
+An answer running at that moment is stopped and written again on the new ones, its message kept
+and one answer kept, saying <em>restarted: the admin changed the chat settings</em> (or <em>the sandbox
+settings</em>, <em>the proxy</em>, <em>the agents' settings</em>) or <em>restarted: Flux was updated</em>. One the user
+may no longer have answered ends stopped, saying why. A finished answer is never touched; the
+next one simply starts on the new settings. The limits per answer and this time apply from the
+next answer and start nothing again.</p>
+<h3 id="environment-variables">Environment variables<a class="headerlink" href="#environment-variables" title="Permanent link">&para;</a></h3>
+<p>Variables apply in order: the server's (<strong>Admin › Agents › All agents</strong>), the user's
+(<strong>Account</strong>), the loop's (<strong>Settings › Preferences</strong>). Secrets are stored encrypted. The
+sandbox's own variables, <code>PATH</code>, <code>HOME</code> and the model settings cannot be set this way.</p>
+<h3 id="version">Version<a class="headerlink" href="#version" title="Permanent link">&para;</a></h3>
+<p><strong>Admin › Version</strong> says which code the server runs and updates it. Updates follow <code>main</code> and
+are fast-forward only.</p>
+<ul>
+<li><strong>Running:</strong> the commit the server started on (its short hash and the D-number in its
+  subject), the branch, whether the checkout has changes, the Nix lock's inputs (<code>flake.lock</code>),
+  the <strong>Environment</strong> (the <a href="../../guide/run/#the-environment-is-built-before-the-restart">prepared dev shell</a>
+  the server started on, its key and the previous one; whether one is building or failed, or the
+  checkout's <code>flake.nix</code>/<code>flake.lock</code> want another), how long the server has run and the clone's path.
+  When the checkout has moved since the server started, it says so, with the restart command.</li>
+<li><strong>Check for updates</strong> runs <code>git fetch origin main</code> in the server's clone and lists the
+  commits behind <code>origin/main</code>, with their D-numbers. A <code>main</code> that has commits of its own has
+  diverged and cannot be updated.</li>
+<li><strong>Documents:</strong> a dry run of <code>flux task migrate</code> over every loop's documents, by
+  <code>origin/main</code>'s code (its tree in a temporary folder) when it can run here, else by the
+  running code. It lists which documents would change and which need a hand. Nothing is written.
+  A document that names an agent an admin added (<strong>Admin › Agents</strong>) loads as it does for its runs: the dry
+  run, the migration after an update and <strong>Admin › Loops › Migrate all</strong> know the server's added
+  agents.</li>
+<li><strong>Update</strong> is refused off <code>main</code>, with changes in the checkout, or when <code>main</code> has diverged.
+  Running loops do not hold it: each start runs on its own copy of the code it started on, in the
+  Nix environment it started in (<a href="../../guide/run/#running-loops-keep-their-code">Running loops keep their code</a>),
+  so no loop is stopped or waited for. After the fast-forward the server restarts. When it starts on
+  the new code it first migrates every idle loop's documents: a document is written only when it
+  loads, and the original is kept as <code>&lt;file&gt;.orig</code>. A running loop's documents are never rewritten
+  under it: the tab lists them as waiting, and they are migrated when its run ends (or just before
+  its next start), on the History with the update they follow. Only a loop running on the checkout
+  itself (one started while the checkout had changes, or before each start had its own code) still
+  holds an update, until it ends; the tab names it. There is no "after the running passes" any
+  more: nothing an update changes reaches a running loop.</li>
+<li><strong>The environment first:</strong> under the service units, when <code>origin/main</code>'s <code>flake.nix</code> or
+  <code>flake.lock</code> differ from every environment already built, <strong>Update</strong> builds that environment
+  first, in the background, as the service's account. The checkout and the server are not
+  touched meanwhile. The update is queued: the tab says "Building the environment for …" and
+  follows the build, and the History lists it. Once the environment is built, the update is applied
+  (fast-forward, the environment made current, the restart).
+  A failed build moves nothing: the queued update is dropped, and the tab shows the end of Nix's
+  output. A queued update builds its environment ahead in the same way, so the switch is quick. A
+  code-only update needs no build and goes at once, as before. A rollback reuses the previous
+  environment that is kept, or builds it first in the same way.</li>
+<li><strong>Roll back</strong> returns to the commit the last update came from, as long as the checkout is
+  still where that update left it. It is refused with changes in the checkout, or while a loop
+  runs on the checkout itself. Documents that update migrated and nobody changed since are put
+  back from their <code>.orig</code>; a renamed one is listed for a hand. A running loop's are put back when
+  its run ends, as above; when the code rolled back to cannot do that (it predates each start having
+  its own code), a rollback with such a loop running is refused until it ends. Then the server
+  restarts.</li>
+<li><strong>History:</strong> who, when, from and to, and the result of each update, queued update, migration
+  (at the start, or "after its run"), document put back, and rollback. It is kept in <code>&lt;data&gt;/version/log.jsonl</code> and in the audit trail.</li>
+</ul>
+<p>How the server restarts depends on how it runs. The system service with its own account
+(<code>FLUX_SERVICE=system</code>, <a href="../../guide/run/#system-service-with-its-own-account">below</a>) ends
+itself and systemd's <code>Restart=always</code> starts the new code; no polkit or sudo is involved. The
+user service and the owner's system service (<code>FLUX_SERVICE=watched</code>) are restarted by
+<code>flux-update.path</code> when HEAD moves (its <code>flux-update.service</code> builds the environment first, then
+restarts); there, Update fast-forwards the owner's checkout only when it is clean and on <code>main</code>. A
+server started by hand says the command to run, and it has no prepared environment: an update moves
+the checkout at once, as before.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../groups/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Groups">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Groups
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../../preview/" class="md-footer__link md-footer__link--next" aria-label="Next: Preview app">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                Preview app
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">© 2026 Flux</div>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      <script id="__config" type="application/json">{"base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.footer", "content.code.copy", "content.code.annotate", "toc.follow", "search.suggest"], "search": "../../assets/javascripts/workers/search.973d3a69.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.f55a23d4.min.js"></script>
+      
+    
+  </body>
+</html>

@@ -1,0 +1,50 @@
+# PTO's elementwise tile units as ONE pyCircuit datapath, checked against the spec's own ASL model
+#. The spec is not in this file: it is spec/ beside it, fetched once and pinned:
+#     ./fetch-spec
+#     flux task run applications/pto
+# Each pass works on one unit of the whole design: the orchestrator picks it from
+# `fluxpreset pto ops --names`, the design agent reads its NDF clauses, and the pass goes on until
+# that unit and the units depending on it match the spec's answers.
+
+statement: >-
+  One combinational datapath, in pyCircuit, for the PTO ISA's elementwise tile units: what a vector
+  engine lane computes for one element. INTERFACE (fixed -- the checks drive exactly these ports):
+  inputs `op` (8 bits: the unit, by its code from `fluxpreset pto ops --spec spec`), `dtype`
+  (5 bits: the data type, by its position in the spec's TileDataType enumeration, listed by the same
+  command), `a` and `b` (64 bits: the source elements in their low bits; one-source units ignore
+  `b`); outputs `y` (64 bits: the destination element in its low bits -- only the type's width is
+  compared) and `fault` (1 bit: 1 exactly when the spec refuses the operation, e.g. a data type the
+  unit does not support; `y` is then not compared). The answer for every (unit, type, a, b) is the
+  spec's: its ASL model run by ASLRef (`fluxpreset pto ref UNIT --spec spec` lists what it refuses or
+  asserts on). The file defines `build(m: CycleAwareCircuit, domain: CycleAwareDomain)` and sets
+  `build.__pycircuit_name__ = "pto_elementwise"`; the outputs are read in the cycle the inputs are
+  driven. Grow it unit by unit; never break a unit that already matches.
+
+language: python
+
+flow:
+  orchestrate:
+    by: claude
+    scope:
+      list: fluxpreset pto ops --names --spec {home}/spec
+      brief: fluxpreset ndf clauses {scope} --spec {home}/spec
+      check: fluxpreset pto check {artifact} --units {scope} --dependents --spec {home}/spec
+      timeout_s: 1800
+  generate: {by: claude, prototype: false}
+  test: fluxpreset pto check {artifact} --build-only --spec {home}/spec
+  measure:
+    spec:
+      run: fluxpreset pto check {artifact} --measure --spec {home}/spec
+      metrics: [vectors_failing, units_passing, units]
+      needs: [pycircuit, aslref]
+      timeout_s: 3600
+  knowledge:
+    library: [pycircuit.md]   # read on demand (`flux knowledge`), never pasted
+  select: {finalists: 1}
+
+objectives:
+  - {metric: vectors_failing, direction: minimize, goal: 0}
+  - {metric: units_passing, direction: maximize}
+
+budget:
+  steps: 8

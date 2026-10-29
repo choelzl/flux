@@ -1,0 +1,2193 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Flux searches for better designs: it makes them with a script, a model or a coding agent, checks and measures them with real tools, and decides from your objectives.">
+      
+      
+      
+        <link rel="canonical" href="https://choelzl.github.io/flux/reference/presets/">
+      
+      
+        <link rel="prev" href="../commands/">
+      
+      
+        <link rel="next" href="../cli/">
+      
+      
+      <link rel="icon" href="../../assets/app/logo.svg">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.6.23">
+    
+    
+      
+        <title>Presets - Flux</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.84d31ad4.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.06af60db.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/flux-theme.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#presets" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="Flux" class="md-header__button md-logo" aria-label="Flux" data-md-component="logo">
+      <svg class="flux-logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" aria-label="Flux"><g fill="currentColor"><rect x="78" y="8" width="16" height="28" rx="8"/><rect x="120" y="8" width="16" height="28" rx="8"/><rect x="162" y="8" width="16" height="28" rx="8"/><rect x="120" y="220" width="16" height="28" rx="8"/><rect x="162" y="220" width="16" height="28" rx="8"/><rect x="8" y="78" width="28" height="16" rx="8"/><rect x="8" y="120" width="28" height="16" rx="8"/><rect x="8" y="162" width="28" height="16" rx="8"/><rect x="220" y="78" width="28" height="16" rx="8"/><rect x="220" y="120" width="28" height="16" rx="8"/><rect x="220" y="162" width="28" height="16" rx="8"/></g><rect x="78" y="208" width="16" height="40" rx="8" fill="#f66824"/><g fill="none" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"><rect x="40" y="40" width="176" height="176" rx="32" stroke="currentColor"/><path d="M86 248V118A32 32 0 0 1 118 86H174" stroke="#f66824"/><path d="M128 248V146A18 18 0 0 1 146 128H166" stroke="currentColor"/></g></svg>
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Flux
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Presets
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/choelzl/flux" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    choelzl/flux
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../start/install/" class="md-tabs__link">
+          
+  
+  
+  Get started
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../guide/build-your-own/" class="md-tabs__link">
+          
+  
+  
+  Guides
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../web/" class="md-tabs__link">
+          
+  
+  
+  Web app
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../preview/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Preview app
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../../guide/parameters/" class="md-tabs__link">
+          
+  
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="Flux" class="md-nav__button md-logo" aria-label="Flux" data-md-component="logo">
+      <svg class="flux-logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" aria-label="Flux"><g fill="currentColor"><rect x="78" y="8" width="16" height="28" rx="8"/><rect x="120" y="8" width="16" height="28" rx="8"/><rect x="162" y="8" width="16" height="28" rx="8"/><rect x="120" y="220" width="16" height="28" rx="8"/><rect x="162" y="220" width="16" height="28" rx="8"/><rect x="8" y="78" width="28" height="16" rx="8"/><rect x="8" y="120" width="28" height="16" rx="8"/><rect x="8" y="162" width="28" height="16" rx="8"/><rect x="220" y="78" width="28" height="16" rx="8"/><rect x="220" y="120" width="28" height="16" rx="8"/><rect x="220" y="162" width="28" height="16" rx="8"/></g><rect x="78" y="208" width="16" height="40" rx="8" fill="#f66824"/><g fill="none" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"><rect x="40" y="40" width="176" height="176" rx="32" stroke="currentColor"/><path d="M86 248V118A32 32 0 0 1 118 86H174" stroke="#f66824"/><path d="M128 248V146A18 18 0 0 1 146 128H166" stroke="currentColor"/></g></svg>
+    </a>
+    Flux
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/choelzl/flux" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    choelzl/flux
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Home
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    Get started
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            Get started
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../start/install/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Install
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/tutorial/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    First loop
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/loop-crafter/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Loop crafter
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../start/ask/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Write a loop with an agent
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    Guides
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            Guides
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/build-your-own/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Configure
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/loop-shape/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Search and agents
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/knowledge/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Knowledge, skills, hidden paths
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/parts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Split a larger design
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/cookbook/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Recipes
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/run/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Run, stop, resume
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/models/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Models and agents
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    Web app
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            Web app
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../web/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Tour
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../web/live/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Live
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../web/results/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Results
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../web/files/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Files and settings
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../web/chat/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Chat
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../web/groups/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Groups
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../web/admin/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Server and admin
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../preview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Preview app
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    Reference
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            Reference
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/parameters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Document
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../search/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Searches
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../agents/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Agent options
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../commands/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Commands and placeholders
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    Presets
+    
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    Presets
+    
+  </span>
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#golden" class="md-nav__link">
+    <span class="md-ellipsis">
+      golden
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#rtl" class="md-nav__link">
+    <span class="md-ellipsis">
+      rtl
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#systemc" class="md-nav__link">
+    <span class="md-ellipsis">
+      systemc
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cases" class="md-nav__link">
+    <span class="md-ellipsis">
+      cases
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ccases" class="md-nav__link">
+    <span class="md-ellipsis">
+      ccases
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pytest" class="md-nav__link">
+    <span class="md-ellipsis">
+      pytest
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#accuracy" class="md-nav__link">
+    <span class="md-ellipsis">
+      accuracy
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#timebound" class="md-nav__link">
+    <span class="md-ellipsis">
+      timebound
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#bench" class="md-nav__link">
+    <span class="md-ellipsis">
+      bench
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#prog" class="md-nav__link">
+    <span class="md-ellipsis">
+      prog
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sanitize" class="md-nav__link">
+    <span class="md-ellipsis">
+      sanitize
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#complexity" class="md-nav__link">
+    <span class="md-ellipsis">
+      complexity
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#scaling" class="md-nav__link">
+    <span class="md-ellipsis">
+      scaling
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#repeat" class="md-nav__link">
+    <span class="md-ellipsis">
+      repeat
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#derive" class="md-nav__link">
+    <span class="md-ellipsis">
+      derive
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#regress" class="md-nav__link">
+    <span class="md-ellipsis">
+      regress
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#extract" class="md-nav__link">
+    <span class="md-ellipsis">
+      extract
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#champsim" class="md-nav__link">
+    <span class="md-ellipsis">
+      champsim
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#asl" class="md-nav__link">
+    <span class="md-ellipsis">
+      asl
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ndf" class="md-nav__link">
+    <span class="md-ellipsis">
+      ndf
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pto" class="md-nav__link">
+    <span class="md-ellipsis">
+      pto
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#without-a-preset" class="md-nav__link">
+    <span class="md-ellipsis">
+      Without a preset
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#one-interface" class="md-nav__link">
+    <span class="md-ellipsis">
+      One interface
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#writing-a-preset" class="md-nav__link">
+    <span class="md-ellipsis">
+      Writing a preset
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#golden-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      Golden model
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    CLI
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refusals/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Common refusals
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../glossary/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Glossary
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#golden" class="md-nav__link">
+    <span class="md-ellipsis">
+      golden
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#rtl" class="md-nav__link">
+    <span class="md-ellipsis">
+      rtl
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#systemc" class="md-nav__link">
+    <span class="md-ellipsis">
+      systemc
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cases" class="md-nav__link">
+    <span class="md-ellipsis">
+      cases
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ccases" class="md-nav__link">
+    <span class="md-ellipsis">
+      ccases
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pytest" class="md-nav__link">
+    <span class="md-ellipsis">
+      pytest
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#accuracy" class="md-nav__link">
+    <span class="md-ellipsis">
+      accuracy
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#timebound" class="md-nav__link">
+    <span class="md-ellipsis">
+      timebound
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#bench" class="md-nav__link">
+    <span class="md-ellipsis">
+      bench
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#prog" class="md-nav__link">
+    <span class="md-ellipsis">
+      prog
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sanitize" class="md-nav__link">
+    <span class="md-ellipsis">
+      sanitize
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#complexity" class="md-nav__link">
+    <span class="md-ellipsis">
+      complexity
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#scaling" class="md-nav__link">
+    <span class="md-ellipsis">
+      scaling
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#repeat" class="md-nav__link">
+    <span class="md-ellipsis">
+      repeat
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#derive" class="md-nav__link">
+    <span class="md-ellipsis">
+      derive
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#regress" class="md-nav__link">
+    <span class="md-ellipsis">
+      regress
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#extract" class="md-nav__link">
+    <span class="md-ellipsis">
+      extract
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#champsim" class="md-nav__link">
+    <span class="md-ellipsis">
+      champsim
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#asl" class="md-nav__link">
+    <span class="md-ellipsis">
+      asl
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ndf" class="md-nav__link">
+    <span class="md-ellipsis">
+      ndf
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pto" class="md-nav__link">
+    <span class="md-ellipsis">
+      pto
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#without-a-preset" class="md-nav__link">
+    <span class="md-ellipsis">
+      Without a preset
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#one-interface" class="md-nav__link">
+    <span class="md-ellipsis">
+      One interface
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#writing-a-preset" class="md-nav__link">
+    <span class="md-ellipsis">
+      Writing a preset
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#golden-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      Golden model
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="presets">Presets<a class="headerlink" href="#presets" title="Permanent link">&para;</a></h1>
+<p>Flux's own checks and measurements. A document runs one as <code>fluxpreset NAME ...</code>; nothing is
+copied into the loop's folder. <code>flux tools</code> lists the catalog entries below, and the configurator
+offers them as a check's <strong>Type</strong> or a measurement's <strong>Tool</strong> under <strong>Flux presets</strong>. In a shell,
+<code>fluxpreset</code> alone lists the presets and <code>fluxpreset NAME --help</code> describes one.</p>
+<p>Each entry gives its title, catalog id and role, the command a document writes, and its
+parameters with their defaults. A <code>{name}</code> in a command that is not one of the
+<a href="../commands/#command-placeholders">loop's placeholders</a> is a parameter.</p>
+<h2 id="golden">golden<a class="headerlink" href="#golden" title="Permanent link">&para;</a></h2>
+<p>The golden test for RTL: the design against a golden model's vectors. It prints the failing vectors and <code>N failing of M</code>, and exits 0 (pass), 1 (fail) or 3 (did not compile). <code>--extra F.sv</code> adds a module the design instantiates. The golden model's format is <a href="#golden-model">below</a>.</p>
+<div class="highlight"><pre><span></span><code>fluxpreset golden DESIGN --golden golden.py [--extra F.sv] [--module M]
+</code></pre></div>
+<ul>
+<li><strong>Test against a golden model</strong> (<code>rtl-golden</code>, a check): <code>fluxpreset golden {artifact} --golden {golden}</code><br />
+  Verilator runs the module on golden.py's vectors and counts the wrong outputs. Parameters: <code>golden</code> (<code>{home}/golden.py</code>). Reports <code>N failing</code>. Needs <code>verilator</code>.</li>
+</ul>
+<h2 id="rtl">rtl<a class="headerlink" href="#rtl" title="Permanent link">&para;</a></h2>
+<p>Hardware checks and measurements on the ASAP7 process: lint with Verilator, measure with OpenROAD-flow-scripts. <code>rtl measure</code> runs the flow to the stage asked and prints one line, <code>fmax_mhz=... area_um2=... power_w=... cell_count=... path_ps=... worst_slack_ps=...</code> (<code>stat</code> only area and cells; <code>route</code> adds <code>drc_errors</code> and <code>wirelength_um</code>).</p>
+<div class="highlight"><pre><span></span><code>fluxpreset rtl lint DESIGN
+fluxpreset rtl measure DESIGN --stage stat|synth|place|route --clock-ps N
+fluxpreset rtl cycles DESIGN --golden golden.py
+fluxpreset rtl equiv DESIGN --reference ref.sv
+fluxpreset rtl breakdown DESIGN
+fluxpreset rtl fmax DESIGN --stage synth [--steps 6]
+fluxpreset rtl power DESIGN --golden golden.py --stage place
+fluxpreset rtl energy DESIGN --golden golden.py --stage place
+fluxpreset rtl path DESIGN --stage place
+</code></pre></div>
+<ul>
+<li><strong>Lint for hardware defects</strong> (<code>rtl-lint</code>, a check): <code>fluxpreset rtl lint {artifact}</code><br />
+  Verilator's hardware defects only: latches, multiple drivers, combinational loops, blocking/non-blocking mixes, implicit nets; width and style warnings are not defects. It also refuses what does not parse. Reports <code>N failing</code>. Needs <code>verilator</code>.</li>
+<li><strong>Area and cells (ASAP7)</strong> (<code>rtl-stat</code>, a stage): <code>fluxpreset rtl measure {artifact} --stage stat --clock-ps {clock_ps}</code><br />
+  OpenROAD-flow-scripts' synthesis: the mapped cells' area; nothing timed, the cheapest screen. Parameters: <code>clock_ps</code> (<code>1000</code>). Reports <code>area_um2</code>, <code>cell_count</code>. Needs <code>yosys</code>, <code>openroad</code>, <code>make</code>.</li>
+<li><strong>Synthesise and time (ASAP7)</strong> (<code>rtl-synth</code>, a stage): <code>fluxpreset rtl measure {artifact} --stage synth --clock-ps {clock_ps}</code><br />
+  OpenROAD-flow-scripts to its floorplan: the netlist timed unplaced, seconds. Parameters: <code>clock_ps</code> (<code>1000</code>). Reports <code>fmax_mhz</code>, <code>area_um2</code>, <code>power_w</code>, <code>cell_count</code>, <code>path_ps</code>. Needs <code>yosys</code>, <code>openroad</code>, <code>make</code>, <code>sta</code>.</li>
+<li><strong>Place and time (ASAP7)</strong> (<code>rtl-place</code>, a stage): <code>fluxpreset rtl measure {artifact} --stage place --clock-ps {clock_ps}</code><br />
+  OpenROAD-flow-scripts to detailed placement, timed with wire estimates: tens of seconds. Parameters: <code>clock_ps</code> (<code>1000</code>). Reports <code>fmax_mhz</code>, <code>area_um2</code>, <code>power_w</code>, <code>cell_count</code>, <code>path_ps</code>. Needs <code>yosys</code>, <code>openroad</code>, <code>make</code>, <code>sta</code>.</li>
+<li><strong>Route and time (ASAP7)</strong> (<code>rtl-route</code>, a stage): <code>fluxpreset rtl measure {artifact} --stage route --clock-ps {clock_ps}</code><br />
+  OpenROAD-flow-scripts to routing: timing after global routing, minutes. Parameters: <code>clock_ps</code> (<code>1000</code>). Reports <code>fmax_mhz</code>, <code>area_um2</code>, <code>power_w</code>, <code>cell_count</code>, <code>path_ps</code>. Needs <code>yosys</code>, <code>openroad</code>, <code>make</code>, <code>sta</code>.</li>
+<li><strong>Clock cycles (Verilator)</strong> (<code>rtl-cycles</code>, a stage): <code>fluxpreset rtl cycles {artifact} --golden {golden}</code><br />
+  A clocked design run on golden.py's vectors, each started when the last is done: its latency in cycles (the most, the fewest) and the mean cycles per result. Parameters: <code>golden</code> (<code>{home}/golden.py</code>). Reports <code>latency_cycles</code>, <code>latency_min_cycles</code>, <code>cycles_per_result</code>. Needs <code>verilator</code>.</li>
+<li><strong>Equal to a reference module</strong> (<code>rtl-equiv</code>, a check): <code>fluxpreset rtl equiv {artifact} --reference {reference}</code><br />
+  Formal equivalence with Yosys (a miter of the two, proved by SAT; a clocked pair by induction): passes when they are equal for every input, else prints a counterexample. Parameters: <code>reference</code> (<code>{home}/reference.sv</code>). Reports <code>N failing</code>. Needs <code>yosys</code>.</li>
+<li><strong>Where the area goes (ASAP7)</strong> (<code>rtl-breakdown</code>, a stage): <code>fluxpreset rtl breakdown {artifact} --clock-ps {clock_ps}</code><br />
+  OpenROAD-flow-scripts' synthesis, its cells grouped: sequential, adders, XORs, buffers and inverters, the rest of the logic; and the flops. Parameters: <code>clock_ps</code> (<code>1000</code>). Reports <code>area_seq_um2</code>, <code>area_arith_um2</code>, <code>area_xor_um2</code>, <code>area_buf_um2</code>, <code>area_logic_um2</code>, <code>flop_count</code>, <code>area_um2</code>. Needs <code>yosys</code>, <code>openroad</code>, <code>make</code>.</li>
+<li><strong>Fastest clock that closes (ASAP7)</strong> (<code>rtl-fmax</code>, a stage): <code>fluxpreset rtl fmax {artifact} --stage {stage} --clock-ps {clock_ps} --steps {steps}</code><br />
+  A few OpenROAD-flow-scripts runs, each at the period the last one's slack says, until the fastest clock that closes timing at that stage is found: costly, and the honest fmax. Parameters: <code>stage</code> (<code>synth</code>), <code>clock_ps</code> (<code>1000</code>), <code>steps</code> (<code>6</code>). Reports <code>fmax_closed_mhz</code>, <code>closed_period_ps</code>. Needs <code>yosys</code>, <code>openroad</code>, <code>sta</code>, <code>make</code>.</li>
+<li><strong>Power from the design's own switching (ASAP7)</strong> (<code>rtl-power</code>, a stage): <code>fluxpreset rtl power {artifact} --golden {golden} --stage {stage} --clock-ps {clock_ps}</code><br />
+  Verilator runs golden.py's vectors and records the switching; OpenROAD reads it on the synthesised or placed design and reports power: internal, switching, leakage. Parameters: <code>golden</code> (<code>{home}/golden.py</code>), <code>stage</code> (<code>place</code>), <code>clock_ps</code> (<code>1000</code>). Reports <code>power_w</code>, <code>power_internal_w</code>, <code>power_switching_w</code>, <code>power_leakage_w</code>. Needs <code>verilator</code>, <code>yosys</code>, <code>openroad</code>, <code>sta</code>, <code>make</code>.</li>
+<li><strong>Energy per result (ASAP7)</strong> (<code>rtl-energy</code>, a stage): <code>fluxpreset rtl energy {artifact} --golden {golden} --stage {stage} --clock-ps {clock_ps}</code><br />
+  The power the golden vectors' own switching draws, times the time one result takes (its measured cycles at the clock): energy per result and energy-delay product. Parameters: <code>golden</code> (<code>{home}/golden.py</code>), <code>stage</code> (<code>place</code>), <code>clock_ps</code> (<code>1000</code>). Reports <code>energy_pj_per_result</code>, <code>edp_pj_ns</code>, <code>power_w</code>, <code>cycles_per_result</code>. Needs <code>verilator</code>, <code>yosys</code>, <code>openroad</code>, <code>sta</code>, <code>make</code>.</li>
+<li><strong>The critical path's anatomy (ASAP7)</strong> (<code>rtl-path</code>, a stage): <code>fluxpreset rtl path {artifact} --stage {stage} --clock-ps {clock_ps}</code><br />
+  OpenROAD's worst path at the stage: how many cells it crosses, and how much of its delay is in the cells and how much in the wires -- whether to cut logic or wire. Parameters: <code>stage</code> (<code>place</code>), <code>clock_ps</code> (<code>1000</code>). Reports <code>path_ps</code>, <code>path_levels</code>, <code>path_cell_ps</code>, <code>path_wire_ps</code>, <code>slack_ps</code>. Needs <code>yosys</code>, <code>openroad</code>, <code>sta</code>, <code>make</code>.</li>
+</ul>
+<h2 id="systemc">systemc<a class="headerlink" href="#systemc" title="Permanent link">&para;</a></h2>
+<p>A SystemC design as SystemVerilog: ICSC translates it, so every RTL preset can judge it. Alone it checks that the module translates; <code>--then "golden --golden g.py"</code> or <code>--then "rtl measure --stage stat"</code> runs that preset on the translation.</p>
+<div class="highlight"><pre><span></span><code>fluxpreset systemc DESIGN.h --top M --golden golden.py [--then "golden --golden golden.py"]
+</code></pre></div>
+<ul>
+<li><strong>SystemC translates to RTL (ICSC)</strong> (<code>systemc-translate</code>, a check): <code>fluxpreset systemc {artifact} --top {top} --golden {golden}</code><br />
+  ICSC translates the SystemC module to SystemVerilog: passes when it does, and when the ports are the golden model's. Parameters: <code>top</code> (<code>top</code>), <code>golden</code> (<code>{home}/golden.py</code>). Reports <code>N failing</code>.</li>
+<li><strong>SystemC against a golden model</strong> (<code>systemc-golden</code>, a check): <code>fluxpreset systemc {artifact} --top {top} --golden {golden} --then "golden --golden {golden}"</code><br />
+  ICSC translates the SystemC module, then Verilator runs the RTL on golden.py's vectors. Parameters: <code>top</code> (<code>top</code>), <code>golden</code> (<code>{home}/golden.py</code>). Reports <code>N failing</code>. Needs <code>verilator</code>.</li>
+</ul>
+<h2 id="cases">cases<a class="headerlink" href="#cases" title="Permanent link">&para;</a></h2>
+<p>The golden test for Python: the design's function called on cases and compared with the expected value or a reference function's (floats within <code>--tol</code>). Cases come from a JSON table (<code>[args]</code> or <code>{"args", "kwargs", "expected"}</code>), the reference module's <code>CASES</code>, and <code>--random N</code> draws of its <code>inputs(rng)</code>.</p>
+<div class="highlight"><pre><span></span><code>fluxpreset cases DESIGN.py --call F [--reference ref.py[:F]] [--cases cases.json] [--random N] [--tol R]
+</code></pre></div>
+<ul>
+<li><strong>Compare with a reference function</strong> (<code>python-cases</code>, a check): <code>fluxpreset cases {artifact} --call {call} --reference {reference} --random {random}</code><br />
+  Calls the design's function on cases (a JSON table, the reference's CASES, random inputs from its inputs(rng)) and compares each result with the reference function's or the expected value. Parameters: <code>call</code> (<code>main</code>), <code>reference</code> (<code>{home}/reference.py</code>), <code>random</code> (<code>100</code>). Reports <code>N failing</code>.</li>
+</ul>
+<h2 id="ccases">ccases<a class="headerlink" href="#ccases" title="Permanent link">&para;</a></h2>
+<p><code>cases</code> for a C or C++ function: the design built as a shared library and called through ctypes with a scalar <code>--sig</code>, against a Python reference.</p>
+<div class="highlight"><pre><span></span><code>fluxpreset ccases DESIGN.c --call F --sig "long(long,long)" --reference ref.py:F --random N
+</code></pre></div>
+<ul>
+<li><strong>Compare a C function with a reference</strong> (<code>c-cases</code>, a check): <code>fluxpreset ccases {artifact} --call {call} --sig {sig} --reference {reference} --random {random}</code><br />
+  Builds the design as a shared library and calls one function (a scalar signature) on cases, each result compared with a Python reference function's or the expected value. Parameters: <code>call</code> (<code>main</code>), <code>sig</code> (<code>int(int)</code>), <code>reference</code> (<code>{home}/reference.py</code>), <code>random</code> (<code>100</code>). Reports <code>N failing</code>. Needs <code>cc</code>.</li>
+</ul>
+<h2 id="pytest">pytest<a class="headerlink" href="#pytest" title="Permanent link">&para;</a></h2>
+<p>Your pytest file against the design: the design is copied as <code>design.py</code> beside your tests, and the failing tests are counted.</p>
+<div class="highlight"><pre><span></span><code>fluxpreset pytest DESIGN.py --tests test_design.py` (the design imported as `design`)
+</code></pre></div>
+<ul>
+<li><strong>Run your pytest file</strong> (<code>python-pytest</code>, a check): <code>fluxpreset pytest {artifact} --tests {tests}</code><br />
+  Runs your pytest file with the design importable as <code>design</code>; counts the failing tests. Parameters: <code>tests</code> (<code>{home}/test_design.py</code>). Reports <code>N failing</code>.</li>
+</ul>
+<h2 id="accuracy">accuracy<a class="headerlink" href="#accuracy" title="Permanent link">&para;</a></h2>
+<p>How far an approximation is from its reference, as a measurement, not pass or fail. <code>max_ulp</code> counts float64 steps.</p>
+<div class="highlight"><pre><span></span><code>fluxpreset accuracy DESIGN.py --call F --reference ref.py:F --random N
+</code></pre></div>
+<ul>
+<li><strong>Accuracy against a reference</strong> (<code>python-accuracy</code>, a stage): <code>fluxpreset accuracy {artifact} --call {call} --reference {reference} --random {random}</code><br />
+  Calls the design's function and a reference on the same cases and reports how far apart they are: absolute, relative and ULP error. Parameters: <code>call</code> (<code>main</code>), <code>reference</code> (<code>{home}/reference.py</code>), <code>random</code> (<code>1000</code>). Reports <code>max_abs_error</code>, <code>mean_abs_error</code>, <code>max_rel_error</code>, <code>mean_rel_error</code>, <code>max_ulp</code>.</li>
+</ul>
+<h2 id="timebound">timebound<a class="headerlink" href="#timebound" title="Permanent link">&para;</a></h2>
+<p>A time budget as a check: a Python function slower than <code>--max-ms</code> (the fastest of <code>--runs</code>) fails before the costly benchmark runs. A run stuck past the budget is stopped.</p>
+<div class="highlight"><pre><span></span><code>fluxpreset timebound DESIGN.py --call F --args "(1000,)" --max-ms 50
+</code></pre></div>
+<ul>
+<li><strong>Within a time budget</strong> (<code>python-timebound</code>, a check): <code>fluxpreset timebound {artifact} --call {call} --args {args} --max-ms {max_ms}</code><br />
+  Times one call of the design's function on a large input and fails a design slower than the budget, before the costly benchmark. Parameters: <code>call</code> (<code>main</code>), <code>args</code> (<code>()</code>), <code>max_ms</code> (<code>1000</code>). Reports <code>N failing</code>.</li>
+</ul>
+<h2 id="bench">bench<a class="headerlink" href="#bench" title="Permanent link">&para;</a></h2>
+<p>Time a Python function: the design loaded, <code>f(*args)</code> timed over <code>--runs</code> after <code>--warmup</code>. <code>time_ms</code> is the median. Exit 3 when the design does not load, 1 when it raises.</p>
+<div class="highlight"><pre><span></span><code>fluxpreset bench DESIGN.py --call F --args "(1000,)" [--runs 5] [--warmup 1]
+</code></pre></div>
+<ul>
+<li><strong>Time a Python function</strong> (<code>python-bench</code>, a stage): <code>fluxpreset bench {artifact} --call {call} --args {args} --runs {runs}</code><br />
+  Loads the design, calls one function with your arguments, times it over several runs. Parameters: <code>call</code> (<code>main</code>), <code>args</code> (<code>()</code>), <code>runs</code> (<code>5</code>). Reports <code>time_ms</code>.</li>
+</ul>
+<h2 id="prog">prog<a class="headerlink" href="#prog" title="Permanent link">&para;</a></h2>
+<p>Build a program with <code>--build</code> (<code>{out}</code> is the program it builds), then time, count, size or watch it. It prints <code>name=value</code> lines and exits 3 when the build fails. Older documents said <code>flux prog</code>; <code>flux task migrate</code> rewrites it.</p>
+<div class="highlight"><pre><span></span><code>fluxpreset prog time|count|memory|size --build "c++ -O2 -o {out} {artifact}" [--run CMD]
+</code></pre></div>
+<ul>
+<li><strong>Program size</strong> (<code>prog-size</code>, a stage): <code>fluxpreset prog size --build "{build}"</code><br />
+  Builds the program and reads its sections with <code>size</code>: text, data and bss bytes. Parameters: <code>build</code> (<code>c++ -O2 -o {out} {artifact}</code>). Reports <code>text_bytes</code>, <code>data_bytes</code>, <code>bss_bytes</code>. Needs <code>size</code>.</li>
+<li><strong>Program run time</strong> (<code>prog-time</code>, a stage): <code>fluxpreset prog time --build "{build}" --run "{run}" --runs {runs} --warmup {warmup}</code><br />
+  Builds the program and times it over several runs (hyperfine when present). Parameters: <code>build</code> (<code>c++ -O2 -o {out} {artifact}</code>), <code>run</code>, <code>runs</code> (<code>10</code>), <code>warmup</code> (<code>1</code>). Reports <code>time_ms</code>, <code>time_ms_stddev</code>, <code>time_ms_min</code>.</li>
+<li><strong>Instruction count (Valgrind)</strong> (<code>prog-count</code>, a stage): <code>fluxpreset prog count --build "{build}" --run "{run}"</code><br />
+  Builds the program and counts instructions and cache misses with Valgrind's cachegrind: deterministic. Parameters: <code>build</code> (<code>c++ -O2 -o {out} {artifact}</code>), <code>run</code>. Reports <code>instructions</code>, <code>d1_misses</code>, <code>ll_misses</code>, <code>branch_mispredicts</code>. Needs <code>valgrind</code>.</li>
+<li><strong>Program peak memory</strong> (<code>prog-memory</code>, a stage): <code>fluxpreset prog memory --build "{build}" --run "{run}" --runs {runs}</code><br />
+  Builds the program and runs it: its peak resident memory as the kernel counts it, the most over the runs. Parameters: <code>build</code> (<code>c++ -O2 -o {out} {artifact}</code>), <code>run</code>, <code>runs</code> (<code>3</code>). Reports <code>peak_rss_kb</code>.</li>
+</ul>
+<h2 id="sanitize">sanitize<a class="headerlink" href="#sanitize" title="Permanent link">&para;</a></h2>
+<p>A C or C++ program built with AddressSanitizer and UndefinedBehaviorSanitizer and run: each distinct memory error, leak or undefined behaviour it hits is a failure.</p>
+<div class="highlight"><pre><span></span><code>fluxpreset sanitize --build "cc -O1 -o {out} {artifact}" [--run CMD]
+</code></pre></div>
+<ul>
+<li><strong>Memory and undefined-behaviour errors</strong> (<code>c-sanitize</code>, a check): <code>fluxpreset sanitize --build "{build}" --run "{run}"</code><br />
+  Builds the program with AddressSanitizer and UndefinedBehaviorSanitizer and runs it: each memory error, leak or undefined behaviour it hits is a failure. Parameters: <code>build</code> (<code>cc -O1 -o {out} {artifact}</code>), <code>run</code>. Reports <code>N failing</code>. Needs <code>cc</code>.</li>
+</ul>
+<h2 id="complexity">complexity<a class="headerlink" href="#complexity" title="Permanent link">&para;</a></h2>
+<p>How complex a design's source is, read and not run, in any common language (lizard). With <code>--max-cyclomatic N</code> it fails each function over N.</p>
+<div class="highlight"><pre><span></span><code>fluxpreset complexity DESIGN [--ext .c] [--max-cyclomatic 15]
+</code></pre></div>
+<ul>
+<li><strong>Source complexity</strong> (<code>complexity</code>, a stage): <code>fluxpreset complexity {artifact}</code><br />
+  Reads the design's source (any common language) and counts its lines of code, functions, cyclomatic complexity and tokens; nothing is built or run. Reports <code>loc</code>, <code>functions</code>, <code>cyclomatic_max</code>, <code>cyclomatic_mean</code>, <code>tokens</code>, <code>max_function_loc</code>.</li>
+<li><strong>No function too complex</strong> (<code>complexity-limit</code>, a check): <code>fluxpreset complexity {artifact} --max-cyclomatic {max_cyclomatic}</code><br />
+  Fails each function whose cyclomatic complexity is over the limit. Parameters: <code>max_cyclomatic</code> (<code>15</code>). Reports <code>N failing</code>.</li>
+</ul>
+<h2 id="scaling">scaling<a class="headerlink" href="#scaling" title="Permanent link">&para;</a></h2>
+<p>How a command's time grows with the problem size: timed at doubling sizes (<code>{n}</code>; <code>--input "gen {n}"</code> feeds its stdin, <code>--build</code> makes <code>{out}</code> first), start-up time taken off, fitted as time ~ n^k. <code>scaling_exponent</code> is about 1 for linear, 2 for quadratic. With <code>--max-exponent K</code> it is a check.</p>
+<div class="highlight"><pre><span></span><code>fluxpreset scaling [--start 1000|--sizes A,B,C] [--input "gen {n}"] [--build "cc -o {out} {artifact}"] [--max-exponent K] -- CMD {n}
+</code></pre></div>
+<ul>
+<li><strong>How time grows with size</strong> (<code>scaling</code>, a stage): <code>fluxpreset scaling --start {start} -- {command}</code><br />
+  Times the program at doubling problem sizes and fits time ~ n^k: the exponent says how it scales (1 linear, 2 quadratic), the constant factor aside. Parameters: <code>start</code> (<code>1000</code>), <code>command</code> (<code>{artifact} {n}</code>). Reports <code>scaling_exponent</code>, <code>scaling_r2</code>, <code>time_at_max_ms</code>, <code>max_n</code>.</li>
+<li><strong>Scales no worse than n^k</strong> (<code>scaling-limit</code>, a check): <code>fluxpreset scaling --start {start} --max-exponent {max_exponent} -- {command}</code><br />
+  Times the program at doubling sizes and fails when time grows faster than n to the given power. Parameters: <code>start</code> (<code>1000</code>), <code>command</code> (<code>{artifact} {n}</code>), <code>max_exponent</code> (<code>1.5</code>). Reports <code>N failing</code>.</li>
+</ul>
+<h2 id="repeat">repeat<a class="headerlink" href="#repeat" title="Permanent link">&para;</a></h2>
+<p>Any measurement run several times with its noise taken out: each metric's median and <code>NAME_spread_pct</code>.</p>
+<div class="highlight"><pre><span></span><code>fluxpreset repeat --n 5 [--warmup 1] -- CMD
+</code></pre></div>
+<ul>
+<li><strong>Median of several runs</strong> (<code>repeat</code>, a stage): <code>fluxpreset repeat --n {n} -- {command}</code><br />
+  Runs any measurement several times and prints each metric's median and its spread, so one noisy run does not decide. Parameters: <code>n</code> (<code>5</code>), <code>command</code>. Reports your <code>name=value</code> lines.</li>
+</ul>
+<h2 id="derive">derive<a class="headerlink" href="#derive" title="Permanent link">&para;</a></h2>
+<p>Metrics made from other metrics: a command's own numbers plus formulas over them (arithmetic, <code>min</code>, <code>max</code>, <code>abs</code>, <code>sqrt</code>, <code>log</code>, <code>exp</code>).</p>
+<div class="highlight"><pre><span></span><code>fluxpreset derive --expr NAME=EXPR [--expr ...] -- CMD
+</code></pre></div>
+<ul>
+<li><strong>Metrics from formulas</strong> (<code>derive</code>, a stage): <code>fluxpreset derive --expr {expr} -- {command}</code><br />
+  Runs any measurement and adds metrics computed from its numbers, such as area times delay or throughput per watt. Parameters: <code>expr</code> (<code>adp=area_um2*path_ps</code>), <code>command</code>. Reports your <code>name=value</code> lines.</li>
+</ul>
+<h2 id="regress">regress<a class="headerlink" href="#regress" title="Permanent link">&para;</a></h2>
+<p>A performance gate: a measurement run again and compared with a recorded baseline file. <code>--record</code> writes the file, <code>--tol</code> is the allowed percent, <code>--higher</code> names metrics where more is better.</p>
+<div class="highlight"><pre><span></span><code>fluxpreset regress --baseline base.json [--tol 5] [--record] -- CMD
+</code></pre></div>
+<ul>
+<li><strong>No worse than a baseline</strong> (<code>regress</code>, a check): <code>fluxpreset regress --baseline {baseline} --tol {tol} -- {command}</code><br />
+  Runs any measurement again and fails when a metric is worse than the recorded baseline by more than the tolerance. Parameters: <code>baseline</code> (<code>{home}/baseline.json</code>), <code>tol</code> (<code>5</code>), <code>command</code>. Reports <code>N failing</code>.</li>
+</ul>
+<h2 id="extract">extract<a class="headerlink" href="#extract" title="Permanent link">&para;</a></h2>
+<p>Any tool's output as <code>name=value</code>, so a tool that does not speak Flux needs no script: JSON, CSV or text, picked with <code>--pick PATH=name</code> (a dotted path, a column or a regex group).</p>
+<div class="highlight"><pre><span></span><code>fluxpreset extract [--format json|csv|regex] --pick PATH=name -- CMD
+</code></pre></div>
+<ul>
+<li><strong>Numbers out of any tool's output</strong> (<code>extract</code>, a stage): <code>fluxpreset extract --format {format} --pick {pick} -- {command}</code><br />
+  Runs your tool and reads its JSON, CSV or text output, printing the numbers you pick as name=value. Parameters: <code>format</code> (<code>json</code>), <code>pick</code> (<code>value=metric</code>), <code>command</code>. Reports your <code>name=value</code> lines.</li>
+</ul>
+<h2 id="champsim">champsim<a class="headerlink" href="#champsim" title="Permanent link">&para;</a></h2>
+<p>A cache prefetcher in ChampSim, on your traces. <code>stats</code> runs the prefetcher and the run without it on every trace and says why it wins: coverage (the share of misses removed), accuracy, lateness.</p>
+<div class="highlight"><pre><span></span><code>fluxpreset champsim build|check|run|stats ARTIFACT --traces DIR [--warmup N --sim N]
+</code></pre></div>
+<ul>
+<li><strong>Build the prefetcher into ChampSim</strong> (<code>champsim-build</code>, a check): <code>fluxpreset champsim build {artifact}</code><br />
+  Compiles a prefetcher header into ChampSim; reports the first compiler error. Reports <code>N failing</code>. Needs <code>pythia</code>.</li>
+<li><strong>Smoke-run the prefetcher</strong> (<code>champsim-check</code>, a check): <code>fluxpreset champsim check {artifact} --traces {traces}</code><br />
+  Builds the prefetcher and runs it on one trace; refused when it issues no prefetches. Parameters: <code>traces</code> (<code>{home}/traces</code>). Reports <code>N failing</code>. Needs <code>pythia</code>.</li>
+<li><strong>Simulate on your traces (ChampSim)</strong> (<code>champsim-run</code>, a stage): <code>fluxpreset champsim run {artifact} --traces {traces} --warmup {warmup} --sim {sim}</code><br />
+  Runs an .ini or a prefetcher header on every trace; the geometric-mean IPC speed-up over no prefetcher. Parameters: <code>traces</code> (<code>{home}/traces</code>), <code>warmup</code> (<code>10000000</code>), <code>sim</code> (<code>15000000</code>). Reports <code>geomean_speedup</code>. Needs <code>pythia</code>.</li>
+<li><strong>Why the prefetcher wins (ChampSim)</strong> (<code>champsim-stats</code>, a stage): <code>fluxpreset champsim stats {artifact} --traces {traces} --warmup {warmup} --sim {sim}</code><br />
+  Runs it and the run without it on every trace: L2 misses per kilo-instruction with and without it, the share of misses it removed (coverage), and how many of its prefetches were used, late or useless. Parameters: <code>traces</code> (<code>{home}/traces</code>), <code>warmup</code> (<code>10000000</code>), <code>sim</code> (<code>15000000</code>). Reports <code>l2_mpki</code>, <code>l2_mpki_baseline</code>, <code>pf_coverage</code>, <code>pf_accuracy</code>, <code>pf_late</code>, <code>pf_useless</code>, <code>pf_issued_pki</code>, <code>geomean_speedup</code>. Needs <code>pythia</code>.</li>
+</ul>
+<h2 id="asl">asl<a class="headerlink" href="#asl" title="Permanent link">&para;</a></h2>
+<p>A PTO-style spec's AVS tests, from a spec checkout kept in the loop's folder. <code>tests</code> lists a unit's tests (by id or mnemonic); <code>run</code> runs them with ASLRef as the spec's release suite does, on <code>--jobs</code> threads, each failing test a line then <code>N failing of M</code>. <code>--out FILE</code> writes each result as JSON. Needs <code>aslref</code> on PATH or <code>--aslref</code>.</p>
+<div class="highlight"><pre><span></span><code>fluxpreset asl tests|run UNIT... --spec {home}/spec [--jobs N] [--out FILE]
+</code></pre></div>
+<ul>
+<li><strong>The spec's AVS tests pass</strong> (<code>asl-avs</code>, a check): <code>fluxpreset asl run {unit} --spec {home}/spec</code><br />
+  Runs a PTO-style spec unit's AVS tests with ASLRef, through the spec's own runner, from the spec kept in the application's folder. Each failing test a line, then the count. Parameters: <code>unit</code> (<code>TADD</code>). Reports <code>N failing</code>. Needs <code>aslref</code>.</li>
+</ul>
+<h2 id="ndf">ndf<a class="headerlink" href="#ndf" title="Permanent link">&para;</a></h2>
+<p>A PTO-style spec's normative clauses, read with the NDF tool. <code>list</code> gives each unit with its clauses by modality and its test count; <code>clauses UNIT</code> prints a unit's clauses; <code>scope UNIT</code> lists the unit and every unit that depends on it; <code>check UNIT --results FILE</code> reads <code>asl run --out</code> and counts each MUST clause failed or uncovered.</p>
+<div class="highlight"><pre><span></span><code>fluxpreset ndf list|clauses|scope|check UNIT --spec {home}/spec
+</code></pre></div>
+<ul>
+<li><strong>Every MUST clause covered and passing</strong> (<code>ndf-contract</code>, a check): <code>fluxpreset ndf check {unit} --spec {home}/spec --results {results}</code><br />
+  Reads a PTO-style spec unit's NDF clauses (the NDF tool, from the spec in the application's folder) and the AVS results <code>fluxpreset asl run --out</code> wrote: each MUST clause that failed or has no test is a line, then the count. Parameters: <code>unit</code> (<code>TADD</code>), <code>results</code> (<code>avs.json</code>). Reports <code>N failing</code>. Needs <code>ndf</code>.</li>
+</ul>
+<h2 id="pto">pto<a class="headerlink" href="#pto" title="Permanent link">&para;</a></h2>
+<p>A pyCircuit design checked against a PTO-style spec's ASL model, unit by unit. The design is one combinational datapath for the spec's elementwise units, with ports <code>op</code> (8 bits, from <code>fluxpreset pto ops</code>), <code>dtype</code> (5), <code>a</code>, <code>b</code> (64), <code>y</code> (64) and <code>fault</code> (1). Each wrong vector is a line, then <code>N failing of M</code>; <code>--build-only</code> only builds, <code>--measure</code> prints <code>vectors_failing</code>, <code>units_passing</code>, <code>units</code>. Needs <code>pycircuit</code> and <code>aslref</code>.</p>
+<div class="highlight"><pre><span></span><code>fluxpreset pto ops [--names]
+fluxpreset pto ref UNIT...
+fluxpreset pto check DESIGN --units UNIT... [--dependents] [--build-only|--measure]` (`--spec {home}/spec`)
+</code></pre></div>
+<ul>
+<li><strong>The design matches the spec's ASL model</strong> (<code>pto-check</code>, a check): <code>fluxpreset pto check {artifact} --units {units} --spec {home}/spec</code><br />
+  Builds a pyCircuit design (pycircuit, the C++ model) and drives it with each unit's reference vectors -- the spec's own answers from ASLRef, cached per spec -- one wrong vector a line, then the count. The interface: <code>fluxpreset pto ops</code>. Parameters: <code>units</code> (<code>all</code>). Reports <code>N failing</code>. Needs <code>pycircuit</code>, <code>aslref</code>.</li>
+</ul>
+<h2 id="without-a-preset">Without a preset<a class="headerlink" href="#without-a-preset" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Test script</strong> (<code>python-test-script</code>, a check): <code>{python} {script} {artifact}</code><br />
+  A Python script beside the document runs the design on known cases and prints <code>N failing</code>. Parameters: <code>script</code> (<code>{home}/check.py</code>). Reports <code>N failing</code>.</li>
+<li><strong>Any command</strong> (<code>custom-check</code>, a check): <code>{command}</code><br />
+  Any command; it prints <code>N failing</code> (or say <code>count_re</code> / <code>fail_re</code>), or its exit code decides. Parameters: <code>command</code>. Reports <code>N failing</code>.</li>
+<li><strong>Timing script</strong> (<code>bench-script</code>, a stage): <code>{python} {script} {artifact}</code><br />
+  A Python script beside the document runs the design and prints <code>time_ms=...</code>. Parameters: <code>script</code> (<code>{home}/bench.py</code>). Reports <code>time_ms</code>.</li>
+<li><strong>Any command</strong> (<code>custom-stage</code>, a stage): <code>{command}</code><br />
+  Any command; it prints <code>name=value</code> for each metric it measures, listed as the stage's <code>metrics</code>. Parameters: <code>command</code>. Reports your <code>name=value</code> lines.</li>
+</ul>
+<h2 id="one-interface">One interface<a class="headerlink" href="#one-interface" title="Permanent link">&para;</a></h2>
+<p>Every preset keeps the same interface:</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Arguments</td>
+<td><code>fluxpreset NAME [SUBCOMMAND] ARTIFACT [--option VALUE ...]</code>: the design file first, every other input an option with a default</td>
+</tr>
+<tr>
+<td>stdin</td>
+<td>Never read</td>
+</tr>
+<tr>
+<td>stdout</td>
+<td>A check: each failure on a line of its own, then <code>N failing</code> (or <code>N failing of M</code>) last. A measurement: <code>name=value</code> for each metric it reports</td>
+</tr>
+<tr>
+<td>stderr</td>
+<td>Diagnostics for a person; never the count or the numbers</td>
+</tr>
+<tr>
+<td>Exit code</td>
+<td><code>0</code> passed or measured; <code>1</code> failed, or the measurement could not be taken; <code>2</code> wrong arguments; <code>3</code> the design did not build, parse or load</td>
+</tr>
+<tr>
+<td>Files</td>
+<td>Only in a temporary folder of its own; never in the loop's folder</td>
+</tr>
+</tbody>
+</table>
+<h2 id="writing-a-preset">Writing a preset<a class="headerlink" href="#writing-a-preset" title="Permanent link">&para;</a></h2>
+<p>A preset is a module <code>flux_presets/NAME.py</code> (or a package) with <code>main(argv) -&gt; int</code> (its command
+line) and <code>catalog() -&gt; [entry]</code>: one catalog entry per check or stage it offers, its <code>run</code>
+starting <code>fluxpreset NAME</code>. <code>flux tools</code>, the configurator's <strong>Flux presets</strong> list and the
+loader's language and <code>needs</code> inference read those entries; nothing else in Flux names a preset.</p>
+<h2 id="golden-model">Golden model<a class="headerlink" href="#golden-model" title="Permanent link">&para;</a></h2>
+<p><code>fluxpreset golden</code>, <code>rtl cycles</code>, <code>rtl power</code>, <code>rtl energy</code> and <code>systemc</code> read a golden model:
+a Python file that defines <code>PORTS</code> and <code>golden(**inputs)</code>.</p>
+<div class="highlight"><pre><span></span><code><span class="n">PORTS</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="p">{</span><span class="s2">"name"</span><span class="p">:</span> <span class="s2">"x"</span><span class="p">,</span> <span class="s2">"dir"</span><span class="p">:</span> <span class="s2">"in"</span><span class="p">,</span> <span class="s2">"bits"</span><span class="p">:</span> <span class="mi">16</span><span class="p">,</span> <span class="s2">"unsigned"</span><span class="p">:</span> <span class="kc">True</span><span class="p">},</span>
+    <span class="p">{</span><span class="s2">"name"</span><span class="p">:</span> <span class="s2">"y"</span><span class="p">,</span> <span class="s2">"dir"</span><span class="p">:</span> <span class="s2">"out"</span><span class="p">,</span> <span class="s2">"bits"</span><span class="p">:</span> <span class="mi">16</span><span class="p">,</span> <span class="s2">"unsigned"</span><span class="p">:</span> <span class="kc">True</span><span class="p">},</span>
+<span class="p">]</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">golden</span><span class="p">(</span><span class="n">x</span><span class="p">):</span>
+    <span class="k">return</span> <span class="p">{</span><span class="s2">"y"</span><span class="p">:</span> <span class="n">x</span><span class="p">}</span>
+</code></pre></div>
+<table>
+<thead>
+<tr>
+<th>Setting</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>COUNT</code></td>
+<td>Random vectors (default <code>32</code>), besides generated corner cases</td>
+</tr>
+<tr>
+<td><code>SEED</code></td>
+<td>Random seed</td>
+</tr>
+<tr>
+<td><code>VECTORS</code></td>
+<td>Extra input dictionaries; expected outputs still come from <code>golden()</code></td>
+</tr>
+<tr>
+<td><code>EXHAUSTIVE</code></td>
+<td>Every input combination (at most 20 input bits)</td>
+</tr>
+<tr>
+<td><code>CLOCK</code></td>
+<td>The clock port of a clocked design, e.g. <code>"clk"</code></td>
+</tr>
+<tr>
+<td><code>LATENCY</code></td>
+<td>Cycles from <code>start</code> to <code>done</code> for a clocked design</td>
+</tr>
+<tr>
+<td><code>TOLERANCE_ULP</code></td>
+<td>Map of floating-point output port to allowed ULP error; absent means exact</td>
+</tr>
+</tbody>
+</table>
+<p>Match the ports and clocking in the contract and the design. Floating-point bit-pattern ports
+are unsigned; reinterpret their bits in <code>golden()</code> rather than converting the integer to a
+float. A Python prototype is checked against the same file with
+<code>python -m flux_loop.golden_proto PROTOTYPE.py --golden golden.py</code> (prints <code>N failing of M</code>).</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../commands/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Commands and placeholders">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Commands and placeholders
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../cli/" class="md-footer__link md-footer__link--next" aria-label="Next: CLI">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                CLI
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">© 2026 Flux</div>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      <script id="__config" type="application/json">{"base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.footer", "content.code.copy", "content.code.annotate", "toc.follow", "search.suggest"], "search": "../../assets/javascripts/workers/search.973d3a69.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.f55a23d4.min.js"></script>
+      
+    
+  </body>
+</html>

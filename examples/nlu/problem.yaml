@@ -1,0 +1,48 @@
+# The FP16 non-linear unit: seven operators, each its own sub-loop in ops/<op>/ -- a
+# folder whose problem.yaml says only what differs from this one, and its golden model.
+#     flux task run applications/nlu --tui
+#     flux task run applications/nlu/ops/exp      # one operator alone
+
+statement: >-
+  The seven operators of an FP16 non-linear unit (recip, rsqrt, sigmoid, tanh, gelu, log, exp):
+  each within 1 ULP of the correctly rounded reference on ALL 65536 inputs, at 800 MHz on
+  ASAP7 with the least area and power.
+
+subtasks: [ops/recip, ops/rsqrt, ops/sigmoid, ops/tanh, ops/gelu, ops/log, ops/exp]   # shallowest arithmetic first
+
+language: systemverilog
+
+objectives:                 # 3% margin on shallower stages, 3% tie band
+  - {metric: fmax_mhz, direction: maximize, goal: 800, margin: 0.03, tie: 0.03}
+  - {metric: area_um2, direction: minimize}
+  - {metric: power_w, direction: minimize}
+
+flow:                       # every operator's, unless its folder says otherwise
+  orchestrate: {by: flux}    # FluxAgent picks each pass's operator (unsaid, the rules would); each operator, saying none, inherits it
+  generate: {by: claude, prototype: true}  # drafts each operator's prototype and RTL (a parent's command would compose)
+  test: "fluxpreset golden {artifact} --golden {home}/golden.py" # {home}: the operator's folder
+  measure:
+    synth:
+      run: "fluxpreset rtl measure {artifact} --stage synth --clock-ps 1250 --timeout 1200"
+      metrics: [fmax_mhz, area_um2, power_w, cell_count]
+      needs: [yosys, openroad]
+      timeout_s: 1300
+    place:
+      run: "fluxpreset rtl measure {artifact} --stage place --clock-ps 1250 --timeout 1800"
+      metrics: [fmax_mhz, area_um2, power_w, cell_count]
+      needs: [yosys, openroad]
+      timeout_s: 1900
+  knowledge:
+    library:                  # read on demand (`flux knowledge`, knowledge(query)), never pasted
+      - knowledge/nlu-methods.md
+      - knowledge/fp16_blocks.py   # verified FP16 decode, rounding, Horner, segment tables
+  select: {finalists: 3}
+
+budget:
+  steps: 24
+  repair_attempts: 20
+  explore_every: 4
+  cooldown_after: 3
+  prototype_attempts: 30
+  prototype_patience: 8
+  prototype_attempts_max: 90

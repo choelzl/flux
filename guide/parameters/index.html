@@ -1,0 +1,2838 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Flux searches for better designs: it makes them with a script, a model or a coding agent, checks and measures them with real tools, and decides from your objectives.">
+      
+      
+      
+        <link rel="canonical" href="https://choelzl.github.io/flux/guide/parameters/">
+      
+      
+        <link rel="prev" href="../../preview/">
+      
+      
+        <link rel="next" href="../../reference/search/">
+      
+      
+      <link rel="icon" href="../../assets/app/logo.svg">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.6.23">
+    
+    
+      
+        <title>Document - Flux</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.84d31ad4.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.06af60db.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/flux-theme.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#document" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="Flux" class="md-header__button md-logo" aria-label="Flux" data-md-component="logo">
+      <svg class="flux-logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" aria-label="Flux"><g fill="currentColor"><rect x="78" y="8" width="16" height="28" rx="8"/><rect x="120" y="8" width="16" height="28" rx="8"/><rect x="162" y="8" width="16" height="28" rx="8"/><rect x="120" y="220" width="16" height="28" rx="8"/><rect x="162" y="220" width="16" height="28" rx="8"/><rect x="8" y="78" width="28" height="16" rx="8"/><rect x="8" y="120" width="28" height="16" rx="8"/><rect x="8" y="162" width="28" height="16" rx="8"/><rect x="220" y="78" width="28" height="16" rx="8"/><rect x="220" y="120" width="28" height="16" rx="8"/><rect x="220" y="162" width="28" height="16" rx="8"/></g><rect x="78" y="208" width="16" height="40" rx="8" fill="#f66824"/><g fill="none" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"><rect x="40" y="40" width="176" height="176" rx="32" stroke="currentColor"/><path d="M86 248V118A32 32 0 0 1 118 86H174" stroke="#f66824"/><path d="M128 248V146A18 18 0 0 1 146 128H166" stroke="currentColor"/></g></svg>
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Flux
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Document
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/choelzl/flux" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    choelzl/flux
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../start/install/" class="md-tabs__link">
+          
+  
+  
+  Get started
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../build-your-own/" class="md-tabs__link">
+          
+  
+  
+  Guides
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../web/" class="md-tabs__link">
+          
+  
+  
+  Web app
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../preview/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Preview app
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="./" class="md-tabs__link">
+          
+  
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="Flux" class="md-nav__button md-logo" aria-label="Flux" data-md-component="logo">
+      <svg class="flux-logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" aria-label="Flux"><g fill="currentColor"><rect x="78" y="8" width="16" height="28" rx="8"/><rect x="120" y="8" width="16" height="28" rx="8"/><rect x="162" y="8" width="16" height="28" rx="8"/><rect x="120" y="220" width="16" height="28" rx="8"/><rect x="162" y="220" width="16" height="28" rx="8"/><rect x="8" y="78" width="28" height="16" rx="8"/><rect x="8" y="120" width="28" height="16" rx="8"/><rect x="8" y="162" width="28" height="16" rx="8"/><rect x="220" y="78" width="28" height="16" rx="8"/><rect x="220" y="120" width="28" height="16" rx="8"/><rect x="220" y="162" width="28" height="16" rx="8"/></g><rect x="78" y="208" width="16" height="40" rx="8" fill="#f66824"/><g fill="none" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"><rect x="40" y="40" width="176" height="176" rx="32" stroke="currentColor"/><path d="M86 248V118A32 32 0 0 1 118 86H174" stroke="#f66824"/><path d="M128 248V146A18 18 0 0 1 146 128H166" stroke="currentColor"/></g></svg>
+    </a>
+    Flux
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/choelzl/flux" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    choelzl/flux
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Home
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    Get started
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            Get started
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../start/install/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Install
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tutorial/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    First loop
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../loop-crafter/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Loop crafter
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../start/ask/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Write a loop with an agent
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    Guides
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            Guides
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../build-your-own/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Configure
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../loop-shape/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Search and agents
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../knowledge/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Knowledge, skills, hidden paths
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Split a larger design
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cookbook/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Recipes
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../run/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Run, stop, resume
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../models/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Models and agents
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    Web app
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            Web app
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../web/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Tour
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../web/live/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Live
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../web/results/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Results
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../web/files/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Files and settings
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../web/chat/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Chat
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../web/groups/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Groups
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../web/admin/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Server and admin
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../preview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Preview app
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    Reference
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            Reference
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    Document
+    
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    Document
+    
+  </span>
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-document-at-a-glance" class="md-nav__link">
+    <span class="md-ellipsis">
+      The document at a glance
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#files-and-loading" class="md-nav__link">
+    <span class="md-ellipsis">
+      Files and loading
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#document-fields" class="md-nav__link">
+    <span class="md-ellipsis">
+      Document fields
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#flow-settings" class="md-nav__link">
+    <span class="md-ellipsis">
+      Flow settings
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Flow settings">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#critics" class="md-nav__link">
+    <span class="md-ellipsis">
+      Critics
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#check-settings" class="md-nav__link">
+    <span class="md-ellipsis">
+      Check settings
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#measurement-settings" class="md-nav__link">
+    <span class="md-ellipsis">
+      Measurement settings
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#knowledge-settings" class="md-nav__link">
+    <span class="md-ellipsis">
+      Knowledge settings
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#hidden-from-ai" class="md-nav__link">
+    <span class="md-ellipsis">
+      Hidden from AI
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#skills" class="md-nav__link">
+    <span class="md-ellipsis">
+      Skills
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#objective-settings" class="md-nav__link">
+    <span class="md-ellipsis">
+      Objective settings
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#budget" class="md-nav__link">
+    <span class="md-ellipsis">
+      Budget
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Budget">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#run-length-repairs-and-concurrency" class="md-nav__link">
+    <span class="md-ellipsis">
+      Run length, repairs, and concurrency
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#prototypes" class="md-nav__link">
+    <span class="md-ellipsis">
+      Prototypes
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#direct-model-tools-and-context" class="md-nav__link">
+    <span class="md-ellipsis">
+      Direct-model tools and context
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#baseline-pass-0" class="md-nav__link">
+    <span class="md-ellipsis">
+      Baseline / pass 0
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#parts-and-sub-loops" class="md-nav__link">
+    <span class="md-ellipsis">
+      Parts and sub-loops
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#moved-to-their-own-pages" class="md-nav__link">
+    <span class="md-ellipsis">
+      Moved to their own pages
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/search/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Searches
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/agents/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Agent options
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/commands/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Commands and placeholders
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/presets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Presets
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    CLI
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/refusals/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Common refusals
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/glossary/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Glossary
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-document-at-a-glance" class="md-nav__link">
+    <span class="md-ellipsis">
+      The document at a glance
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#files-and-loading" class="md-nav__link">
+    <span class="md-ellipsis">
+      Files and loading
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#document-fields" class="md-nav__link">
+    <span class="md-ellipsis">
+      Document fields
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#flow-settings" class="md-nav__link">
+    <span class="md-ellipsis">
+      Flow settings
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Flow settings">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#critics" class="md-nav__link">
+    <span class="md-ellipsis">
+      Critics
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#check-settings" class="md-nav__link">
+    <span class="md-ellipsis">
+      Check settings
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#measurement-settings" class="md-nav__link">
+    <span class="md-ellipsis">
+      Measurement settings
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#knowledge-settings" class="md-nav__link">
+    <span class="md-ellipsis">
+      Knowledge settings
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#hidden-from-ai" class="md-nav__link">
+    <span class="md-ellipsis">
+      Hidden from AI
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#skills" class="md-nav__link">
+    <span class="md-ellipsis">
+      Skills
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#objective-settings" class="md-nav__link">
+    <span class="md-ellipsis">
+      Objective settings
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#budget" class="md-nav__link">
+    <span class="md-ellipsis">
+      Budget
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Budget">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#run-length-repairs-and-concurrency" class="md-nav__link">
+    <span class="md-ellipsis">
+      Run length, repairs, and concurrency
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#prototypes" class="md-nav__link">
+    <span class="md-ellipsis">
+      Prototypes
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#direct-model-tools-and-context" class="md-nav__link">
+    <span class="md-ellipsis">
+      Direct-model tools and context
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#baseline-pass-0" class="md-nav__link">
+    <span class="md-ellipsis">
+      Baseline / pass 0
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#parts-and-sub-loops" class="md-nav__link">
+    <span class="md-ellipsis">
+      Parts and sub-loops
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#moved-to-their-own-pages" class="md-nav__link">
+    <span class="md-ellipsis">
+      Moved to their own pages
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="document">Document<a class="headerlink" href="#document" title="Permanent link">&para;</a></h1>
+<p>Everything a loop's document, <code>problem.yaml</code>, can say, and the contract every command it names
+must follow: arguments, placeholders, what to print, exit codes. It is written from the code
+and checked against it.</p>
+<p>Use <a href="../build-your-own/">Configure</a> for why you would choose each setting,
+<code>flux task check FOLDER</code> to validate a document, and <code>flux task migrate FOLDER --write</code> to
+upgrade an older one.</p>
+<h2 id="the-document-at-a-glance">The document at a glance<a class="headerlink" href="#the-document-at-a-glance" title="Permanent link">&para;</a></h2>
+<p>Only <code>statement</code> is required. A complete document; the numbered marks say where each part is
+described:</p>
+<div class="highlight"><pre><span></span><code><span class="nt">statement</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Count the primes below n, as fast as possible.</span><span class="w">  </span><span class="c1"># (1)!</span>
+<span class="nt">contract</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">&gt;-</span><span class="w">  </span><span class="c1"># (2)!</span>
+<span class="w">  </span><span class="no">A Python module defining count_primes(n) that returns</span>
+<span class="w">  </span><span class="no">exactly how many primes are below n.</span>
+<span class="nt">language</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">python</span>
+
+<span class="nt">flow</span><span class="p">:</span><span class="w">  </span><span class="c1"># (3)!</span>
+<span class="w">  </span><span class="nt">orchestrate</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">search</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">sweep</span>
+<span class="w">    </span><span class="nt">space</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">method</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">trial_division</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">sieve</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">slice_sieve</span><span class="p p-Indicator">]}</span>
+<span class="w">  </span><span class="nt">generate</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">command</span><span class="p">:</span><span class="w"> </span><span class="s">"{python}</span><span class="nv"> </span><span class="s">{home}/render.py</span><span class="nv"> </span><span class="s">{artifact}</span><span class="nv"> </span><span class="s">{method}"</span>
+<span class="w">  </span><span class="nt">test</span><span class="p">:</span><span class="w">  </span><span class="c1"># (4)!</span>
+<span class="w">    </span><span class="nt">build</span><span class="p">:</span><span class="w"> </span><span class="s">"{python}</span><span class="nv"> </span><span class="s">-m</span><span class="nv"> </span><span class="s">py_compile</span><span class="nv"> </span><span class="s">{artifact}"</span>
+<span class="w">    </span><span class="nt">correctness</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">run</span><span class="p">:</span><span class="w"> </span><span class="s">"{python}</span><span class="nv"> </span><span class="s">{home}/check.py</span><span class="nv"> </span><span class="s">{artifact}"</span>
+<span class="w">      </span><span class="nt">timeout_s</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">60</span>
+<span class="w">  </span><span class="nt">measure</span><span class="p">:</span><span class="w">  </span><span class="c1"># (5)!</span>
+<span class="w">    </span><span class="nt">quick</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">run</span><span class="p">:</span><span class="w"> </span><span class="s">"{python}</span><span class="nv"> </span><span class="s">{home}/bench.py</span><span class="nv"> </span><span class="s">{artifact}</span><span class="nv"> </span><span class="s">50000"</span>
+<span class="w">      </span><span class="nt">metrics</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">time_ms</span><span class="p p-Indicator">]</span>
+<span class="w">      </span><span class="nt">cutoff</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">metric</span><span class="p">:</span><span class="w"> </span><span class="nv">time_ms</span><span class="p p-Indicator">,</span><span class="nt"> below</span><span class="p">:</span><span class="w"> </span><span class="nv">20</span><span class="p p-Indicator">}</span>
+<span class="w">    </span><span class="nt">full</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">run</span><span class="p">:</span><span class="w"> </span><span class="s">"{python}</span><span class="nv"> </span><span class="s">{home}/bench.py</span><span class="nv"> </span><span class="s">{artifact}</span><span class="nv"> </span><span class="s">1000000"</span>
+<span class="w">      </span><span class="nt">metrics</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">time_ms</span><span class="p p-Indicator">]</span>
+<span class="w">  </span><span class="nt">select</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">finalists</span><span class="p">:</span><span class="w"> </span><span class="nv">2</span><span class="p p-Indicator">}</span>
+
+<span class="nt">objectives</span><span class="p">:</span><span class="w">  </span><span class="c1"># (6)!</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">metric</span><span class="p">:</span><span class="w"> </span><span class="nv">time_ms</span><span class="p p-Indicator">,</span><span class="nt"> direction</span><span class="p">:</span><span class="w"> </span><span class="nv">minimize</span><span class="p p-Indicator">,</span><span class="nt"> goal</span><span class="p">:</span><span class="w"> </span><span class="nv">20</span><span class="p p-Indicator">}</span>
+
+<span class="nt">budget</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">passes</span><span class="p">:</span><span class="w"> </span><span class="nv">5</span><span class="p p-Indicator">,</span><span class="nt"> workers</span><span class="p">:</span><span class="w"> </span><span class="nv">1</span><span class="p p-Indicator">}</span><span class="w">  </span><span class="c1"># (7)!</span>
+<span class="nt">params</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">n_max</span><span class="p">:</span><span class="w"> </span><span class="nv">1000000</span><span class="p p-Indicator">}</span><span class="w">  </span><span class="c1"># (8)!</span>
+</code></pre></div>
+<ol>
+<li>What to make. The only required field.</li>
+<li>Rules every design must follow: names, ports, what is forbidden.</li>
+<li>Who does each box of the loop: here a search over three methods, and a script that
+   writes each design (<a href="#flow-settings">flow settings</a>).</li>
+<li>The checks, in order; the first that fails refuses the design
+   (<a href="#check-settings">check settings</a>).</li>
+<li>The measurements, cheapest first. <code>cutoff</code> decides which designs go on to the next stage;
+   <code>select.finalists</code> how many climb (<a href="#measurement-settings">measurement settings</a>).</li>
+<li>What decides. A <code>goal</code> makes an objective a limit: here at most 20 ms
+   (<a href="#objective-settings">objectives</a>).</li>
+<li>How much to spend (<a href="#budget">budget</a>).</li>
+<li>Your own settings, handed to every command as the <code>{params}</code> file.</li>
+</ol>
+<h2 id="files-and-loading">Files and loading<a class="headerlink" href="#files-and-loading" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>The folder is the loop.</strong> Its name is the loop's id: 1 to 60 letters, digits, <code>_</code> and <code>-</code>.
+  There is no <code>id</code> key; saying one is refused.</li>
+<li><strong>The document</strong> is <code>problem.yaml</code> (or <code>problem.yml</code>, <code>problem.json</code>). Alternates beside it
+  are <code>NAME.problem.yaml</code>; each has its own record, <code>out/&lt;id&gt;.NAME.db</code>.</li>
+<li><strong>Beside it:</strong> your scripts, <code>library/</code> (papers and notes the model reads), <code>workbench/</code>
+  (the agents' own tools and notes, kept across runs), <code>skills/</code> (read unless <code>skills:</code> says otherwise), and <code>out/</code>
+  (the record, the cache and the decided design, written by Flux).</li>
+<li><strong>Parsing:</strong> a YAML or JSON error reports its line and column; a document that is not a
+  mapping is refused. Unknown keys are refused with a "did you mean" hint.</li>
+<li><strong>Older documents</strong> are never upgraded silently: <code>flux task migrate FOLDER</code> shows what
+  changes and <code>--write</code> saves it.</li>
+<li><strong>Normal form:</strong> equivalent spellings (<code>plan: flux</code> and <code>plan: {by: flux}</code>) load to the same
+  document and share one record -- <code>model</code>, FluxAgent's old name, too.</li>
+</ul>
+<h2 id="document-fields">Document fields<a class="headerlink" href="#document-fields" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Values / default</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>statement</code></td>
+<td>Required non-empty string</td>
+<td>What to build or optimize</td>
+</tr>
+<tr>
+<td><code>contract</code></td>
+<td>String; empty</td>
+<td>Interface and rules every design must follow (names, ports, what is forbidden)</td>
+</tr>
+<tr>
+<td><code>language</code></td>
+<td>String; inferred, else <code>text</code></td>
+<td>The design's file type (table below)</td>
+</tr>
+<tr>
+<td><code>flow</code></td>
+<td>Map; defaults below</td>
+<td>Who does each step: search, generation, checks, measurements, and the supporting boxes</td>
+</tr>
+<tr>
+<td><code>objectives</code></td>
+<td>List; empty</td>
+<td>Limits and ordered preferences (<a href="#objective-settings">objectives</a>)</td>
+</tr>
+<tr>
+<td><code>budget</code></td>
+<td>Map; defaults below</td>
+<td>Run length, repairs, concurrency, prototypes (<a href="#budget">budget</a>)</td>
+</tr>
+<tr>
+<td><code>params</code></td>
+<td>Map; empty</td>
+<td>Your own settings, handed to any command as the <code>{params}</code> JSON file</td>
+</tr>
+<tr>
+<td><code>parts</code></td>
+<td>List of names, map of descriptions, or <code>decompose</code></td>
+<td>Pieces of one artifact (<a href="#parts-and-sub-loops">parts</a>)</td>
+</tr>
+<tr>
+<td><code>subtasks</code></td>
+<td>List of folders or inline documents, or <code>decompose</code></td>
+<td>Child problems, each its own loop (<a href="#parts-and-sub-loops">sub-loops</a>)</td>
+</tr>
+<tr>
+<td><code>max_subtasks</code></td>
+<td>Integer; <code>4</code></td>
+<td>Most children when <code>subtasks: decompose</code></td>
+</tr>
+<tr>
+<td><code>skills</code></td>
+<td><code>off</code>, a folder or list of folders, or <code>{from, off}</code>; <code>skills/</code></td>
+<td>Skills (a folder with <code>SKILL.md</code>) the model and agents can load (<a href="#skills">skills</a>)</td>
+</tr>
+<tr>
+<td><code>baseline</code></td>
+<td><code>true</code>, <code>false</code>, or a map; absent</td>
+<td>A reference measured before pass 1 (<a href="#baseline-pass-0">baseline</a>)</td>
+</tr>
+</tbody>
+</table>
+<p><strong><code>language</code></strong> sets the design file's extension, matched without case:</p>
+<table>
+<thead>
+<tr>
+<th>Language</th>
+<th>Extension</th>
+<th>Language</th>
+<th>Extension</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>systemverilog</code></td>
+<td><code>.sv</code></td>
+<td><code>cpp</code>, <code>c++</code></td>
+<td><code>.cpp</code></td>
+</tr>
+<tr>
+<td><code>verilog</code></td>
+<td><code>.v</code></td>
+<td><code>c</code></td>
+<td><code>.c</code></td>
+</tr>
+<tr>
+<td><code>vhdl</code></td>
+<td><code>.vhd</code></td>
+<td><code>cuda</code></td>
+<td><code>.cu</code></td>
+</tr>
+<tr>
+<td><code>python</code></td>
+<td><code>.py</code></td>
+<td><code>opencl</code></td>
+<td><code>.cl</code></td>
+</tr>
+<tr>
+<td><code>text</code></td>
+<td><code>.txt</code></td>
+<td><code>rust</code></td>
+<td><code>.rs</code></td>
+</tr>
+<tr>
+<td><code>yaml</code></td>
+<td><code>.yaml</code></td>
+<td><code>markdown</code></td>
+<td><code>.md</code></td>
+</tr>
+<tr>
+<td><code>json</code></td>
+<td><code>.json</code></td>
+<td><code>shell</code>, <code>bash</code></td>
+<td><code>.sh</code></td>
+</tr>
+<tr>
+<td><code>chisel</code>, <code>scala</code></td>
+<td><code>.scala</code></td>
+<td>anything else</td>
+<td><code>.</code> + the name, lower case, no spaces</td>
+</tr>
+</tbody>
+</table>
+<p>When <code>language</code> is absent it is inferred only from a check or stage that starts with a
+built-in tool's full command (in practice the Verilator lint line, which gives
+<code>systemverilog</code>); otherwise it is <code>text</code>. Say it explicitly.</p>
+<h2 id="flow-settings">Flow settings<a class="headerlink" href="#flow-settings" title="Permanent link">&para;</a></h2>
+<p><code>flow</code> says who does each box of the loop's drawing. A box takes a word, an agent's name, or
+<code>{by: &lt;word or agent&gt;, ...settings, ...agent options}</code>:</p>
+<div class="highlight"><pre><span></span><code><span class="nt">flow</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">generate</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">claude</span><span class="w">                              </span><span class="c1"># an agent, no options</span>
+<span class="w">  </span><span class="nt">select</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">by</span><span class="p">:</span><span class="w"> </span><span class="nv">claude</span><span class="p p-Indicator">,</span><span class="nt"> session</span><span class="p">:</span><span class="w"> </span><span class="nv">pass</span><span class="p p-Indicator">}</span><span class="w">           </span><span class="c1"># an agent with options</span>
+<span class="w">  </span><span class="nt">plan</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">flux</span><span class="w">                                    </span><span class="c1"># FluxAgent</span>
+<span class="w">  </span><span class="nt">calibrate</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">off</span><span class="w">                                </span><span class="c1"># a word</span>
+</code></pre></div>
+<p><code>flux</code> is <strong>FluxAgent</strong>, Flux's own model working a box (its endpoint and model are set in
+<a href="../models/">Models and agents</a>). <code>model</code>, its old name, means the same everywhere and is still
+read; the configurator keeps it in a document that says it and writes <code>flux</code> in a new one.
+<code>claude</code>, <code>codex</code> and <code>opencode</code> are built in; a server can add agents of its own (named by
+<code>FLUX_AGENTS</code>). The old form <code>{agent: X}</code> is refused: write <code>{by: X}</code>.</p>
+<table>
+<thead>
+<tr>
+<th>Box</th>
+<th>Values (first is the default)</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>flow.orchestrate.by</code></td>
+<td>unset (the rules, no AI), <code>given</code>, <code>flux</code>, <code>tools</code>, agent</td>
+<td>Who decides what to try next</td>
+</tr>
+<tr>
+<td><code>flow.orchestrate.policy</code></td>
+<td>an intent: <code>adaptive</code> (default), <code>explore</code>, <code>improve</code>, <code>tune</code>, <code>finetune</code>, <code>variations</code></td>
+<td>The emphasis that guides who decides, FluxAgent or an agent proposing points, or a search's prompts</td>
+</tr>
+<tr>
+<td><code>flow.orchestrate.search</code></td>
+<td>unset, <code>sweep</code>, <code>montecarlo</code>, <code>anneal</code>, <code>gradient</code>, <code>genetic</code>, <code>pareto</code>, <code>{gradient: {...}}</code>, <code>module:Class</code>, a list of phases</td>
+<td>How the points of <code>space</code> are picked (<a href="../../reference/search/">search settings</a>)</td>
+</tr>
+<tr>
+<td><code>flow.orchestrate.scope</code></td>
+<td><code>{list: ..., brief: ..., check: ..., timeout_s: 120}</code></td>
+<td>The scopes of one whole design a pass may work on (<a href="#scope">scope</a>)</td>
+</tr>
+<tr>
+<td><code>flow.plan</code></td>
+<td><code>off</code>, <code>flux</code>, agent</td>
+<td>Write the pass's plan, checked before use</td>
+</tr>
+<tr>
+<td><code>flow.generate</code></td>
+<td><code>flux</code>, agent, <code>{command: ...}</code>, <code>{catalog: [paths]}</code></td>
+<td>Write each design</td>
+</tr>
+<tr>
+<td><code>flow.test</code></td>
+<td>A command, or an ordered map of named checks; never an agent</td>
+<td>Decide correctness (<a href="#check-settings">checks</a>)</td>
+</tr>
+<tr>
+<td><code>flow.measure</code></td>
+<td>An ordered map of named stages; never an agent</td>
+<td>Put numbers on passing designs (<a href="#measurement-settings">measurements</a>)</td>
+</tr>
+<tr>
+<td><code>flow.select</code></td>
+<td>unset (the objectives choose), agent, <code>{finalists: N}</code></td>
+<td>Choose the decision; an agent only breaks ties</td>
+</tr>
+<tr>
+<td><code>flow.calibrate</code></td>
+<td><code>on</code>, <code>off</code></td>
+<td>Compare a costly stage's numbers with the cheap stage's</td>
+</tr>
+<tr>
+<td><code>flow.feedback</code></td>
+<td>unset (your notes are read), <code>off</code></td>
+<td>Take your notes from the loop's Chat into the next prompt</td>
+</tr>
+<tr>
+<td><code>flow.knowledge</code></td>
+<td>A map (<a href="#knowledge-settings">knowledge</a>): <code>library</code>, <code>by</code> (who digests, or <code>off</code>), <code>insights</code>, ...</td>
+<td>What the model and agents can look up</td>
+</tr>
+</tbody>
+</table>
+<p>The configurator's Graph names the boxes by what they do: <code>orchestrate</code> is <strong>Search</strong>,
+<code>generate</code> <strong>Design</strong>, <code>test</code> <strong>Check</strong>, <code>measure</code> <strong>Measure</strong>, <code>select</code> <strong>Choose</strong>.</p>
+<ul>
+<li><strong><code>orchestrate: {by, policy, search, space}</code></strong> (D1499, D1512). <code>by</code> unset is the rules (they pick
+  the work, no AI); <code>given</code> a fixed order (<code>{given: [part_a, part_b]}</code>); <code>flux</code> (FluxAgent picks);
+  <code>tools</code> (FluxAgent with tools: standings, history, decisions, knowledge); or an agent. <code>policy</code> is
+  the intent that guides it -- <code>adaptive</code> (default), <code>explore</code>, <code>improve</code>, <code>tune</code>, <code>finetune</code>,
+  <code>variations</code>; it guides, it never forbids. <code>search</code> is the algorithm that picks the points of
+  <code>space</code> (<code>sweep</code>, <code>montecarlo</code>, <code>anneal</code>, <code>gradient</code>, <code>genetic</code>, <code>pareto</code>, phases) and decides
+  alone; <code>policy</code> beside it guides its prompts (unsaid, the search's own guidance). A space with
+  <code>by: flux</code> or an agent and no search: that one proposes the points, guided by <code>policy</code>. A search
+  word under <code>policy:</code>, or an intent under <code>search:</code>, is refused naming the right key (<code>flux task
+  migrate</code> moves an older document's). The bare word is shorthand: <code>orchestrate: explore</code> is
+  <code>{policy: explore}</code>, <code>orchestrate: sweep</code> <code>{search: sweep}</code>, <code>orchestrate: claude</code> <code>{by: claude}</code>.</li>
+<li><a id="scope"></a><strong><code>orchestrate.scope</code></strong>, for a loop of one whole design (no parts,
+  sub-loops or knobs): each pass works on one scope of it. <code>list</code> is a command printing the scopes,
+  one a line, its name first; <code>brief</code>, given <code>{scope}</code>, prints what the design agent is told of it;
+  <code>check</code>, given <code>{scope}</code> and <code>{artifact}</code>, checks the scope on a design that passed the gate
+  (<code>N failing of M</code>, or its exit). Each pass the orchestrator picks its direction and a scope in one
+  decision, seeing which scopes the latest passes took and how their checks ended (the rules: each
+  in turn). While the scope's check fails, the design goes back to the same agent with the failures,
+  until it is clean or the pass's <code>steps</code> are spent; every design that passes the gate is kept and
+  measured as usual. For a spec kept in the loop's folder: <code>list: fluxpreset ndf list --spec
+  {home}/spec</code>, <code>brief: fluxpreset ndf clauses {scope} --spec {home}/spec</code> (it names the units that
+  depend on it), and <code>fluxpreset ndf scope {scope} --spec {home}/spec</code> lists the unit and its
+  dependents for a check of your own.</li>
+<li><strong><code>generate</code></strong> takes exactly one form. <code>{command: ...}</code> is your script
+  (<a href="../../reference/commands/#generator-command">generator contract</a>); <code>{catalog: [a.py, b.py]}</code> reads the listed files
+  (relative to the folder) in turn; <code>flux</code> (FluxAgent) and agents write the design from the brief. A
+  generate agent keeps one session per part through its repairs; <code>session</code> is refused here.
+  A generator command has no <code>timeout_s</code> of its own: it uses the largest check timeout.</li>
+<li><strong><code>test</code> and <code>measure</code> are never an agent's.</strong> <code>by:</code> on them is refused: they establish
+  facts.</li>
+<li><strong><code>select: {finalists: N}</code></strong> is how many designs climb to each costlier stage (default <code>3</code>).
+  <code>{by: claude, finalists: 2}</code> adds an agent that breaks ties among designs the objectives
+  cannot separate; the objectives' choice stands otherwise.</li>
+<li><strong><code>plan</code></strong> is checked before use; a plan that fails the check falls back to the document's
+  order.</li>
+<li><a id="thinking"></a><strong>Thinking.</strong> One switch, <code>think: true</code> or <code>false</code>, beside whoever works a box.
+  Where FluxAgent works it -- <code>orchestrate</code>, <code>plan</code>, <code>generate</code> -- <code>{by: flux, think: true}</code>
+  lets it reason before it answers (slower, often better; its thinking shows in the task's live view);
+  <code>think: false</code>, it answers straight. A thinking model's answer that comes back empty is asked again
+  with thinking off. Beside an agent -- any box, critic or Knowledge section an agent works, an agent
+  added under a name of its own too -- <code>{by: claude, think: false}</code> runs it at its effort for not
+  thinking, <code>true</code> at its effort for thinking (both the admin's, below); refused for an agent of your own
+  <code>command</code>. An agent's <code>effort</code> (<a href="../../reference/agents/">agent options</a>) is the finer level and wins
+  over its <code>think</code>. Unsaid, the server's <a href="../../web/admin/#thinking-by-default">thinking by default</a>
+  decides: untouched, FluxAgent answers straight and each agent works at its own effort (no flag), as
+  before. The configurator shows <strong>Thinking</strong> under the agent wherever one is chosen -- a box, a critic,
+  a Knowledge section -- <em>default</em>, on, off, its help line saying the admin's default, with its
+  <strong>effort</strong> beside it (FluxAgent's levels or the agent's kind's); a box nothing thinks on shows none.
+  Where FluxAgent works a critic or a Knowledge section, the document cannot say its thinking; Search
+  <em>with tools</em> says it as <code>{by: tools, think: true}</code>, which the configurator does not edit. There the
+  two show read-only, the admin's, and the help line says so.
+  FluxAgent proposing the points of a search over settings (Search's <em>AI</em> search) has its own,
+  written beside it: <code>orchestrate: {by: flux, think: true, effort: high, space: {...}}</code>.</li>
+<li><a id="effort"></a><strong>Effort (FluxAgent).</strong> Beside <code>by: flux</code> (or <code>model</code>) on <code>orchestrate</code>, <code>plan</code> or
+  <code>generate</code>, <code>effort: low | medium | high | max</code> sets FluxAgent's thinking, its tool rounds and its
+  output at once (<a href="../../web/chat/#the-page">the table</a>): <code>low</code> 6 rounds, 3000 tokens, no thinking;
+  <code>medium</code> 20 and 6000; <code>high</code> 30 and 10000, thinking; <code>max</code> 50 and 16000, thinking, and a self-check of
+  its answer. It comes before the box's <code>think</code>. Unsaid, the box runs as before (the loop's
+  <code>tool_hops</code>, the run's output cap) unless the admin picked an effort for FluxAgent
+  (<a href="../../web/admin/#thinking-by-default">thinking by default</a>). The configurator shows <strong>effort</strong>
+  beside FluxAgent's Thinking.</li>
+</ul>
+<div class="highlight"><pre><span></span><code><span class="nt">flow</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">orchestrate</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">by</span><span class="p">:</span><span class="w"> </span><span class="nv">flux</span><span class="p p-Indicator">,</span><span class="nt"> think</span><span class="p">:</span><span class="w"> </span><span class="nv">true</span><span class="p p-Indicator">}</span><span class="w">        </span><span class="c1"># FluxAgent reasons over what to try next</span>
+<span class="w">  </span><span class="nt">plan</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">by</span><span class="p">:</span><span class="w"> </span><span class="nv">flux</span><span class="p p-Indicator">,</span><span class="nt"> effort</span><span class="p">:</span><span class="w"> </span><span class="nv">max</span><span class="p p-Indicator">}</span><span class="w">                </span><span class="c1"># thinks, 50 tool rounds, checks its own plan</span>
+<span class="w">  </span><span class="nt">generate</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">by</span><span class="p">:</span><span class="w"> </span><span class="nv">codex</span><span class="p p-Indicator">,</span><span class="nt"> think</span><span class="p">:</span><span class="w"> </span><span class="nv">false</span><span class="p p-Indicator">}</span><span class="w">         </span><span class="c1"># the design agent at its effort for not thinking</span>
+<span class="w">  </span><span class="nt">select</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">by</span><span class="p">:</span><span class="w"> </span><span class="nv">claude</span><span class="p p-Indicator">,</span><span class="nt"> effort</span><span class="p">:</span><span class="w"> </span><span class="nv">high</span><span class="p p-Indicator">}</span><span class="w">          </span><span class="c1"># the finer level, as it is</span>
+</code></pre></div>
+<h3 id="critics">Critics<a class="headerlink" href="#critics" title="Permanent link">&para;</a></h3>
+<p>A critic is a second opinion on one box, said as <code>critic:</code> inside it. Only four boxes take one:</p>
+<table>
+<thead>
+<tr>
+<th>Box</th>
+<th>What the critic judges</th>
+<th>A rejection</th>
+<th><code>rounds</code></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>orchestrate</code></td>
+<td>The split into parts, or the pass's direction</td>
+<td>The work is divided again with the objection</td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>test</code></td>
+<td>A design the checks passed</td>
+<td>The design fails; the objection is its note on the record</td>
+<td>no</td>
+</tr>
+<tr>
+<td><code>measure</code></td>
+<td>A stage's numbers</td>
+<td>The result is marked rejected and never chosen; it is not measured again</td>
+<td>no</td>
+</tr>
+<tr>
+<td><code>select</code></td>
+<td>The pick</td>
+<td>The decision is made again without it</td>
+<td>yes</td>
+</tr>
+</tbody>
+</table>
+<div class="highlight"><pre><span></span><code><span class="nt">flow</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">orchestrate</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">by</span><span class="p">:</span><span class="w"> </span><span class="nv">claude</span><span class="p p-Indicator">,</span><span class="nt"> critic</span><span class="p">:</span><span class="w"> </span><span class="nv">flux</span><span class="p p-Indicator">}</span>
+<span class="w">  </span><span class="nt">test</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">correctness</span><span class="p">:</span><span class="w"> </span><span class="s">"{python}</span><span class="nv"> </span><span class="s">{home}/check.py</span><span class="nv"> </span><span class="s">{artifact}"</span>
+<span class="w">    </span><span class="nt">critic</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">claude</span>
+<span class="w">  </span><span class="nt">select</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">finalists</span><span class="p">:</span><span class="w"> </span><span class="nv">2</span><span class="p p-Indicator">,</span><span class="nt"> critic</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">by</span><span class="p">:</span><span class="w"> </span><span class="nv">claude</span><span class="p p-Indicator">,</span><span class="nt"> rounds</span><span class="p">:</span><span class="w"> </span><span class="nv">2</span><span class="p p-Indicator">,</span><span class="nt"> timeout_s</span><span class="p">:</span><span class="w"> </span><span class="nv">600</span><span class="p p-Indicator">}}</span>
+</code></pre></div>
+<p>A critic is <code>flux</code> (FluxAgent), an agent, your own agent (<code>{by: {command: [...]}}</code>), or
+<code>{by: ..., rounds: N, ...agent options}</code>. <code>rounds</code> (1 to 5, default 1) is how many times the box
+answers an objection, on <code>orchestrate</code> and <code>select</code> only. A rejection holds for later passes.
+A box without <code>critic:</code> has none. The older <code>flow.critique</code> and <code>budget.critique_rounds</code> are
+refused; <code>flux task migrate</code> turns the first into critics and takes the critics off for a <code>0</code> of the second.</p>
+<h3 id="check-settings">Check settings<a class="headerlink" href="#check-settings" title="Permanent link">&para;</a></h3>
+<p><code>flow.test</code> is one command (a check named <code>test</code>) or an ordered map. Checks run in the order
+written; the first that reports failures refuses the design and the rest do not run.</p>
+<div class="highlight"><pre><span></span><code><span class="nt">test</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">build</span><span class="p">:</span><span class="w"> </span><span class="s">"{python}</span><span class="nv"> </span><span class="s">-m</span><span class="nv"> </span><span class="s">py_compile</span><span class="nv"> </span><span class="s">{artifact}"</span><span class="w">                  </span><span class="c1"># a bare command</span>
+<span class="w">  </span><span class="nt">correctness</span><span class="p">:</span><span class="w">                                                </span><span class="c1"># or a map</span>
+<span class="w">    </span><span class="nt">run</span><span class="p">:</span><span class="w"> </span><span class="s">"{python}</span><span class="nv"> </span><span class="s">{home}/check.py</span><span class="nv"> </span><span class="s">{artifact}"</span>
+<span class="w">    </span><span class="nt">timeout_s</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">60</span>
+</code></pre></div>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Default</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>run</code></td>
+<td>Required</td>
+<td>Command string or argument list</td>
+</tr>
+<tr>
+<td><code>count_re</code></td>
+<td><code>(\d+) failing</code></td>
+<td>One capture group holding the number of failures</td>
+</tr>
+<tr>
+<td><code>fail_re</code></td>
+<td>Absent</td>
+<td>One match per failure; used instead of the default count pattern</td>
+</tr>
+<tr>
+<td><code>timeout_s</code></td>
+<td><code>120</code></td>
+<td>Seconds before the check is stopped</td>
+</tr>
+</tbody>
+</table>
+<p>Check names are a letter, then letters, digits, <code>_</code> and <code>-</code>. A check named <code>build</code> uses no
+default pattern: any non-zero exit means the design did not build. <code>count_re</code> or <code>fail_re</code>
+at the level of <code>flow.test</code> (not inside a check) is refused. How a check's output becomes a
+verdict is in the <a href="../../reference/commands/#check-command">check contract</a>.</p>
+<h3 id="measurement-settings">Measurement settings<a class="headerlink" href="#measurement-settings" title="Permanent link">&para;</a></h3>
+<p><code>flow.measure</code> is an ordered map of stages, cheapest first. A stage is a command or a map:</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Default</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>run</code></td>
+<td>Required</td>
+<td>Command string or argument list (as a check's; <code>command:</code> is refused, <code>flux task migrate</code> renames it)</td>
+</tr>
+<tr>
+<td><code>metrics</code></td>
+<td>Required unless <code>metrics_re</code></td>
+<td>The names printed as <code>name=value</code> -- a number, or a dictionary (below)</td>
+</tr>
+<tr>
+<td><code>metrics_re</code></td>
+<td>Derived from <code>metrics</code></td>
+<td>Map of metric name to a regex with one capture group</td>
+</tr>
+<tr>
+<td><code>needs</code></td>
+<td>Inferred for <code>fluxpreset prog count</code>/<code>size</code>; else empty</td>
+<td>Programs required on PATH; a missing one skips the stage ("NOT RUN")</td>
+</tr>
+<tr>
+<td><code>timeout_s</code></td>
+<td><code>600</code></td>
+<td>Seconds before the stage is stopped</td>
+</tr>
+<tr>
+<td><code>cutoff</code></td>
+<td>None</td>
+<td>A gate before the next stage, or a list of gates that must all pass</td>
+</tr>
+<tr>
+<td><code>estimate</code></td>
+<td>Off</td>
+<td>Predict first, and skip designs the estimate already rules out</td>
+</tr>
+</tbody>
+</table>
+<p>A stage names its metrics only. A metric printed as a dictionary, <code>name={"a": 1, "b": 2}</code>
+(or inside a JSON object of metrics), is read as one: each finite value becomes <code>name.a</code>,
+<code>name.b</code>, a test each. Missing, <code>null</code> and non-finite values stay unmeasured, never zero. To rank
+by the dictionary as a whole, its objective says so: <code>{metric: name, type: dict, aggregate: sum,
+direction: minimize, unit: us}</code> -- <code>name</code> then holds the <code>aggregate</code> of its tests: <code>mean</code>
+(default), <code>median</code>, <code>min</code>, <code>max</code> or <code>sum</code>; an objective may instead rank one test,
+<code>{metric: name.a}</code>. Metric names are unique per stage; <code>evaluator:</code> stages are gone and refused.</p>
+<p><strong>Cutoffs</strong> gate the next stage: <code>{metric: M, at: N}</code> keeps designs at least N,
+<code>{metric: M, below: N}</code> at most N, <code>{metric: M, within: F}</code> within the fraction F
+(<code>0 &lt; F &lt;= 1</code>) of this run's best on that stage. Exactly one rule per condition. <code>M</code> is any
+number the design has at that stage: measured there or carried from an earlier stage (below).</p>
+<p><strong>Estimates:</strong> <code>{kind: surrogate|command|model, margin: 0.05}</code>; <code>command</code> only with
+<code>kind: command</code> (<a href="../../reference/commands/#estimate-command">estimate contract</a>). The surrogate needs three measured
+designs first. A design whose estimate misses a cutoff or a limit by more than the margin is
+skipped and never measured; designs that run keep their estimate in the record.</p>
+<p><strong>Stages measure different things.</strong> One stage may time a design and the next measure its
+area; a stage need not repeat what an earlier one measured. A design's numbers at a stage are,
+for each metric, the deepest measurement at or before it: a later stage replaces an earlier one's
+number for the same metric, and a metric only an earlier stage measured is carried forward (the
+record keeps each stage's own row; the carrying is done when it is read). Results, <code>flux loop
+results</code>, <code>show</code> and the report say where a carried number came from ("fmax_mhz=500 (from timing)").</p>
+<div class="highlight"><pre><span></span><code><span class="nt">flow</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">measure</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">timing</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">run</span><span class="p">:</span><span class="w"> </span><span class="s">"{python}</span><span class="nv"> </span><span class="s">{home}/sta.py</span><span class="nv"> </span><span class="s">{artifact}"</span><span class="p p-Indicator">,</span><span class="nt"> metrics</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">fmax_mhz</span><span class="p p-Indicator">],</span><span class="nt"> cutoff</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">metric</span><span class="p">:</span><span class="w"> </span><span class="nv">fmax_mhz</span><span class="p p-Indicator">,</span><span class="nt"> at</span><span class="p">:</span><span class="w"> </span><span class="nv">250</span><span class="p p-Indicator">}}</span>
+<span class="w">    </span><span class="nt">area</span><span class="p">:</span><span class="w">   </span><span class="p p-Indicator">{</span><span class="nt">run</span><span class="p">:</span><span class="w"> </span><span class="s">"{python}</span><span class="nv"> </span><span class="s">{home}/area.py</span><span class="nv"> </span><span class="s">{artifact}"</span><span class="p p-Indicator">,</span><span class="nt"> metrics</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">area_um2</span><span class="p p-Indicator">]}</span>
+<span class="nt">objectives</span><span class="p">:</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">metric</span><span class="p">:</span><span class="w"> </span><span class="nv">fmax_mhz</span><span class="p p-Indicator">,</span><span class="nt"> goal</span><span class="p">:</span><span class="w"> </span><span class="s">"&gt;=</span><span class="nv"> </span><span class="s">300"</span><span class="p p-Indicator">}</span><span class="w">   </span><span class="c1"># judged on area, with timing's number carried</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">metric</span><span class="p">:</span><span class="w"> </span><span class="nv">area_um2</span><span class="p p-Indicator">,</span><span class="nt"> direction</span><span class="p">:</span><span class="w"> </span><span class="nv">minimize</span><span class="p p-Indicator">}</span>
+</code></pre></div>
+<p>Every objective must be measured by at least one stage. A limit pinned with <code>stage:</code> must name a
+stage that has its metric (measured there or before), and a cutoff may name only a metric its stage
+has; otherwise the run says the question cannot be answered as posed. <code>task check</code> and the run's
+first step note an objective only the last stage measures: the stages before rank without it.</p>
+<p><strong>Between stages:</strong> designs that pass a stage's cutoffs join its frontier; the
+<code>select.finalists</code> best (spread along the frontier with several objectives) climb to the
+next stage. A stage ranks on the objectives it has numbers for; one not measured yet is left out
+there, and the log says so ("timing: ranked on fmax_mhz; area_um2 (first on area) not measured
+yet"). A stage that has no objective at all lets every design through its cutoffs. The decision
+is made on the deepest stage reached, over the designs measured there, each with every objective
+by then; a design that never reached the stage where an objective is first measured is not
+chosen: Results lists it as pending. <code>--screen-only</code> stops after the first stage.</p>
+<h3 id="knowledge-settings">Knowledge settings<a class="headerlink" href="#knowledge-settings" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Default</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>library</code></td>
+<td>Empty</td>
+<td>Files and folders (specs, sources, notes, PDFs), relative to the folder, that join <code>library/</code> as the loop's library: read on demand (<code>flux knowledge</code>, a model's <code>knowledge(query)</code>), never pasted into a prompt (D1494)</td>
+</tr>
+<tr>
+<td><code>by</code></td>
+<td><code>flux</code></td>
+<td>Who summarises the library's papers: <code>flux</code> (FluxAgent) or an agent (its options beside); <code>off</code> turns the library, its digest and its hint off</td>
+</tr>
+<tr>
+<td><code>insights</code></td>
+<td><code>{by: off}</code></td>
+<td>Conclusions drawn from the record: <code>{by: rules}</code> (computed, no AI), <code>{by: &lt;agent&gt;}</code>, or <code>{by: off}</code>; an agent reads them with <code>flux knowledge insights</code>, never pasted into its brief (D1505)</td>
+</tr>
+<tr>
+<td><code>workbench</code></td>
+<td>who digests</td>
+<td>Who sums up the agents' <code>workbench/</code> when it changed: <code>off</code>, <code>flux</code>, or an agent (<code>{by: claude, timeout_s: 600}</code> with its options); unsaid, whoever digests the papers</td>
+</tr>
+<tr>
+<td><code>ideas</code></td>
+<td><code>flux</code></td>
+<td>Who cleans up the ideas notebook before a pass, once it grew: <code>flux</code> (FluxAgent, the default; off in a loop that asks the model nothing), <code>off</code>, or an agent; <code>{by: flux, open: 20, new: 10}</code> runs it at 20 open ideas with 10 new since the last cleanup (the defaults). It merges repeated ideas (undoable) and ranks the rest; see <a href="../knowledge/#ideas-cleanup">Ideas cleanup</a></td>
+</tr>
+<tr>
+<td><code>hidden</code></td>
+<td>Empty</td>
+<td>Files, folders or globs (relative to the folder) the AI agents may not read: tests, checks, a gate's files and their parameters; see <a href="#hidden-from-ai">Hidden from AI</a></td>
+</tr>
+</tbody>
+</table>
+<p><code>by: off</code> may have <code>insights</code>, <code>ideas</code>, <code>workbench</code> and <code>hidden</code> beside it, not <code>library</code>. The old
+<code>sheet</code>, <code>files</code>, <code>text</code>, <code>digest</code>, <code>lessons</code> and <code>off</code> keys are refused; <code>flux task migrate</code> moves them
+(a <code>text</code> needs a file). While knowledge is on, the loop's <code>library/</code> is read
+(there is no server-wide library: <code>FLUX_LIBRARY</code> is not read); PDFs go through <code>pdftotext</code>.
+Each project the loop is linked into has its library inside it, read-only, at
+<code>library/&lt;project&gt;@&lt;group&gt;/</code> (<code>&lt;project&gt;@_</code> for a global project), in the loop's project order,
+with the project's hidden paths hidden under it: a name with <code>@</code> at the top of <code>library/</code> is
+reserved for them, so the loop's own files and a project's never clash. A project's paper is
+digested by the loop for its own problem and cited by its place (<code>library/nlu@hw/x.pdf</code>); an exact
+copy in a later folder is read once.</p>
+<h3 id="hidden-from-ai">Hidden from AI<a class="headerlink" href="#hidden-from-ai" title="Permanent link">&para;</a></h3>
+<p><code>knowledge.hidden</code> keeps an agent from gaming the gate by reading it: the loop's own tools (its
+checks, stages, scripts and probes) read these paths as ever, and a check's failure text still
+reaches the agent; no agent and no prompt reads them.</p>
+<div class="highlight"><pre><span></span><code><span class="nt">flow</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">knowledge</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">hidden</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">tests/</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">golden.py</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">"params/*.json"</span><span class="p p-Indicator">]</span>
+</code></pre></div>
+<p>Each path is relative to the loop folder, inside it, and never the document itself. Sub-loops
+hide their parent's paths too, beside their own. An agent's own <code>hidden:</code> option adds paths for that
+agent alone. Hidden paths are left out of the library, the knowledge files, the skills, the
+workbench's index and <code>flux loop library</code>; <code>flux library</code>, <code>flux loop diff</code>, <code>gate</code> and <code>measure</code> refuse them.
+Every agent turn's brief names them as off limits, and the agent's own permission settings refuse
+them:</p>
+<ul>
+<li><strong>Claude Code:</strong> <code>--settings</code> with <code>permissions.deny</code>: <code>Read(...)</code> and <code>Edit(...)</code> on each path
+  (absolute, <code>//...</code>, and relative to the turn's folder when inside it).</li>
+<li><strong>OpenCode:</strong> <code>permission.read</code> and <code>permission.edit</code> deny patterns in its config
+  (<code>OPENCODE_CONFIG_CONTENT</code>).</li>
+<li><strong>Codex:</strong> no per-path rule a user can set; only the brief says so.</li>
+</ul>
+<p>No tool is taken away and no shell command is refused for naming a path: the agent keeps its
+search tools (Claude Code's Grep and Glob, OpenCode's grep and glob) and may run <code>pytest tests</code>.
+OpenCode's grep and glob follow no <code>read</code> rule, and Claude Code's follow it only best-effort, so
+there the brief is what asks the agent to leave the paths alone.</p>
+<p>This stops an agent from targeting a path; it is no sandbox. A script the agent writes could still
+open the file, so for secrets use the run's sandbox. In the web app, a file or folder is hidden from
+the Files tab (Actions, Hide from AI), when it is added, or in the configurator's Knowledge box.</p>
+<h3 id="skills">Skills<a class="headerlink" href="#skills" title="Permanent link">&para;</a></h3>
+<p>A skill is a folder with a <code>SKILL.md</code> (front matter <code>name</code> and <code>description</code>, then the
+instructions). The loop's <code>skills/</code> folder is read without a word in the document. The model
+gets an index of them and a <code>skill</code> tool; every coding agent of the loop (the design agent, a
+box's, a critic, the insights' and the digests') finds them in its work directory
+(<code>.claude/skills</code>, <code>.opencode/skills</code>, <code>.agents/skills</code>), together with the built-in
+<code>flux-loop-commands</code> (how the loop's record is read with <code>flux loop ...</code>).</p>
+<div class="highlight"><pre><span></span><code><span class="nt">skills</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">off</span><span class="w">                                  </span><span class="c1"># none, not the built-in one either</span>
+<span class="nt">skills</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">skills</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">../shared-skills</span><span class="p p-Indicator">]</span><span class="w">           </span><span class="c1"># these folders instead of skills/</span>
+<span class="nt">skills</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">off</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">flux-loop-commands</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">rtl-style</span><span class="p p-Indicator">]}</span><span class="w">   </span><span class="c1"># skills/ and the built-in one, these two off</span>
+<span class="nt">skills</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">from</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">../shared-skills</span><span class="p p-Indicator">],</span><span class="nt"> off</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">old-style</span><span class="p p-Indicator">]}</span>
+</code></pre></div>
+<h2 id="objective-settings">Objective settings<a class="headerlink" href="#objective-settings" title="Permanent link">&para;</a></h2>
+<p>Each entry is a metric name or a map:</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Default</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>metric</code></td>
+<td>Required</td>
+<td>A metric a stage reports (<code>name</code> or <code>name.test</code> for a dictionary metric)</td>
+</tr>
+<tr>
+<td><code>direction</code></td>
+<td><code>maximize</code>, or the stage metric's</td>
+<td><code>minimize</code> or <code>maximize</code></td>
+</tr>
+<tr>
+<td><code>goal</code></td>
+<td>None</td>
+<td>A limit: at most N when minimizing, at least N when maximizing; also <code>"&gt;= 1000"</code>, <code>"&lt; 80"</code></td>
+</tr>
+<tr>
+<td><code>stage</code></td>
+<td>The deepest stage for a goal</td>
+<td>Where the goal is judged (a stage that has the metric: measured there or carried from an earlier one)</td>
+</tr>
+<tr>
+<td><code>unit</code></td>
+<td>Known for common metrics</td>
+<td>Display unit</td>
+</tr>
+<tr>
+<td><code>type</code></td>
+<td><code>number</code></td>
+<td><code>dict</code>: the metric is a dictionary of tests, ranked by <code>aggregate</code></td>
+</tr>
+<tr>
+<td><code>aggregate</code></td>
+<td><code>mean</code> with <code>type: dict</code></td>
+<td>How a dictionary's tests make its number: <code>mean</code>, <code>median</code>, <code>min</code>, <code>max</code>, <code>sum</code></td>
+</tr>
+<tr>
+<td><code>tie</code></td>
+<td><code>0</code></td>
+<td>Relative band within which two designs tie and the next objective decides</td>
+</tr>
+<tr>
+<td><code>margin</code></td>
+<td><code>0</code></td>
+<td>Extra headroom required when a goal is judged on a shallower stage</td>
+</tr>
+<tr>
+<td><code>balance</code></td>
+<td><code>false</code></td>
+<td>Decide by the best trade-off (the knee) of the goal-less objectives</td>
+</tr>
+<tr>
+<td><code>keep</code></td>
+<td>None</td>
+<td>A relative limit: keep this fraction (0..1] of the best gain over <code>above</code></td>
+</tr>
+<tr>
+<td><code>above</code></td>
+<td><code>0</code></td>
+<td>The reference for <code>keep</code></td>
+</tr>
+</tbody>
+</table>
+<p><strong>How the decision is made:</strong> a design that meets every limit beats one that misses any. Among
+those that meet them, the goal-less objectives decide in the order written (within <code>tie</code>,
+the next one decides). If none meets every limit, the one missing fewest, then by the
+smallest shortfall, is reported as the closest, not as a decision. An unmeasured limit counts
+as missed. With <code>balance</code>, the knee is taken among the designs measured on every balance
+metric that no other design beats on every objective. An exact tie goes to the next
+objective in the order written, limits included (of two designs alike on area, the faster),
+then to the design made first (its first measurement), never to the order the record lists
+them in: the decision is always on the front. <code>goal</code> cannot be combined with <code>keep</code> or <code>balance</code>; a dictionary metric no objective
+says <code>type: dict</code> for has no number of its own: an objective names one of its tests (<code>d.test</code>).</p>
+<h2 id="budget">Budget<a class="headerlink" href="#budget" title="Permanent link">&para;</a></h2>
+<h3 id="run-length-repairs-and-concurrency">Run length, repairs, and concurrency<a class="headerlink" href="#run-length-repairs-and-concurrency" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Default</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>passes</code></td>
+<td><code>0</code></td>
+<td>Passes to run; <code>0</code> runs until stopped</td>
+</tr>
+<tr>
+<td><code>steps</code></td>
+<td><code>24</code></td>
+<td>Work items in one pass</td>
+</tr>
+<tr>
+<td><code>budget_s</code></td>
+<td>None</td>
+<td>Wall-clock seconds for one pass, checked before each step</td>
+</tr>
+<tr>
+<td><code>repair_attempts</code></td>
+<td><code>12</code></td>
+<td>Repairs of one draft before it is given up</td>
+</tr>
+<tr>
+<td><code>batch</code></td>
+<td><code>1</code></td>
+<td>Search designs one pass carries</td>
+</tr>
+<tr>
+<td><code>workers</code></td>
+<td><code>0</code></td>
+<td>Tool runs at once; <code>0</code> = half the cores, at most 4. Use <code>1</code> for timings</td>
+</tr>
+<tr>
+<td><code>parallel</code></td>
+<td><code>1</code></td>
+<td>Passes at once (a server limit also applies)</td>
+</tr>
+<tr>
+<td><code>parallel_parts</code></td>
+<td><code>1</code></td>
+<td>Parts drafted at once</td>
+</tr>
+<tr>
+<td><code>tools_at_once</code></td>
+<td><code>0</code></td>
+<td>Checks and measurements at once across the whole loop -- passes and parts at once, and an agent's <code>flux probe</code> -- for a tool that breaks when two of its runs share the machine; <code>0</code> = no limit</td>
+</tr>
+<tr>
+<td><code>screen_only</code></td>
+<td><code>false</code></td>
+<td>Stop after the first stage</td>
+</tr>
+<tr>
+<td><code>max_depth</code></td>
+<td><code>3</code></td>
+<td>Deepest nesting of sub-loops</td>
+</tr>
+<tr>
+<td><code>regenerate</code></td>
+<td><code>[]</code></td>
+<td>Parts to draft again instead of reusing admitted ones</td>
+</tr>
+<tr>
+<td><code>exploration_quota</code></td>
+<td><code>0.0</code></td>
+<td>Least share (0..1) of search choices kept for exploring</td>
+</tr>
+<tr>
+<td><code>explore_every</code></td>
+<td><code>4</code></td>
+<td>Every Nth draft starts fresh rather than from the best</td>
+</tr>
+<tr>
+<td><code>explore_after</code></td>
+<td><code>2</code></td>
+<td>Stalled passes before exploring</td>
+</tr>
+<tr>
+<td><code>part_patience</code></td>
+<td><code>3</code></td>
+<td>A loop with parts works on ONE part a pass, picked by its standing; a part whose last N passes gained nothing rests until every part rests (then the whole is at rest and a pass explores). <code>explore_every</code> passes give the least recently visited part its turn</td>
+</tr>
+<tr>
+<td><code>agent_continues</code></td>
+<td><code>3</code></td>
+<td>Times a design agent's session is continued past its time limit (the last one is told so). Then the design as it stands is handed in if the gate passes it; else a final short turn (<code>agent_grace_s</code>) whose only job is the gate; else the last file a <code>flux probe gate</code> passed in this design's turns. Only with none of these does the pass give up, without a design, its notes on the record</td>
+</tr>
+<tr>
+<td><code>agent_grace_s</code></td>
+<td>a quarter of the agent's time limit, 300–600 s</td>
+<td>The final turn after the continues: told the gate's failure on its file, one gate probe, no stages, no experiments; the last file the gate passed is offered to copy back. Its file is handed in when the gate passes it. <code>0</code> turns the final turn off (the passing file, if any, is still handed in)</td>
+</tr>
+<tr>
+<td><code>explore</code></td>
+<td><code>0</code></td>
+<td>Managed by the loop each pass; a value here has no effect</td>
+</tr>
+<tr>
+<td><code>cooldown_after</code></td>
+<td><code>3</code></td>
+<td>Build failures in a row before a part yields</td>
+</tr>
+<tr>
+<td><code>patching</code></td>
+<td><code>true</code></td>
+<td>Repair with edits rather than full rewrites</td>
+</tr>
+<tr>
+<td><code>patch_context_lines</code></td>
+<td><code>40</code></td>
+<td>Lines around a fault shown in a repair prompt</td>
+</tr>
+<tr>
+<td><code>revert_after</code></td>
+<td><code>3</code></td>
+<td>Failed compile repairs before going back to the last good design</td>
+</tr>
+<tr>
+<td><code>regress_after</code></td>
+<td><code>2</code></td>
+<td>Worsening edits in a row tolerated at first</td>
+</tr>
+<tr>
+<td><code>max_tolerance</code></td>
+<td><code>4</code></td>
+<td>Most that tolerance grows</td>
+</tr>
+</tbody>
+</table>
+<p><code>finalists</code> is set with <code>flow.select.finalists</code> and calibration with <code>flow.calibrate</code>; as
+<code>budget</code> keys they are refused, and so is <code>prototype</code>: it is generate's (below). Only
+<code>exploration_quota</code> is type-checked; check the others with care.</p>
+<h3 id="prototypes">Prototypes<a class="headerlink" href="#prototypes" title="Permanent link">&para;</a></h3>
+<p>A prototype is the algorithm in Python (or SystemC) checked against the golden model before
+the target design is written. It applies to problems with a golden model, and is said on the box
+that writes the designs: <code>generate: {prototype: false}</code>, <code>generate: {by: claude, prototype: systemc}</code>
+(<code>true</code>, the default, <code>false</code>, <code>python</code> or <code>systemc</code>). Beside a <code>command</code> or a <code>catalog</code> no prototype is
+written: it is a warning there. Setting it does not create a golden model. Its limits are budget knobs:</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Default</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>prototype_attempts</code></td>
+<td><code>30</code></td>
+<td>First model attempts</td>
+</tr>
+<tr>
+<td><code>prototype_patience</code></td>
+<td><code>8</code></td>
+<td>Attempts earned per new best</td>
+</tr>
+<tr>
+<td><code>prototype_attempts_max</code></td>
+<td><code>90</code></td>
+<td>Most model attempts</td>
+</tr>
+<tr>
+<td><code>prototype_agent_attempts</code></td>
+<td><code>8</code></td>
+<td>First coding-agent attempts</td>
+</tr>
+<tr>
+<td><code>prototype_agent_patience</code></td>
+<td><code>2</code></td>
+<td>Coding-agent attempts earned per new best</td>
+</tr>
+<tr>
+<td><code>prototype_agent_attempts_max</code></td>
+<td><code>20</code></td>
+<td>Most coding-agent attempts</td>
+</tr>
+<tr>
+<td><code>prototype_table_max</code></td>
+<td><code>64</code></td>
+<td>Largest module-level table allowed</td>
+</tr>
+<tr>
+<td><code>prototype_cost_max</code></td>
+<td><code>0</code> (effective <code>2000</code>)</td>
+<td>Cost ceiling before spelling; negative turns it off</td>
+</tr>
+<tr>
+<td><code>prototype_shrink_attempts</code></td>
+<td><code>8</code></td>
+<td>Attempts to make a verified prototype cheaper</td>
+</tr>
+<tr>
+<td><code>prototype_unmeasured_stop</code></td>
+<td><code>4</code></td>
+<td>Unmeasurable attempts in a row before the pass ends</td>
+</tr>
+</tbody>
+</table>
+<h3 id="direct-model-tools-and-context">Direct-model tools and context<a class="headerlink" href="#direct-model-tools-and-context" title="Permanent link">&para;</a></h3>
+<p>For FluxAgent turns, not a coding agent's.</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Default</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>structured</code></td>
+<td><code>true</code></td>
+<td>Schema-constrained answers where supported</td>
+</tr>
+<tr>
+<td><code>tools</code></td>
+<td><code>true</code></td>
+<td>Tools inside model turns</td>
+</tr>
+<tr>
+<td><code>compute_timeout_s</code></td>
+<td><code>10.0</code></td>
+<td>Seconds for the model's <code>compute</code> tool</td>
+</tr>
+<tr>
+<td><code>tool_hops</code></td>
+<td><code>6</code></td>
+<td>Tool rounds before the model must answer</td>
+</tr>
+<tr>
+<td><code>hop_share</code></td>
+<td><code>0.5</code></td>
+<td>Share of the context window for one tool round</td>
+</tr>
+<tr>
+<td><code>knowledge_share</code></td>
+<td><code>0.5</code></td>
+<td>Share of the window for static knowledge</td>
+</tr>
+<tr>
+<td><code>compact</code></td>
+<td><code>rules</code></td>
+<td><code>rules</code> or <code>llm</code>: how an over-full context is shortened</td>
+</tr>
+<tr>
+<td><code>compact_share</code></td>
+<td><code>0.6</code></td>
+<td>Window share that triggers compaction</td>
+</tr>
+<tr>
+<td><code>tool_result_chars</code></td>
+<td><code>40000</code></td>
+<td>Most characters of a tool's output given to the model</td>
+</tr>
+<tr>
+<td><code>plan_file</code></td>
+<td>None</td>
+<td>A saved plan to follow</td>
+</tr>
+</tbody>
+</table>
+<h2 id="baseline-pass-0">Baseline / pass 0<a class="headerlink" href="#baseline-pass-0" title="Permanent link">&para;</a></h2>
+<p><code>baseline</code> runs the checks and the real measurements on a reference before pass 1, so
+results can be read relative to it. It is off by default; pass 0 calls no model or agent,
+writes no golden model and repairs nothing, and does not count toward <code>passes</code>.</p>
+<div class="highlight"><pre><span></span><code><span class="nt">baseline</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span><span class="w">                                   </span><span class="c1"># the project as it is: your scripts as written</span>
+<span class="c1"># baseline: {file: baseline.py}                  # an unchanged design file</span>
+<span class="c1"># baseline: {command: "{python} {home}/baseline.py {artifact}", timeout_s: 600}</span>
+<span class="c1"># baseline: {metrics: [{metric: area_um2, value: 120}, {metric: fmax_mhz, value: 1000, stage: place}]}</span>
+<span class="c1"># add only: true to stop after pass 0</span>
+</code></pre></div>
+<table>
+<thead>
+<tr>
+<th>Form</th>
+<th>What pass 0 measures</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>true</code></td>
+<td>Your scripts as written; <code>{artifact}</code> is an empty file, so use <code>{home}/...</code> paths</td>
+</tr>
+<tr>
+<td><code>{file: F}</code></td>
+<td>F (relative to the folder) copied to <code>{artifact}</code>; the original is untouched</td>
+</tr>
+<tr>
+<td><code>{command: C, timeout_s: 600}</code></td>
+<td>Whatever C writes to <code>{artifact}</code> (<a href="../../reference/commands/#baseline-command">contract</a>); if it writes nothing, the project as it is</td>
+</tr>
+<tr>
+<td><code>{metrics: [...]}</code></td>
+<td>Nothing runs: the values are recorded as the reference</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li><strong><code>metrics</code> entries</strong> are <code>{metric, value, stage}</code>: a finite number; <code>stage</code> defaults to
+  the deepest; the metric must be one that stage reports; each stage/metric pair once.
+  Provided values supply no design and are never the decision.</li>
+<li><strong><code>only: true</code></strong> ends the run after pass 0 (a tool check without optimization).</li>
+<li><strong>Reuse:</strong> a successful baseline on record stands while the document's <code>baseline:</code> section is
+  unchanged -- whatever else changes (the folder's files, the tools, Flux). To measure it again,
+  the loop's Settings › Maintenance › <strong>Re-Evaluate</strong> with <strong>Rerun baseline</strong> ticked (or <code>flux task run ... --rerun-baseline</code>)
+  makes the next start, and only it, run pass 0. A failed one is tried again at the next start. Baselines bypass the cache, estimates and cutoffs.</li>
+<li>Baselines are references: drawn as gray lines, the base of relative values, never the
+  decision or a search start. They are not inherited by sub-loops.</li>
+</ul>
+<h2 id="parts-and-sub-loops">Parts and sub-loops<a class="headerlink" href="#parts-and-sub-loops" title="Permanent link">&para;</a></h2>
+<p><strong><code>parts</code></strong> divides one artifact: <code>parts: [decoder, encoder]</code>, a map of descriptions
+(<code>{decoder: "the 8b10b decoder"}</code>), or <code>decompose</code> (the orchestrator divides it, at most 8).
+Names are a letter, then letters, digits, <code>_</code>, <code>-</code>. Parts are drafted and checked one by one
+and joined in order, separated by a blank line.</p>
+<p><strong><code>subtasks</code></strong> divides a problem into child loops: a list of folders beside the document
+(<code>subtasks: [ops/recip, ops/exp]</code>), inline documents (maps with an <code>id</code>), or <code>decompose</code>.
+Do not combine <code>parts</code> and <code>subtasks</code>.</p>
+<ul>
+<li><strong>A folder child</strong> has its own <code>problem.yaml</code> (no <code>id</code>; the folder names it), its record is
+  <code>&lt;parent&gt;/&lt;child&gt;</code>, and it shares the parent's <code>out/</code> and <code>workbench/</code>.</li>
+<li><strong>Inheritance:</strong> a child takes the parent's <code>contract</code>, <code>language</code>, <code>flow</code> (including
+  checks, measurements and knowledge), <code>objectives</code>, <code>skills</code>, <code>params</code> and <code>budget</code>
+  unless it says them; <code>flow</code>, <code>budget</code> and <code>params</code> merge key by key, the child's
+  winning. Not inherited: <code>statement</code> (each child says its own), <code>parts</code>, <code>subtasks</code>,
+  <code>max_subtasks</code>, <code>baseline</code>, and a parent's <code>generate: {command}</code>. <code>orchestrate</code> is one box
+  (D1514): a child that says none inherits the parent's whole (who decides, policy, search,
+  space, critic, thinking, effort; never seeds or scope), and a child that says its own has
+  exactly that, with nothing of the parent's merged in.</li>
+<li><strong>Composition:</strong> a parent's <code>generate: {command: "... {parts} {artifact}"}</code> composes the
+  children's decided designs into the whole once every child has decided
+  (<a href="../../reference/commands/#composition-command">composition contract</a>). Without it the parent composes nothing.</li>
+<li>Give inherited <code>skills</code> as paths that resolve from the child too (or absolute ones), and
+  write inline children in the long form (<code>{by: flux}</code>).</li>
+</ul>
+<h2 id="moved-to-their-own-pages">Moved to their own pages<a class="headerlink" href="#moved-to-their-own-pages" title="Permanent link">&para;</a></h2>
+<p>Older links to this page land here.</p>
+<ul>
+<li><a id="search-settings"></a>Search settings and policies: <a href="../../reference/search/">Search policies</a></li>
+<li><a id="agent-options"></a>Agent options: <a href="../../reference/agents/">Agent options</a></li>
+<li><a id="how-commands-run"></a><a id="command-placeholders"></a><a id="command-contracts"></a>How commands run, placeholders and contracts: <a href="../../reference/commands/">Commands and placeholders</a></li>
+<li><a id="generator-command"></a><a id="check-command"></a><a id="measurement-command"></a><a id="estimate-command"></a><a id="search-command"></a><a id="baseline-command"></a><a id="composition-command"></a><a id="agent-command"></a>Each command's contract: <a href="../../reference/commands/#command-contracts">Command contracts</a></li>
+<li><a id="built-in-tools"></a><a id="flux-presets"></a>Built-in tools and Flux presets: <a href="../../reference/presets/">Presets</a></li>
+<li><a id="rtl-golden-model"></a>The RTL golden model: <a href="../../reference/presets/#golden-model">Golden model</a></li>
+<li><a id="common-refusals"></a>Common refusals: <a href="../../reference/refusals/">Common refusals</a></li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../../preview/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Preview app">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Preview app
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../../reference/search/" class="md-footer__link md-footer__link--next" aria-label="Next: Searches">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                Searches
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">© 2026 Flux</div>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      <script id="__config" type="application/json">{"base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.footer", "content.code.copy", "content.code.annotate", "toc.follow", "search.suggest"], "search": "../../assets/javascripts/workers/search.973d3a69.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.f55a23d4.min.js"></script>
+      
+    
+  </body>
+</html>

@@ -1,0 +1,1737 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Flux searches for better designs: it makes them with a script, a model or a coding agent, checks and measures them with real tools, and decides from your objectives.">
+      
+      
+      
+        <link rel="canonical" href="https://choelzl.github.io/flux/guide/loop-shape/">
+      
+      
+        <link rel="prev" href="../build-your-own/">
+      
+      
+        <link rel="next" href="../knowledge/">
+      
+      
+      <link rel="icon" href="../../assets/app/logo.svg">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.6.23">
+    
+    
+      
+        <title>Search and agents - Flux</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.84d31ad4.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.06af60db.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/flux-theme.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#search-and-agents" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="Flux" class="md-header__button md-logo" aria-label="Flux" data-md-component="logo">
+      <svg class="flux-logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" aria-label="Flux"><g fill="currentColor"><rect x="78" y="8" width="16" height="28" rx="8"/><rect x="120" y="8" width="16" height="28" rx="8"/><rect x="162" y="8" width="16" height="28" rx="8"/><rect x="120" y="220" width="16" height="28" rx="8"/><rect x="162" y="220" width="16" height="28" rx="8"/><rect x="8" y="78" width="28" height="16" rx="8"/><rect x="8" y="120" width="28" height="16" rx="8"/><rect x="8" y="162" width="28" height="16" rx="8"/><rect x="220" y="78" width="28" height="16" rx="8"/><rect x="220" y="120" width="28" height="16" rx="8"/><rect x="220" y="162" width="28" height="16" rx="8"/></g><rect x="78" y="208" width="16" height="40" rx="8" fill="#f66824"/><g fill="none" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"><rect x="40" y="40" width="176" height="176" rx="32" stroke="currentColor"/><path d="M86 248V118A32 32 0 0 1 118 86H174" stroke="#f66824"/><path d="M128 248V146A18 18 0 0 1 146 128H166" stroke="currentColor"/></g></svg>
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Flux
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Search and agents
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/choelzl/flux" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    choelzl/flux
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../start/install/" class="md-tabs__link">
+          
+  
+  
+  Get started
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../build-your-own/" class="md-tabs__link">
+          
+  
+  
+  Guides
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../web/" class="md-tabs__link">
+          
+  
+  
+  Web app
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../preview/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Preview app
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../parameters/" class="md-tabs__link">
+          
+  
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="Flux" class="md-nav__button md-logo" aria-label="Flux" data-md-component="logo">
+      <svg class="flux-logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" aria-label="Flux"><g fill="currentColor"><rect x="78" y="8" width="16" height="28" rx="8"/><rect x="120" y="8" width="16" height="28" rx="8"/><rect x="162" y="8" width="16" height="28" rx="8"/><rect x="120" y="220" width="16" height="28" rx="8"/><rect x="162" y="220" width="16" height="28" rx="8"/><rect x="8" y="78" width="28" height="16" rx="8"/><rect x="8" y="120" width="28" height="16" rx="8"/><rect x="8" y="162" width="28" height="16" rx="8"/><rect x="220" y="78" width="28" height="16" rx="8"/><rect x="220" y="120" width="28" height="16" rx="8"/><rect x="220" y="162" width="28" height="16" rx="8"/></g><rect x="78" y="208" width="16" height="40" rx="8" fill="#f66824"/><g fill="none" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"><rect x="40" y="40" width="176" height="176" rx="32" stroke="currentColor"/><path d="M86 248V118A32 32 0 0 1 118 86H174" stroke="#f66824"/><path d="M128 248V146A18 18 0 0 1 146 128H166" stroke="currentColor"/></g></svg>
+    </a>
+    Flux
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/choelzl/flux" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    choelzl/flux
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Home
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    Get started
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            Get started
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../start/install/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Install
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tutorial/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    First loop
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../loop-crafter/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Loop crafter
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../start/ask/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Write a loop with an agent
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    Guides
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            Guides
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../build-your-own/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Configure
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    Search and agents
+    
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    Search and agents
+    
+  </span>
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#search-a-space-of-settings" class="md-nav__link">
+    <span class="md-ellipsis">
+      Search a space of settings
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Search a space of settings">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#conditional-choices-and-components" class="md-nav__link">
+    <span class="md-ellipsis">
+      Conditional choices and components
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#let-a-model-or-agent-explore-designs" class="md-nav__link">
+    <span class="md-ellipsis">
+      Let a model or agent explore designs
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#put-agents-in-the-right-steps" class="md-nav__link">
+    <span class="md-ellipsis">
+      Put agents in the right steps
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#split-a-larger-design" class="md-nav__link">
+    <span class="md-ellipsis">
+      Split a larger design
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../knowledge/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Knowledge, skills, hidden paths
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Split a larger design
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cookbook/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Recipes
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../run/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Run, stop, resume
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../models/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Models and agents
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    Web app
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            Web app
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../web/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Tour
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../web/live/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Live
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../web/results/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Results
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../web/files/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Files and settings
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../web/chat/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Chat
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../web/groups/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Groups
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../web/admin/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Server and admin
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../preview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Preview app
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    Reference
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            Reference
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parameters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Document
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/search/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Searches
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/agents/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Agent options
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/commands/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Commands and placeholders
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/presets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Presets
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    CLI
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/refusals/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Common refusals
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/glossary/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Glossary
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#search-a-space-of-settings" class="md-nav__link">
+    <span class="md-ellipsis">
+      Search a space of settings
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Search a space of settings">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#conditional-choices-and-components" class="md-nav__link">
+    <span class="md-ellipsis">
+      Conditional choices and components
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#let-a-model-or-agent-explore-designs" class="md-nav__link">
+    <span class="md-ellipsis">
+      Let a model or agent explore designs
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#put-agents-in-the-right-steps" class="md-nav__link">
+    <span class="md-ellipsis">
+      Put agents in the right steps
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#split-a-larger-design" class="md-nav__link">
+    <span class="md-ellipsis">
+      Split a larger design
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="search-and-agents">Search and agents<a class="headerlink" href="#search-and-agents" title="Permanent link">&para;</a></h1>
+<p>A loop separates <strong>what to try next</strong> (<code>flow.orchestrate</code>) from <strong>how to make the design</strong>
+(<code>flow.generate</code>). The gate and measurement stages establish the results. You can change the
+search or generator while keeping those checks, measurements, and objectives.</p>
+<p><a class="shot-link" href="../../assets/web/graph-light.webp" data-only="light"><img alt="The loop as the configurator's Graph draws it: Search, Design, Check, Measure and Choose on a ring, with the setup boxes beside it" src="../../assets/web/graph-light.webp#only-light" /></a>
+<a class="shot-link" href="../../assets/web/graph-dark.webp" data-only="dark"><img alt="The loop as the configurator's Graph draws it: Search, Design, Check, Measure and Choose on a ring, with the setup boxes beside it" src="../../assets/web/graph-dark.webp#only-dark" /></a></p>
+<p>The configurator's Graph draws the loop as a ring: <strong>Search</strong> (<code>orchestrate</code>) chooses what to
+try, <strong>Design</strong> (<code>generate</code>) makes it, <strong>Check</strong> (<code>test</code>) and <strong>Measure</strong> (<code>measure</code>) establish
+the facts, and <strong>Choose</strong> (<code>select</code>) decides. A failed check goes back to Design. The setup
+boxes beside the ring run before the passes or feed every prompt.</p>
+<h2 id="search-a-space-of-settings">Search a space of settings<a class="headerlink" href="#search-a-space-of-settings" title="Permanent link">&para;</a></h2>
+<p>Use a finite space when you can list meaningful choices. The generator and other commands
+receive those choices as placeholders:</p>
+<div class="highlight"><pre><span></span><code><span class="nt">flow</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">orchestrate</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">search</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">sweep</span>
+<span class="w">    </span><span class="nt">space</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">algorithm</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">list_sieve</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">slice_sieve</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">odd_sieve</span><span class="p p-Indicator">]</span>
+<span class="w">      </span><span class="nt">wheel</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">0</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">1</span><span class="p p-Indicator">]</span>
+<span class="w">    </span><span class="nt">seeds</span><span class="p">:</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">algorithm</span><span class="p">:</span><span class="w"> </span><span class="nv">list_sieve</span><span class="p p-Indicator">,</span><span class="nt"> wheel</span><span class="p">:</span><span class="w"> </span><span class="nv">0</span><span class="p p-Indicator">}</span>
+<span class="w">  </span><span class="nt">generate</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">command</span><span class="p">:</span><span class="w"> </span><span class="s">"{python}</span><span class="nv"> </span><span class="s">{home}/render.py</span><span class="nv"> </span><span class="s">{artifact}</span><span class="nv"> </span><span class="s">{algorithm}</span><span class="nv"> </span><span class="s">{wheel}"</span><span class="p p-Indicator">}</span>
+</code></pre></div>
+<p>The seed is measured first; an omitted knob uses its first choice. The first seed is the
+home point. Order numeric choices meaningfully because local search uses that order.</p>
+<table>
+<thead>
+<tr>
+<th><code>search</code></th>
+<th>How it chooses experiments</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>sweep</code></td>
+<td>Enumerate distinct combinations; a useful baseline for a small space</td>
+</tr>
+<tr>
+<td><code>montecarlo</code></td>
+<td>Sample distinct random points</td>
+</tr>
+<tr>
+<td><code>gradient</code></td>
+<td>Follow measured improvements among nearby choices</td>
+</tr>
+<tr>
+<td><code>anneal</code></td>
+<td>Make local moves and sometimes accept worse points to escape a region</td>
+</tr>
+<tr>
+<td><code>genetic</code></td>
+<td>Evolve a population through selection and mutation</td>
+</tr>
+<tr>
+<td><code>pareto</code></td>
+<td>Explore trade-offs; requires at least two objectives</td>
+</tr>
+<tr>
+<td><code>by: flux</code> beside the space, no search -- its old name: <code>model</code></td>
+<td>FluxAgent proposes legal points from the space and measured history; <code>by: claude</code> an agent does</td>
+</tr>
+<tr>
+<td><code>control</code></td>
+<td>Compare the home point with only some of the incumbent's knobs kept (<code>keep: [...]</code>)</td>
+</tr>
+<tr>
+<td><code>phases</code></td>
+<td>Run several of these in order, each with its own options</td>
+</tr>
+<tr>
+<td><code>command</code></td>
+<td>Your own search script: <code>orchestrate: {command: "...", timeout_s: 600}</code> (<a href="../../reference/commands/#search-command">contract</a>)</td>
+</tr>
+</tbody>
+</table>
+<p>One pass normally carries one point. <code>budget.batch</code> lets it carry several; <code>budget.parallel</code>
+runs several passes simultaneously. A search finishing its finite walk does not, by itself,
+stop an unlimited run. Use a pass cap for a bounded sweep.</p>
+<p>Passes running at once share the Setup steps that read only what every pass reads: the model's
+reading of the document, the division into parts, the papers' digest, the workbench's README, the
+ideas cleanup and the agent's insights. The first pass of a wave to reach such a step runs it; the
+others wait and take its result, and their step says "shared with pass N". A step that fails the
+way a pass alone goes on from (a digest or a cleanup that could not run) is that result for the
+whole wave, and the next wave asks again; a step that raises is tried again by one waiting pass,
+not by all of them. The gates, opening the record and preparing the inputs stay each pass's own.
+One pass at a time runs every step in every pass, as before.</p>
+<p>Configure a search's own options under its name:</p>
+<div class="highlight"><pre><span></span><code><span class="nt">flow</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">orchestrate</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">search</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">gradient</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">steps</span><span class="p">:</span><span class="w"> </span><span class="nv">16</span><span class="p p-Indicator">,</span><span class="nt"> patience</span><span class="p">:</span><span class="w"> </span><span class="nv">2</span><span class="p p-Indicator">,</span><span class="nt"> reach</span><span class="p">:</span><span class="w"> </span><span class="nv">adjacent</span><span class="p p-Indicator">}</span>
+<span class="w">    </span><span class="nt">space</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">block</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">16</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">32</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">64</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">128</span><span class="p p-Indicator">]</span>
+<span class="w">      </span><span class="nt">order</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">ijk</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">ikj</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">jki</span><span class="p p-Indicator">]</span>
+</code></pre></div>
+<p>The <a href="../../reference/search/">search reference</a> lists each search's options and defaults.
+For a multi-phase search, keep the space and list the phases in order, each <code>{search: ..., &lt;its options&gt;}</code>
+(<code>policy:</code> beside a phase's search is the intent that guides it):</p>
+<div class="highlight"><pre><span></span><code><span class="nt">flow</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">orchestrate</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">space</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">block</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">16</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">32</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">64</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">128</span><span class="p p-Indicator">],</span><span class="nt"> order</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">ijk</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">ikj</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">jki</span><span class="p p-Indicator">]}</span>
+<span class="w">    </span><span class="nt">search</span><span class="p">:</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">search</span><span class="p">:</span><span class="w"> </span><span class="nv">montecarlo</span><span class="p p-Indicator">,</span><span class="nt"> name</span><span class="p">:</span><span class="w"> </span><span class="nv">sample</span><span class="p p-Indicator">,</span><span class="nt"> samples</span><span class="p">:</span><span class="w"> </span><span class="nv">8</span><span class="p p-Indicator">,</span><span class="nt"> seed</span><span class="p">:</span><span class="w"> </span><span class="nv">0</span><span class="p p-Indicator">}</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">search</span><span class="p">:</span><span class="w"> </span><span class="nv">gradient</span><span class="p p-Indicator">,</span><span class="nt"> name</span><span class="p">:</span><span class="w"> </span><span class="nv">tune</span><span class="p p-Indicator">,</span><span class="nt"> knobs</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">block</span><span class="p p-Indicator">],</span><span class="nt"> steps</span><span class="p">:</span><span class="w"> </span><span class="nv">8</span><span class="p p-Indicator">,</span><span class="nt"> policy</span><span class="p">:</span><span class="w"> </span><span class="nv">tune</span><span class="p p-Indicator">}</span>
+</code></pre></div>
+<h3 id="conditional-choices-and-components">Conditional choices and components<a class="headerlink" href="#conditional-choices-and-components" title="Permanent link">&para;</a></h3>
+<p>Avoid measuring a knob that has no effect on a chosen algorithm:</p>
+<div class="highlight"><pre><span></span><code><span class="nt">space</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">algorithm</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">list_sieve</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">slice_sieve</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">odd_sieve</span><span class="p p-Indicator">]</span>
+<span class="w">  </span><span class="nt">wheel</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">values</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">0</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">1</span><span class="p p-Indicator">],</span><span class="nt"> when</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">algorithm</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">list_sieve</span><span class="p p-Indicator">]}}</span>
+</code></pre></div>
+<p>This is the <code>space</code> inside <code>flow.orchestrate</code>. Inactive choices sit at their home values and
+are not repeatedly measured as different designs. A nested component groups its knobs:</p>
+<div class="highlight"><pre><span></span><code><span class="nt">space</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">prefetch</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">optional</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">    </span><span class="nt">distance</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">1</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">2</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">4</span><span class="p p-Indicator">]</span>
+<span class="w">    </span><span class="nt">degree</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">1</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">2</span><span class="p p-Indicator">]</span>
+</code></pre></div>
+<p>The search sees <code>prefetch.on</code>, <code>prefetch.distance</code>, and <code>prefetch.degree</code>. <code>{point}</code> provides
+these as nested JSON to a generator. A choice can also use <code>from: "out/invented/*.sv"</code> beside
+<code>values</code> to include filenames discovered when the document loads.</p>
+<h2 id="let-a-model-or-agent-explore-designs">Let a model or agent explore designs<a class="headerlink" href="#let-a-model-or-agent-explore-designs" title="Permanent link">&para;</a></h2>
+<p>A model or agent can invent algorithms and architectures without a predefined knob space.
+The default guidance is adaptive: reasoned risks are welcome, and exploration can happen
+before the incumbent stalls. Say who decides what to try next (<code>by</code>; unset, the rules), and with
+which emphasis (<code>policy</code>), in <code>flow.orchestrate</code>; who writes the code is <code>flow.generate</code>, set apart:</p>
+<div class="highlight"><pre><span></span><code><span class="nt">flow</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">orchestrate</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">by</span><span class="p">:</span><span class="w"> </span><span class="nv">claude</span><span class="p p-Indicator">,</span><span class="nt"> policy</span><span class="p">:</span><span class="w"> </span><span class="nv">adaptive</span><span class="p p-Indicator">}</span>
+<span class="w">  </span><span class="nt">generate</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">claude</span>
+<span class="nt">budget</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">exploration_quota</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.25</span>
+</code></pre></div>
+<table>
+<thead>
+<tr>
+<th><code>flow.orchestrate.policy</code></th>
+<th>Emphasis</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>adaptive</code></td>
+<td>Choose local improvements or a new approach from the evidence</td>
+</tr>
+<tr>
+<td><code>explore</code></td>
+<td>Try materially different algorithms, architectures, or representations</td>
+</tr>
+<tr>
+<td><code>improve</code></td>
+<td>Improve the objectives through local or structural changes</td>
+</tr>
+<tr>
+<td><code>tune</code></td>
+<td>Favor parameter and implementation changes near promising designs</td>
+</tr>
+<tr>
+<td><code>finetune</code></td>
+<td>Favor small changes whose effect can be attributed</td>
+</tr>
+<tr>
+<td><code>variations</code></td>
+<td>Develop distinct versions of promising approaches</td>
+</tr>
+</tbody>
+</table>
+<p>An intent is prompt and choice guidance, not a hard ban on broader changes; a <code>search</code>
+selects an actual search algorithm over a space (and decides alone; <code>by</code> beside it has no effect).
+Prefer <code>search: sweep</code> for enumerating knob combinations; use <code>{by: claude, policy: explore}</code> to
+guide an agent's work, and <code>{policy: explore, search: gradient}</code> to guide a search's prompts.
+The algorithm names all have implemented walks: <code>gradient</code> is coordinate descent over
+discrete choices, rather than derivatives; <code>pareto</code> uses a tree guided by trade-offs across
+the first two objectives. Without a space, these names guide the reasoning instead of
+running those walks. Preferences influence choices but do not force every experiment to
+follow them, and a script that writes a design does not read model prompts.</p>
+<p>In the configurator, the whole search is the <strong>Search</strong> box on the Graph: its <strong>Policy</strong> (the
+intent), its <strong>Search</strong> once there are settings (an algorithm, or <em>AI</em>: FluxAgent or an agent,
+picked under it), then the <strong>Settings to search</strong> (each a name and its values); Extra only names it.</p>
+<p><code>exploration_quota</code> reserves a minimum share of recorded search choices for exploration,
+including across parallel passes. It counts attempts, not elapsed seconds, successful designs,
+or a guaranteed fraction of a finite grid. Use <code>0</code> for no enforced quota. Existing verified
+candidates remain available when an experiment is worse or fails. Correctness checks and the
+contract still apply to every new design.</p>
+<p>Guidance reaches initial generation, repairs, prototype work, and later improvements. Logs
+record the selected move and its reason. A finite budget or manual stop controls the run;
+reaching a goal or keeping the same incumbent does not stop an unlimited run.</p>
+<h2 id="put-agents-in-the-right-steps">Put agents in the right steps<a class="headerlink" href="#put-agents-in-the-right-steps" title="Permanent link">&para;</a></h2>
+<p>Name an installed agent directly, and use <code>{by: ..., ...}</code> only when adding options:</p>
+<div class="highlight"><pre><span></span><code><span class="nt">flow</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">orchestrate</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">by</span><span class="p">:</span><span class="w"> </span><span class="nv">claude</span><span class="p p-Indicator">,</span><span class="nt"> policy</span><span class="p">:</span><span class="w"> </span><span class="nv">adaptive</span><span class="p p-Indicator">}</span>
+<span class="w">  </span><span class="nt">plan</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">by</span><span class="p">:</span><span class="w"> </span><span class="nv">claude</span><span class="p p-Indicator">,</span><span class="nt"> session</span><span class="p">:</span><span class="w"> </span><span class="nv">pass</span><span class="p p-Indicator">}</span>
+<span class="w">  </span><span class="nt">generate</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">by</span><span class="p">:</span><span class="w"> </span><span class="nv">claude</span><span class="p p-Indicator">,</span><span class="nt"> timeout_s</span><span class="p">:</span><span class="w"> </span><span class="nv">1800</span><span class="p p-Indicator">,</span><span class="nt"> probe</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">gate</span><span class="p">:</span><span class="w"> </span><span class="nv">20</span><span class="p p-Indicator">,</span><span class="nt"> stages</span><span class="p">:</span><span class="w"> </span><span class="nv">3</span><span class="p p-Indicator">}}</span>
+<span class="w">  </span><span class="nt">select</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">by</span><span class="p">:</span><span class="w"> </span><span class="nv">claude</span><span class="p p-Indicator">,</span><span class="nt"> finalists</span><span class="p">:</span><span class="w"> </span><span class="nv">2</span><span class="p p-Indicator">}</span>
+<span class="w">  </span><span class="nt">knowledge</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">by</span><span class="p">:</span><span class="w"> </span><span class="nv">claude</span><span class="p p-Indicator">,</span><span class="nt"> insights</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">by</span><span class="p">:</span><span class="w"> </span><span class="nv">rules</span><span class="p p-Indicator">}}</span>
+</code></pre></div>
+<p><code>claude</code>, <code>codex</code>, and <code>opencode</code> are built in; a server can offer additional named agents.
+They can plan, generate, and advise decisions. <code>flow.test</code> and <code>flow.measure</code> remain
+commands: an agent cannot replace their factual results. Selection still uses
+the objectives; an agent's advice is checked and can fall back to the rules.</p>
+<p>A <strong>critic</strong> is a second opinion on one box: <code>critic:</code> under <code>orchestrate</code> (the split or the
+direction), <code>test</code> (a design the checks passed), <code>measure</code> (a stage's numbers) or <code>select</code> (the
+pick). It is <code>flux</code> (FluxAgent), an agent, or <code>{by: ..., rounds: N}</code>. A rejection is a verdict: the design
+fails, the numbers are marked, or the pick is made again without it.</p>
+<div class="highlight"><pre><span></span><code><span class="nt">flow</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">test</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">correctness</span><span class="p">:</span><span class="w"> </span><span class="s">"{python}</span><span class="nv"> </span><span class="s">{home}/check.py</span><span class="nv"> </span><span class="s">{artifact}"</span>
+<span class="w">    </span><span class="nt">critic</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">claude</span>
+<span class="w">  </span><span class="nt">select</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">finalists</span><span class="p">:</span><span class="w"> </span><span class="nv">2</span><span class="p p-Indicator">,</span><span class="nt"> critic</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">by</span><span class="p">:</span><span class="w"> </span><span class="nv">flux</span><span class="p p-Indicator">,</span><span class="nt"> rounds</span><span class="p">:</span><span class="w"> </span><span class="nv">2</span><span class="p p-Indicator">}}</span>
+</code></pre></div>
+<p>See <a href="../parameters/#critics">critics</a> for each box's rules.</p>
+<p>A generation agent resumes one session for a part through its repairs until that part is
+admitted; a later improvement starts fresh. Do not set <code>session</code> on <code>generate</code>. Decision
+steps such as <code>plan</code> and a critic accept <code>session: turn</code> (default) or <code>session: pass</code>.</p>
+<p>Agents can use <code>flux probe</code> to check their current file during a turn. <code>probe</code> budgets those
+checks per turn. Direct use of certain raw tools is restricted by default; <code>allow</code> can give
+specific tools back when that suits the task. See <a href="../../reference/agents/">agent options</a>.</p>
+<p>For FluxAgent, use <code>orchestrate: {by: flux, policy: adaptive}</code> and <code>generate: flux</code> (<code>model</code>, its old
+name, is the same).
+<a href="../models/">Models and agents</a> explains endpoint and agent setup.</p>
+<h2 id="split-a-larger-design">Split a larger design<a class="headerlink" href="#split-a-larger-design" title="Permanent link">&para;</a></h2>
+<p>A design too large for one piece can be split into parts, or into sub-loops whose decided
+designs a parent composes: see <a href="../parts/">Split a larger design</a>.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../build-your-own/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Configure">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Configure
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../knowledge/" class="md-footer__link md-footer__link--next" aria-label="Next: Knowledge, skills, hidden paths">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                Knowledge, skills, hidden paths
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">© 2026 Flux</div>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      <script id="__config" type="application/json">{"base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.footer", "content.code.copy", "content.code.annotate", "toc.follow", "search.suggest"], "search": "../../assets/javascripts/workers/search.973d3a69.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.f55a23d4.min.js"></script>
+      
+    
+  </body>
+</html>

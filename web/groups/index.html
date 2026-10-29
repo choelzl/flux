@@ -1,0 +1,1905 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Flux searches for better designs: it makes them with a script, a model or a coding agent, checks and measures them with real tools, and decides from your objectives.">
+      
+      
+      
+        <link rel="canonical" href="https://choelzl.github.io/flux/web/groups/">
+      
+      
+        <link rel="prev" href="../chat/">
+      
+      
+        <link rel="next" href="../admin/">
+      
+      
+      <link rel="icon" href="../../assets/app/logo.svg">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.6.23">
+    
+    
+      
+        <title>Groups - Flux</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.84d31ad4.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.06af60db.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/flux-theme.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#groups" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="Flux" class="md-header__button md-logo" aria-label="Flux" data-md-component="logo">
+      <svg class="flux-logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" aria-label="Flux"><g fill="currentColor"><rect x="78" y="8" width="16" height="28" rx="8"/><rect x="120" y="8" width="16" height="28" rx="8"/><rect x="162" y="8" width="16" height="28" rx="8"/><rect x="120" y="220" width="16" height="28" rx="8"/><rect x="162" y="220" width="16" height="28" rx="8"/><rect x="8" y="78" width="28" height="16" rx="8"/><rect x="8" y="120" width="28" height="16" rx="8"/><rect x="8" y="162" width="28" height="16" rx="8"/><rect x="220" y="78" width="28" height="16" rx="8"/><rect x="220" y="120" width="28" height="16" rx="8"/><rect x="220" y="162" width="28" height="16" rx="8"/></g><rect x="78" y="208" width="16" height="40" rx="8" fill="#f66824"/><g fill="none" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"><rect x="40" y="40" width="176" height="176" rx="32" stroke="currentColor"/><path d="M86 248V118A32 32 0 0 1 118 86H174" stroke="#f66824"/><path d="M128 248V146A18 18 0 0 1 146 128H166" stroke="currentColor"/></g></svg>
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Flux
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Groups
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/choelzl/flux" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    choelzl/flux
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../start/install/" class="md-tabs__link">
+          
+  
+  
+  Get started
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../guide/build-your-own/" class="md-tabs__link">
+          
+  
+  
+  Guides
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../" class="md-tabs__link">
+          
+  
+  
+  Web app
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../preview/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Preview app
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../guide/parameters/" class="md-tabs__link">
+          
+  
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="Flux" class="md-nav__button md-logo" aria-label="Flux" data-md-component="logo">
+      <svg class="flux-logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" aria-label="Flux"><g fill="currentColor"><rect x="78" y="8" width="16" height="28" rx="8"/><rect x="120" y="8" width="16" height="28" rx="8"/><rect x="162" y="8" width="16" height="28" rx="8"/><rect x="120" y="220" width="16" height="28" rx="8"/><rect x="162" y="220" width="16" height="28" rx="8"/><rect x="8" y="78" width="28" height="16" rx="8"/><rect x="8" y="120" width="28" height="16" rx="8"/><rect x="8" y="162" width="28" height="16" rx="8"/><rect x="220" y="78" width="28" height="16" rx="8"/><rect x="220" y="120" width="28" height="16" rx="8"/><rect x="220" y="162" width="28" height="16" rx="8"/></g><rect x="78" y="208" width="16" height="40" rx="8" fill="#f66824"/><g fill="none" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"><rect x="40" y="40" width="176" height="176" rx="32" stroke="currentColor"/><path d="M86 248V118A32 32 0 0 1 118 86H174" stroke="#f66824"/><path d="M128 248V146A18 18 0 0 1 146 128H166" stroke="currentColor"/></g></svg>
+    </a>
+    Flux
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/choelzl/flux" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    choelzl/flux
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Home
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    Get started
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            Get started
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../start/install/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Install
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/tutorial/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    First loop
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/loop-crafter/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Loop crafter
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../start/ask/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Write a loop with an agent
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    Guides
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            Guides
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/build-your-own/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Configure
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/loop-shape/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Search and agents
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/knowledge/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Knowledge, skills, hidden paths
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/parts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Split a larger design
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/cookbook/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Recipes
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/run/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Run, stop, resume
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/models/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Models and agents
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    Web app
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            Web app
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Tour
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../live/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Live
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../results/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Results
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../files/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Files and settings
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../chat/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Chat
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    Groups
+    
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    Groups
+    
+  </span>
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#a-tab-per-group" class="md-nav__link">
+    <span class="md-ellipsis">
+      A tab per group
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#members" class="md-nav__link">
+    <span class="md-ellipsis">
+      Members
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#new-project" class="md-nav__link">
+    <span class="md-ellipsis">
+      New project
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#a-projects-page" class="md-nav__link">
+    <span class="md-ellipsis">
+      A project's page
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="A project&#39;s page">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#library" class="md-nav__link">
+    <span class="md-ellipsis">
+      Library
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#knowledge" class="md-nav__link">
+    <span class="md-ellipsis">
+      Knowledge
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Knowledge">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-collector" class="md-nav__link">
+    <span class="md-ellipsis">
+      The collector
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#settings" class="md-nav__link">
+    <span class="md-ellipsis">
+      Settings
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#global" class="md-nav__link">
+    <span class="md-ellipsis">
+      Global
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#in-no-group" class="md-nav__link">
+    <span class="md-ellipsis">
+      In no group
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#admins" class="md-nav__link">
+    <span class="md-ellipsis">
+      Admins
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../admin/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Server and admin
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../preview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Preview app
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    Reference
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            Reference
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/parameters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Document
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/search/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Searches
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/agents/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Agent options
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/commands/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Commands and placeholders
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/presets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Presets
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    CLI
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/refusals/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Common refusals
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/glossary/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Glossary
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#a-tab-per-group" class="md-nav__link">
+    <span class="md-ellipsis">
+      A tab per group
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#members" class="md-nav__link">
+    <span class="md-ellipsis">
+      Members
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#new-project" class="md-nav__link">
+    <span class="md-ellipsis">
+      New project
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#a-projects-page" class="md-nav__link">
+    <span class="md-ellipsis">
+      A project's page
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="A project&#39;s page">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#library" class="md-nav__link">
+    <span class="md-ellipsis">
+      Library
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#knowledge" class="md-nav__link">
+    <span class="md-ellipsis">
+      Knowledge
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Knowledge">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-collector" class="md-nav__link">
+    <span class="md-ellipsis">
+      The collector
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#settings" class="md-nav__link">
+    <span class="md-ellipsis">
+      Settings
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#global" class="md-nav__link">
+    <span class="md-ellipsis">
+      Global
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#in-no-group" class="md-nav__link">
+    <span class="md-ellipsis">
+      In no group
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#admins" class="md-nav__link">
+    <span class="md-ellipsis">
+      Admins
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="groups">Groups<a class="headerlink" href="#groups" title="Permanent link">&para;</a></h1>
+<p><strong>Groups</strong>, in the top bar between <strong>Loops</strong> and <strong>Admin</strong>, is every user's page for the teams
+they are in: who is in each group, what their membership gives them, whose settings their runs
+use, and the group's projects. Admins set groups up under <strong>Admin › Users › Groups</strong>
+(<a href="../admin/#accounts">Server and admin</a>); this page is where everyone else sees them.</p>
+<h2 id="a-tab-per-group">A tab per group<a class="headerlink" href="#a-tab-per-group" title="Permanent link">&para;</a></h2>
+<p>The page has a tab for each of your groups and one for <strong>Global</strong> (with its number of projects),
+with no title above them (the bar says Groups). The tab you chose is in the address
+(<code>#/groups/&lt;id&gt;</code>, <code>#/groups/global</code>) and remembered in this browser; a project opens under its
+group's tab (<a href="#a-projects-page">A project's page</a>).</p>
+<p>Under a group's tab:</p>
+<table>
+<thead>
+<tr>
+<th>Part</th>
+<th>What it shows</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Projects</strong></td>
+<td>The group's projects: title and about, address (<code>&lt;group&gt;/&lt;name&gt;</code>), <strong>invite only</strong> or <strong>open · <em>level</em></strong> beside the title, and your level on it -- what the project gives you (Viewer, Asker, Contributor, Lead; Custom only for a mix of boxes), with your group's <strong>curate</strong> or <strong>manage</strong> said beside it ("Asker + curate"); its words on hover; "—" when you only see it. An invite-only project you are not added to is not listed. The address is one line, cut with an ellipsis when it is long (the whole on hover). Members who may <strong>create</strong>, and admins, get the <strong>New project</strong> form under the list</td>
+</tr>
+<tr>
+<td><strong>You in</strong> <em>group</em></td>
+<td>A few facts: your <strong>Level</strong> (its words on hover, <a href="../admin/#the-words">the words</a>), what it <strong>Gives</strong> in plain words (curate or manage every project of the group, create projects; loops only through the projects you are in or that open to the group), <strong>Open projects</strong> (the level they give, for its managers and admins to choose) and <strong>Credentials</strong> in one line (the server's settings through it, through another group, or your own)</td>
+</tr>
+<tr>
+<td><strong>Members · N</strong></td>
+<td>Who is in it: names and levels for everyone; the member grid (a box per word) for whoever manages the group</td>
+</tr>
+</tbody>
+</table>
+<p>On a phone <strong>You in</strong> comes first, then the projects and the members.</p>
+<h2 id="members">Members<a class="headerlink" href="#members" title="Permanent link">&para;</a></h2>
+<p>A membership's level is <strong>Member</strong>, <strong>Maintainer</strong> (curate, create) or <strong>Lead</strong> (curate, manage,
+create): a group membership has no loop word. Being in a group gives nothing on any loop: a loop is
+reached when its owner shares it, or links it into a project you are in (or that opens to the
+group). A member who <strong>manages</strong> the
+group (a Lead) sees the members in the member grid, adds people with <strong>+ Add people</strong> (they join as
+Member), removes anyone but themselves with <strong>×</strong>, and gives levels and words up to their own;
+admins any. A member who may not manage the group sees the other members, their names and levels,
+read-only (never the words' table), and is told whom to ask. Nobody leaves a group from here.</p>
+<h2 id="new-project">New project<a class="headerlink" href="#new-project" title="Permanent link">&para;</a></h2>
+<p><strong>New project</strong> asks for a <strong>Title</strong> (free) and a <strong>Name</strong>, made from the title until you type
+one. The name is checked as you type: letters, digits, <code>-</code> and <code>_</code>, at most 60, and not one the
+group already has whatever its case. <strong>Create project</strong> makes <code>&lt;group&gt;/&lt;name&gt;</code>, blank and invite
+only, and you are its Lead (every word). Nothing is said under the form but an error, when there is one. A
+project's title opens its page.</p>
+<h2 id="a-projects-page">A project's page<a class="headerlink" href="#a-projects-page" title="Permanent link">&para;</a></h2>
+<p>Think of a group as an organisation and a project as one of its repositories, with members of
+its own; loops are linked into it. Its page opens on the Groups page, under its group's tab (the
+tab lit; a global project under <strong>Global</strong>): <code>#/groups/&lt;group id&gt;/&lt;name&gt;</code>, <code>#/groups/global/&lt;name&gt;</code>.
+Every link Flux makes to it is this one. An old address, <code>#/projects/&lt;group&gt;/&lt;name&gt;</code>, still opens it (a link in an older notification, a bookmark)
+and is replaced by the new one.</p>
+<p>Under the group tabs:</p>
+<ul>
+<li><strong>Projects › <em>its title</em> ▾</strong> -- <strong>Projects</strong> goes back to the group's projects; <strong>▾</strong> lists the
+  group's other projects you see, with their loops, and <strong>+ New project</strong> for whoever may make one.
+  A pick opens the other project on the same tab when it has it.</li>
+<li><strong>Its head:</strong> the title, what the group's members get (<strong>🔒 Invite only</strong>, <strong>Group views</strong>,
+  <strong>Open</strong>; a global project <strong>Public</strong> or <strong>🔒 Private</strong>; its sentence on hover), <strong>You: <em>your level</em></strong> (its
+  words on hover), its address with a copy button, its about. <strong>Leave</strong>, a quiet button there, for
+  its own members.</li>
+<li><strong>Its tabs:</strong> <strong>Overview</strong>, <strong>Library</strong>, <strong>Knowledge</strong> and <strong>Settings</strong> (only for whoever may change
+  something there -- a Contributor's holds the topics alone; a plain member or a Viewer has none), each its own
+  address: <code>…/&lt;name&gt;/library</code>, <code>…/&lt;name&gt;/knowledge</code>, <code>…/&lt;name&gt;/settings</code>.</li>
+</ul>
+<table>
+<thead>
+<tr>
+<th>Overview</th>
+<th>What it shows</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Loops · N</strong></td>
+<td>Each loop linked into it that you may see: owner / name, its state, when last active, and for your own its place in the loop's order of projects ("1st of its 3"). <strong>+ Link one of my loops</strong> if you hold the <strong>link</strong> role (anyone on a global project that takes loops); <strong>×</strong> takes one of yours out (the loop stays). A global project lists only your own loops, every one to admins and its managers, with whether each learns from its runs. What linking gives is on the ⓘ</td>
+</tr>
+<tr>
+<td><strong>People · N</strong></td>
+<td>Its members, names and levels (their words on hover); <strong>Manage ›</strong> opens Settings for whoever keeps them</td>
+</tr>
+<tr>
+<td><strong>Library</strong></td>
+<td>How many files it holds and their size; <strong>Open ›</strong></td>
+</tr>
+<tr>
+<td><strong>Your access</strong></td>
+<td>Your words, and how you have them in a line: as a member, through the group, everyone on a public global project (what they give on its loops on hover)</td>
+</tr>
+</tbody>
+</table>
+<p>On a phone the Overview is one column, Loops first.</p>
+<p><strong>Words:</strong> view, ask, edit, run -- what a member may do with every loop linked into it -- then
+link (link one's own loops in), curate (review what is learnt, keep the library) and manage (title,
+members, access; rename, archive, delete). Each implies view. A global project's members hold only
+<strong>curate</strong> or <strong>manage</strong> (Member, Maintainer, Lead): its visibility gives view. Sharing a linked loop stays its owner's. Words only
+add up: a project never takes one away.</p>
+<p><strong>Who manages it:</strong> its managers, the group's managers (<strong>manage</strong> on the group) and admins, each
+giving words up to their own. They also set what the group's members get -- <strong>Invite only</strong> (private:
+hidden until you're added -- only its members, the group's curators and managers and admins see it;
+a new project's default), <strong>Group views</strong> (they view it and
+its loops) or <strong>Open to the group</strong> (every member gets its <strong>Level for open</strong>: the group's default,
+or one of its own -- Viewer, Asker, Contributor or Maintainer -- that level, nothing more). There
+is no joining; anyone may leave a project. Others see its people, names and levels, in the Overview.</p>
+<h3 id="library">Library<a class="headerlink" href="#library" title="Permanent link">&para;</a></h3>
+<p>A project's <strong>Library</strong> is a folder of papers, specs and notes for its loops, browsed exactly as a
+loop's <a href="../files/">Files</a> tab: the tree, the viewer (text in the editor, anything else to download),
+<strong>Add files</strong> and <strong>Add folder</strong> (or a drop; a single <code>.zip</code> is unpacked) into the folder open in
+the viewer, and <strong>Rename…</strong>, <strong>Move…</strong>, <strong>Delete…</strong> on the selected item. Its use is shown beside
+the room it has: a loop's, 100,000 files and 8 GB. Above it, <strong>which loops read it</strong>: every loop
+linked into the project reads it, read-only, at <code>library/&lt;name&gt;@&lt;group&gt;/</code> of its own library
+(<code>library/&lt;name&gt;@_/</code> for a global project), whoever runs it -- the loops you see are named, the
+others counted. An archived project's library is read by no loop, nor by a loop whose owner no
+longer views the project.</p>
+<table>
+<thead>
+<tr>
+<th>Who</th>
+<th>May</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Whoever <strong>views</strong> the project (its members, its group as its access says, everyone for a global one)</td>
+<td>browse and download</td>
+</tr>
+<tr>
+<td><strong>edit</strong>, <strong>curate</strong> or <strong>manage</strong> on it -- as its member, through its group (an open project's level; a membership's curate and manage reach every project of the group), a global project's members with curate or manage</td>
+<td>upload, rename, move, delete, edit a text file</td>
+</tr>
+<tr>
+<td><strong>manage</strong> (its managers, the group's managers, admins)</td>
+<td><strong>Hide from AI</strong> / <strong>Show to AI</strong>: the paths the agents of its loops will not see (under its place, <code>library/&lt;name&gt;@&lt;group&gt;/drafts/</code>)</td>
+</tr>
+</tbody>
+</table>
+<p>An archived project's library is read-only. Uploads, renames, moves, edits, deletes and hidden
+paths are on the audit trail.</p>
+<h3 id="knowledge">Knowledge<a class="headerlink" href="#knowledge" title="Permanent link">&para;</a></h3>
+<p>A project's <strong>Knowledge</strong> is what its loops have taught: short entries, each one insight, filed under the project's <strong>topics</strong> and proven by <strong>designs</strong> -- results of loops, never a number
+typed in. The <strong>accepted</strong> entries reach the project's loops at their next start: their agents query
+them with <code>flux knowledge</code> (list, <code>search "&lt;words&gt;"</code>, <code>show &lt;id&gt;</code>; see
+<a href="../../guide/knowledge/">Knowledge</a>), and a coding agent's brief says so in one line -- the project's
+place and its topics with their counts. Proposals, rejected and retired entries never reach a loop; a
+run reads the entries as its start saw them, and its log line says the version
+("project knowledge silicon@hw-lab 3f2a… (5 entries)"). People add entries by hand, and the <strong>collector</strong>
+proposes them from the loops' best designs (below).</p>
+<p>The tab is a row of chips and one list. <strong>All</strong> and a chip per topic (with its count; the topic's question
+on hover) filter the list; <strong>To review</strong>, for its curators, holds the proposals; <strong>+ Add</strong> is at the row's
+end. A row is an entry's headline with two muted lines of its analysis, its topic and how many designs back
+it at the right -- "✓ maria · 2 designs" when a curator ticked it, "+1" when it was reinforced today. A
+click opens it: the analysis at a reading width (a design named <code>#142</code> in it is a link), its <strong>Designs</strong>
+(each a link to that design in its loop's <strong>Results</strong>, with its rank then -- "top 1 of 61" --, the day, how
+it came: "added by cy", "collected from nlu-gelu", later "from bob's chat in nlu-gelu"; one added later
+marked "+ … reinforced"), who accepted it, and <strong>Reinforce…</strong>, <strong>Edit</strong> and <strong>Retire</strong> for whoever may.</p>
+<table>
+<thead>
+<tr>
+<th>Who</th>
+<th>May</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Whoever <strong>views</strong> the project</td>
+<td>read the list; their own proposals, marked <strong>in review</strong></td>
+</tr>
+<tr>
+<td><strong>edit</strong>, <strong>curate</strong> or <strong>manage</strong></td>
+<td><strong>+ Add</strong> an entry -- a topic, the insight in one line, the analysis (why it works, what the top designs did differently, citing them as <code>#142</code>, the cost, where it does not hold, what is open) and at least one design of a loop of the project they view; <strong>Reinforce…</strong> an entry in the list with another design, at once, no review; write the <strong>Topics</strong></td>
+</tr>
+<tr>
+<td><strong>curate</strong> (its curators, the group's curators and managers through the cascade)</td>
+<td><strong>To review</strong>: open a proposal to change its headline and analysis, <strong>✓</strong> accepts it, <strong>✕</strong> rejects it; <strong>Edit</strong> and <strong>Retire</strong> an entry in the list</td>
+</tr>
+</tbody>
+</table>
+<p>An entry's proof is enough with designs from <strong>2 different loops</strong>. Until then it is a proposal; a
+curator's ✓ on one with less accepts it and <strong>ticks</strong> it ("✓ maria"), and the list says so. A curator's
+own entry goes straight in (ticked when its proof is short) -- on a global project another curator
+accepts it. A proposal may be marked <strong>contradicts:</strong> <em>an entry's headline</em>. Accepted, rejected and
+retired entries stay on the record; the author is told when a curator decides. An archived project's
+knowledge is read-only. Every change (topics, add, accept, reject, edit, retire, reinforce, a collector's
+run) is on the audit trail.</p>
+<h4 id="the-collector">The collector<a class="headerlink" href="#the-collector" title="Permanent link">&para;</a></h4>
+<p>Flux reads a loop's best designs for each project it is linked into -- unarchived, with topics, the link's
+<strong>learning</strong> on (on by default in a group's project; in a global one only its managers or an admin turn it
+on, and the loop's owner may turn it off) -- and writes what they teach as proposals, outside the loop: no
+step of the loop, nothing in its prompts or its folders changes. It looks once the loop's <strong>top 5</strong> designs
+(by the loop's own ranking, as "top 1 of 61" says it) hold <strong>more than 3</strong> that it has not read for that
+project: the loop's front has mostly moved since the last look. A design is read once; a name given again
+by a later start is another design. The server looks when a start ends and, while loops run, every two
+minutes at the ones whose record changed, one look at a time in the background.</p>
+<p>A look is one call to the loop's own model -- its owner's FluxAgent settings for that loop, at their cost,
+about 6-12k tokens in and 3k at most out -- with the new top designs (their idea, their text or its diff
+against the loop's baseline, their numbers), the rest of the loop to compare, and the project's entries. It
+answers with at most six items, each checked before anything is written:</p>
+<table>
+<thead>
+<tr>
+<th>It finds</th>
+<th>What happens</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>The new designs work by an accepted entry's mechanism</td>
+<td>They <strong>reinforce</strong> it at once, no review: "+ … collected from nlu-gelu, reinforced"</td>
+</tr>
+<tr>
+<td>A new insight</td>
+<td>A proposal in <strong>To review</strong>, "collected from nlu-gelu"</td>
+</tr>
+<tr>
+<td>They contradict an entry</td>
+<td>A proposal marked <strong>contradicts:</strong> <em>its headline</em></td>
+</tr>
+<tr>
+<td>An entry is superseded or shown wrong</td>
+<td>A proposal <strong>retire:</strong> <em>its headline</em>, with the reason: <strong>✓</strong> retires the entry, <strong>✕</strong> keeps it. Nothing is retired by itself</td>
+</tr>
+</tbody>
+</table>
+<p>Its rules are Flux's own: an insight answers a topic's question, in a one-line headline and an analysis of
+80-200 words -- the mechanism, what the top designs did differently from the rest (citing them, <code>#142</code>),
+the cost, where it does not hold, what is open -- proven by the designs it names; no bare conclusions, vague
+tips or flag trivia, and nothing when the designs do not explain the mechanism and its limits. An item that
+does not hold (a topic or an entry that is not there, a design it was not shown, an analysis of the wrong
+length or citing none of its designs) is dropped and said on the audit. A call that fails reads nothing (the
+designs wait for a later look, not within the hour); a reply that is not the JSON asked counts as read.
+Curators see its last run in a quiet line under the list: <strong>Last collected: nlu-gelu · Oct 23 · 2 proposed,
+1 reinforced</strong> (on hover: how many designs it read, how many items it dropped). Its calls count in
+<a href="../admin/">Admin › Insights</a>' usage as the loop's and its owner's, as <strong>knowledge collector</strong> under By agent
+(priced by the loop's FluxAgent token prices), and a failed one as a failed turn of its endpoint.</p>
+<h3 id="settings">Settings<a class="headerlink" href="#settings" title="Permanent link">&para;</a></h3>
+<p>For its managers (and admins): <strong>Members &amp; access</strong> first -- its members in the same grid as a
+group's: a level (<a href="../admin/#the-words">the words</a>), the Member mark, a box
+per word, <strong>×</strong>; <strong>All members</strong> gives or takes a word from everyone; <strong>+ Add people</strong> (they join as
+Member); and what the group's members get, with the <strong>Level for open</strong>. Then <strong>About</strong> (title and about), <strong>Name</strong> with <strong>Rename…</strong> -- the new
+name is checked as typed, the old address stops working (no redirect) and its members and its
+group's are told the new one; the page opens at the new address -- <strong>Archive…</strong> / <strong>Unarchive</strong> and
+<strong>Delete…</strong> (type its name; its loops stay, taken out of it). On a global project admins also
+choose its <strong>Visibility</strong> -- <strong>Public</strong> (everyone sees it, its library and knowledge) or <strong>Private</strong>
+(only its members and admins) -- and who links loops into it (everyone, or admins only; a private
+one's members only). <strong>Topics</strong>, for whoever may edit the project (a Contributor
+too, who sees only this card): a row a topic -- its id (lower-case letters, digits, <code>-</code> and <code>_</code>) and the
+question its entries answer -- edited in place, <strong>+ Topic</strong>, <strong>✕</strong>, <strong>Save</strong>; <strong>YAML</strong> shows the
+project's <code>knowledge.yaml</code> as written (<code>pipelining: Where do pipeline stages pay off, and what do they
+cost?</code>, a line a topic, comments kept). A topic renamed takes its entries with it; one that still holds an
+entry is not removed. A member who may change nothing there (a plain member) sees no Settings tab.</p>
+<h2 id="global">Global<a class="headerlink" href="#global" title="Permanent link">&para;</a></h2>
+<p><strong>Global</strong> lists the global projects you see: the <strong>public</strong> ones (everyone sees them, their library
+and knowledge) and the <strong>private</strong> ones you are a member of (nobody else but admins finds them).
+Their members curate or manage them; there is no curator group. Only admins make them: <strong>New global
+project</strong> under the list (admins only), <strong>Admin › Users › Projects</strong>, or <code>flux project create
+_/&lt;name&gt;</code> (public; <code>--visibility private</code>). Anyone may link a loop into a public one, a private
+one's members into it (admins only when its join rule says so); it gives nobody any right on the
+loop, shows you only your own loops in it (admins and its managers see every one; in a private one
+its members do not see each other either), and learns from a loop's runs only once an admin or one
+of its managers turns that on.</p>
+<h2 id="in-no-group">In no group<a class="headerlink" href="#in-no-group" title="Permanent link">&para;</a></h2>
+<p>A user in no group sees what a group is, that an admin adds them to one, and the <strong>Global</strong> tab.
+Their own loops and those shared with them are under <strong>Loops</strong> as always.</p>
+<h2 id="admins">Admins<a class="headerlink" href="#admins" title="Permanent link">&para;</a></h2>
+<p>An admin sees their own groups; <strong>Every group (admin)</strong>, at the end of the tabs, adds the others, marked "not a member".
+In every group an admin sets any member's level in the grid, the group's <strong>Credentials</strong> (Server
+settings or Own settings) and its open level, adds and removes members, and makes projects. <strong>Every
+group in Admin › Groups</strong> opens <strong>Admin › Users › Groups</strong>.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../chat/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Chat">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Chat
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../admin/" class="md-footer__link md-footer__link--next" aria-label="Next: Server and admin">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                Server and admin
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">© 2026 Flux</div>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      <script id="__config" type="application/json">{"base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.footer", "content.code.copy", "content.code.annotate", "toc.follow", "search.suggest"], "search": "../../assets/javascripts/workers/search.973d3a69.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.f55a23d4.min.js"></script>
+      
+    
+  </body>
+</html>

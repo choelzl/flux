@@ -1,0 +1,34 @@
+# A conflict-free address-to-bank mapping, or the proof there is none (the study is this
+# document and the commands of `flux_bankmap.steps` -- no world).
+#     flux task run applications/bankmap --db demo-bankmap.db --tui
+
+statement: >-
+  An address-to-bank mapping for a memory of 8 banks that is conflict-free for 4 concurrent
+  accesses at each of the strides 1, 8 and 16, for every start address of a 20-bit space:
+  the cheapest one the exhaustive checker accepts, or the proof that none exists and what is
+  achievable instead.
+language: verilog
+
+params:                         # the ask, read by every step as {params}
+  strides: [1, 8, 16]
+  concurrent: 4
+  banks: 8
+  address_bits: 20
+  z3_seconds: 60
+  topology: crossbar            # crossbar | staged:GxH | omega | butterfly | clos:n,m,r | benes
+  llm_round: 6                  # model-proposed mappings per round; 0 = solver only
+  model_rounds: 2               # model rounds after the solver
+  # also: max_xor_inputs, stage_capacities, lanes, stages, problem
+
+objectives:
+  - {metric: hardware_cost, direction: minimize, unit: XOR}
+
+flow:
+  generate: {prototype: false}
+  orchestrate:                  # the chain: baseline, proof, z3, then the model's rounds
+    command: "{python} -m flux_bankmap.steps search {history} {state} {params}"
+  test:
+    exhaustive: "{python} -m flux_bankmap.steps check {artifact} {params}"   # every start address, then the Verilog Verilated
+  measure:
+    exhaustive: {run: "{python} -m flux_bankmap.steps cost {artifact}", metrics: [hardware_cost]}
+
