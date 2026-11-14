@@ -1,0 +1,2428 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Flux searches for better designs: it makes them with a script, a model or a coding agent, checks and measures them with real tools, and decides from your objectives.">
+      
+      
+      
+        <link rel="canonical" href="https://choelzl.github.io/flux/guide/run/">
+      
+      
+        <link rel="prev" href="../cookbook/">
+      
+      
+        <link rel="next" href="../models/">
+      
+      
+      <link rel="icon" href="../../assets/app/logo.svg">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.6.23">
+    
+    
+      
+        <title>Run, stop, resume - Flux</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.84d31ad4.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.06af60db.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/flux-theme.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#run-stop-resume" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="Flux" class="md-header__button md-logo" aria-label="Flux" data-md-component="logo">
+      <svg class="flux-logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" aria-label="Flux"><g fill="currentColor"><rect x="78" y="8" width="16" height="28" rx="8"/><rect x="120" y="8" width="16" height="28" rx="8"/><rect x="162" y="8" width="16" height="28" rx="8"/><rect x="120" y="220" width="16" height="28" rx="8"/><rect x="162" y="220" width="16" height="28" rx="8"/><rect x="8" y="78" width="28" height="16" rx="8"/><rect x="8" y="120" width="28" height="16" rx="8"/><rect x="8" y="162" width="28" height="16" rx="8"/><rect x="220" y="78" width="28" height="16" rx="8"/><rect x="220" y="120" width="28" height="16" rx="8"/><rect x="220" y="162" width="28" height="16" rx="8"/></g><rect x="78" y="208" width="16" height="40" rx="8" fill="#f66824"/><g fill="none" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"><rect x="40" y="40" width="176" height="176" rx="32" stroke="currentColor"/><path d="M86 248V118A32 32 0 0 1 118 86H174" stroke="#f66824"/><path d="M128 248V146A18 18 0 0 1 146 128H166" stroke="currentColor"/></g></svg>
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Flux
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Run, stop, resume
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/choelzl/flux" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    choelzl/flux
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../start/install/" class="md-tabs__link">
+          
+  
+  
+  Get started
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../build-your-own/" class="md-tabs__link">
+          
+  
+  
+  Guides
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../web/" class="md-tabs__link">
+          
+  
+  
+  Web app
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../preview/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Preview app
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../parameters/" class="md-tabs__link">
+          
+  
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="Flux" class="md-nav__button md-logo" aria-label="Flux" data-md-component="logo">
+      <svg class="flux-logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" aria-label="Flux"><g fill="currentColor"><rect x="78" y="8" width="16" height="28" rx="8"/><rect x="120" y="8" width="16" height="28" rx="8"/><rect x="162" y="8" width="16" height="28" rx="8"/><rect x="120" y="220" width="16" height="28" rx="8"/><rect x="162" y="220" width="16" height="28" rx="8"/><rect x="8" y="78" width="28" height="16" rx="8"/><rect x="8" y="120" width="28" height="16" rx="8"/><rect x="8" y="162" width="28" height="16" rx="8"/><rect x="220" y="78" width="28" height="16" rx="8"/><rect x="220" y="120" width="28" height="16" rx="8"/><rect x="220" y="162" width="28" height="16" rx="8"/></g><rect x="78" y="208" width="16" height="40" rx="8" fill="#f66824"/><g fill="none" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"><rect x="40" y="40" width="176" height="176" rx="32" stroke="currentColor"/><path d="M86 248V118A32 32 0 0 1 118 86H174" stroke="#f66824"/><path d="M128 248V146A18 18 0 0 1 146 128H166" stroke="currentColor"/></g></svg>
+    </a>
+    Flux
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/choelzl/flux" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    choelzl/flux
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Home
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    Get started
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            Get started
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../start/install/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Install
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tutorial/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    First loop
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../loop-crafter/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Loop crafter
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../start/ask/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Write a loop with an agent
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    Guides
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            Guides
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../build-your-own/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Configure
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../loop-shape/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Search and agents
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../knowledge/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Knowledge, skills, hidden paths
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cookbook/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Recipes
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    Run, stop, resume
+    
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    Run, stop, resume
+    
+  </span>
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#check-before-running" class="md-nav__link">
+    <span class="md-ellipsis">
+      Check before running
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#runtime-overrides" class="md-nav__link">
+    <span class="md-ellipsis">
+      Runtime overrides
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#stop-resume-and-keep-experiments-separate" class="md-nav__link">
+    <span class="md-ellipsis">
+      Stop, resume, and keep experiments separate
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Stop, resume, and keep experiments separate">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#when-a-measurement-still-counts" class="md-nav__link">
+    <span class="md-ellipsis">
+      When a measurement still counts
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#upgrading-older-loops" class="md-nav__link">
+    <span class="md-ellipsis">
+      Upgrading older loops
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#moving-a-loop-in-one-file" class="md-nav__link">
+    <span class="md-ellipsis">
+      Moving a loop in one file
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#read-the-result-and-full-output" class="md-nav__link">
+    <span class="md-ellipsis">
+      Read the result and full output
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Read the result and full output">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#read-a-loop-from-a-shell" class="md-nav__link">
+    <span class="md-ellipsis">
+      Read a loop from a shell
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sandbox" class="md-nav__link">
+    <span class="md-ellipsis">
+      Sandbox
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Sandbox">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#when-the-sandbox-cannot-start" class="md-nav__link">
+    <span class="md-ellipsis">
+      When the sandbox cannot start
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#compiling" class="md-nav__link">
+    <span class="md-ellipsis">
+      Compiling
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#system-service" class="md-nav__link">
+    <span class="md-ellipsis">
+      System service
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="System service">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-environment-is-built-before-the-restart" class="md-nav__link">
+    <span class="md-ellipsis">
+      The environment is built before the restart
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#host-commands-as-the-flux-account" class="md-nav__link">
+    <span class="md-ellipsis">
+      Host commands as the flux account
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nix-for-the-flux-account" class="md-nav__link">
+    <span class="md-ellipsis">
+      Nix for the flux account
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cgroup-delegation-for-the-flux-account" class="md-nav__link">
+    <span class="md-ellipsis">
+      cgroup delegation for the flux account
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#a-private-repository-over-https" class="md-nav__link">
+    <span class="md-ellipsis">
+      A private repository over HTTPS
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#behind-a-proxy" class="md-nav__link">
+    <span class="md-ellipsis">
+      Behind a proxy
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#moving-the-servers-data-by-hand" class="md-nav__link">
+    <span class="md-ellipsis">
+      Moving the server's data by hand
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#where-a-loops-files-are" class="md-nav__link">
+    <span class="md-ellipsis">
+      Where a loop's files are
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#setup-elsewhere" class="md-nav__link">
+    <span class="md-ellipsis">
+      Setup elsewhere
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../models/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Models and agents
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    Web app
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            Web app
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../web/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Tour
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../web/live/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Live
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../web/results/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Results
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../web/files/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Files and settings
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../web/chat/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Chat
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../web/groups/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Groups
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../web/admin/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Server and admin
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../web/machines/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Machines
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../preview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Preview app
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    Reference
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            Reference
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parameters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Document
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/search/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Searches
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/agents/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Agent options
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/commands/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Commands and placeholders
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/presets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Presets
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    CLI
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/refusals/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Common refusals
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/glossary/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Glossary
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#check-before-running" class="md-nav__link">
+    <span class="md-ellipsis">
+      Check before running
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#runtime-overrides" class="md-nav__link">
+    <span class="md-ellipsis">
+      Runtime overrides
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#stop-resume-and-keep-experiments-separate" class="md-nav__link">
+    <span class="md-ellipsis">
+      Stop, resume, and keep experiments separate
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Stop, resume, and keep experiments separate">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#when-a-measurement-still-counts" class="md-nav__link">
+    <span class="md-ellipsis">
+      When a measurement still counts
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#upgrading-older-loops" class="md-nav__link">
+    <span class="md-ellipsis">
+      Upgrading older loops
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#moving-a-loop-in-one-file" class="md-nav__link">
+    <span class="md-ellipsis">
+      Moving a loop in one file
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#read-the-result-and-full-output" class="md-nav__link">
+    <span class="md-ellipsis">
+      Read the result and full output
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Read the result and full output">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#read-a-loop-from-a-shell" class="md-nav__link">
+    <span class="md-ellipsis">
+      Read a loop from a shell
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sandbox" class="md-nav__link">
+    <span class="md-ellipsis">
+      Sandbox
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Sandbox">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#when-the-sandbox-cannot-start" class="md-nav__link">
+    <span class="md-ellipsis">
+      When the sandbox cannot start
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#compiling" class="md-nav__link">
+    <span class="md-ellipsis">
+      Compiling
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#system-service" class="md-nav__link">
+    <span class="md-ellipsis">
+      System service
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="System service">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-environment-is-built-before-the-restart" class="md-nav__link">
+    <span class="md-ellipsis">
+      The environment is built before the restart
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#host-commands-as-the-flux-account" class="md-nav__link">
+    <span class="md-ellipsis">
+      Host commands as the flux account
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nix-for-the-flux-account" class="md-nav__link">
+    <span class="md-ellipsis">
+      Nix for the flux account
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cgroup-delegation-for-the-flux-account" class="md-nav__link">
+    <span class="md-ellipsis">
+      cgroup delegation for the flux account
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#a-private-repository-over-https" class="md-nav__link">
+    <span class="md-ellipsis">
+      A private repository over HTTPS
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#behind-a-proxy" class="md-nav__link">
+    <span class="md-ellipsis">
+      Behind a proxy
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#moving-the-servers-data-by-hand" class="md-nav__link">
+    <span class="md-ellipsis">
+      Moving the server's data by hand
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#where-a-loops-files-are" class="md-nav__link">
+    <span class="md-ellipsis">
+      Where a loop's files are
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#setup-elsewhere" class="md-nav__link">
+    <span class="md-ellipsis">
+      Setup elsewhere
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="run-stop-resume">Run, stop, resume<a class="headerlink" href="#run-stop-resume" title="Permanent link">&para;</a></h1>
+<p>Use this page after <a href="../tutorial/">creating</a> and <a href="../build-your-own/">configuring</a> a loop. In
+the web app, the same actions are a loop's <strong>Start</strong> and <strong>Stop</strong> (<a href="../../web/#a-loops-page">Tour</a>).
+Replace <code>sums</code> with your loop's folder. Commands use the active Flux environment.</p>
+<h2 id="check-before-running">Check before running<a class="headerlink" href="#check-before-running" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code>flux<span class="w"> </span>task<span class="w"> </span>check<span class="w"> </span>sums
+flux<span class="w"> </span>task<span class="w"> </span>run<span class="w"> </span>sums<span class="w"> </span>--passes<span class="w"> </span><span class="m">1</span><span class="w"> </span>--json<span class="w"> </span>sums/out/answer.json
+</code></pre></div>
+<p><code>task check</code> validates the document, lists the stages and required tools, and reports problems
+before a run: every file the document names must be in the folder (a missing one is listed with the
+key that names it and what the folder holds), and the golden model must run. It exits 2 when the
+document does not load (<code>not a task:</code>) and 1 when something is missing or refused (<code>MISSING:</code>,
+<code>REFUSED:</code>, or <code>WILL NOT RUN:</code> when a <code>flux</code>/<code>fluxpreset</code> command's words are refused by its own <code>--help</code>). Like a run, it runs in the <a href="#sandbox">sandbox</a>; <code>--no-sandbox</code> checks on this
+machine. It does not execute the candidate checks and measurements. A bounded first run checks the actual
+scripts and their output.</p>
+<p>A folder normally contains <code>problem.yaml</code>. Additional <code>NAME.problem.yaml</code> files describe
+alternate problems in the same folder and use separate records. When a folder contains several
+valid documents, specify the file explicitly for unattended runs:</p>
+<div class="highlight"><pre><span></span><code>flux<span class="w"> </span>task<span class="w"> </span>run<span class="w"> </span>sums/small.problem.yaml<span class="w"> </span>--passes<span class="w"> </span><span class="m">1</span>
+</code></pre></div>
+<h2 id="runtime-overrides">Runtime overrides<a class="headerlink" href="#runtime-overrides" title="Permanent link">&para;</a></h2>
+<p>Values in <code>budget</code> are persistent settings; command-line options override them for one run.
+Use <code>flux task run --help</code> for the complete command syntax.</p>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Effect</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--passes N</code></td>
+<td>Stop after N passes (one design each, however many run at once); default is <code>budget.passes</code>, or until stopped when omitted/zero</td>
+</tr>
+<tr>
+<td><code>--tries-per-pass N</code>, <code>--repairs-per-design N</code></td>
+<td>Override <code>budget.tries_per_pass</code> and <code>budget.repairs_per_design</code></td>
+</tr>
+<tr>
+<td><code>--db FILE</code></td>
+<td>Use a different record</td>
+</tr>
+<tr>
+<td><code>--out FILE</code></td>
+<td>Choose where the feasible decision artifact is written</td>
+</tr>
+<tr>
+<td><code>--json FILE</code></td>
+<td>Write the answer and results as JSON</td>
+</tr>
+<tr>
+<td><code>--tui</code></td>
+<td>Open the terminal task, log, and results view</td>
+</tr>
+<tr>
+<td><code>--model NAME</code>, <code>--think</code>, <code>--num-predict N</code></td>
+<td>Choose a model, request reasoning, and bound output tokens</td>
+</tr>
+<tr>
+<td><code>--role ROLE=NAME</code></td>
+<td>Override a role; <code>task check</code> lists available choices</td>
+</tr>
+<tr>
+<td><code>--agent orchestrate plan</code></td>
+<td>Give the direct model orchestration and planning; <code>all</code> enables both (its tool calls are <code>budget.tools</code>, on by default)</td>
+</tr>
+<tr>
+<td><code>--tool-hops N</code>, <code>--hop-share F</code>, <code>--patience N</code></td>
+<td>Override model tool rounds, context share, and prototype patience</td>
+</tr>
+<tr>
+<td><code>--no-prototype</code></td>
+<td>Disable prototype work</td>
+</tr>
+<tr>
+<td><code>--skill DIR</code></td>
+<td>Add a skill directory; repeatable</td>
+</tr>
+<tr>
+<td><code>--replies FILE</code></td>
+<td>Supply scripted model replies, useful for repeatable experiments</td>
+</tr>
+<tr>
+<td><code>--rerun-baseline</code></td>
+<td>Measure the <a href="../parameters/#baseline-pass-0">baseline</a> (pass 0) again, though the document's <code>baseline</code> is unchanged</td>
+</tr>
+<tr>
+<td><code>--reevaluate</code></td>
+<td>At this start, after the baseline: check and measure again every design on the record (those Invalidate set aside, else every one), after a check or measurement changed; then the passes</td>
+</tr>
+<tr>
+<td><code>--reevaluate-tabs accepted,failed</code></td>
+<td>With <code>--reevaluate</code>: only the designs of these Results tabs (accepted, rejected, failed, pending); all four, or none said, is every design</td>
+</tr>
+<tr>
+<td><code>--remeasure</code></td>
+<td>Measure again the designs a rejection asked for, then rest</td>
+</tr>
+<tr>
+<td><code>--no-sandbox</code></td>
+<td>Run on this machine, not in the <a href="#sandbox">sandbox</a> (also <code>FLUX_SANDBOX=0</code>)</td>
+</tr>
+</tbody>
+</table>
+<h2 id="stop-resume-and-keep-experiments-separate">Stop, resume, and keep experiments separate<a class="headerlink" href="#stop-resume-and-keep-experiments-separate" title="Permanent link">&para;</a></h2>
+<p>An unlimited run continues until you stop it. Limits and timeouts can end individual attempts
+or passes; a satisfied objective or a stalled search does not automatically end the run.
+Stop with Ctrl-C, <code>q</code> in the TUI, the browser's Stop action, or another terminal:</p>
+<div class="highlight"><pre><span></span><code>flux<span class="w"> </span>stop<span class="w"> </span>sums/out/sums.db<span class="w">        </span><span class="c1"># finish the current pass</span>
+flux<span class="w"> </span>stop<span class="w"> </span>sums/out/sums.db<span class="w"> </span>--now<span class="w">  </span><span class="c1"># interrupt immediately</span>
+</code></pre></div>
+<p>Run the document again to continue its record; unchanged measurements are reused. One run a
+record at a time: while a loop runs, from the browser or a terminal, a second start of it (the other
+way too) is refused with <code>not started: this loop's record (sums.db) is being run by pid N (...)</code>, naming the
+run that has it. While a terminal's run has it, the browser's Delete, Rename, Reset, Archive, Replace
+(import) and Set aside are refused the same way, and Stop says to stop that run where it runs. A run that was
+killed holds nothing. Changing the
+objective can reuse observations; changing the measurement changes what can be reused.</p>
+<p>A loop run as a <a href="../loop-shape/#two-ways-to-run-passes-or-a-trunk">trunk</a> stops the same way.
+<code>flux stop</code>: its agents' turns end, the running branches finish, the designs waiting stay for the
+next start. <code>--now</code>: everything ends; the designs that were running are kept, and the next start runs them first,
+then the ones waiting, and its agents go on where they were. <code>--passes N</code> counts hand-ins there; the queue drains after the last.</p>
+<h3 id="when-a-measurement-still-counts">When a measurement still counts<a class="headerlink" href="#when-a-measurement-still-counts" title="Permanent link">&para;</a></h3>
+<p>A measurement still counts (for the decision, the ranking, the best and the charts) until one of
+these changes for its stage: <strong>the measure command</strong> (its words; spacing, quoting and comments do
+not count), <strong>how its numbers are read</strong> (<code>metrics</code> / <code>metrics_re</code>, a dictionary's aggregate),
+<strong>its parameters</strong> (the document's <code>params:</code>, when the command takes <code>{params}</code>), <strong>its input
+files</strong> (the files and scripts the command uses), or <strong>its tools</strong> (the build of each program the
+stage runs or <code>needs</code>). Nothing else of the loop makes a measurement stale: not the prompt, other
+stages, the checks, objectives, cutoffs, agents and their settings, budgets, names, comments, or
+files no measurement reads (a README, notes).</p>
+<p>A change counts from when the loop judges it: at the loop's next start, or at once when the file is
+saved on the page (the configurator, the Files editor) and the loop is not running. A file edited
+elsewhere (a shell, an agent) is judged at the next start; until then every page and <code>flux loop
+summary</code> say the last judgement, and when it was made ("what counts was judged ... by ...").</p>
+<p>When a stage changes, its older measurements stop counting, but nothing is hidden: in Results
+they keep their numbers and their tab, muted, with a "measured before a change" mark; the
+decision, the pool, the best and every chart leave them out, as the loop does. The loop's
+<strong>Overview</strong> says so on top, in the card a failed start uses ("12 designs were measured before a
+change to how synth is measured (the measure command and input file a.txt)"), and the loop's
+owner or an editor chooses:</p>
+<ul>
+<li><strong>Accept as current</strong>: the measurements count again, at once, for the loop and every page (audited);</li>
+<li><strong>Leave as stale</strong>: they stay uncounted and the card is closed for that change; a later change
+  shows the card again;</li>
+<li><strong>Re-measure</strong>: those designs are checked and measured again under today's setup: by the running
+  loop before its next pass, else by a run of its own that starts at once.</li>
+</ul>
+<p>For a separate experiment, use a fresh <code>--db</code> or a new folder name. Copying a folder's generated
+<code>out/</code> and <code>workbench/</code> also copies its history and agent files; leave them out for a fresh loop.
+In the browser, a stopped loop's <strong>Settings › Preferences › Archive, reset or delete</strong> offers Reset, which
+asks what to keep.
+Reset removes generated data while retaining the source document and scripts.</p>
+<p>For a process that outlives the terminal:</p>
+<div class="highlight"><pre><span></span><code>flux<span class="w"> </span>run<span class="w"> </span>--<span class="w"> </span>flux<span class="w"> </span>task<span class="w"> </span>run<span class="w"> </span>sums
+flux<span class="w"> </span>status<span class="w"> </span>sums/out/sums.db
+flux<span class="w"> </span>attach<span class="w"> </span>sums/out/sums.db
+</code></pre></div>
+<h3 id="upgrading-older-loops">Upgrading older loops<a class="headerlink" href="#upgrading-older-loops" title="Permanent link">&para;</a></h3>
+<p>Flux never upgrades a document silently. <code>flux task migrate FOLDER</code> shows what would change in a
+loop's documents and <code>--write</code> saves them (the original kept as <code>&lt;file&gt;.orig</code>). This Flux reads documents
+from the format of Nov 12, 2026 on, and records from version 7 on: no document step is above that yet, so the
+command says every document of today current. A record of an older version, or a loop file of an older format,
+is refused saying the commit that still brings it up -- open the loop with Flux 9957e3728, run
+<code>flux task migrate --write</code> (and a start, or Compact and check, for its record) there, and export it again. A
+document saying a key of an older document is refused naming the key and Flux e7a0f9cba, which says what became
+of it.</p>
+<h3 id="moving-a-loop-in-one-file">Moving a loop in one file<a class="headerlink" href="#moving-a-loop-in-one-file" title="Permanent link">&para;</a></h3>
+<p><code>flux loop export</code> writes a loop as one <code>.zip</code>, as the web's Settings › Export does (see
+<a href="../../web/files/#export-and-import">Export and import</a>); <code>flux loop import</code> replaces a loop's
+contents from one, with the same checks:</p>
+<div class="highlight"><pre><span></span><code>flux<span class="w"> </span>loop<span class="w"> </span><span class="nb">export</span><span class="w"> </span>sums<span class="w"> </span>--loop-only<span class="w"> </span>-o<span class="w"> </span>sums.loop.zip<span class="w">     </span><span class="c1"># the document, files and library (hidden files too)</span>
+flux<span class="w"> </span>loop<span class="w"> </span><span class="nb">export</span><span class="w"> </span>ada/sums<span class="w"> </span>--full<span class="w"> </span>-o<span class="w"> </span>sums.full.zip<span class="w">      </span><span class="c1"># and the record, workbench, answer, notes (a web loop: USER/LOOP)</span>
+flux<span class="w"> </span>loop<span class="w"> </span>import<span class="w"> </span>sums.full.zip<span class="w"> </span>--into<span class="w"> </span>other<span class="w"> </span>--dry-run<span class="w">  </span><span class="c1"># every check, nothing replaced</span>
+flux<span class="w"> </span>loop<span class="w"> </span>import<span class="w"> </span>sums.loop.zip<span class="w"> </span>--into<span class="w"> </span>ada/sums<span class="w"> </span>--keep-results<span class="w"> </span>--json
+</code></pre></div>
+<p><code>LOOP</code> is a loop's folder or <code>USER/LOOP</code> of the web server's data (<code>--data</code>; then a running loop
+is refused and both are on the audit). Import keeps the loop's name and settings, migrates the
+file's documents up from the format of Nov 12, 2026 (an older file, a record in it older than version 7, or a newer file
+is refused, the older ones naming the Flux that brings them up), runs nothing of it, and leaves the loop as it was
+on any refusal. Exit 0 done, 1 refused, 2 the loop or the file is not
+there.</p>
+<h2 id="read-the-result-and-full-output">Read the result and full output<a class="headerlink" href="#read-the-result-and-full-output" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code>flux<span class="w"> </span>loop<span class="w"> </span>summary<span class="w"> </span>--loop<span class="w"> </span>sums/out/sums.db<span class="w"> </span>--html
+flux<span class="w"> </span>log<span class="w"> </span>sums/out/sums.db
+</code></pre></div>
+<p>The report shows measured designs, trade-offs, refusals, and the standing design. The chosen
+artifact is written under <code>out/</code> only when a design meets the requirements. An estimated metric
+or a shallower screening result should not be read as a confirmed measurement.</p>
+<table>
+<thead>
+<tr>
+<th><code>task run</code> exit</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>0</code></td>
+<td>A measured design meets every requirement; the decision artifact is written</td>
+</tr>
+<tr>
+<td><code>3</code></td>
+<td>Correct designs were measured, but none meets every requirement; the report shows the shortfall</td>
+</tr>
+<tr>
+<td><code>1</code></td>
+<td>No design was measured, or the run could not start</td>
+</tr>
+<tr>
+<td><code>130</code></td>
+<td>Interrupted</td>
+</tr>
+</tbody>
+</table>
+<p>In the web app, a loop's <a href="../../web/live/">Live</a> tab shows passes, tools, agent activity, and
+their output as a graph and a timeline. Its <strong>Start</strong> picker opens an older start; its tasks and
+conversations belong to that start.
+Files, logs, and results provide raw or fullscreen views. History is available while its files
+and records are retained; resetting a loop clears the generated history.</p>
+<h3 id="read-a-loop-from-a-shell">Read a loop from a shell<a class="headerlink" href="#read-a-loop-from-a-shell" title="Permanent link">&para;</a></h3>
+<p><code>flux loop</code> reads a loop's results back, one question a command, read-only, so a running loop is
+safe. Name the loop with <code>--loop FOLDER</code> (a folder, a
+document or a record file; default: the current folder); every command takes <code>--json</code>. The
+options are in <a href="../../reference/cli/#flux-loop">the CLI reference</a>.</p>
+<table>
+<thead>
+<tr>
+<th>Command</th>
+<th>What it answers</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>flux loop summary</code></td>
+<td>The loop's state: running or not, its last phase, the budget, how many at once, a trunk's queue, its stages and checks; the baseline, the best per objective and the standing pick, each against the baseline</td>
+</tr>
+<tr>
+<td><code>flux loop passes [--last N]</code></td>
+<td>Each pass: its direction and why, its decision; "checks changed at pass N" where the document's checks or stages changed</td>
+</tr>
+<tr>
+<td><code>flux loop notes</code></td>
+<td>The people's notes and the decisions' reasons</td>
+</tr>
+<tr>
+<td><code>flux loop results [--top N] [--stage S\|all] [--goals]</code></td>
+<td>The measured designs ranked by the loop's objectives, meeting or missing the goals</td>
+</tr>
+<tr>
+<td><code>flux loop tried [--failed] [--gate G] [--match TEXT]</code></td>
+<td>Every design tried: how far it got, its numbers or why it stopped; a draft a stop cut before it was handed in, "stopped before handed in"</td>
+</tr>
+<tr>
+<td><code>flux loop show NAME [--rows]</code></td>
+<td>One design whole: its pass, its idea, its gate check by check, each stage's numbers or error, what changed since it was judged; <code>--rows</code>: every row of it in order</td>
+</tr>
+<tr>
+<td><code>flux loop design NAME [--print]</code></td>
+<td>A design's files, written read-only to a folder of yours, one path a line</td>
+</tr>
+<tr>
+<td><code>flux loop compare A B ...</code>, <code>flux loop diff A [B]</code></td>
+<td>Designs side by side, metric by metric; two designs (or a design and a file) line by line, or one design against the design it was built from (else the baseline); <code>--stat</code> counts the lines</td>
+</tr>
+<tr>
+<td><code>flux loop stages</code></td>
+<td>Each stage: designs reached, passed, refused, running; how long its rows take</td>
+</tr>
+<tr>
+<td><code>flux loop events [--kind K] [--since 2h]</code></td>
+<td>The record's events; <code>--since</code> those after a time ago or an ISO time</td>
+</tr>
+<tr>
+<td><code>flux loop ideas [--top]</code></td>
+<td>The ideas notebook, the best-scored first, with each idea's evidence</td>
+</tr>
+<tr>
+<td><code>flux loop starred</code></td>
+<td>The designs people starred in Results</td>
+</tr>
+</tbody>
+</table>
+<p>A first look at a loop:</p>
+<div class="highlight"><pre><span></span><code>flux<span class="w"> </span>loop<span class="w"> </span>summary<span class="w"> </span>--loop<span class="w"> </span>sums
+flux<span class="w"> </span>loop<span class="w"> </span>results<span class="w"> </span>--top<span class="w"> </span><span class="m">5</span><span class="w"> </span>--loop<span class="w"> </span>sums
+flux<span class="w"> </span>loop<span class="w"> </span>tried<span class="w"> </span>--failed<span class="w"> </span>--loop<span class="w"> </span>sums
+flux<span class="w"> </span>loop<span class="w"> </span>show<span class="w"> </span><span class="s1">'#6'</span><span class="w"> </span>--loop<span class="w"> </span>sums
+</code></pre></div>
+<h2 id="sandbox">Sandbox<a class="headerlink" href="#sandbox" title="Permanent link">&para;</a></h2>
+<p><code>flux task check</code>, <code>flux task run</code> and <code>flux ask</code> run inside a container, so neither an agent nor
+the document's own code (its commands, scripts, <code>golden.py</code>) can touch the rest of the machine.
+The engine is rootless Podman when installed, else Docker (<code>FLUX_SANDBOX_ENGINE=podman|docker</code>).
+Without either, these commands stop with <code>the sandbox needs Podman or Docker</code>.</p>
+<ul>
+<li><strong>It sees</strong> the host read-only: the system, <code>/nix/store</code>, Flux itself, the programs on PATH,
+  and the loop's folder.</li>
+<li><strong>It writes</strong> only the loop's <code>out/</code> and <code>workbench/</code> and the loop's own cache. Scratch is gone
+  after the run, and a loop's <strong>Scratch /tmp size</strong> (Admin › Runtime › Sandbox, or the loop's Settings ›
+  Advanced) caps it on disk: write what must last under the loop's <code>out/</code> or <code>workbench/</code>.</li>
+<li><strong>Its home</strong> holds the agents' configuration and logins for Flux, not your own home: <code>~/.ssh</code>,
+  other repositories and the Docker socket are not there.</li>
+<li><strong>Network</strong> is the host's by default. <code>FLUX_SANDBOX_ALLOW=host,domain,10.0.0.0/8</code> limits HTTP(S)
+  to those destinations; add <code>FLUX_SANDBOX_RAW_NETWORK=1</code> for direct TCP/UDP to them (needs <code>nft</code>
+  on the host). Behind a proxy, <code>HTTP_PROXY</code>/<code>HTTPS_PROXY</code>/<code>NO_PROXY</code> pass in; an allowlist's hosts
+  are reached through it. On a server, its admin sets it (<a href="../../web/admin/#proxy">Proxy</a>).</li>
+<li><strong>Limits:</strong> <code>FLUX_SANDBOX_MEMORY</code> in GB (e.g. <code>16</code>), <code>FLUX_SANDBOX_CPUS</code>, <code>FLUX_SANDBOX_PIDS</code> (default
+  4096), <code>FLUX_SANDBOX_TMP_SIZE</code> in GB (e.g. <code>0.5</code>). On a server, its admin's defaults and maximums apply
+  (<a href="../../web/admin/#sandbox">Sandbox limits</a>), and the server stops the biggest loop before the
+  machine runs out of memory (<a href="../../web/admin/#the-memory-guard">The memory guard</a>).</li>
+<li><strong>Off:</strong> <code>--no-sandbox</code> or <code>FLUX_SANDBOX=0</code> runs on this machine as you. Use it only for code
+  you trust, such as the <a href="../tutorial/">first loop</a>.</li>
+<li><strong>Where Podman keeps its state:</strong> <code>FLUX_SANDBOX_STORAGE</code> names its storage and
+  <code>FLUX_SANDBOX_RUNTIME</code> its runtime folder (by default <code>/run/user/&lt;uid&gt;</code>, else <code>/tmp</code>).</li>
+</ul>
+<h3 id="when-the-sandbox-cannot-start">When the sandbox cannot start<a class="headerlink" href="#when-the-sandbox-cannot-start" title="Permanent link">&para;</a></h3>
+<p>A start that cannot reach the engine stops with what the engine said and what to do, for example
+<code>the podman sandbox cannot start: ...</code>. Check that the command it names (<code>podman ... info</code>)
+answers as the account that runs Flux. Flux repairs Podman's own state by itself when no Flux
+container runs, and says so in the loop's log.</p>
+<p>To keep Podman's state in one place, let the account linger (<code>sudo loginctl enable-linger &lt;user&gt;</code>)
+before its first sandboxed run, or name a folder with <code>FLUX_SANDBOX_RUNTIME</code> (for a system service,
+in its environment file); keep that folder's path short, as Podman refuses long ones (the error says
+how long it may be). <strong><code>... belongs to another account</code></strong>: remove the folder it names as root, or
+set <code>FLUX_SANDBOX_RUNTIME</code> to a folder of the account's.</p>
+<h2 id="compiling">Compiling<a class="headerlink" href="#compiling" title="Permanent link">&para;</a></h2>
+<p>Checks, measurements and an agent's probes often build C or C++ (a Verilator testbench, a simulator, a benchmark).
+Flux sets three things for every tool it runs, in the sandbox or not, and its built-in checks and measurements
+use them:</p>
+<ul>
+<li><strong>Flux clears <code>MAKEFLAGS</code>.</strong> A <code>-j</code> inherited from your shell's profile (<code>MAKEFLAGS=-j32</code>) would make
+  Verilator's own make build one file at a time. Never put <code>-j</code> in <code>MAKEFLAGS</code> in a script.</li>
+<li><strong>Use <code>FLUX_JOBS</code></strong> for a build's parallelism: <code>make -j"$FLUX_JOBS"</code>, <code>verilator --build-jobs "$FLUX_JOBS"</code>,
+  <code>cmake --build . -j "$FLUX_JOBS"</code>, <code>ninja -j "$FLUX_JOBS"</code>. For a check or a measurement it is the cores of its
+  <a href="../parameters/#resource-hints-needs">resource hint</a> (<code>needs: {cores: 8}</code>), never above the sandbox's CPU
+  limit; with no cores said, and for a tool run outside them, it is the machine's cores shared among the loop's tool
+  slots (cores ÷ <code>tools_at_once</code>, at least 1).</li>
+<li><strong>ccache is on.</strong> Each user has a cache of their own (<code>ccache/&lt;user&gt;</code> in Flux's cache folder, at most 10 GB),
+  shared by all of that user's loops and runs, so a design built again, or the same files in another design's folder,
+  compile in a fraction of the time. No user's run can read or write another user's cache: a shared one would let a
+  run plant a compiled file that another user's build then uses. Each user's first builds fill their own cache.
+  Verilator's builds use it on their own. Another build uses it with <code>CC="ccache gcc" CXX="ccache g++"</code>, or with
+  <code>PATH="$FLUX_CCACHE_BIN:$PATH"</code>, where <code>gcc</code>, <code>g++</code>, <code>cc</code>, <code>c++</code>, <code>clang</code> and <code>clang++</code> go through ccache. A
+  build that does neither is not cached. The tool's step in Live says the run's ccache hits and misses; Admin ›
+  Activity › Resources says each user's cache's size.</li>
+</ul>
+<p>The built-in checks and measurements build with <code>FLUX_JOBS</code> and through your ccache on their own, and within a pass
+the steps of one design share what they built: <code>rtl measure --stage place</code> after <code>--stage synth</code> at the same clock
+and settings continues from the synthesised floorplan, <code>rtl power</code>, <code>energy</code>, <code>path</code> and <code>breakdown</code> read a stage
+already made, and <code>rtl cycles</code>, <code>power</code> and <code>energy</code> run the model the golden test built. To benefit, measure a
+design's stages at the same <code>--clock-ps</code>. Nothing is shared with another design, loop or user, and none of it changes
+a number, a verdict or a netlist.</p>
+<h2 id="system-service">System service<a class="headerlink" href="#system-service" title="Permanent link">&para;</a></h2>
+<p>A server for a team runs as a system service, set up by one command, as root, from <code>flux/</code>:</p>
+<div class="highlight"><pre><span></span><code>sudo<span class="w"> </span>python3<span class="w"> </span>scripts/install-service.py<span class="w"> </span>--<span class="w"> </span>--host<span class="w"> </span><span class="m">0</span>.0.0.0<span class="w"> </span>--port<span class="w"> </span><span class="m">8765</span>
+</code></pre></div>
+<p>Options for <code>flux serve</code> go after <code>--</code>. The service runs neither as you nor from your checkout:</p>
+<table>
+<thead>
+<tr>
+<th>What</th>
+<th>Where</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Account</td>
+<td><code>flux</code>, a system user (<code>--account</code>)</td>
+</tr>
+<tr>
+<td>Code</td>
+<td>its own clone, <code>/opt/flux/src</code> (<code>--src</code>), of <code>main</code> from your checkout's origin (<code>--origin</code>, <code>--branch</code>)</td>
+</tr>
+<tr>
+<td>Web data</td>
+<td><code>/var/lib/flux/web</code></td>
+</tr>
+<tr>
+<td>Sandbox home</td>
+<td><code>/var/lib/flux/home</code>, the account's HOME, where its agents log in</td>
+</tr>
+<tr>
+<td>Caches</td>
+<td><code>/var/cache/flux</code></td>
+</tr>
+<tr>
+<td>Settings</td>
+<td><code>/etc/flux/service.env</code>, one <code>NAME=value</code> a line</td>
+</tr>
+</tbody>
+</table>
+<p>In order, the command makes the account, lets it use Nix (<a href="#nix-for-the-flux-account">below</a>),
+gives it sub-ids and linger (rootless Podman needs both), lets Podman limit its jobs
+(<a href="#cgroup-delegation-for-the-flux-account">below</a>), clones the code as the account, creates
+<code>/etc/flux/service.env</code> (with your proxy settings, <a href="#behind-a-proxy">below</a>), installs the unit,
+builds the environment, makes the first admin account when there is none (it asks for a password),
+and turns the service on. Each step is skipped when it is already done, so it can run again after
+a fix. For an SSH origin it first makes the account a key and stops until that key is a read-only
+deploy key of the repository. For an HTTPS origin, see <a href="#a-private-repository-over-https">A private repository over
+HTTPS</a>.</p>
+<p><code>--dry-run</code> needs no root: it says what is there and what is missing, and prints the unit and every
+step, writing nothing. The service is protected from the out-of-memory killers (<code>--oom-score-adjust</code>,
+default -500; <code>--memory-low 2G</code> keeps memory for it) and starts at boot. <code>journalctl -u flux.service -f</code>
+shows it.</p>
+<p>At the end the command prints how each agent logs in as the account (<code>codex login</code>,
+<code>claude setup-token</code>, <code>opencode auth login</code>); a web user logs in in <strong>Account › Agents</strong>.</p>
+<p>A <code>flux serve</code> started by hand is for development only.</p>
+<h3 id="the-environment-is-built-before-the-restart">The environment is built before the restart<a class="headerlink" href="#the-environment-is-built-before-the-restart" title="Permanent link">&para;</a></h3>
+<p>Updates go through <a href="../../web/admin/#version">Admin › Server › Version</a>. An update that changes Flux's
+toolchain builds its new environment first, while the old server keeps serving, and the server
+restarts only once that build has finished; a failed build leaves the server running as it was. A
+code-only update restarts in seconds. Admin › Server › Version shows the build's state.</p>
+<p>Updates never stop running loops: they finish on the version they started on, and their next start
+uses the new one.</p>
+<h3 id="host-commands-as-the-flux-account">Host commands as the flux account<a class="headerlink" href="#host-commands-as-the-flux-account" title="Permanent link">&para;</a></h3>
+<p><code>flux web-loop</code> and <code>flux web-agent</code> (<a href="../../web/admin/#loops-from-the-servers-machine">from the server's machine</a>)
+must run as the <code>flux</code> account, in the service's prepared environment:</p>
+<div class="highlight"><pre><span></span><code>sudo<span class="w"> </span>-u<span class="w"> </span>flux<span class="w"> </span>-H<span class="w"> </span>env<span class="w"> </span>-C<span class="w"> </span>/<span class="w"> </span><span class="nv">FLUX_DATA_HOME</span><span class="o">=</span>/var/lib/flux<span class="w"> </span>sh<span class="w"> </span>/opt/flux/src/flux/scripts/flux-env.sh<span class="w"> </span>run<span class="w"> </span>flux<span class="w"> </span>web-agent<span class="w"> </span><span class="nb">test</span>
+</code></pre></div>
+<p>Run as yourself, they say "permission denied on …" and print this command.</p>
+<h3 id="nix-for-the-flux-account">Nix for the flux account<a class="headerlink" href="#nix-for-the-flux-account" title="Permanent link">&para;</a></h3>
+<p>The account runs the daemon's (multi-user) Nix, and the daemon decides two things from
+<code>/etc/nix/nix.conf</code>. The installer reads both (<code>nix config show</code>, else
+<code>nix show-config</code>, else the file and what it includes, never your own <code>~/.config/nix</code>) and
+sets what is missing itself:</p>
+<ul>
+<li><strong>May it use Nix?</strong> <code>allowed-users</code> must name it, a group of it, or <code>*</code>. When it does not,
+  the installer adds <code>flux</code> to it (your entries kept).</li>
+<li>
+<p><strong>Does it get the binary caches?</strong> The flake's <code>nixConfig</code> names a cache (its substituters and
+  keys are read from <code>flake.nix</code>). Nix uses it for an untrusted account only when the cache is
+  in <code>substituters</code> or <code>trusted-substituters</code> and its key in <code>trusted-public-keys</code>. Otherwise
+  OpenROAD and the other tools build from source, which takes hours. The installer adds what is
+  missing, for example:</p>
+<div class="highlight"><pre><span></span><code><span class="c1"># Flux: the account that runs Flux and the binary caches its tools come from (written by its installer)</span>
+<span class="na">extra-allowed-users</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">flux</span>
+<span class="na">extra-substituters</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">https://nixchip0.cachix.org</span>
+<span class="na">extra-trusted-substituters</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">https://nixchip0.cachix.org</span>
+<span class="na">extra-trusted-public-keys</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">nixchip0.cachix.org-1:nT5gEHc4661JFHoDukEnF1NFQ0XvS0TE7P370HLm4Ng=</span>
+<span class="c1"># end of Flux</span>
+</code></pre></div>
+<p>It writes this block to <code>/etc/nix/nix.custom.conf</code> when <code>nix.conf</code> includes that file (the
+Determinate installer's), else to the end of <code>nix.conf</code>, after copying the file once to
+<code>nix.conf.before-flux</code>. Lines you added yourself are found and left alone. After a change it
+runs <code>systemctl restart nix-daemon</code> and checks, as the account, that Nix now shows the values.
+On NixOS (<code>nix.conf</code> made by the system's configuration) it prints the <code>nix.settings</code> to add
+and stops. With <code>FLUX_INSTALL_BUILD=1</code> it leaves the caches alone.</p>
+</li>
+<li>
+<p><strong>Can it reach the daemon's socket?</strong> This is decided by the files' modes, not by <code>nix.conf</code>.
+  Debian's and Ubuntu's <code>nix</code> package (<code>/usr/bin/nix</code>) makes <code>/nix/var/nix/daemon-socket</code>
+  <code>root:nix-users 0750</code>, so an account outside <code>nix-users</code> gets "getting status of
+  /nix/var/nix/daemon-socket/socket: Permission denied" even when <code>allowed-users = *</code>. The
+  installer reads the folder's and the socket's group and mode. When only their group may reach
+  them, it adds the account to that group (<code>usermod -aG nix-users flux</code>), never to
+  <code>root</code>, <code>wheel</code>, <code>sudo</code>, <code>admin</code> or <code>adm</code>. When only such a group or only the owner may reach
+  them, it stops and says so.</p>
+</li>
+</ul>
+<p>The report also says which <code>nix</code> the service runs: <code>/nix/var/nix/profiles/default/bin/nix</code> when
+it is there, else the <code>nix</code> on your PATH (<code>/usr/bin/nix</code> with a distribution's package). It
+names Nix's version and warns when it is older than the flake needs (Nix 2.4, the first with
+flakes, for its <code>flake.lock</code>). It also says whether that <code>nix</code> is a client of the daemon. With
+no daemon socket, Nix is single-user, which cannot serve another account.</p>
+<p>Each time it runs, the installer reads the settings again and tries Nix as the account:
+<code>nix store info</code> from Nix 2.19, <code>nix store ping</code> before it (an older Nix does not know
+<code>store info</code>), and the other one if the first fails. A daemon that closes
+the connection ("Connection reset by peer": it has not read its settings since they let the
+account in) is restarted once. If both still fail, it stops and prints both commands' errors.
+Listing <code>flux</code> in <code>trusted-users</code> would also do all of this, but a trusted user can do nearly
+what root can, so the installer never does it.</p>
+<h3 id="cgroup-delegation-for-the-flux-account">cgroup delegation for the flux account<a class="headerlink" href="#cgroup-delegation-for-the-flux-account" title="Permanent link">&para;</a></h3>
+<p>Rootless Podman limits a job's CPU, memory and processes inside the account's systemd user
+manager (<code>user@&lt;uid&gt;.service</code>). It can do that only when systemd hands the manager the <code>cpu</code>,
+<code>memory</code> and <code>pids</code> controllers. The host must use cgroup v2. On an older host that still uses
+cgroup v1 or the hybrid mode, the installer stops and says to boot with
+<code>systemd.unified_cgroup_hierarchy=1</code>. It never switches the mode itself.</p>
+<p>When the account's manager lacks one of those controllers, the installer:</p>
+<ol>
+<li>
+<p>Writes <code>/etc/systemd/system/user@.service.d/delegate.conf</code>:</p>
+<div class="highlight"><pre><span></span><code><span class="k">[Service]</span>
+<span class="na">Delegate</span><span class="o">=</span><span class="s">cpu cpuset io memory pids</span>
+</code></pre></div>
+<p>It leaves your files alone when one of them, or systemd's own default, already delegates
+them. A <code>delegate.conf</code> of yours that delegates too little is first copied to
+<code>delegate.conf.before-flux</code>.
+2. Runs <code>systemctl daemon-reload</code>.
+3. Restarts the account's manager, and no other user's, when nothing of the account's runs under
+   it. If something is still running there, it stops instead and asks you to restart
+   <code>user@&lt;uid&gt;.service</code> once that has finished, or to reboot. Then run the installer again.
+4. Checks that the manager now has the controllers.</p>
+</li>
+</ol>
+<p>When the controllers are already there, it changes nothing and prints nothing.</p>
+<h3 id="a-private-repository-over-https">A private repository over HTTPS<a class="headerlink" href="#a-private-repository-over-https" title="Permanent link">&para;</a></h3>
+<p>With an HTTPS origin (<code>--origin https://...</code>), the account needs a credential for the clone and
+for <strong>Admin › Server › Version</strong>'s fetch. The report says whether the account has one for the origin's
+host and whether your <code>~/.git-credentials</code> has a line for that host. It never shows a token.
+The installer first tries <code>git ls-remote</code> as the account, which needs nothing for a public
+repository. If that fails:</p>
+<ul>
+<li>It copies only your <code>~/.git-credentials</code> line or lines for the origin's host into the
+  account's <code>/var/lib/flux/home/.git-credentials</code> (0600, owned by <code>flux</code>) and sets
+  <code>credential.helper store</code> in its <code>~/.gitconfig</code>. Lines for other hosts are never copied.</li>
+<li>
+<p>With <code>--no-git-credentials</code>, or when you have no line for the host, it copies nothing. It
+  prints the steps and stops. To store a token as the account, typed so it stays out of the
+  shell's history:</p>
+<div class="highlight"><pre><span></span><code>sudo<span class="w"> </span>-u<span class="w"> </span>flux<span class="w"> </span>-H<span class="w"> </span>bash<span class="w"> </span>-c<span class="w"> </span><span class="s1">'read -rsp "Token for github.com: " t; echo; git config --global credential.helper store; printf "protocol=https\nhost=github.com\nusername=x-access-token\npassword=%s\n\n" "$t" | git credential approve'</span>
+</code></pre></div>
+</li>
+</ul>
+<p>Use a token of its own rather than a broader personal one: a fine-grained token for this
+repository only, with <strong>Contents: read-only</strong>. The server's fetch uses the same stored credential
+and never prompts either.</p>
+<h3 id="behind-a-proxy">Behind a proxy<a class="headerlink" href="#behind-a-proxy" title="Permanent link">&para;</a></h3>
+<p>A systemd service gets none of your shell's variables, so behind a proxy its first start times
+out fetching the flake's inputs from GitHub. The report lists your <code>http_proxy</code>, <code>https_proxy</code>,
+<code>all_proxy</code> and <code>no_proxy</code> (in either case) by name and the proxy's host:port only; under <code>sudo</code>,
+which keeps none of them, it reads them from the shell you ran <code>sudo</code> from. A user and
+password in a proxy URL are never shown. The report also says whether <code>nix-daemon</code> has a proxy.
+The installer then:</p>
+<ul>
+<li>writes them into <code>/etc/flux/service.env</code>, each only if that file does not set it already. A
+  proxy URL with a user and password is never written; it names it for you to add by hand. With
+  <code>--no-proxy-env</code> it writes nothing and prints the lines instead.</li>
+<li>
+<p>prints, when <code>nix-daemon</code> has no proxy, the lines for its binary cache downloads. It never
+  edits the daemon itself:</p>
+<div class="highlight"><pre><span></span><code>sudo<span class="w"> </span>systemctl<span class="w"> </span>edit<span class="w"> </span>nix-daemon<span class="w">    </span><span class="c1"># add:</span>
+<span class="o">[</span>Service<span class="o">]</span>
+<span class="nv">Environment</span><span class="o">=</span><span class="nv">https_proxy</span><span class="o">=</span>http://proxy.example:3128
+sudo<span class="w"> </span>systemctl<span class="w"> </span>restart<span class="w"> </span>nix-daemon
+</code></pre></div>
+</li>
+<li>
+<p>tries each GitHub input of <code>flake.lock</code> as the account, with those variables (<code>curl</code>, 15 s).
+  A timeout points to a proxy it lacks. A 404 means a private input: Nix needs a token in the
+  account's own <code>~/.config/nix/nix.conf</code> (<code>access-tokens = github.com=&lt;token&gt;</code>), and the step
+  prints how to store one without it landing in the shell's history.</p>
+</li>
+</ul>
+<h3 id="moving-the-servers-data-by-hand">Moving the server's data by hand<a class="headerlink" href="#moving-the-servers-data-by-hand" title="Permanent link">&para;</a></h3>
+<p>Never copy the server's database (<code>flux-web.db</code>) alone while the server runs. Either copy the
+backup that <strong>Admin › Server › Maintenance › Compact and check</strong> saved (with <strong>backups kept</strong> over 0), or stop the server first
+(<a href="../../web/admin/#backups-and-restore">Backups and restore</a>). The next start refuses a database
+with stray files beside it and says which to move aside.</p>
+<p>After copying a server's data to new folders by hand, run <code>flux web-move</code> with the service
+stopped, so the records name the new folders (a dry run first, then the same with <code>--write</code>):</p>
+<div class="highlight"><pre><span></span><code>sudo<span class="w"> </span>systemctl<span class="w"> </span>stop<span class="w"> </span>flux.service
+sudo<span class="w"> </span>runuser<span class="w"> </span>-u<span class="w"> </span>flux<span class="w"> </span>--<span class="w"> </span>env<span class="w"> </span><span class="nv">HOME</span><span class="o">=</span>/var/lib/flux/home<span class="w"> </span><span class="nv">FLUX_DATA_HOME</span><span class="o">=</span>/var/lib/flux<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span><span class="nv">FLUX_CACHE_HOME</span><span class="o">=</span>/var/cache/flux<span class="w"> </span><span class="nv">FLUX_ROOT</span><span class="o">=</span>/opt/flux/src/flux<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>sh<span class="w"> </span>-c<span class="w"> </span><span class="s1">'cd /opt/flux/src/flux &amp;&amp; nix develop --accept-flake-config --command flux web-move \</span>
+<span class="s1">    --from-data /home/you/.local/share/flux/web --from-cache /home/you/.cache/flux \</span>
+<span class="s1">    --from-source /home/you/src/flux/flux'</span>
+sudo<span class="w"> </span>systemctl<span class="w"> </span>start<span class="w"> </span>flux.service
+</code></pre></div>
+<p><code>--from-source</code> is the folder of your own checkout's <code>flake.nix</code>. A second run changes nothing.</p>
+<h3 id="where-a-loops-files-are">Where a loop's files are<a class="headerlink" href="#where-a-loops-files-are" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>folder</th>
+<th>what is in it</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>out/</code></td>
+<td>the results: designs, measurements, decisions</td>
+</tr>
+<tr>
+<td><code>runs/</code></td>
+<td>the log, the notes, the answer, the loop's conversations</td>
+</tr>
+<tr>
+<td><code>workbench/</code></td>
+<td>the agents' notes and tools</td>
+</tr>
+</tbody>
+</table>
+<p>Everything else Flux writes for a loop is scratch, which the clean-ups may delete.</p>
+<h2 id="setup-elsewhere">Setup elsewhere<a class="headerlink" href="#setup-elsewhere" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Installing Flux, the web app and the hardware tools: <a href="../../start/install/">Install</a>.</li>
+<li>FluxAgent and the coding agents: <a href="../models/">Models and agents</a>.</li>
+<li>Following runs in the browser: <a href="../../web/">Web app</a>.</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../cookbook/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Recipes">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Recipes
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../models/" class="md-footer__link md-footer__link--next" aria-label="Next: Models and agents">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                Models and agents
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">© 2026 Flux</div>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      <script id="__config" type="application/json">{"base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.footer", "content.code.copy", "content.code.annotate", "toc.follow", "search.suggest"], "search": "../../assets/javascripts/workers/search.973d3a69.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.f55a23d4.min.js"></script>
+      
+    
+  </body>
+</html>

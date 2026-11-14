@@ -1,0 +1,1693 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Flux searches for better designs: it makes them with a script, a model or a coding agent, checks and measures them with real tools, and decides from your objectives.">
+      
+      
+      
+        <link rel="canonical" href="https://choelzl.github.io/flux/web/live/">
+      
+      
+        <link rel="prev" href="../">
+      
+      
+        <link rel="next" href="../results/">
+      
+      
+      <link rel="icon" href="../../assets/app/logo.svg">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.6.23">
+    
+    
+      
+        <title>Live - Flux</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.84d31ad4.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.06af60db.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/flux-theme.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#live" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="Flux" class="md-header__button md-logo" aria-label="Flux" data-md-component="logo">
+      <svg class="flux-logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" aria-label="Flux"><g fill="currentColor"><rect x="78" y="8" width="16" height="28" rx="8"/><rect x="120" y="8" width="16" height="28" rx="8"/><rect x="162" y="8" width="16" height="28" rx="8"/><rect x="120" y="220" width="16" height="28" rx="8"/><rect x="162" y="220" width="16" height="28" rx="8"/><rect x="8" y="78" width="28" height="16" rx="8"/><rect x="8" y="120" width="28" height="16" rx="8"/><rect x="8" y="162" width="28" height="16" rx="8"/><rect x="220" y="78" width="28" height="16" rx="8"/><rect x="220" y="120" width="28" height="16" rx="8"/><rect x="220" y="162" width="28" height="16" rx="8"/></g><rect x="78" y="208" width="16" height="40" rx="8" fill="#f66824"/><g fill="none" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"><rect x="40" y="40" width="176" height="176" rx="32" stroke="currentColor"/><path d="M86 248V118A32 32 0 0 1 118 86H174" stroke="#f66824"/><path d="M128 248V146A18 18 0 0 1 146 128H166" stroke="currentColor"/></g></svg>
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Flux
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Live
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/choelzl/flux" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    choelzl/flux
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../start/install/" class="md-tabs__link">
+          
+  
+  
+  Get started
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../guide/build-your-own/" class="md-tabs__link">
+          
+  
+  
+  Guides
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../" class="md-tabs__link">
+          
+  
+  
+  Web app
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../preview/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Preview app
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../guide/parameters/" class="md-tabs__link">
+          
+  
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="Flux" class="md-nav__button md-logo" aria-label="Flux" data-md-component="logo">
+      <svg class="flux-logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" aria-label="Flux"><g fill="currentColor"><rect x="78" y="8" width="16" height="28" rx="8"/><rect x="120" y="8" width="16" height="28" rx="8"/><rect x="162" y="8" width="16" height="28" rx="8"/><rect x="120" y="220" width="16" height="28" rx="8"/><rect x="162" y="220" width="16" height="28" rx="8"/><rect x="8" y="78" width="28" height="16" rx="8"/><rect x="8" y="120" width="28" height="16" rx="8"/><rect x="8" y="162" width="28" height="16" rx="8"/><rect x="220" y="78" width="28" height="16" rx="8"/><rect x="220" y="120" width="28" height="16" rx="8"/><rect x="220" y="162" width="28" height="16" rx="8"/></g><rect x="78" y="208" width="16" height="40" rx="8" fill="#f66824"/><g fill="none" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"><rect x="40" y="40" width="176" height="176" rx="32" stroke="currentColor"/><path d="M86 248V118A32 32 0 0 1 118 86H174" stroke="#f66824"/><path d="M128 248V146A18 18 0 0 1 146 128H166" stroke="currentColor"/></g></svg>
+    </a>
+    Flux
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/choelzl/flux" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    choelzl/flux
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Home
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    Get started
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            Get started
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../start/install/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Install
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/tutorial/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    First loop
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/loop-crafter/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Loop crafter
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../start/ask/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Write a loop with an agent
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    Guides
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            Guides
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/build-your-own/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Configure
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/loop-shape/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Search and agents
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/knowledge/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Knowledge, skills, hidden paths
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/cookbook/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Recipes
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/run/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Run, stop, resume
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/models/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Models and agents
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    Web app
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            Web app
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Tour
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    Live
+    
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    Live
+    
+  </span>
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-toolbar" class="md-nav__link">
+    <span class="md-ellipsis">
+      The toolbar
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#graph" class="md-nav__link">
+    <span class="md-ellipsis">
+      Graph
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#timeline" class="md-nav__link">
+    <span class="md-ellipsis">
+      Timeline
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#a-trunk-mode-loop" class="md-nav__link">
+    <span class="md-ellipsis">
+      A trunk-mode loop
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../results/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Results
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../files/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Files and settings
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../chat/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Chat
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../groups/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Groups
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../admin/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Server and admin
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../machines/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Machines
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../preview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Preview app
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    Reference
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            Reference
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/parameters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Document
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/search/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Searches
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/agents/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Agent options
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/commands/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Commands and placeholders
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/presets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Presets
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    CLI
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/refusals/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Common refusals
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/glossary/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Glossary
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-toolbar" class="md-nav__link">
+    <span class="md-ellipsis">
+      The toolbar
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#graph" class="md-nav__link">
+    <span class="md-ellipsis">
+      Graph
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#timeline" class="md-nav__link">
+    <span class="md-ellipsis">
+      Timeline
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#a-trunk-mode-loop" class="md-nav__link">
+    <span class="md-ellipsis">
+      A trunk-mode loop
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="live">Live<a class="headerlink" href="#live" title="Permanent link">&para;</a></h1>
+<p>A loop's <strong>Live</strong> tab shows what its run does, task by task, as it happens, and what earlier
+starts did. It has two views, <strong>Graph</strong> and <strong>Timeline</strong>, and always shows every pass of the start:
+the Graph picks the pass it draws from its chain of passes, the Timeline draws them all side by side.
+It opens on the Graph; <code>live/timeline</code> opens the Timeline. An address of the Tree or the Log, views
+Live had before (<code>live/tree</code>, <code>live/log</code>), opens the Graph; the start's log is the Overview's
+<strong>Log</strong> when a run stopped on an error, and <strong>Files</strong>.</p>
+<p><a class="shot-link" href="../../assets/web/live-graph-light.webp" data-only="light"><img alt="Live's Graph: the pass as the loop's boxes" src="../../assets/web/live-graph-light.webp#only-light" /></a>
+<a class="shot-link" href="../../assets/web/live-graph-dark.webp" data-only="dark"><img alt="Live's Graph: the pass as the loop's boxes" src="../../assets/web/live-graph-dark.webp#only-dark" /></a></p>
+<h2 id="the-toolbar">The toolbar<a class="headerlink" href="#the-toolbar" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Start</strong> picks the start to show: the one running, or an older one, which replays its passes,
+  tools and conversations. It lists the latest 50 starts; <strong>Earlier</strong> at its end brings the
+  ones before them.</li>
+<li><strong>Follow</strong> keeps the latest work in view as the run goes on, in the Graph and the Timeline alike: the Timeline
+  at its end (now), at any zoom, the latest task's bar in sight. Pressed while it follows (its tooltip says which);
+  scrolling the view, zooming or selecting a task stops it and leaves the view where you put it; <strong>Follow</strong> again
+  resumes, back at the latest work at once.</li>
+</ul>
+<p>The head over the view is one line: <strong>All passes</strong>, then its counts -- its tasks (grey), done,
+failed, retried -- each count's word in its tooltip. When pipelining is off and the loop's record holds three passes
+or more, a quiet line under it may say turning it on is worth it: "Pipelining could make passes about 24% shorter:
+Settings › Problem › Extra › Pipelining." -- worked out from the record with nothing run (the
+time from each pass's design passing Check to its decision, against the whole pass), and said only when it is 10% or
+more. With pipelining on, nothing is said. <code>flux loop passes</code> ends with the same advice (<code>budget.pipeline: true</code>).</p>
+<h2 id="graph">Graph<a class="headerlink" href="#graph" title="Permanent link">&para;</a></h2>
+<p>The pass as the loop's drawing: Search, Design, Check, Measure, Choose, and a critic where one
+is set. Each box says what it is set to (Search what it picked), whether it passed (✓ or ✗), and
+<code>×N</code> when it ran again; a design of several tries has a bar per try, ✓, <code>!</code> (not built) or ✗. Boxes the loop skipped are dashed.
+A pass that tests an idea queued in <strong>Results › Ideas</strong> runs no search: the queued idea is its
+direction. Its Search box says <code>queued idea</code> (the queue's icon) instead of <code>skipped</code>, as do the
+tree and the pass's flow; its Design carries the same tag, the idea it follows in its tooltip,
+and the Search's inspector names the idea with a link to Results › Ideas. With nothing queued, a
+pass may suggest the best-scored idea not measured yet; when the design takes it, the Design box
+says <code>suggested idea</code>, the idea in its tooltip. Above the flow is
+the chain of passes, one bubble a pass in the colour of how it came out, and which pass is drawn
+(<code>Pass 4 shown</code>); a bubble draws its pass and opens it in the inspector. The chain shows the
+start's Setup, the pass before the one drawn, it, the one after and the latest; a <code>…</code> between them
+opens every pass of the chain, <strong>Less</strong> folds it again. A pass that is over is read, not followed;
+<strong>Follow</strong> comes back to the work at hand. A step bar fills once its step is
+done; one at work pulses, light. A Check or Measure box has a bar per step, not per run: five
+checks run three times are five bars, one stage measured ten times is one; a bar's tooltip sums
+its runs (<code>check unit: 9 of 11 passed, 1 failed, 1 running</code>), amber when it failed on the way,
+and a click opens its latest run. Measure has a bar for each stage the document sets, in its
+order (<code>area</code>, <code>perf</code>): a stage no run has reached yet is a grey bar while the box is at work
+(<code>measurement perf: waiting</code>), hollow once it is over (<code>not reached</code>), as Check's checks to come.
+A box of one task opens it; a Design of one try opens its draft, the agent's conversation, while it
+drafts, while its check runs and once it is over; one of several tries opens its list. A design agent's
+draft, and the Design box, show the rundown it gave of the design it handed in (<strong>Rationale</strong>, a few
+points: its key points, what it changed and why), once its short follow-up has answered.</p>
+<p>A pass that checks and measures each design apart -- the re-check measuring designs again, several at
+once -- lists them a design at a time. Check and Measure count designs (<code>×246</code>, its tooltip
+<code>246 designs measured</code>), not stretches of work. Check has a row per design with a dot per check
+(<code>✓ #214 ●●●●</code>) and Measure a row per design with a dot per stage (<code>✓ #246 ●● 24m 07s</code>, the
+design's measuring time). A dot is green when done, red when failed, blue at work, grey while
+waiting and hollow when never reached; its tooltip names the step, its state and its time. A stage
+whose command exited non-zero is a failed measurement: its dot is red, its design's row and its
+task are ✗, and a box whose last run it was is ✗ too (a journal from before Flux read it so is shown
+the same way). The
+latest five show, the earlier ones folded on top ("34 earlier designs"). A design's check opens
+its checks, a design's Measure row its stages (<code>Measure · #246</code>), and each check or stage opens
+its own detail: its command, exit and output, with <code>‹ Check · #210</code> or <code>‹ Measure · #246</code> to go
+back.</p>
+<p>After a pass's design is measured, the loop has the standing design's numbers on the same stage,
+so the two compare under one setup. When the standing design had to be measured again, Measure lists
+it as a row of its own (<code>✓ #68 ●</code> and <code>✓ #42 ●</code>) with an amber tag naming why: <code>tools changed</code>,
+<code>inputs changed</code>, <code>command changed</code>, <code>readout changed</code> (how the stage reads its numbers), <code>params
+changed</code>, <code>last try failed</code> or <code>not cached</code>. Its tooltip and its panel say it in full (<code>standing
+design, measured again: its stage's tools changed since 2 Nov</code>), with what changed (<code>yosys
+rebuilt</code>, <code>bench.py edited</code>); its numbers from before are kept, these added beside them.</p>
+<h2 id="timeline">Timeline<a class="headerlink" href="#timeline" title="Permanent link">&para;</a></h2>
+<p>The start's time in three rows, each named once: <strong>Setup</strong>, <strong>Design</strong> and <strong>Tool</strong>. It takes the page's width, the
+inspector under it; a long start scrolls sideways, the row names kept in view, and only the part in sight (and a view's
+width either side) is drawn.</p>
+<ul>
+<li><strong>Setup</strong>: the start's own steps -- opening the record, a baseline reused, the papers, the workbench -- each in its
+  box's colour, on as few lines as steps at work at once need; the decisions that are over many designs: the
+  baseline's, the re-check's, the closing decision; and a design's Choose that ran without a tool slot (below).</li>
+<li><strong>Design</strong>: a line per design at work at once, <code>budget.designs_at_once</code> lines. A pass is one design's work, in one
+  box on its line: its Search (yellow) first, then each try its own bar (blue), and at the hand-in the design's tag
+  (<code>#42</code>). The time between two tries draws nothing.</li>
+<li><strong>Tool</strong>: <code>budget.tools_at_once</code> lines, whether <code>pipeline</code> is on or off. A design's tool work is one box: its Check,
+  a bar per Measure stage, then its Choose, in the boxes' colours, the design's tag (<code>#42</code>) at the end of its Measure
+  part where there is room. While it runs the box is dashed to now. A pass whose earlier pass has not decided yet waits
+  for its turn before its Choose, its tool slot given back meanwhile: its box ends at its last Measure stage, and its
+  Choose, run without a slot, is an orange bar on the Setup row, its tooltip naming the design. So the Tool row never
+  needs more lines than slots. A search pass's checks and measurements are bars of their own (its
+  designs are checked and measured together). A check or measurement an agent ran itself in its try (a probe) takes a
+  Tool line too, hatched in its kind's colour and outlined in the agent's pink; a try's check that sent the design back
+  is a short outlined bar there.</li>
+</ul>
+<p>Hovering a design -- its box on the Design line, its tag, its box on the Tool line or its Choose on Setup -- lights them all, so you can
+follow a design from its Search to its decision. One pass at a time, each pass is a column behind the rows, white and
+light grey by turns, its number at the top; passes at work at once have no columns, the Design lines say them.</p>
+<p>A bar is a step's work, not its wait. A step waiting for a tool slot (or for room on the machine) draws nothing until its
+tool starts, so the Tool row never draws more boxes at once than there are slots (<code>tools_at_once: 8</code>: eight tools at
+once, a design's check, measurements and decision holding one). How long it waited is said in its
+task ("waited 3m for a tool slot"), and in the box's tooltip when a step waited inside it (a journal of an older
+version, when checks and measurements had slots of their own). Lines are filled by time: a line a design freed is the
+next design's, and a bar never moves to another line as the run goes on.</p>
+<p>A row draws at most six lines; the work on the lines past them is not drawn (the row's name says "+3": the lines
+hidden). The unroll tool (two bars, arrows spreading), in the header when a row is that wide, draws every line instead;
+pressed again, it folds back. Clicking a row's "+3" does the same. This browser remembers the choice. A task picked
+elsewhere (the Graph, a link, the arrow keys) whose bar is on a hidden line unrolls the rows; while Following, the
+row's "+3" is marked instead.</p>
+<p>Every bar is its own: a click selects that one step and opens it in the inspector, and Tab and Enter reach the bars
+in time order. A bar too short to see is still clicked a few pixels either side of it. Beside the unroll tool,
+<strong>Zoom out</strong>, <strong>Zoom in</strong> and <strong>Fit to the window</strong> widen the time axis (twice as wide each click) and bring it back to
+the page's width; the chart then scrolls sideways inside its box (by touch on a phone), the time axis's ticks spaced to
+round steps. Zooming keeps the moment in the middle of the view where it is, or the end of a running start when it
+was in view, so the chart keeps showing what runs now. Ctrl and the mouse wheel (a trackpad's pinch) zoom around the
+pointer; double-clicking a bar zooms in until it fills half the view. The zoom is kept for each loop until the
+browser tab is closed, apart from the unroll tool's choice. Where an agent or FluxAgent works a step (a try's draft, a
+Setup step, a Search), a pink strip along the foot of its bar says when; the strip is always inside its own bar, at
+any zoom. The Setup row holds what the start reads and writes before its work: opening the
+record (from the moment its file is opened: on a first start its tables are made then), a baseline reused (<em>baseline</em>:
+its decisions read back), and before a re-check's first Check its row on the record (<em>re-check on record</em>) and its
+queue (<em>re-check queue</em>: the designs to measure again and the measured ones read back); and at a pass's end its
+connection to the record closing (<em>close record</em>: the record's log written back into it, slow on a slow disk). Each
+Setup step is a bar when it takes half a second or more, its tooltip saying which part took the time, and a note in its
+box otherwise. Per box: how many calls, the average, the longest, the total, and its share of the wall clock.</p>
+<h2 id="a-trunk-mode-loop">A trunk-mode loop<a class="headerlink" href="#a-trunk-mode-loop" title="Permanent link">&para;</a></h2>
+<p>A loop run as a <a href="../../guide/loop-shape/#two-ways-to-run-passes-or-a-trunk">trunk</a> has a Live that
+shows its trunks and its branches instead of passes.</p>
+<p>The <strong>Graph</strong> starts with the trunk: a Design box per agent (<code>Design · claude · t1</code>), at work for
+the whole run. Its line says what it does now -- <em>writing</em>, <em>queue full</em> (its share of the queue is
+waiting), <em>waiting</em> (between turns) or <em>stopped</em> -- then its turn, how long it has worked and how
+many designs it handed in; a bar for each of them, in the box's colour when measured, red when it failed its
+Check, amber on an error, faint while it waits or runs, and one more pulsing while the agent writes.
+Only the 10 latest are drawn: after a long run <em>+137</em> starts the row, the earlier hand-ins counted
+(<em>1k</em> past a thousand; its tooltip says <em>137 earlier hand-ins</em>).
+Pressing the box opens the agent's latest turn. Under it, <em>3 running · 2 waiting of 6</em>, then the
+chain: the start's Setup (<code>S</code>) and a chip per design (<code>#42</code>), the running ones with a blue dot, a
+failed one red, those waiting dashed at the end. Picking a chip draws that design's branch as a
+pass's boxes -- Check, Measure, Choose -- under a line saying the design, what it came from, its
+agent and why; pressing a box opens its task. Live opens on the latest running branch. A Setup
+run again during the trunk is a chip of its own (<code>S3</code>) where it began among the designs.</p>
+<p>However many designs there are, the chain is one line, as the pass chain: the first chip,
+<code>…</code>, the chip before the one picked, it, the one after, <code>…</code>, the last (a waiting design while some
+wait). Picking a chip moves that window onto it; a <code>…</code> opens the chips it hides, in its place (the
+line scrolls sideways when they do not fit), and <strong>Less</strong> folds them again.</p>
+<p><strong>Run setup</strong>, beside Stop in the head of a running trunk loop's Live, runs the Setup again (when
+the library changed, say), the document unchanged. It is greyed out while one runs or is asked;
+who pressed it is in the audit log.</p>
+<p>The <strong>Timeline</strong> is the one passes have -- the same zoom, unroll tool, selection and rows: <em>Setup</em>, <em>Design</em> and
+<em>Tool</em>. <em>Setup</em>: the start's own steps in their boxes' colours -- the re-check's and the closing decision's choice among
+them -- then a bar for each Setup run again (a setup or Search bud). Every step is in its box's colour as in a flow: a
+Search bud's own Setup steps (tools ready, the record opened) are grey bars before its Search bar, and that bar opens the
+bud's Search turn; hovering it names who answered (<em>FluxAgent</em> and its model, or the agent) and the tools it read the
+record with. No words are written on these bars: hovering one names it (<em>Decision</em>, <em>S3</em>, <em>Q2</em>). <em>Design</em>: a line per
+trunk, named at the left (<code>t1</code>, <code>t2</code>), a bar per turn -- a turn is one design -- from when the trunk began readying the
+turn (its brief) to its end, a pink strip on it where its agent works, and at its end the tag of the design it handed in
+(<code>#47</code>). Each turn has its own transcript in the inspector, titled with the design it handed in (*Design · t3 · turn 4 ·</p>
+<h1 id="47-a-turn-that-handed-none-in-says-how-many-in-a-row-tool-budgettools_at_once-lines-each-designs-check-a">47*); a turn that handed none in says how many in a row. <em>Tool</em>: <code>budget.tools_at_once</code> lines; each design's Check, a<a class="headerlink" href="#47-a-turn-that-handed-none-in-says-how-many-in-a-row-tool-budgettools_at_once-lines-each-designs-check-a" title="Permanent link">&para;</a></h1>
+<p>bar per Measure stage and its decision in one box, its tag at the end of its Measure part where there is room; a failed
+Check ends its box with a red mark. Hovering a design -- its turn, a tag or its box -- lights its turn, its tags and its
+box; each bar -- a turn, a step, a stage -- opens its own task. The re-check at the start has no turn: its designs' boxes
+sit under a grey band, <em>R · re-check</em>, each with its tag. The checks an agent ran itself in its turn (<code>flux loop gate</code>,
+<code>flux loop measure</code>) take Tool lines too, hatched in their kind's colour and outlined in pink: probes, counted with the
+tasks, never the loop's measurements. Past six lines the rest are hidden (<em>+N</em>: the lines hidden); the unroll tool or the
+<em>+N</em> draws every line.</p>
+<p>Every count on a trunk's Live is the start picked in <strong>Start</strong>: a trunk box's <em>handed in</em>, <em>running</em>, <em>waiting</em>, the
+chain and the Timeline count what that start did, not what earlier starts left on the record (a design still waiting
+from before is in the queue this start takes from).</p>
+<h2 id="the-inspector">The inspector<a class="headerlink" href="#the-inspector" title="Permanent link">&para;</a></h2>
+<p>Selecting a task opens it beside the list. A tool's task shows its command, folder, exit and
+time, and its output as it runs. An agent's task shows its reply, then its conversation: text,
+thinking and tool calls, each input and output. A model's try reads the same way: the tools it
+called, then its reply in parts (why, the idea, the design as code, each edit as a diff) and its
+tokens. <strong>Raw</strong> and <strong>Fullscreen</strong> open the whole of it.</p>
+<p>Only people with the <strong>Internals</strong> permission (<a href="../admin/#accounts">Admin › People › Users</a>) see the
+prompts the loop's agents and models were given, their thinking, and each of their actions: every
+tool call, command, file read or written, search and result. Everyone else, the loop's owner
+included, sees the turn's status, its final reply, a pass's search direction without its reason,
+and its actions as counts and time:
+<code>14 tool calls · 3 probes · 12m 30s</code>, one line where the calls would be. This holds for every
+agent: the loop's own, Chat's and the New-loop author. The commands of your own stages and checks
+are your configuration, not an agent's actions, so they stay visible.</p>
+<p>An agent's or a model's turn starts with its facts as one row of small pills, each with its
+icon: the agent (in the agent's pink), the model, its status, <code>exit 0</code>, <code>37 turns</code>, its tokens
+in and out, its cost, <code>thinking on</code>, <code>Tool calls (12)</code>. Hover a pill (or read it with a screen
+reader) for its label: <code>tokens: 2.0M in · 19.0k out</code>. An exit other than 0 and an error take
+their colour; the turn's state stays in the pill beside its title. The Agents tab and Chat's
+<strong>Thinking &amp; commands</strong> show a turn's facts the same way.</p>
+<p>Under its title a task says where it is, the whole path: <code>Pass 2 › Design › try 8</code>, a tool call
+<code>… › try 8 › call 6</code>. An improve says the stage it starts from (<code>from the esl stage</code>), and its
+steps are rows that open them (its draft). A try that failed or was not built says why in a line under that. A box
+shows its runs with their state and time, its total time in its head; a box still to come says
+what the document sets it to, in a few words, with the YAML folded under them. A pass shows what
+it measured last and whether that was kept, where its time went (in the bar's order) and its six
+boxes, each with how many times it worked ("Design · 3 tries · 2 not built"); once it is over, a
+box it never reached says "not run", and a failed pass says why. A check's failures read "14 of 18
+fail".</p>
+<p>Choose's panel names its pick and its pool. A design a critic rejected is struck through in its
+table with a <strong>critic</strong> tag, and the critic's reason is said under the table; the tag, the reason's
+<strong>Open</strong> and the step <strong>Choose · critique · #N -- rejected</strong> all open the critic's
+turn. Only this Choose's critiques strike its rows, not another pass's. A dictionary metric is one
+number there, as the loop ranks it: its objective's <code>aggregate</code>, else the dictionary's own <code>_a</code>, else the mean; hover a
+cell for its entries. The rows sort by it, and "same numbers as" compares it.</p>
+<p>The table also lists the designs measured by then that were not in the pool, muted, each with why
+in a few words: "screen only" (its pass ended, or the run stopped, before it climbed to the stage
+the choice is made on), "cut on screen" (a cutoff), "stale" (measured
+before a change to how its stage is measured), "same design as #137", "rejected by the critic", "the baseline", a stage the document no longer has. Hover a row for the whole reason; when
+nothing recorded says why, the row says <strong>why not recorded</strong> rather than guess. When such a design beats the pick on the first
+column's objective, a notice over the table names each one with its value and why it was not
+compared: "3 designs have a smaller jx_time than #131 and were not in the pool: #140 (377 ns) was
+measured on screen only: its pass ended before it climbed to full. ..."</p>
+<h2 id="older-runs">Older runs<a class="headerlink" href="#older-runs" title="Permanent link">&para;</a></h2>
+<p>A start recorded by a much older Flux is shown as written, under a notice saying so.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../" class="md-footer__link md-footer__link--prev" aria-label="Previous: Tour">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Tour
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../results/" class="md-footer__link md-footer__link--next" aria-label="Next: Results">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                Results
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">© 2026 Flux</div>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      <script id="__config" type="application/json">{"base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.footer", "content.code.copy", "content.code.annotate", "toc.follow", "search.suggest"], "search": "../../assets/javascripts/workers/search.973d3a69.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.f55a23d4.min.js"></script>
+      
+    
+  </body>
+</html>
