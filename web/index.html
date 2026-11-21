@@ -1,0 +1,1706 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Flux searches for better designs: it makes them with a script, a model or a coding agent, checks and measures them with real tools, and decides from your objectives.">
+      
+      
+      
+        <link rel="canonical" href="https://choelzl.github.io/flux/web/">
+      
+      
+        <link rel="prev" href="../guide/models/">
+      
+      
+        <link rel="next" href="live/">
+      
+      
+      <link rel="icon" href="../assets/app/logo.svg">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.6.23">
+    
+    
+      
+        <title>Tour - Flux</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.84d31ad4.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.06af60db.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/flux-theme.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#tour" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="Flux" class="md-header__button md-logo" aria-label="Flux" data-md-component="logo">
+      <svg class="flux-logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" aria-label="Flux"><g fill="currentColor"><rect x="78" y="8" width="16" height="28" rx="8"/><rect x="120" y="8" width="16" height="28" rx="8"/><rect x="162" y="8" width="16" height="28" rx="8"/><rect x="120" y="220" width="16" height="28" rx="8"/><rect x="162" y="220" width="16" height="28" rx="8"/><rect x="8" y="78" width="28" height="16" rx="8"/><rect x="8" y="120" width="28" height="16" rx="8"/><rect x="8" y="162" width="28" height="16" rx="8"/><rect x="220" y="78" width="28" height="16" rx="8"/><rect x="220" y="120" width="28" height="16" rx="8"/><rect x="220" y="162" width="28" height="16" rx="8"/></g><rect x="78" y="208" width="16" height="40" rx="8" fill="#f66824"/><g fill="none" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"><rect x="40" y="40" width="176" height="176" rx="32" stroke="currentColor"/><path d="M86 248V118A32 32 0 0 1 118 86H174" stroke="#f66824"/><path d="M128 248V146A18 18 0 0 1 146 128H166" stroke="currentColor"/></g></svg>
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Flux
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Tour
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/choelzl/flux" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    choelzl/flux
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href=".." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../start/install/" class="md-tabs__link">
+          
+  
+  
+  Start
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../guide/build-your-own/" class="md-tabs__link">
+          
+  
+  
+  Guide
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="./" class="md-tabs__link">
+          
+  
+  
+  Web app
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../guide/parameters/" class="md-tabs__link">
+          
+  
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="Flux" class="md-nav__button md-logo" aria-label="Flux" data-md-component="logo">
+      <svg class="flux-logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" aria-label="Flux"><g fill="currentColor"><rect x="78" y="8" width="16" height="28" rx="8"/><rect x="120" y="8" width="16" height="28" rx="8"/><rect x="162" y="8" width="16" height="28" rx="8"/><rect x="120" y="220" width="16" height="28" rx="8"/><rect x="162" y="220" width="16" height="28" rx="8"/><rect x="8" y="78" width="28" height="16" rx="8"/><rect x="8" y="120" width="28" height="16" rx="8"/><rect x="8" y="162" width="28" height="16" rx="8"/><rect x="220" y="78" width="28" height="16" rx="8"/><rect x="220" y="120" width="28" height="16" rx="8"/><rect x="220" y="162" width="28" height="16" rx="8"/></g><rect x="78" y="208" width="16" height="40" rx="8" fill="#f66824"/><g fill="none" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"><rect x="40" y="40" width="176" height="176" rx="32" stroke="currentColor"/><path d="M86 248V118A32 32 0 0 1 118 86H174" stroke="#f66824"/><path d="M128 248V146A18 18 0 0 1 146 128H166" stroke="currentColor"/></g></svg>
+    </a>
+    Flux
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/choelzl/flux" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    choelzl/flux
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Home
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    Start
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            Start
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../start/install/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Install
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../guide/tutorial/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    First loop
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../start/ask/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Write a loop with an agent
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../preview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Preview app
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    Guide
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            Guide
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../guide/build-your-own/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Configure
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../guide/loop-shape/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Search and agents
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../guide/knowledge/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Knowledge and skills
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../guide/cookbook/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Recipes
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../guide/run/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Run, stop, resume
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../guide/models/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Models and agents
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    Web app
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            Web app
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    Tour
+    
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    Tour
+    
+  </span>
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#loops" class="md-nav__link">
+    <span class="md-ellipsis">
+      Loops
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#new-loop" class="md-nav__link">
+    <span class="md-ellipsis">
+      New loop
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#a-loops-page" class="md-nav__link">
+    <span class="md-ellipsis">
+      A loop's page
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="A loop&#39;s page">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#overview-cards" class="md-nav__link">
+    <span class="md-ellipsis">
+      Overview cards
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#start-stop-restart" class="md-nav__link">
+    <span class="md-ellipsis">
+      Start, stop, restart
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#a-loops-chat" class="md-nav__link">
+    <span class="md-ellipsis">
+      A loop's Chat
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#everywhere" class="md-nav__link">
+    <span class="md-ellipsis">
+      Everywhere
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="live/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Live
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="results/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Results
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="files/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Files and settings
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="chat/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Chat
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="groups/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Groups and projects
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="admin/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Admin
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="machines/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Machines
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    Reference
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            Reference
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../guide/parameters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Document
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/search/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Searches
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/agents/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Agent options
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/commands/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Document commands
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/presets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Presets
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/refusals/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Refusals
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/glossary/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Glossary
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#loops" class="md-nav__link">
+    <span class="md-ellipsis">
+      Loops
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#new-loop" class="md-nav__link">
+    <span class="md-ellipsis">
+      New loop
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#a-loops-page" class="md-nav__link">
+    <span class="md-ellipsis">
+      A loop's page
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="A loop&#39;s page">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#overview-cards" class="md-nav__link">
+    <span class="md-ellipsis">
+      Overview cards
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#start-stop-restart" class="md-nav__link">
+    <span class="md-ellipsis">
+      Start, stop, restart
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#a-loops-chat" class="md-nav__link">
+    <span class="md-ellipsis">
+      A loop's Chat
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#everywhere" class="md-nav__link">
+    <span class="md-ellipsis">
+      Everywhere
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="tour">Tour<a class="headerlink" href="#tour" title="Permanent link">&para;</a></h1>
+<p>Flux is a shared server with accounts, used in the browser. Each user has loops; each loop is a
+document and its files, run sandboxed on the server. Create, check, start, stop, follow and read
+loops here. <a href="../start/install/#install-and-start-the-server">Install</a> starts a server.</p>
+<p>Try it first in the Preview app: <a href="../preview/?tour=create">create a loop step by step</a>, then a tour
+of the app, or <a href="../preview/?tour=1">the tour alone</a>.</p>
+<p><a class="shot-link" href="../assets/web/overview-light.webp" data-only="light"><img alt="A loop's Overview: its state, its decision against the limits, and the best designs so far" src="../assets/web/overview-light.webp#only-light" /></a>
+<a class="shot-link" href="../assets/web/overview-dark.webp" data-only="dark"><img alt="A loop's Overview: its state, its decision against the limits, and the best designs so far" src="../assets/web/overview-dark.webp#only-dark" /></a></p>
+<h2 id="loops">Loops<a class="headerlink" href="#loops" title="Permanent link">&para;</a></h2>
+<p>The first page lists your loops. Each row shows:</p>
+<ul>
+<li>its state, and its <strong>design agent</strong> (who works its Design box; tinted while running);</li>
+<li>its designs as "2 / 12 / 30": accepted this start / accepted / all (every design handed in);
+  the tooltip says accepted of measured (accepted and rejected), failed and pending. The Overview's
+  <strong>Acceptance rate</strong> is accepted ÷ measured;</li>
+<li>the decision's main measurements (Settings › Measurements' Main, else the first objective),
+  green or red against their limits;</li>
+<li><strong>Start</strong>, <strong>Stop</strong> and <strong>Restart</strong> as small icons at the row's end.</li>
+</ul>
+<p>Search, filter by state, sort by activity, name or decision. <strong>Shared with me</strong> lists loops shared
+with you or your group, with your rights ("ask · edit · run"). Archived loops are under
+<strong>Archived</strong> (<a href="files/#archive">Archive</a>).</p>
+<p><strong>Project tabs</strong>: when you see a group's project, tabs above the search filter by project: <strong>All</strong>,
+one per project, <strong>In no project</strong>, each with a count. Under <strong>All</strong>, a <strong>Project</strong> column names
+each loop's first project and "+N" others (<a href="groups/#a-projects-page">Groups</a>). The chosen tab is
+remembered in this browser.</p>
+<h2 id="new-loop">New loop<a class="headerlink" href="#new-loop" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Way</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Configurator</strong></td>
+<td>A form in six steps (<a href="../preview/?tour=create">Create a loop</a> in the Preview walks through it)</td>
+</tr>
+<tr>
+<td><strong>Create or upload</strong></td>
+<td>An empty loop, or one from a folder, files, a <code>.zip</code>, or a pasted document (<strong>Paste YAML</strong>)</td>
+</tr>
+<tr>
+<td><strong>Direct edit</strong></td>
+<td>Write the YAML yourself</td>
+</tr>
+<tr>
+<td><strong>Agent</strong></td>
+<td>An agent writes it from your prompt and files (<a href="../start/ask/">Write a loop with an agent</a>)</td>
+</tr>
+<tr>
+<td><strong>Clone</strong></td>
+<td>A copy of a loop's problem, without its runs</td>
+</tr>
+</tbody>
+</table>
+<h2 id="a-loops-page">A loop's page<a class="headerlink" href="#a-loops-page" title="Permanent link">&para;</a></h2>
+<p>The header has <strong>Start</strong> (▶) at rest, <strong>Stop</strong> (■) and <strong>Restart</strong> (↻) while running.</p>
+<table>
+<thead>
+<tr>
+<th>Tab</th>
+<th>What it shows</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Overview</strong></td>
+<td>State, decision and objectives, best designs, best-so-far chart, notes, the agent's questions</td>
+</tr>
+<tr>
+<td><strong>Live</strong></td>
+<td>The run now and every pass, as a graph or timeline (<a href="live/">Live</a>)</td>
+</tr>
+<tr>
+<td><strong>Results</strong></td>
+<td>Every design measured, charts, ideas, library (<a href="results/">Results</a>)</td>
+</tr>
+<tr>
+<td><strong>Agents</strong></td>
+<td>Every model and agent turn, newest first: where (pass, box, try), outcome, prompt, reply, tool calls, time, tokens; session info ("resumed (turn k of K)", "new session", "warm start", "shared first session")</td>
+</tr>
+<tr>
+<td><strong>Files</strong></td>
+<td>The loop's files and the agents' workbench (<a href="files/">Files and settings</a>)</td>
+</tr>
+<tr>
+<td><strong>Settings</strong></td>
+<td>Preferences, sharing, maintenance, the problem (<a href="files/#settings">Files and settings</a>)</td>
+</tr>
+</tbody>
+</table>
+<p>An agent writing or revising the problem shows a strip at the top of the Overview until the loop
+starts, the document changes, or six hours pass. <strong>Hide from Overview</strong> hides an ended strip. Its
+history: <strong>Settings › Problem › Agent</strong>.</p>
+<h3 id="overview-cards">Overview cards<a class="headerlink" href="#overview-cards" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Decision</strong>: the decision and its pill (✓ accepted; ! closest when nothing meets every
+  requirement; ✗ failed), "ties with #229", "last pass 17 min ago". Hover the pill for the rule
+  ("Decided by: smallest area_um2 at fmax_mhz &gt;= 1000") and stage. Below: a tile per main
+  measurement with its change from the reference, then <strong>Best 3</strong>.<ul>
+<li>The reference: the latest baseline at its stage, else the accepted designs' P10 (minimized)
+  or P90 (maximized). Every page compares with the same reference.</li>
+</ul>
+</li>
+<li><strong>Best</strong>: a chart per main measurement, titled "best cycles (-12.9%)" (or "best cycles 6189"
+  without a baseline).</li>
+<li><strong>Starred designs</strong> (add it yourself): a tile per starred design, latest first.</li>
+<li><strong>Note to the loop</strong> and <strong>Agent asks</strong>: <a href="#a-loops-chat">below</a>.</li>
+<li><strong>Small cards</strong> (top row): <strong>State</strong>, <strong>Designs measured</strong>, <strong>Passes</strong>, <strong>Last improvement</strong>,
+  <strong>Working now</strong> by default; up to 10.</li>
+</ul>
+<table>
+<thead>
+<tr>
+<th>Small card</th>
+<th>Shows</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Last improvement</strong></td>
+<td>When the best design last improved ("42 min ago"), which design, which pass, passes since</td>
+</tr>
+<tr>
+<td><strong>Pass speed</strong></td>
+<td>Median wall time of the last 20 passes, most at once, passes per hour</td>
+</tr>
+<tr>
+<td><strong>Working now</strong></td>
+<td>Agents and models at work, designs per box ("11 design · 3 check · 2 measure"); "idle" at rest</td>
+</tr>
+<tr>
+<td><strong>Idea queue</strong></td>
+<td>Ideas queued, evaluated, and proposed but neither</td>
+</tr>
+<tr>
+<td><strong>Uptime</strong></td>
+<td>How long this start has run; starts today</td>
+</tr>
+<tr>
+<td><strong>One metric</strong></td>
+<td>One metric's best accepted value and change from the baseline ("−12.9%"); the metric you type in the layout editor, else the first objective</td>
+</tr>
+<tr>
+<td><strong>Stage funnel</strong></td>
+<td>Designs made → passed checks → measured on the last stage</td>
+</tr>
+</tbody>
+</table>
+<p>Customize cards in <strong>Account › Profile › Customize</strong> (Overview layout); <strong>Defaults</strong> restores
+them. Hidden cards cost nothing to load.</p>
+<h3 id="start-stop-restart">Start, stop, restart<a class="headerlink" href="#start-stop-restart" title="Permanent link">&para;</a></h3>
+<p><strong>Start</strong> asks how many passes (one design each) or <strong>Until stopped</strong>.</p>
+<ul>
+<li>A trunk asks for designs and says what runs ("trunk: 2 agents (claude (opus), codex),
+  3 branches at once, 6 may wait"); one branch at once while parallel work is off.</li>
+<li>A folder with several problems asks which; one that does not load is shown with why and a
+  <strong>Direct edit</strong> link.</li>
+<li>It checks the document first when inputs changed (as <strong>Settings › Problem › Check</strong>); on
+  failure the button reads <strong>Start anyway</strong>.</li>
+<li>A start resumes from the record. Started from the Loops list, you stay on the list (<strong>Started</strong>,
+  with <strong>Open</strong>).</li>
+<li>A failed loop shows <strong>Start again</strong>. While an agent writes the problem, Start waits.</li>
+</ul>
+<p><strong>Stop</strong> and <strong>Restart</strong> act after the current pass. The asked button turns red with an hourglass,
+an amber pill shows "Stops after pass 4" or "Restarts after pass 4", and the loop stays
+<strong>running</strong> until then. Press the other to switch. Press the same one again (it turns solid red)
+to act now: it asks, then abandons the pass.</p>
+<h2 id="a-loops-chat">A loop's Chat<a class="headerlink" href="#a-loops-chat" title="Permanent link">&para;</a></h2>
+<p><strong>Chat</strong>, on every tab of a loop, opens a panel with one conversation about the loop.</p>
+<ul>
+<li>The bar: the conversation's name (opens the list, with <strong>+ New chat</strong> and <strong>Delete</strong>),
+  <strong>Open in Chat</strong> (opens it in the top bar's Chat), <strong>Close</strong>.</li>
+<li><strong>Ask</strong> puts a question (why it stalls, which design is best, what to try) to an agent or
+  FluxAgent. It reads the loop and changes nothing.</li>
+<li><strong>Thinking &amp; commands</strong> under an answer shows how it was made.</li>
+<li><strong>Enter</strong> sends, <strong>Shift+Enter</strong> adds a line.</li>
+<li>A dot on <strong>Chat</strong> means the loop's agent is asking you something.</li>
+<li>The loop's chats share a <strong>Chat workbench</strong> (editors only), separate from the loop's own
+  <code>workbench/</code> (<a href="chat/#a-loops-chat-workbench">A loop's Chat workbench</a>).</li>
+<li>Old <code>#/app/NAME/ask</code> and <code>#/app/NAME/talk</code> links open it; <code>#/app/NAME/chat/ID</code> opens one
+  conversation.</li>
+</ul>
+<p><strong>Note to the loop</strong> (Overview card): a note sent while the loop runs reaches its agents at the
+next step (a trunk: each agent's next turn), and every step while it stands.</p>
+<ul>
+<li>Enter sends. A loop at rest has no box.</li>
+<li>Notes are listed newest first. A filled dot: read ("Read at pass 14"); a ring: waiting.</li>
+<li>The latest three show; <strong>N more</strong> shows up to twenty.</li>
+<li>Editors remove a note with its bin. An unread note then never arrives; a read one leaves the
+  agents' next messages.</li>
+</ul>
+<p><strong>Agent asks</strong> (Overview card): the agent's question with its choices, <strong>You decide</strong> and a free
+answer; your answer goes as a note. Answered questions are listed below. Hidden when there is
+nothing.</p>
+<p>The question's line above the tabs, and the bell, lead there. With the card hidden, <strong>Answer</strong>
+opens a dialog.</p>
+<p><strong>Chat</strong> in the top bar is the same, bound to no loop (<a href="chat/">Chat</a>); its rail lists your loops'
+conversations (<a href="chat/#loop-chats">Loop chats</a>).</p>
+<h2 id="everywhere">Everywhere<a class="headerlink" href="#everywhere" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Top bar</strong>: <strong>Chat</strong> · <strong>Loops</strong> · <strong>Groups</strong> · <strong>Admin</strong> (admins). <strong>New loop</strong> is at the end of
+  the Loops list's search bar.</li>
+<li><strong>Theme</strong>: system, light or dark; remembered in this browser.</li>
+<li><strong>Your name</strong> opens <strong>Account</strong>. While an admin views as a user, it shows that user's name.</li>
+<li><strong>Bell</strong>: a run ends or fails, an agent asks, a loop is shared with you.</li>
+<li><strong>Browser tab</strong>: names what is open ("cpu_tune — Loop", "CPU block diagram — Chat"). Its icon's
+  dot: <strong>pink</strong> something waits for you, <strong>red</strong> failed, <strong>blue</strong> running or answering.</li>
+<li><strong>Live updates</strong>: pages refresh only what changed, keeping your scroll and selection. An editor
+  you are typing in is never replaced: <strong>Changed on the server</strong> offers <strong>Reload</strong>. A background
+  tab pauses and catches up when you return.</li>
+<li><strong>Long lists</strong> load more as you scroll ("N of M").</li>
+<li><strong>Raw</strong> and <strong>Fullscreen</strong> on files, logs, results and agent turns.</li>
+<li><strong>Addresses</strong> name the view: <code>#/app/NAME/live/timeline</code>,
+  <code>#/app/NAME/settings/problem?step=graph</code>.</li>
+<li><strong>Phone</strong>: account items move to the <strong>menu</strong> button; lists and tabs stack.</li>
+</ul>
+<p>The <a href="../preview/">Preview app</a> runs these pages on sample data.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../guide/models/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Models and agents">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Models and agents
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="live/" class="md-footer__link md-footer__link--next" aria-label="Next: Live">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                Live
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">© 2026 Flux</div>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      <script id="__config" type="application/json">{"base": "..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.footer", "content.code.copy", "content.code.annotate", "toc.follow", "search.suggest"], "search": "../assets/javascripts/workers/search.973d3a69.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.f55a23d4.min.js"></script>
+      
+    
+  </body>
+</html>

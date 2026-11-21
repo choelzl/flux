@@ -1,0 +1,1849 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Flux searches for better designs: it makes them with a script, a model or a coding agent, checks and measures them with real tools, and decides from your objectives.">
+      
+      
+      
+        <link rel="canonical" href="https://choelzl.github.io/flux/web/machines/">
+      
+      
+        <link rel="prev" href="../admin/">
+      
+      
+        <link rel="next" href="../../guide/parameters/">
+      
+      
+      <link rel="icon" href="../../assets/app/logo.svg">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.6.23">
+    
+    
+      
+        <title>Machines - Flux</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.84d31ad4.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.06af60db.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/flux-theme.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#machines" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="Flux" class="md-header__button md-logo" aria-label="Flux" data-md-component="logo">
+      <svg class="flux-logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" aria-label="Flux"><g fill="currentColor"><rect x="78" y="8" width="16" height="28" rx="8"/><rect x="120" y="8" width="16" height="28" rx="8"/><rect x="162" y="8" width="16" height="28" rx="8"/><rect x="120" y="220" width="16" height="28" rx="8"/><rect x="162" y="220" width="16" height="28" rx="8"/><rect x="8" y="78" width="28" height="16" rx="8"/><rect x="8" y="120" width="28" height="16" rx="8"/><rect x="8" y="162" width="28" height="16" rx="8"/><rect x="220" y="78" width="28" height="16" rx="8"/><rect x="220" y="120" width="28" height="16" rx="8"/><rect x="220" y="162" width="28" height="16" rx="8"/></g><rect x="78" y="208" width="16" height="40" rx="8" fill="#f66824"/><g fill="none" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"><rect x="40" y="40" width="176" height="176" rx="32" stroke="currentColor"/><path d="M86 248V118A32 32 0 0 1 118 86H174" stroke="#f66824"/><path d="M128 248V146A18 18 0 0 1 146 128H166" stroke="currentColor"/></g></svg>
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Flux
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Machines
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/choelzl/flux" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    choelzl/flux
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../start/install/" class="md-tabs__link">
+          
+  
+  
+  Start
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../guide/build-your-own/" class="md-tabs__link">
+          
+  
+  
+  Guide
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../" class="md-tabs__link">
+          
+  
+  
+  Web app
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../guide/parameters/" class="md-tabs__link">
+          
+  
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="Flux" class="md-nav__button md-logo" aria-label="Flux" data-md-component="logo">
+      <svg class="flux-logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" aria-label="Flux"><g fill="currentColor"><rect x="78" y="8" width="16" height="28" rx="8"/><rect x="120" y="8" width="16" height="28" rx="8"/><rect x="162" y="8" width="16" height="28" rx="8"/><rect x="120" y="220" width="16" height="28" rx="8"/><rect x="162" y="220" width="16" height="28" rx="8"/><rect x="8" y="78" width="28" height="16" rx="8"/><rect x="8" y="120" width="28" height="16" rx="8"/><rect x="8" y="162" width="28" height="16" rx="8"/><rect x="220" y="78" width="28" height="16" rx="8"/><rect x="220" y="120" width="28" height="16" rx="8"/><rect x="220" y="162" width="28" height="16" rx="8"/></g><rect x="78" y="208" width="16" height="40" rx="8" fill="#f66824"/><g fill="none" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"><rect x="40" y="40" width="176" height="176" rx="32" stroke="currentColor"/><path d="M86 248V118A32 32 0 0 1 118 86H174" stroke="#f66824"/><path d="M128 248V146A18 18 0 0 1 146 128H166" stroke="currentColor"/></g></svg>
+    </a>
+    Flux
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/choelzl/flux" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    choelzl/flux
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Home
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    Start
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            Start
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../start/install/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Install
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/tutorial/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    First loop
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../start/ask/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Write a loop with an agent
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../preview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Preview app
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    Guide
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            Guide
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/build-your-own/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Configure
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/loop-shape/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Search and agents
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/knowledge/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Knowledge and skills
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/cookbook/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Recipes
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/run/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Run, stop, resume
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/models/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Models and agents
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    Web app
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            Web app
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Tour
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../live/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Live
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../results/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Results
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../files/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Files and settings
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../chat/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Chat
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../groups/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Groups and projects
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../admin/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Admin
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    Machines
+    
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    Machines
+    
+  </span>
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#whose-machine-it-is" class="md-nav__link">
+    <span class="md-ellipsis">
+      Whose machine it is
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-the-machine-needs" class="md-nav__link">
+    <span class="md-ellipsis">
+      What the machine needs
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-machines-page" class="md-nav__link">
+    <span class="md-ellipsis">
+      The Machines page
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-line" class="md-nav__link">
+    <span class="md-ellipsis">
+      The line
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The line">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#a-machine-added-before-the-system-service" class="md-nav__link">
+    <span class="md-ellipsis">
+      A machine added before the system service
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#labels-and-needs" class="md-nav__link">
+    <span class="md-ellipsis">
+      Labels and needs
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#limits" class="md-nav__link">
+    <span class="md-ellipsis">
+      Limits
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#which-machine-a-step-goes-to" class="md-nav__link">
+    <span class="md-ellipsis">
+      Which machine a step goes to
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#proxies" class="md-nav__link">
+    <span class="md-ellipsis">
+      Proxies
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#when-a-machine-cannot-run-a-step" class="md-nav__link">
+    <span class="md-ellipsis">
+      When a machine cannot run a step
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#updates" class="md-nav__link">
+    <span class="md-ellipsis">
+      Updates
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#drain-a-machine" class="md-nav__link">
+    <span class="md-ellipsis">
+      Drain a machine
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#a-storage-machine" class="md-nav__link">
+    <span class="md-ellipsis">
+      A storage machine
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#rotate-a-machines-keys" class="md-nav__link">
+    <span class="md-ellipsis">
+      Rotate a machine's keys
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#rename-a-machine" class="md-nav__link">
+    <span class="md-ellipsis">
+      Rename a machine
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#remove-a-machine" class="md-nav__link">
+    <span class="md-ellipsis">
+      Remove a machine
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    Reference
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            Reference
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/parameters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Document
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/search/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Searches
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/agents/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Agent options
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/commands/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Document commands
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/presets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Presets
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/refusals/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Refusals
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/glossary/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Glossary
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#whose-machine-it-is" class="md-nav__link">
+    <span class="md-ellipsis">
+      Whose machine it is
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-the-machine-needs" class="md-nav__link">
+    <span class="md-ellipsis">
+      What the machine needs
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-machines-page" class="md-nav__link">
+    <span class="md-ellipsis">
+      The Machines page
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-line" class="md-nav__link">
+    <span class="md-ellipsis">
+      The line
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The line">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#a-machine-added-before-the-system-service" class="md-nav__link">
+    <span class="md-ellipsis">
+      A machine added before the system service
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#labels-and-needs" class="md-nav__link">
+    <span class="md-ellipsis">
+      Labels and needs
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#limits" class="md-nav__link">
+    <span class="md-ellipsis">
+      Limits
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#which-machine-a-step-goes-to" class="md-nav__link">
+    <span class="md-ellipsis">
+      Which machine a step goes to
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#proxies" class="md-nav__link">
+    <span class="md-ellipsis">
+      Proxies
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#when-a-machine-cannot-run-a-step" class="md-nav__link">
+    <span class="md-ellipsis">
+      When a machine cannot run a step
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#updates" class="md-nav__link">
+    <span class="md-ellipsis">
+      Updates
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#drain-a-machine" class="md-nav__link">
+    <span class="md-ellipsis">
+      Drain a machine
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#a-storage-machine" class="md-nav__link">
+    <span class="md-ellipsis">
+      A storage machine
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#rotate-a-machines-keys" class="md-nav__link">
+    <span class="md-ellipsis">
+      Rotate a machine's keys
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#rename-a-machine" class="md-nav__link">
+    <span class="md-ellipsis">
+      Rename a machine
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#remove-a-machine" class="md-nav__link">
+    <span class="md-ellipsis">
+      Remove a machine
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="machines">Machines<a class="headerlink" href="#machines" title="Permanent link">&para;</a></h1>
+<p>Run some steps on <strong>another machine</strong>: one with an FPGA board, a licensed tool, or more cores or
+memory. Add it once from the Machines page and one line run on it; then a check or stage whose <code>needs</code> matches its labels runs
+there, and its numbers come back as if run on the server
+(<a href="../../guide/parameters/#resource-hints-needs">Resource hints</a>).</p>
+<h2 id="whose-machine-it-is">Whose machine it is<a class="headerlink" href="#whose-machine-it-is" title="Permanent link">&para;</a></h2>
+<p><a class="shot-link" href="../../assets/web/group-machines-light.webp" data-only="light"><img alt="A group's Machines tab: its machines, used by its members' loops" src="../../assets/web/group-machines-light.webp#only-light" /></a>
+<a class="shot-link" href="../../assets/web/group-machines-dark.webp" data-only="dark"><img alt="A group's Machines tab: its machines, used by its members' loops" src="../../assets/web/group-machines-dark.webp#only-dark" /></a></p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>A server machine</th>
+<th>A group's machine</th>
+<th>Your own machine</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Added by</td>
+<td>an admin</td>
+<td>an admin or one of the group's managers</td>
+<td>any user</td>
+</tr>
+<tr>
+<td>Used by</td>
+<td>every user's loops</td>
+<td>the loops of the group's <strong>members</strong></td>
+<td>only the loops <strong>you own</strong>: never a loop shared with you, never anyone else's</td>
+</tr>
+<tr>
+<td>Added in</td>
+<td><strong>Admin › Runtime › Machines</strong></td>
+<td>the group's <strong>Machines</strong> tab, or <strong>Admin › Runtime › Machines</strong> (Role: A group's)</td>
+<td><strong>Account › Machines</strong></td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li>A loop uses its <strong>owner's</strong> machines, whoever starts it. A step goes to any machine its <code>needs</code>
+  match; no kind is preferred.</li>
+<li>A member who leaves a group (or is disabled) stops using its machines within seconds; running
+  steps finish.</li>
+<li>Deleting a group revokes its machines and cancels unused codes.</li>
+<li>Machine names are unique across the server.</li>
+</ul>
+<h2 id="what-the-machine-needs">What the machine needs<a class="headerlink" href="#what-the-machine-needs" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Linux</strong> with systemd and <strong>Podman 4.9+</strong> (cgroup v2): Ubuntu 24.04, Debian 13, Fedora,
+  RHEL 9.4+. The line delegates cgroup controllers to the <code>flux</code> account as the server installer
+  does (<a href="../../start/install/#system-service">System service</a>).</li>
+<li><strong>Nix</strong>, multi-user. The line lets <code>flux</code> use it and adds the binary caches (cache.nixos.org,
+  nixchip0.cachix.org), as the server installer does.</li>
+<li>Network to the Flux server and the public Nix caches. No Git, repository access or credentials.</li>
+</ul>
+<p>Run the line with <code>sudo</code>. It installs the runner as the system service <code>flux-worker</code> under the
+<code>flux</code> account. If something is missing it says what and stops; run it again after.</p>
+<h2 id="the-machines-page">The Machines page<a class="headerlink" href="#the-machines-page" title="Permanent link">&para;</a></h2>
+<p><a class="shot-link" href="../../assets/web/admin-machines-light.webp" data-only="light"><img alt="Admin › Runtime › Machines: this server, server machines, a group's, a user's, a storage machine" src="../../assets/web/admin-machines-light.webp#only-light" /></a>
+<a class="shot-link" href="../../assets/web/admin-machines-dark.webp" data-only="dark"><img alt="Admin › Runtime › Machines: this server, server machines, a group's, a user's, a storage machine" src="../../assets/web/admin-machines-dark.webp#only-dark" /></a></p>
+<ul>
+<li><strong>Admin › Runtime › Machines</strong>: every machine (server, group, user).</li>
+<li>A group's <strong>Machines</strong> tab (<code>#/groups/&lt;id&gt;/machines</code>): that group's.</li>
+<li><strong>Account › Machines</strong>: yours, and below them <strong>the other machines your loops may use</strong>
+  (read-only), so you know which labels to ask for.</li>
+</ul>
+<p>Each shows:</p>
+<ul>
+<li><strong>Totals</strong>: cores, memory, devices (<code>fpga=1</code>), and use. "1 unhealthy" flags a machine taking no
+  steps.</li>
+<li><strong>A row per machine</strong>: labels (× removes, <strong>+</strong> adds: <code>lab</code>, <code>fpga=1</code>, <code>board=zcu104</code>), use
+  (<code>2/16 cores</code>, <code>8/56 GB</code>), health (healthy, unhealthy with why, setting up or updating with
+  progress, draining or drained, away after five silent minutes), running steps, Flux version
+  (<strong>old</strong> when behind), last heard. Menu: <strong>Rename</strong>, <strong>Drain</strong>/<strong>Resume</strong>, <strong>Rotate keys</strong>,
+  <strong>Revoke</strong>.</li>
+<li><strong>This server</strong>: the first row (accent dot), where unlabelled steps run. Admins give it labels
+  and <strong>Rename</strong> it.</li>
+<li><strong>Waiting</strong>: steps no machine has taken, and why.</li>
+<li><strong>Codes not used yet</strong>, with <strong>Cancel</strong>.</li>
+</ul>
+<p><strong>+ Add machine</strong> (admins pick the <strong>Role</strong>) or <strong>+ Add my machine</strong>: a name and labels, then the
+line to run, with <strong>Copy</strong> (and a hash-checked form for plain HTTP).</p>
+<p>Labels set on the page replace earlier ones. A user's machine's labels are set only by that user;
+admins can still drain or revoke it. Group machine changes are audited (<em>group machine</em>).</p>
+<h2 id="the-line">The line<a class="headerlink" href="#the-line" title="Permanent link">&para;</a></h2>
+<p><a id="add-a-machine-from-the-servers-console"></a></p>
+<p><strong>+ Add machine</strong> (or <strong>+ Add my machine</strong>) makes a one-time code and shows the line to run on the
+new machine, with <strong>Copy</strong>:</p>
+<div class="highlight"><pre><span></span><code>curl<span class="w"> </span>-fsSL<span class="w"> </span>http://flux.example.org:8765/worker/install.sh<span class="w"> </span><span class="p">|</span><span class="w"> </span>sudo<span class="w"> </span>sh<span class="w"> </span>-s<span class="w"> </span>--<span class="w"> </span><span class="s1">'fx1-…@…'</span>
+</code></pre></div>
+<ul>
+<li>The code works <strong>once</strong>, for <strong>one hour</strong>.</li>
+<li>The line checks Podman and Nix, makes the <code>flux</code> account, joins, gets Flux from the server,
+  prepares tools (~2 GB the first time), tests a container, and starts the <code>flux-worker</code>
+  service. The machine's row shows its progress (<em>setting up</em>).</li>
+<li>Files: <code>/var/lib/flux-worker</code>; cache: <code>/var/cache/flux-worker</code>.</li>
+<li><strong>Run it again</strong> (no code needed) to repair or change options; it keeps the machine's identity.</li>
+<li>Over plain HTTP, use the page's hash-checked form.</li>
+<li>Options after the code: <code>--label KEY=VALUE</code> (repeat), <code>--jobs N</code> (steps at once, default 2).</li>
+</ul>
+<h3 id="a-machine-added-before-the-system-service">A machine added before the system service<a class="headerlink" href="#a-machine-added-before-the-system-service" title="Permanent link">&para;</a></h3>
+<p>A machine whose runner was a user service takes no steps. <strong>Revoke</strong> it, remove its user service
+on the machine, and add it again with a new code.</p>
+<h2 id="labels-and-needs">Labels and <code>needs</code><a class="headerlink" href="#labels-and-needs" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><span class="nt">flow</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">measure</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">board</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">run</span><span class="p">:</span><span class="w"> </span><span class="s">"{python}</span><span class="nv"> </span><span class="s">{home}/on_board.py</span><span class="nv"> </span><span class="s">{artifact}"</span>
+<span class="w">      </span><span class="nt">metrics</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">latency</span><span class="p p-Indicator">]</span>
+<span class="w">      </span><span class="nt">needs</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">fpga</span><span class="p">:</span><span class="w"> </span><span class="nv">true</span><span class="p p-Indicator">,</span><span class="nt"> board</span><span class="p">:</span><span class="w"> </span><span class="nv">zcu104</span><span class="p p-Indicator">}</span>
+</code></pre></div>
+<table>
+<thead>
+<tr>
+<th><code>needs</code></th>
+<th>Matches</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>key: true</code></td>
+<td>The machine has the label</td>
+</tr>
+<tr>
+<td>A number (<code>fpga: 1</code>)</td>
+<td>Takes one of a counted resource; <code>fpga=2</code> runs two such steps at once</td>
+</tr>
+<tr>
+<td>A word (<code>board: zcu104</code>)</td>
+<td>Exactly that value</td>
+</tr>
+<tr>
+<td><code>cores</code>, <code>memory</code>, <code>disk</code>, <code>arch</code>, <code>os</code></td>
+<td>What the machine measures itself (not settable by label)</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li>Design's <code>run</code>, the baseline's, a search's <code>run</code> and the scope's commands take <code>needs</code> too.
+  Agent work always runs on the server.</li>
+<li><strong>A whole loop</strong> on a machine: <code>needs</code> in its mode block (<code>flow: {needs: {bigmem: true}}</code> or
+  <code>trunk: {needs: ...}</code>). Requires the server's admin to allow whole-loop runs, and a machine
+  joined as a full machine. The log's start line says where it runs.</li>
+<li>Parallel work for a whole-loop run: on the server or a server machine, the loop's <strong>Allow
+  parallel work</strong>; on your own machine, always; on a group's, the group's <strong>Allow parallel work on
+  our machines</strong>.</li>
+<li>Set labels in the machine's row (<strong>+</strong>, <strong>×</strong>), or with <code>--label</code> on the line. A label only
+  your machine has (<code>alice-board: true</code>) keeps your steps there.</li>
+<li>This server's labels: its row (admins).</li>
+</ul>
+<h2 id="limits">Limits<a class="headerlink" href="#limits" title="Permanent link">&para;</a></h2>
+<p>Each step runs in its own Podman sandbox with the loop's sandbox settings (never above the
+machine's size) and the server's network policy. A step without <code>memory</code> in <code>needs</code> reserves none.</p>
+<h2 id="which-machine-a-step-goes-to">Which machine a step goes to<a class="headerlink" href="#which-machine-a-step-goes-to" title="Permanent link">&para;</a></h2>
+<ul>
+<li>A free machine holding most of the step's inputs (earlier stages, input files) is preferred.
+  A step never waits for "its" machine.</li>
+<li>The user who waited longest since their last step goes first.</li>
+<li>If this server matches too, whichever is free first runs it.</li>
+<li>Runner cache: a quarter of the disk, at most 50 GB, least recently used evicted.</li>
+</ul>
+<h2 id="proxies">Proxies<a class="headerlink" href="#proxies" title="Permanent link">&para;</a></h2>
+<p>The line and the runner honour <code>HTTP_PROXY</code>, <code>HTTPS_PROXY</code>, <code>NO_PROXY</code> (set them in your shell
+before the line; it reads them despite <code>sudo</code>). Give <code>nix-daemon</code> the proxy too when caches need
+it.</p>
+<h2 id="when-a-machine-cannot-run-a-step">When a machine cannot run a step<a class="headerlink" href="#when-a-machine-cannot-run-a-step" title="Permanent link">&para;</a></h2>
+<p>A full disk, a failed sandbox or missing tools are the machine's fault: the step returns to the
+queue for another machine, and this one is <strong>unhealthy</strong> until it checks itself again. A step
+killed for lack of memory runs once more. The machine's row shows its labels, steps and health.</p>
+<h2 id="updates">Updates<a class="headerlink" href="#updates" title="Permanent link">&para;</a></h2>
+<p>A machine updates itself when the server's Flux changes: it stops taking steps, gets the new Flux,
+prepares tools, checks itself, and restarts in seconds with the same identity. Running steps carry
+on (one that cannot is measured again). It shows "updating" meanwhile.</p>
+<p>A failed update keeps the old Flux and takes no steps (unhealthy, with why); it retries after ten
+minutes or at the server's next update. A runner started by hand, or added before the system
+service, cannot update: run the line again (or re-add it).</p>
+<h2 id="drain-a-machine">Drain a machine<a class="headerlink" href="#drain-a-machine" title="Permanent link">&para;</a></h2>
+<p><strong>Drain</strong> in its row: it finishes running steps and takes no new ones. <strong>Resume</strong> puts it back.
+Owners can drain their own machines.</p>
+<h2 id="a-storage-machine">A storage machine<a class="headerlink" href="#a-storage-machine" title="Permanent link">&para;</a></h2>
+<p>A <strong>storage machine</strong> caches loop files for the runners: each file comes from the server once. It
+runs no steps.</p>
+<p>Admins: <strong>+ Add machine</strong>, Role <strong>Storage</strong>. Its line ends in <code>--role storage</code>.</p>
+<ul>
+<li>Needs Nix and the network, no Podman.</li>
+<li>Runners reach it on port <strong>8766</strong>. Options: <code>--listen HOST:PORT</code> (default <code>0.0.0.0:8766</code>),
+  <code>--url URL</code> (default <code>http://&lt;its name&gt;:8766</code>).</li>
+<li>Keeps files unused for a week at most, within half its disk.</li>
+<li>While it is down, runners fetch from the server.</li>
+<li>Shown with a <strong>Storage</strong> tag.</li>
+</ul>
+<h2 id="rotate-a-machines-keys">Rotate a machine's keys<a class="headerlink" href="#rotate-a-machines-keys" title="Permanent link">&para;</a></h2>
+<p><strong>Rotate keys</strong> in its row (admins for any, you for yours). New keys at the next heartbeat; the old ones stop working. No new join code. The row says "new
+keys asked" until done.</p>
+<h2 id="rename-a-machine">Rename a machine<a class="headerlink" href="#rename-a-machine" title="Permanent link">&para;</a></h2>
+<p><strong>Rename</strong> in its row (admins for any, this server included; you for yours). Names: lower-case letters, digits, <code>.</code>, <code>_</code>, <code>-</code>; unique (revoked machines and pending codes
+included). Same machine: keys, labels and steps stay. Past results keep the old name.</p>
+<h2 id="remove-a-machine">Remove a machine<a class="headerlink" href="#remove-a-machine" title="Permanent link">&para;</a></h2>
+<p><strong>Revoke</strong> in its row: its key is refused from now on, and the steps it holds go back to the
+queue. On the machine, disable the <code>flux-worker</code> service and remove its unit,
+<code>/var/lib/flux-worker</code> and <code>/var/cache/flux-worker</code>.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../admin/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Admin">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Admin
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../../guide/parameters/" class="md-footer__link md-footer__link--next" aria-label="Next: Document">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                Document
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">© 2026 Flux</div>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      <script id="__config" type="application/json">{"base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.footer", "content.code.copy", "content.code.annotate", "toc.follow", "search.suggest"], "search": "../../assets/javascripts/workers/search.973d3a69.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.f55a23d4.min.js"></script>
+      
+    
+  </body>
+</html>
