@@ -1,0 +1,2041 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Flux searches for better designs: it makes them with a script, a model or a coding agent, checks and measures them with real tools, and decides from your objectives.">
+      
+      
+      
+        <link rel="canonical" href="https://choelzl.github.io/flux/web/chat/">
+      
+      
+        <link rel="prev" href="../files/">
+      
+      
+        <link rel="next" href="../groups/">
+      
+      
+      <link rel="icon" href="../../assets/app/logo.svg">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.6.23">
+    
+    
+      
+        <title>Chat - Flux</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.84d31ad4.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.06af60db.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/flux-theme.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#chat" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="Flux" class="md-header__button md-logo" aria-label="Flux" data-md-component="logo">
+      <svg class="flux-logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" aria-label="Flux"><g fill="currentColor"><rect x="78" y="8" width="16" height="28" rx="8"/><rect x="120" y="8" width="16" height="28" rx="8"/><rect x="162" y="8" width="16" height="28" rx="8"/><rect x="120" y="220" width="16" height="28" rx="8"/><rect x="162" y="220" width="16" height="28" rx="8"/><rect x="8" y="78" width="28" height="16" rx="8"/><rect x="8" y="120" width="28" height="16" rx="8"/><rect x="8" y="162" width="28" height="16" rx="8"/><rect x="220" y="78" width="28" height="16" rx="8"/><rect x="220" y="120" width="28" height="16" rx="8"/><rect x="220" y="162" width="28" height="16" rx="8"/></g><rect x="78" y="208" width="16" height="40" rx="8" fill="#f66824"/><g fill="none" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"><rect x="40" y="40" width="176" height="176" rx="32" stroke="currentColor"/><path d="M86 248V118A32 32 0 0 1 118 86H174" stroke="#f66824"/><path d="M128 248V146A18 18 0 0 1 146 128H166" stroke="currentColor"/></g></svg>
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Flux
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Chat
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/choelzl/flux" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    choelzl/flux
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../start/install/" class="md-tabs__link">
+          
+  
+  
+  Start
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../guide/build-your-own/" class="md-tabs__link">
+          
+  
+  
+  Guide
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../" class="md-tabs__link">
+          
+  
+  
+  Web app
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../guide/parameters/" class="md-tabs__link">
+          
+  
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="Flux" class="md-nav__button md-logo" aria-label="Flux" data-md-component="logo">
+      <svg class="flux-logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" aria-label="Flux"><g fill="currentColor"><rect x="78" y="8" width="16" height="28" rx="8"/><rect x="120" y="8" width="16" height="28" rx="8"/><rect x="162" y="8" width="16" height="28" rx="8"/><rect x="120" y="220" width="16" height="28" rx="8"/><rect x="162" y="220" width="16" height="28" rx="8"/><rect x="8" y="78" width="28" height="16" rx="8"/><rect x="8" y="120" width="28" height="16" rx="8"/><rect x="8" y="162" width="28" height="16" rx="8"/><rect x="220" y="78" width="28" height="16" rx="8"/><rect x="220" y="120" width="28" height="16" rx="8"/><rect x="220" y="162" width="28" height="16" rx="8"/></g><rect x="78" y="208" width="16" height="40" rx="8" fill="#f66824"/><g fill="none" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"><rect x="40" y="40" width="176" height="176" rx="32" stroke="currentColor"/><path d="M86 248V118A32 32 0 0 1 118 86H174" stroke="#f66824"/><path d="M128 248V146A18 18 0 0 1 146 128H166" stroke="currentColor"/></g></svg>
+    </a>
+    Flux
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/choelzl/flux" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    choelzl/flux
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Home
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    Start
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            Start
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../start/install/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Install
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/tutorial/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    First loop
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../start/ask/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Write a loop with an agent
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../start/vscode/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    VS Code
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../preview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Preview app
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    Guide
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            Guide
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/build-your-own/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Configure
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/loop-shape/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Search and agents
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/knowledge/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Knowledge and skills
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/cookbook/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Recipes
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/run/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Run, stop, resume
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/models/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Models and agents
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    Web app
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            Web app
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Tour
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../live/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Live
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../results/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Results
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../files/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Files and settings
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    Chat
+    
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    Chat
+    
+  </span>
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-page" class="md-nav__link">
+    <span class="md-ellipsis">
+      The page
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The page">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#attached-files" class="md-nav__link">
+    <span class="md-ellipsis">
+      Attached files
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pictures-diagrams-and-charts" class="md-nav__link">
+    <span class="md-ellipsis">
+      Pictures, diagrams and charts
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#loop-chats" class="md-nav__link">
+    <span class="md-ellipsis">
+      Loop chats
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#project-chats" class="md-nav__link">
+    <span class="md-ellipsis">
+      Project chats
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#questions" class="md-nav__link">
+    <span class="md-ellipsis">
+      Questions
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#actions" class="md-nav__link">
+    <span class="md-ellipsis">
+      Actions
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#settings" class="md-nav__link">
+    <span class="md-ellipsis">
+      Settings
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#on-the-web" class="md-nav__link">
+    <span class="md-ellipsis">
+      On the web
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-workbench" class="md-nav__link">
+    <span class="md-ellipsis">
+      The workbench
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#a-loops-chat-workbench" class="md-nav__link">
+    <span class="md-ellipsis">
+      A loop's Chat workbench
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#share" class="md-nav__link">
+    <span class="md-ellipsis">
+      Share
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../groups/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Groups and projects
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../admin/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Admin
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../machines/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Machines
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    Reference
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            Reference
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/parameters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Document
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/search/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Searches
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/agents/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Agent options
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/commands/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Document commands
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/presets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Presets
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/refusals/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Refusals
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/glossary/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Glossary
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-page" class="md-nav__link">
+    <span class="md-ellipsis">
+      The page
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The page">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#attached-files" class="md-nav__link">
+    <span class="md-ellipsis">
+      Attached files
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pictures-diagrams-and-charts" class="md-nav__link">
+    <span class="md-ellipsis">
+      Pictures, diagrams and charts
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#loop-chats" class="md-nav__link">
+    <span class="md-ellipsis">
+      Loop chats
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#project-chats" class="md-nav__link">
+    <span class="md-ellipsis">
+      Project chats
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#questions" class="md-nav__link">
+    <span class="md-ellipsis">
+      Questions
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#actions" class="md-nav__link">
+    <span class="md-ellipsis">
+      Actions
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#settings" class="md-nav__link">
+    <span class="md-ellipsis">
+      Settings
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#on-the-web" class="md-nav__link">
+    <span class="md-ellipsis">
+      On the web
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-workbench" class="md-nav__link">
+    <span class="md-ellipsis">
+      The workbench
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#a-loops-chat-workbench" class="md-nav__link">
+    <span class="md-ellipsis">
+      A loop's Chat workbench
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#share" class="md-nav__link">
+    <span class="md-ellipsis">
+      Share
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="chat">Chat<a class="headerlink" href="#chat" title="Permanent link">&para;</a></h1>
+<p><strong>Chat</strong> (top bar) is a conversation with an agent or FluxAgent, bound to no loop. Ask about your
+loops, a paper, an idea; have it write a script or keep notes. Available when an admin enables it
+(<a href="../admin/#chat">Admin › Runtime › Chat</a>).</p>
+<h2 id="the-page">The page<a class="headerlink" href="#the-page" title="Permanent link">&para;</a></h2>
+<p><a class="shot-link" href="../../assets/web/chat-light.webp" data-only="light"><img alt="Chat: the conversations' rail and a new chat" src="../../assets/web/chat-light.webp#only-light" /></a>
+<a class="shot-link" href="../../assets/web/chat-dark.webp" data-only="dark"><img alt="Chat: the conversations' rail and a new chat" src="../../assets/web/chat-dark.webp#only-dark" /></a></p>
+<p>The rail (left) lists chats; the conversation is in the middle; <strong>Settings</strong> (the sliders, top
+right) opens on the right.</p>
+<p><strong>Rail tabs</strong>: <strong>Chats</strong> (yours), <strong>Loops</strong> (<a href="#loop-chats">Loop chats</a>), <strong>Projects</strong>
+(<a href="#project-chats">Project chats</a>), then <strong>+</strong> and <strong>Close</strong>. Arrow keys, <strong>Home</strong> and <strong>End</strong> move
+between tabs. A tab with a question waiting shows a dot.</p>
+<ul>
+<li><strong>+</strong> starts a chat where you are: your own, or on the open loop or project.</li>
+<li><strong>Chats</strong>: a <strong>Search</strong> box, then <strong>Pinned</strong>, <strong>Today</strong>, <strong>This week</strong>, <strong>Earlier</strong>. A spinner
+  marks a chat being answered; a dot marks one asking you (the top bar's <strong>Chat</strong> too).</li>
+<li>A chat's <strong>more</strong> menu (three dots): <strong>Pin</strong> / <strong>Unpin</strong> (yours alone), <strong>Rename</strong>, <strong>Delete</strong>
+  (removes messages and answers; the workbench stays).</li>
+<li><strong>Close</strong> hides the rail; the <strong>menu</strong> button brings it back.</li>
+</ul>
+<p>Your messages are on the right, answers below. Under each answer: the agent, how long it took,
+and <strong>Thinking &amp; commands</strong> (the terminal icon). Files the answer wrote are listed under it
+(<em>↳ designs/adder8_csel4.sv</em>); click to open.</p>
+<p><strong>The message box</strong>:</p>
+<ul>
+<li><strong>Enter</strong> sends (also <strong>Ctrl+Enter</strong>, <strong>⌘+Enter</strong>); <strong>Shift+Enter</strong> adds a line.</li>
+<li>Pick the agent inside the box (agents offered for Ask, with your settings:
+  <a href="../../guide/models/">Models and agents</a>). A <strong>!</strong> means it is not ready: click for <strong>Test</strong> and
+  <strong>Set up</strong>.</li>
+<li><strong>Think</strong>: a slower, more considered answer. Each agent starts as the admin set it
+  (<a href="../admin/#thinking-by-default">thinking by default</a>); your browser remembers your choice per
+  agent.</li>
+<li><strong>Effort</strong> (with Think on, for coding agents): Claude Code <code>low</code> to <code>max</code>, Codex <code>none</code> to
+  <code>xhigh</code>, OpenCode <code>minimal</code> to <code>max</code>; <em>default</em> is its thinking effort. FluxAgent's <strong>Effort</strong>
+  (<em>low</em> to <em>max</em>) shows always.</li>
+<li>One answer at a time per chat. The row shows <em>Sending…</em>, <em>Starting…</em>, <em>Starting OpenCode…</em>,
+  then the agent's current command, with <strong>Stop</strong>.</li>
+<li>A stopped answer is kept, marked <em>Stopped before it ended</em>. A failed one says why with <strong>Retry</strong>.</li>
+<li>Opening a chat picks the agent of its last answer.</li>
+<li>Answers run in your own sandbox, kept warm between messages (the admin sets how long). An
+  answer interrupted by a settings change or update restarts (<em>restarted: …</em>).</li>
+<li>Coding agents have time and tool-call limits set by the admin.</li>
+</ul>
+<h3 id="attached-files">Attached files<a class="headerlink" href="#attached-files" title="Permanent link">&para;</a></h3>
+<p>Attach with the <strong>paperclip</strong>, by dropping on the conversation, or by pasting (a screenshot
+becomes <em>pasted-<date>-<time>.png</em>).</p>
+<ul>
+<li>Each uploads at once as a chip above the box (<strong>Remove</strong> takes it off) and goes with your next
+  message.</li>
+<li>Limits: 50 MB per file, 10 per message, unless the admin changes them.</li>
+<li>Kept in the workbench's <code>uploads/</code> (workbench on), else in the answer's <code>attached/</code>. Names never
+  overwrite (<em>notes (2).md</em>).</li>
+<li>Coding agents open any file with their own tools. FluxAgent reads text, PDF, Word, Excel,
+  PowerPoint and OpenDocument, not pictures.</li>
+<li>In a loop's Chat: editors' files go to the <a href="#a-loops-chat-workbench">Chat workbench</a>'s
+  <code>uploads/</code>; others' stay with the answer. Never in the loop's own folders.</li>
+</ul>
+<h3 id="pictures-diagrams-and-charts">Pictures, diagrams and charts<a class="headerlink" href="#pictures-diagrams-and-charts" title="Permanent link">&para;</a></h3>
+<p>Answers are Markdown. Code blocks have <strong>Copy</strong>; a block opened with four backticks or <code>~~~</code> can
+hold <code>```</code> fences.</p>
+<ul>
+<li><strong>Pictures</strong>: <code>![caption](/workbench/plots/speed.png)</code>, or <code>library/...</code> in a loop or project
+  chat. PNG, JPEG, GIF, WebP and SVG. Click to open the viewer (wheel or pinch to zoom, drag to
+  move, <strong>Fit</strong> or <strong>0</strong>, <strong>Esc</strong> to close). Anything else (web addresses, <code>data:</code>, paths outside
+  the workbench or library) stays as text.</li>
+<li>**<code>``svg**: drawn in the page's colours. Classes:</code>box<code>,</code>edge<code>,</code>label<code>, tones</code>ink<code>,</code>muted<code>,</code>line<code>,</code>surface<code>,</code>accent<code>,</code>ok<code>,</code>warn<code>,</code>bad<code>, tints</code>box tint-1<code>to</code>box tint-6`.</li>
+<li>**<code>``figure**: HTML cards and containers for drawings no diagram kind fits. Root</code><figure width="760" height="534"><code>; classes</code>card<code>,</code>group<code>,</code>group dashed<code>, tones,</code>tint-1<code>–</code>tint-6<code>,</code>grid cols-3<code>, icons</code><i data-icon="cpu"></i><code>, arrows in</code><svg class="wires"><code>. Scripts, handlers, frames, images, forms, links and outside</code>url()` are
+  removed.</li>
+<li><strong>```diagram</strong>: a short YAML that names parts and picks a kind; Flux lays it out.</li>
+<li><strong>```chart</strong>: JSON; drawn like Results' charts.</li>
+<li><strong>Save to the workbench</strong> writes a drawing as <code>plots/&lt;name&gt;.svg</code> (a diagram's YAML beside it as
+  <code>plots/&lt;name&gt;.diagram.yaml</code>).</li>
+<li>Nothing an agent wrote runs: drawings are shown as images.</li>
+<li>Without the <strong>Internals</strong> permission, svg, figure and diagram blocks arrive as finished pictures
+  (<strong>Fullscreen</strong> and <strong>Save image</strong> only, no source). Charts are the same for everyone.</li>
+<li>```mermaid is no longer drawn: old answers show it as code to admins, a note to others.</li>
+</ul>
+<p><strong>Diagram kinds:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Kind</th>
+<th>Draws</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>pipeline</code></td>
+<td>Stages in columns, pipeline registers between, back edges in lanes below</td>
+</tr>
+<tr>
+<td><code>cycle</code></td>
+<td>Equal steps in a row, back edges below, an optional band</td>
+</tr>
+<tr>
+<td><code>architecture</code></td>
+<td>Rows of cards and groups (name, muted line, icon)</td>
+</tr>
+<tr>
+<td><code>layers</code></td>
+<td>Stacked bands; a bus joins every box beside it</td>
+</tr>
+<tr>
+<td><code>blocks</code></td>
+<td>Free composition: boxes, stores, states, start/end dots, buses, nested groups; state machines and flow charts (<code>@decision</code> diamonds)</td>
+</tr>
+<tr>
+<td><code>timing</code></td>
+<td>Waveforms: one word a cycle (<code>0 1 . x A0 z</code>), phases, edge arrows (<code>valid@2 -&gt; ready@4: handshake</code>), skipped cycles (<code>~12</code>), gated clock (<code>c</code>); also week plans</td>
+</tr>
+<tr>
+<td><code>memory</code></td>
+<td>A memory map, highest address on top, holes shown, nested regions</td>
+</tr>
+<tr>
+<td><code>sequence</code></td>
+<td>Participants, lifelines, messages, dotted replies, <code>alt</code> and <code>loop</code> frames</td>
+</tr>
+<tr>
+<td><code>register</code></td>
+<td>A register map: rows by offset, fields by bit</td>
+</tr>
+<tr>
+<td><code>network</code></td>
+<td>A topology by name and size (<code>topology: mesh 8x8</code>, torus, ring, tree, fat-tree, butterfly, Clos, hypercube, dragonfly), routes, attached blocks (<code>attach: {R00: [MC0 @storage]}</code>)</td>
+</tr>
+<tr>
+<td><code>matrix</code></td>
+<td>A table of cells (a cache's sets by ways, a reservation table)</td>
+</tr>
+<tr>
+<td><code>panels</code></td>
+<td>Up to four drawings on one image, a <code>chart</code> among them</td>
+</tr>
+<tr>
+<td><code>sankey</code></td>
+<td>Flows <code>From -&gt; To: amount</code>; <code>percent: source</code> or <code>percent: total</code> adds shares</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li>In <code>blocks</code>, edges place things ("A -&gt; B"); <code>place:</code> lines add the rest ("Registers under
+  Execute"). Ports (<code>Adder.a</code>), bundles (<code>A, B -&gt; X, Y</code>), <code>layout: ring</code>.</li>
+<li>Ranges name many parts (<code>R00..R33</code>). Edge widths: <code>@wide</code>, <code>@narrow</code>. <code>legend:</code> explains tones.</li>
+<li>Roles tint parts: <code>@compute</code>, <code>@storage</code>, <code>@interconnect</code>, <code>@io</code>, <code>@control</code>, <code>@external</code>;
+  <code>@accent</code> highlights.</li>
+</ul>
+<div class="highlight"><pre><span></span><code><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cycle</span>
+<span class="nt">title</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">The loop</span>
+<span class="nt">steps</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">Search</span><span class="p p-Indicator">:</span><span class="w"> </span><span class="nv">What to try</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">Design</span><span class="p p-Indicator">:</span><span class="w"> </span><span class="nv">Make it</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">Check</span><span class="p p-Indicator">:</span><span class="w"> </span><span class="nv">Verify it</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">Measure</span><span class="p p-Indicator">:</span><span class="w"> </span><span class="nv">Evaluate it</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">Choose</span><span class="p p-Indicator">:</span><span class="w"> </span><span class="nv">Select it</span><span class="p p-Indicator">]</span>
+<span class="nt">back</span><span class="p">:</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">Check -&gt; Design</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Failed check</span>
+<span class="nt">legend</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">bad</span><span class="p">:</span><span class="w"> </span><span class="nv">a failed check goes back</span><span class="p p-Indicator">}</span>
+</code></pre></div>
+<ul>
+<li>Flux sizes and routes everything so nothing overlaps and it fits the column. A label with no
+  room becomes a number with a key. Too wide: it reflows, else is drawn wider and fitted.</li>
+<li>A block with mistakes shows its errors instead ("edge 3: unknown box 'Excute' (did you mean
+  Execute?)"), and <strong>Ask to fix</strong> drafts a fix request.</li>
+<li>Before you see an answer, Flux sends a broken diagram back to the agent, up to 5 times
+  (<strong>Diagram tries</strong> in <a href="../admin/#chat">Admin › Runtime › Chat</a>; 0 turns it off). The row says
+  <em>Fixing the diagram (2 of 5)…</em>. After the last try: <em>Flux sent this diagram back to be fixed
+  5 times; it still does not draw.</em> One that reads badly is sent back once more.</li>
+</ul>
+<p><strong>Charts:</strong></p>
+<div class="highlight"><pre><span></span><code><span class="p">{</span><span class="nt">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"scatter"</span><span class="p">,</span><span class="w"> </span><span class="nt">"title"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Area against fmax"</span><span class="p">,</span>
+<span class="w"> </span><span class="nt">"x"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">"label"</span><span class="p">:</span><span class="w"> </span><span class="s2">"MHz"</span><span class="p">},</span><span class="w"> </span><span class="nt">"y"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">"label"</span><span class="p">:</span><span class="w"> </span><span class="s2">"um2"</span><span class="p">,</span><span class="w"> </span><span class="nt">"log"</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="p">},</span>
+<span class="w"> </span><span class="nt">"series"</span><span class="p">:</span><span class="w"> </span><span class="p">[{</span><span class="nt">"name"</span><span class="p">:</span><span class="w"> </span><span class="s2">"sweep"</span><span class="p">,</span><span class="w"> </span><span class="nt">"points"</span><span class="p">:</span><span class="w"> </span><span class="p">[[</span><span class="mi">800</span><span class="p">,</span><span class="w"> </span><span class="mi">30</span><span class="p">],</span><span class="w"> </span><span class="p">[</span><span class="mi">1200</span><span class="p">,</span><span class="w"> </span><span class="mi">18</span><span class="p">]]},</span>
+<span class="w">            </span><span class="p">{</span><span class="nt">"loop"</span><span class="p">:</span><span class="w"> </span><span class="s2">"bob/mul8"</span><span class="p">,</span><span class="w"> </span><span class="nt">"x"</span><span class="p">:</span><span class="w"> </span><span class="s2">"fmax_mhz"</span><span class="p">,</span><span class="w"> </span><span class="nt">"y"</span><span class="p">:</span><span class="w"> </span><span class="s2">"area_um2"</span><span class="p">}]}</span>
+</code></pre></div>
+<ul>
+<li><code>type</code>: <code>line</code> (default), <code>scatter</code>, <code>bar</code> (x may be a category).</li>
+<li>An axis may say <code>"better": "lower"</code> (or <code>"higher"</code>): best-so-far step line, or dashed fronts.
+  <code>"goal": 2</code> draws a dashed line ("≤ 2").</li>
+<li>Point tags: <code>["4 @failed", 2.3]</code> hollow, <code>@decision</code> orange ring, <code>@accent</code>, <code>@ok</code>, <code>@warn</code>,
+  <code>@bad</code> ring it.</li>
+<li>A loop series: <code>loop</code> (<code>owner/loop</code>), <code>y</code> a metric, <code>x</code> <code>design</code> (default) or a metric; optional
+  <code>stage</code>, <code>part</code>. Read live with <strong>your</strong> rights, drawn as Results draws it. Click a point for
+  <strong>Open in Results</strong>. An unreadable loop says "<em>owner/loop</em>: not available".</li>
+<li>Limits: 8 series, 500 points per written series, a loop's newest 5000 designs.</li>
+<li><strong>Show the source</strong>, <strong>Copy</strong>, <strong>Fullscreen</strong>, <strong>Zoom to an area</strong>.</li>
+<li>An invalid block stays as code with why ("Not a chart: colour is no field of a chart.").</li>
+</ul>
+<h2 id="loop-chats">Loop chats<a class="headerlink" href="#loop-chats" title="Permanent link">&para;</a></h2>
+<p>The <strong>Loops</strong> tab lists each loop you can read that has conversations, latest first (loops you
+may ask about with none yet come after, greyed). <strong>Find a loop or a chat</strong> filters.</p>
+<ul>
+<li>Click a loop: <strong>‹</strong> goes back; its conversations are listed like <strong>Chats</strong>; <strong>+</strong> starts one.</li>
+<li>A conversation opens with the loop's name as a tag. It works like a chat, answered by the loop's
+  own Chat: one answer at a time per loop (<em>One answer at a time per loop</em>), reads the loop,
+  changes nothing itself: it <a href="#actions">proposes</a> changes to that loop alone (every kind but
+  <strong>Library</strong>: a document goes under <code>library/</code> as a <strong>Document</strong>), for you to accept.</li>
+<li>Only people with <strong>Ask</strong> on the loop can ask; others can read. A private conversation (asked by
+  someone without edit) is shown only to its asker.</li>
+<li>The answer runs on a machine, never on the server. The head says which (<strong>on</strong> <em>machine</em>); with
+  none, <strong>no machine</strong> and nothing is sent until one is added
+  (<a href="../machines/#where-a-loop-runs">Machines</a>). It runs as the loop's owner, with the owner's agents,
+  on the owner's machines too, for anyone with <strong>Ask</strong>.</li>
+<li>A loop that lives on a machine in <a href="../../start/vscode/#chat">VS Code</a> is answered there, in its
+  folder, by the agents its <code>problem.yaml</code> defines and FluxAgent.</li>
+<li>Files attached to a question and the <a href="#a-loops-chat-workbench">Chat workbench</a> go with it to
+  its machine; what the agent writes in the workbench comes back.</li>
+<li><strong>Settings</strong> shows the loop (read-only) and, for editors, its
+  <a href="#a-loops-chat-workbench">Chat workbench</a>.</li>
+<li><strong>Open in NAME</strong> opens the loop's page on that conversation.</li>
+<li><strong>more</strong>: <strong>Pin</strong>; <strong>Delete</strong> for editors and for a private conversation's asker. No Rename (the
+  title is the first question).</li>
+</ul>
+<h2 id="project-chats">Project chats<a class="headerlink" href="#project-chats" title="Permanent link">&para;</a></h2>
+<p>A project's own members read its conversations; those who may edit, curate or manage it ask.
+Someone who sees it only through its group sees none
+(<a href="../groups/#its-contents-are-its-members">Groups</a>). The project's <strong>Chat</strong> button opens one.</p>
+<ul>
+<li>The <strong>Projects</strong> tab works like <strong>Loops</strong>. Inside a project a line shows <em>12 entries · To review:
+  3 · 4 loops</em>.</li>
+<li>The agent reads the project read-only: library, accepted knowledge, topics, and its loops you may
+  ask about. Hidden paths stay hidden. Your own model settings, base network, no web tools; one
+  answer at a time per project.</li>
+<li>Proposals (<a href="#actions">Actions</a>): <strong>Knowledge</strong> (an entry to <strong>To review</strong>, never straight in),
+  <strong>Topic</strong>, <strong>Library</strong> (files from the project's Chat workbench).</li>
+<li>The project's Chat workbench works like a loop's. An archived project's chats are read-only.</li>
+</ul>
+<h2 id="questions">Questions<a class="headerlink" href="#questions" title="Permanent link">&para;</a></h2>
+<p>An agent asks only when it cannot go on without you. The question ends the answer as a card.</p>
+<ul>
+<li>Up to four questions; chips at the top move between them (<em>✓ Type · Widths · Target</em>,
+  <em>2 of 3</em>).</li>
+<li>Each has options (one marked <strong>Recommended</strong>), value fields, and <strong>Other</strong> for free text.</li>
+<li><strong>1</strong>–<strong>8</strong> pick, <strong>Enter</strong> moves on, <strong>Next ›</strong> and <strong>Back</strong> too. <strong>Send</strong> once something is
+  answered; blank questions are the agent's to decide.</li>
+<li><strong>You decide</strong> lets the agent choose all.</li>
+<li>Typing a normal message also answers.</li>
+</ul>
+<p>The answer goes as one message to the agent that asked:</p>
+<div class="highlight"><pre><span></span><code>Answer to: Which adder families should adder16's generator try?
+- choice: carry-select
+- choice: Kogge-Stone
+
+Answer to: Which cell library?
+- choice: sky130
+keep it small
+</code></pre></div>
+<h2 id="actions">Actions<a class="headerlink" href="#actions" title="Permanent link">&para;</a></h2>
+<p>Agents never change your loops themselves; they <strong>propose</strong>. Each proposal is a card: what, where,
+why, a preview. <strong>Accept</strong> makes it as you (same checks and audit as by hand); <strong>Reject</strong> drops
+it. The card then says <strong>Done</strong>, <strong>Rejected</strong> or <strong>Refused</strong> with why.</p>
+<table>
+<thead>
+<tr>
+<th>Kind</th>
+<th>What it does</th>
+<th>Its preview</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Library</strong></td>
+<td>copies files from your workbench into the loop's <code>library/</code> (papers, notes its agents read)</td>
+<td>each file, its size and where it goes; <em>replaces</em> when it overwrites one</td>
+</tr>
+<tr>
+<td><strong>Document</strong></td>
+<td>writes a text file (<code>.md</code>, <code>.txt</code>, <code>.rst</code>) under the loop's <code>library/</code>, where its agents read it; a lesson (what a run taught) goes under <code>library/lessons/</code></td>
+<td>the text, or the change to the file it replaces</td>
+</tr>
+<tr>
+<td><strong>Note</strong></td>
+<td>sends a note to the running loop, as the Overview's <strong>Note to the loop</strong> does</td>
+<td>the note</td>
+</tr>
+<tr>
+<td><strong>Hidden from AI</strong></td>
+<td>hides paths from the loop's agents, or shows them again (<a href="../../guide/knowledge/#hidden-from-ai">Hidden from AI</a>)</td>
+<td>the hidden paths before and after: each still hidden with its lock, one shown again struck through</td>
+</tr>
+<tr>
+<td><strong>Idea</strong></td>
+<td>adds an idea to the loop's notebook</td>
+<td>its title, hypothesis and test</td>
+</tr>
+<tr>
+<td><strong>Queue</strong></td>
+<td>queues an idea for testing, or takes it off the queue</td>
+<td>the idea and its place in line</td>
+</tr>
+<tr>
+<td><strong>Merge</strong></td>
+<td>merges ideas that say the same thing, as the notebook's cleanup does (it can be undone)</td>
+<td>the idea kept and those merged into it</td>
+</tr>
+<tr>
+<td><strong>Design note</strong></td>
+<td>pins a note on a design, shown in Results' design detail and in Live's inspector</td>
+<td>the design, its numbers, the note</td>
+</tr>
+<tr>
+<td><strong>Reference</strong></td>
+<td>marks a design as a reference for comparison</td>
+<td>the design and its numbers</td>
+</tr>
+<tr>
+<td><strong>Settings</strong></td>
+<td>changes settings of the loop's problem document -- its budget, who works a box, its model, anything the Configure page sets -- saved as the Configure page saves</td>
+<td>each setting now and proposed; when it takes effect</td>
+</tr>
+<tr>
+<td><strong>Problem document</strong></td>
+<td>replaces the text of the loop's problem document (its flow, checks, measurements), saved as Direct edit saves</td>
+<td>the change, line by line; when it takes effect</td>
+</tr>
+<tr>
+<td><strong>Measure again</strong></td>
+<td>measures a design again (a flaky timeout, a tool that failed), as Results' <strong>Reject</strong> with <em>Measure again</em> does</td>
+<td>the design, its numbers, the stages, and when it is measured</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li>Design notes and references are for reading only.</li>
+<li><strong>Settings</strong> and <strong>Problem document</strong> reach a running loop at its next start (<strong>Restart</strong>). They
+  must still load; a document changed since is refused on Accept. Saving settings drops comments.</li>
+<li>A design to measure again counts as rejected until measured.</li>
+<li>Files the agent brings (a downloaded paper) go to your workbench first.</li>
+<li>A proposal copying a file the loop hides from its agents is refused, naming the file.</li>
+<li>Checked when the answer ends and again on Accept: you must own the loop or have <strong>Edit</strong>; not
+  archived. At most 10 proposals per answer.</li>
+<li>A loop that lives on your machine in <a href="../../start/vscode/#chat">VS Code</a> keeps its files there: a
+  change to them (<strong>Document</strong>, <strong>Settings</strong>, <strong>Problem document</strong>) is accepted in its <strong>Flux</strong> tab
+  in VS Code, which writes it in your folder; here the card says so and offers <strong>Reject</strong>. Once
+  accepted there it says <strong>Done · applied on</strong> your machine, and the server's copy follows your
+  folder as you save, so the next proposal is made on what you have. Chat's own page cannot make
+  such a change.</li>
+</ul>
+<h2 id="settings">Settings<a class="headerlink" href="#settings" title="Permanent link">&para;</a></h2>
+<p>The panel's <strong>Uses</strong>:</p>
+<table>
+<thead>
+<tr>
+<th>Switch</th>
+<th>On</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Loops</strong></td>
+<td>The agent may read your loops: your own, and those shared with you with <strong>Ask</strong>. The line says how many.</td>
+</tr>
+<tr>
+<td><strong>Workbench</strong></td>
+<td>The agent may read and write your workbench.</td>
+</tr>
+<tr>
+<td><strong>Network</strong></td>
+<td>The agent may reach the hosts the admin allows for chat, or any host when the admin opens it. Off, it has the sandbox's base allowlist only, which agents need to work. The line says which. On, FluxAgent also has its <a href="#on-the-web">web tools</a>.</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li>A new chat: <strong>Workbench</strong> on, <strong>Loops</strong> and <strong>Network</strong> off. <strong>Make these my defaults</strong> changes
+  that. A switch the admin keeps off is greyed with why.</li>
+<li>Each answer uses the switches as they were when sent.</li>
+<li><strong>Workbench</strong> is shown only with the <strong>Internals</strong> permission; for others it is on, unseen.</li>
+<li><strong>In focus</strong> (with <strong>Loops</strong>): one loop the answers look at closely.</li>
+<li>A <a href="#loop-chats">loop's chat</a> has no switches: its loop read-only, base network, no web tools.</li>
+<li>The panel remembers open or closed. Under ~1360 px it opens over the conversation.</li>
+</ul>
+<h2 id="on-the-web">On the web<a class="headerlink" href="#on-the-web" title="Permanent link">&para;</a></h2>
+<p>With <strong>Network</strong> on, FluxAgent has web tools:</p>
+<table>
+<thead>
+<tr>
+<th>Tool</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Fetch</td>
+<td>Gets a page or a document over HTTP or HTTPS and reads its text: HTML, PDF, EPUB, Office files, plain text. A PDF or other document is saved whole.</td>
+</tr>
+<tr>
+<td>Paper search</td>
+<td>Searches arXiv and OpenAlex. Each paper comes with its title, authors, year, venue, the start of its abstract, its DOI and an open-access PDF's address when known.</td>
+</tr>
+<tr>
+<td>Web search</td>
+<td>Searches the web, only when the admin set a search provider (<a href="../admin/#chat">Admin › Runtime › Chat</a>).</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li>Only hosts the admin allows (or any public host); never private addresses. Paper search needs
+  <code>export.arxiv.org</code> and <code>api.openalex.org</code>.</li>
+<li>Saved files go to the workbench's <code>uploads/</code> (never overwritten: <code>paper-2.pdf</code>). To add one to a
+  loop's library, the agent proposes it.</li>
+<li>Only search words go out, never your data. The answer cites addresses.</li>
+<li><strong>Thinking &amp; commands</strong> shows each fetch; the audit records hosts.</li>
+<li>Coding agents use their own web tools within the chat's network.</li>
+</ul>
+<h2 id="the-workbench">The workbench<a class="headerlink" href="#the-workbench" title="Permanent link">&para;</a></h2>
+<p>One folder for all your chats: <code>tools/</code>, <code>notes/</code>, <code>drafts/</code>, <code>uploads/</code>. Chat does not create or
+run loops; drafts for one wait in <code>drafts/</code> (start a loop from <strong>New loop</strong>).</p>
+<ul>
+<li><strong>Settings › Workbench</strong> shows a tree. Files open read-only with <strong>Download</strong>, <strong>Delete</strong>,
+  <strong>Fullscreen</strong>. <strong>Refresh</strong> reloads (also after each answer).</li>
+<li>Each answer lists the files it wrote. One another chat may have written meanwhile is dimmed,
+  <em>changed meanwhile</em>.</li>
+<li>A path an answer names (<code>/workbench/notes/speed.md</code>, <code>notes/speed.md</code>) becomes a link if the file
+  exists.</li>
+</ul>
+<h2 id="a-loops-chat-workbench">A loop's Chat workbench<a class="headerlink" href="#a-loops-chat-workbench" title="Permanent link">&para;</a></h2>
+<p>A loop's chats share one <strong>Chat workbench</strong>, separate from the loop's own <code>workbench/</code> (the loop's
+runs never see it).</p>
+<ul>
+<li>For editors only (owner, <strong>Edit</strong>, admins) with the admin's <strong>Workbench</strong> allowed. Others' answers
+  get none, and their attached files stay with the answer.</li>
+<li>Without the <strong>Internals</strong> permission there is no tree to browse, but answers still use it.</li>
+<li>It moves, is renamed and is deleted with the loop; deleting a conversation or resetting the loop
+  keeps it.</li>
+<li>A project's Chat workbench is the same, kept apart from its library and knowledge.</li>
+</ul>
+<h2 id="share">Share<a class="headerlink" href="#share" title="Permanent link">&para;</a></h2>
+<p><strong>Share</strong> (first tool of a conversation's head) makes a read-only link.</p>
+<ul>
+<li><strong>What it shows</strong>: the whole conversation, or one answer.</li>
+<li><strong>Who can open it</strong>: <strong>signed in to this Flux</strong>, or <strong>anyone with the link</strong>.</li>
+<li><strong>Expires</strong>: 1, 7 (default), 30 or 90 days; <strong>never</strong> only for signed-in links. Anyone-links
+  last at most the admin's limit (90 days unless
+  <a href="../admin/#sharing">Admin › Runtime › Chat › Sharing</a> says less).</li>
+<li><strong>Make link</strong>, <strong>Copy</strong>, <strong>Revoke</strong>. <strong>Account › Shared links</strong> lists all.</li>
+</ul>
+<p>The page is live: it shows answers written after the link was made. Workbench pictures in answers
+are shown; other workbench and attached files appear by name, <em>not shared</em>. Never shared:
+workbench, attachments, Thinking &amp; commands, proposals, the loop, library, settings.</p>
+<ul>
+<li><strong>A loop's conversation</strong> needs the <strong>Share</strong> right; the link shows only <strong>your</strong> questions
+  ("1 question of another person is not shared").</li>
+<li>A conversation quoting a file hidden from the loop's agents is not shared.</li>
+<li>A broken link (revoked, expired, deleted, right lost) shows <em>This link does not open</em>. A
+  signed-in link without a session goes through sign-in.</li>
+<li>Search engines are asked not to index it.</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../files/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Files and settings">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Files and settings
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../groups/" class="md-footer__link md-footer__link--next" aria-label="Next: Groups and projects">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                Groups and projects
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">© 2026 Flux</div>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      <script id="__config" type="application/json">{"base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.footer", "content.code.copy", "content.code.annotate", "toc.follow", "search.suggest"], "search": "../../assets/javascripts/workers/search.973d3a69.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.f55a23d4.min.js"></script>
+      
+    
+  </body>
+</html>

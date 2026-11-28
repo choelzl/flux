@@ -1,0 +1,1716 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Flux searches for better designs: it makes them with a script, a model or a coding agent, checks and measures them with real tools, and decides from your objectives.">
+      
+      
+      
+        <link rel="canonical" href="https://choelzl.github.io/flux/reference/agents/">
+      
+      
+        <link rel="prev" href="../search/">
+      
+      
+        <link rel="next" href="../commands/">
+      
+      
+      <link rel="icon" href="../../assets/app/logo.svg">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.6.23">
+    
+    
+      
+        <title>Agent options - Flux</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.84d31ad4.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.06af60db.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/flux-theme.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#agent-options" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="Flux" class="md-header__button md-logo" aria-label="Flux" data-md-component="logo">
+      <svg class="flux-logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" aria-label="Flux"><g fill="currentColor"><rect x="78" y="8" width="16" height="28" rx="8"/><rect x="120" y="8" width="16" height="28" rx="8"/><rect x="162" y="8" width="16" height="28" rx="8"/><rect x="120" y="220" width="16" height="28" rx="8"/><rect x="162" y="220" width="16" height="28" rx="8"/><rect x="8" y="78" width="28" height="16" rx="8"/><rect x="8" y="120" width="28" height="16" rx="8"/><rect x="8" y="162" width="28" height="16" rx="8"/><rect x="220" y="78" width="28" height="16" rx="8"/><rect x="220" y="120" width="28" height="16" rx="8"/><rect x="220" y="162" width="28" height="16" rx="8"/></g><rect x="78" y="208" width="16" height="40" rx="8" fill="#f66824"/><g fill="none" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"><rect x="40" y="40" width="176" height="176" rx="32" stroke="currentColor"/><path d="M86 248V118A32 32 0 0 1 118 86H174" stroke="#f66824"/><path d="M128 248V146A18 18 0 0 1 146 128H166" stroke="currentColor"/></g></svg>
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Flux
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Agent options
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/choelzl/flux" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    choelzl/flux
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../start/install/" class="md-tabs__link">
+          
+  
+  
+  Start
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../guide/build-your-own/" class="md-tabs__link">
+          
+  
+  
+  Guide
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../web/" class="md-tabs__link">
+          
+  
+  
+  Web app
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../../guide/parameters/" class="md-tabs__link">
+          
+  
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="Flux" class="md-nav__button md-logo" aria-label="Flux" data-md-component="logo">
+      <svg class="flux-logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" aria-label="Flux"><g fill="currentColor"><rect x="78" y="8" width="16" height="28" rx="8"/><rect x="120" y="8" width="16" height="28" rx="8"/><rect x="162" y="8" width="16" height="28" rx="8"/><rect x="120" y="220" width="16" height="28" rx="8"/><rect x="162" y="220" width="16" height="28" rx="8"/><rect x="8" y="78" width="28" height="16" rx="8"/><rect x="8" y="120" width="28" height="16" rx="8"/><rect x="8" y="162" width="28" height="16" rx="8"/><rect x="220" y="78" width="28" height="16" rx="8"/><rect x="220" y="120" width="28" height="16" rx="8"/><rect x="220" y="162" width="28" height="16" rx="8"/></g><rect x="78" y="208" width="16" height="40" rx="8" fill="#f66824"/><g fill="none" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"><rect x="40" y="40" width="176" height="176" rx="32" stroke="currentColor"/><path d="M86 248V118A32 32 0 0 1 118 86H174" stroke="#f66824"/><path d="M128 248V146A18 18 0 0 1 146 128H166" stroke="currentColor"/></g></svg>
+    </a>
+    Flux
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/choelzl/flux" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    choelzl/flux
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Home
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    Start
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            Start
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../start/install/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Install
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/tutorial/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    First loop
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../start/ask/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Write a loop with an agent
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../start/vscode/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    VS Code
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../preview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Preview app
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    Guide
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            Guide
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/build-your-own/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Configure
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/loop-shape/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Search and agents
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/knowledge/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Knowledge and skills
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/cookbook/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Recipes
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/run/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Run, stop, resume
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/models/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Models and agents
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    Web app
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            Web app
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../web/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Tour
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../web/live/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Live
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../web/results/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Results
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../web/files/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Files and settings
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../web/chat/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Chat
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../web/groups/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Groups and projects
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../web/admin/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Admin
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../web/machines/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Machines
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    Reference
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            Reference
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/parameters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Document
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../search/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Searches
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    Agent options
+    
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    Agent options
+    
+  </span>
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#options" class="md-nav__link">
+    <span class="md-ellipsis">
+      Options
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#agents-of-the-documents-own" class="md-nav__link">
+    <span class="md-ellipsis">
+      Agents of the document's own
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#interface" class="md-nav__link">
+    <span class="md-ellipsis">
+      Interface
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#command-lines" class="md-nav__link">
+    <span class="md-ellipsis">
+      Command lines
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-an-agent-may-run" class="md-nav__link">
+    <span class="md-ellipsis">
+      What an agent may run
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../commands/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Document commands
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../presets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Presets
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refusals/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Refusals
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../glossary/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Glossary
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#options" class="md-nav__link">
+    <span class="md-ellipsis">
+      Options
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#agents-of-the-documents-own" class="md-nav__link">
+    <span class="md-ellipsis">
+      Agents of the document's own
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#interface" class="md-nav__link">
+    <span class="md-ellipsis">
+      Interface
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#command-lines" class="md-nav__link">
+    <span class="md-ellipsis">
+      Command lines
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-an-agent-may-run" class="md-nav__link">
+    <span class="md-ellipsis">
+      What an agent may run
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="agent-options">Agent options<a class="headerlink" href="#agent-options" title="Permanent link">&para;</a></h1>
+<p>The options a coding agent takes in a document. Boxes an agent may work:
+<a href="../../guide/parameters/#flow-settings">Document reference</a>. Model and login:
+<a href="../../guide/models/">Models and agents</a>.</p>
+<h2 id="options">Options<a class="headerlink" href="#options" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Written beside <code>by: &lt;agent&gt;</code> on a box or a <a href="../../guide/parameters/#critics">critic</a>. Beside
+  <code>by: flux</code> or no <code>by</code>: ignored, with a warning.</li>
+<li>With a list (<code>design: {by: [claude, {by: codex, model: gpt-5-codex}], timeout_s: 1800}</code>), options
+  beside the list apply to all; an entry's own win
+  (<a href="../../guide/loop-shape/#several-design-agents">several Design agents</a>). Sessions are each
+  agent's own.</li>
+</ul>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Default</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>model</code></td>
+<td>The agent's own (or its <a href="../../guide/models/">settings</a>)</td>
+<td>Its model by name, as the agent takes it: <code>{by: codex, model: gpt-5-codex}</code>, OpenCode's <code>provider/model</code>; it wins over every setting. Refused beside <code>by: flux</code> and for your own <code>run:</code> (give it in your command). The older <code>args: [--model, …]</code> still works, but not both at once</td>
+</tr>
+<tr>
+<td><code>provider</code></td>
+<td>None</td>
+<td>The provider a model is isolated to, beside <code>model:</code> (<code>{by: codeagent, model: GLM-V5.1, provider: wireless}</code>), for a build whose CLI takes one with its model: passed as the agent's <code>provider_flag</code> before the model (<code>--provider wireless --model GLM-V5.1</code>). Refused with no <code>model</code>, with no flag known (say <code>provider_flag</code> on the <a href="#agents-of-the-documents-own">definition</a>) or beside that flag in <code>args</code> (<a href="../../guide/parameters/#your-own-agents">Your own agents</a>)</td>
+</tr>
+<tr>
+<td><code>provider_flag</code></td>
+<td>The kind's own: none for Claude Code, Codex and OpenCode</td>
+<td>On a definition (<code>agents:</code>): the flag its CLI takes a model's provider by, e.g. <code>--provider</code>. Nothing is added until a <code>provider:</code> is said</td>
+</tr>
+<tr>
+<td><code>timeout_s</code></td>
+<td><code>1800</code></td>
+<td>Most seconds for one turn</td>
+</tr>
+<tr>
+<td><code>session</code></td>
+<td><code>none</code></td>
+<td><code>none</code>: a new session each pass, on <code>design</code> one per design until it is admitted (its repairs go on in it); <code>seed</code> (<code>design</code> only; Claude Code, Codex and OpenCode): each design's session forked from a seed a pass's Setup made, a turn that read the loop first (<a href="../../guide/loop-shape/#sessions">Sessions</a>); <code>keep</code>: its sessions <a href="../../guide/loop-shape/#sessions-kept-across-passes">kept pass after pass</a>, one per design at once, never renewed for their turns. The papers' digest, the workbench and the ideas have none. Older words: <code>pass</code>, <code>fresh</code> and <code>turn</code> are the default (a warning; remove the line), <code>seeded</code> is refused naming <code>seed</code></td>
+</tr>
+<tr>
+<td><code>seed_timeout_s</code></td>
+<td><code>3600</code></td>
+<td>With <code>session: seed</code>: the most seconds the seed's turn may take, 300 to 10800, whatever <code>timeout_s</code> says; refused elsewhere</td>
+</tr>
+<tr>
+<td><code>every</code></td>
+<td><code>10</code></td>
+<td>With <code>session: seed</code>: the seed is made again at the Setup after this many passes, 1 to 1000; refused elsewhere (<code>reseed_after_bests</code>, which it replaced, does nothing: a warning)</td>
+</tr>
+<tr>
+<td><code>questions</code></td>
+<td><code>decide</code></td>
+<td>Who answers a question the agent asks (your own <code>run:</code> agent asks by writing <code>question.json</code> in its folder): <code>decide</code> (nobody), <code>flux</code> (FluxAgent; <code>model</code> too), <code>operator</code>. Not on a box whose agent answers in one turn (search, plan, choose, the insights, a critic): nobody answers there, so it is a warning, ignored</td>
+</tr>
+<tr>
+<td><code>max_questions</code></td>
+<td><code>2</code></td>
+<td>Question exchanges per draft (as <code>questions</code>)</td>
+</tr>
+<tr>
+<td><code>wait_s</code></td>
+<td><code>300</code></td>
+<td>Seconds to wait for the operator's answer (as <code>questions</code>)</td>
+</tr>
+<tr>
+<td><code>probe</code></td>
+<td><code>{gate: 20, stages: 3}</code></td>
+<td>Probes per turn the design agent (<code>design</code>) may run: its current file against the loop's gate, and against its stages; per stage <code>{bench: 2}</code>; <code>false</code> turns them off; elsewhere a warning</td>
+</tr>
+<tr>
+<td><code>allow</code></td>
+<td><code>[]</code></td>
+<td>Tools the agent may run itself, e.g. <code>[yosys]</code>, or <code>all</code></td>
+</tr>
+<tr>
+<td><code>effort</code></td>
+<td>The server's <a href="../../web/admin/#thinking-by-default">thinking by default</a>: the agent's own unless an admin set one</td>
+<td>How hard it reasons: Claude Code <code>low</code>, <code>medium</code>, <code>high</code>, <code>xhigh</code>, <code>max</code>; Codex <code>none</code>, <code>minimal</code>, <code>low</code>, <code>medium</code>, <code>high</code>, <code>xhigh</code> (as its model takes them: <code>none</code> and <code>minimal</code> are not every model's); OpenCode <code>minimal</code>, <code>low</code>, <code>medium</code>, <code>high</code>, <code>max</code> (as its provider names them); refused for your own <code>command</code>. It wins over <code>think</code>. FluxAgent takes <code>low</code>, <code>medium</code>, <code>high</code>, <code>max</code> beside <code>by: flux</code> (<a href="../../guide/parameters/#effort">Effort</a>)</td>
+</tr>
+<tr>
+<td><code>think</code></td>
+<td>The server's <a href="../../web/admin/#thinking-by-default">thinking by default</a></td>
+<td><code>true</code>: the agent's effort for thinking; <code>false</code>: its effort for not (Admin › Runtime › Agents) -- the box's <a href="../../guide/parameters/#thinking">Thinking</a> switch; refused for your own <code>command</code></td>
+</tr>
+<tr>
+<td><code>instructions</code></td>
+<td>None</td>
+<td>Text added at the end of every brief this agent gets, after its kind's Instructions (<a href="../../web/admin/#instructions">Admin › Agents</a>); a definition's (<code>agents:</code>) or beside <code>by:</code>; your own <code>run:</code> agent's too (4,000 characters at most, the rest cut and said so)</td>
+</tr>
+<tr>
+<td><code>hidden</code></td>
+<td><code>[]</code></td>
+<td>More paths this agent may not read, beside <code>knowledge.hidden</code> (<a href="../../guide/parameters/#hidden-from-ai">Hidden from AI</a>)</td>
+</tr>
+<tr>
+<td><code>hosts</code></td>
+<td><code>[]</code></td>
+<td>Hosts this agent reaches beside its endpoint's (<code>[gw.example.com, "*.corp.example"]</code>: a host, <code>*.domain</code>, an IP, a CIDR), allowed to a run of it on a <a href="../../web/machines/#a-full-machine">full machine</a> that is lent its login; a definition's (<code>agents:</code>) or beside <code>by:</code>. The admin's and your <strong>Allowed hosts</strong> for the agent add to it (<a href="../../web/admin/#your-account">Account › Agents</a>)</td>
+</tr>
+<tr>
+<td><code>bin</code></td>
+<td>The agent's <strong>Program</strong> (<a href="../../web/admin/#admin">Admin › Runtime › Agents</a>), else its interface's own: <code>claude</code>, <code>codex</code>, <code>opencode</code> (on a VS Code machine, an agent's VS Code extension's)</td>
+<td>The program to run. On a definition (<code>agents:</code>) it is enough: the interface Flux drives it with is told by the program's <code>--help</code> (<a href="#interface">Interface</a>)</td>
+</tr>
+<tr>
+<td><code>args</code></td>
+<td>None</td>
+<td>Extra arguments, added before the prompt (the model is <code>model:</code>)</td>
+</tr>
+<tr>
+<td><code>output</code></td>
+<td><code>text</code></td>
+<td>Your own agent: how its output is read (<code>text</code>, <code>opencode</code>, <code>claude</code>, <code>codex</code>)</td>
+</tr>
+<tr>
+<td><code>argv</code></td>
+<td>Its kind's</td>
+<td>A <code>claude</code>, <code>codex</code> or <code>opencode</code> agent: its own arguments for a fresh turn, after its program, in place of its kind's (<a href="#command-lines">Command lines</a>)</td>
+</tr>
+<tr>
+<td><code>resume</code></td>
+<td>Its kind's</td>
+<td>Your own agent: the command that resumes a session (<code>{session}</code>, <code>{answer}</code>); without it <code>session: keep</code> begins a new session every pass (<code>task check</code> says so). A kind's agent: its arguments for a resume, after its program (<a href="#command-lines">Command lines</a>)</td>
+</tr>
+<tr>
+<td><code>fork</code></td>
+<td>Its kind's</td>
+<td>A kind's agent: its arguments for a design's session forked from its seed (<code>session: seed</code>, <a href="../../guide/loop-shape/#sessions">Sessions</a>) (<a href="#command-lines">Command lines</a>)</td>
+</tr>
+<tr>
+<td><code>name</code></td>
+<td>The program's (in <code>agents:</code>, the definition's)</td>
+<td>Your own agent: its name in the record</td>
+</tr>
+</tbody>
+</table>
+<h2 id="agents-of-the-documents-own">Agents of the document's own<a class="headerlink" href="#agents-of-the-documents-own" title="Permanent link">&para;</a></h2>
+<ul>
+<li><code>agents:</code> at the document's top level names agents once:
+  <code>codeagent: {bin: /opt/tools/codeagent}</code>,
+  <code>work-claude: {kind: claude, bin: /opt/tools/claude-wrapper, args: [--profile, work]}</code>, or
+  <code>inhouse: {run: [inhouse-agent, "{prompt_file}", "{artifact}"], output: text}</code>. Every <code>by:</code>
+  that takes an agent may name them (<a href="../../guide/parameters/#your-own-agents">Your own agents</a>).</li>
+<li><code>bin</code> alone is enough: the agent is driven with the <a href="#interface">interface</a> its program speaks.
+  <code>kind</code> (<code>claude</code>, <code>codex</code> or <code>opencode</code>) says it instead -- an override; alone, it runs that
+  interface's own program. <code>run:</code>: a program of your own, its <code>output</code>, <code>resume</code> and <code>name</code> (the
+  definition's name unless said).</li>
+<li>Every option above may sit in a definition; a box's own win. <code>model</code>, <code>provider</code>, <code>effort</code> and
+  <code>think</code> are a <code>kind</code> agent's; a definition's <code>provider</code> goes with its <code>model</code> (a box saying a model
+  of its own leaves it behind), and <code>provider_flag</code> is the definition's alone to say.</li>
+<li><code>bin</code> and <code>run:</code>'s program: a path (<code>{project}</code>, <code>{home}</code>, <code>~</code>) or a name on <code>PATH</code>, checked where
+  the loop runs -- <code>task check</code> checks it (a box's own <code>bin</code> too) with the document's <code>env:</code>.</li>
+<li>Its Instructions: its kind's (<a href="../../web/admin/#instructions">Admin › Agents</a>), none for <code>run:</code>; then
+  its own <code>instructions:</code>, any kind's or <code>run:</code>'s.</li>
+</ul>
+<h2 id="interface">Interface<a class="headerlink" href="#interface" title="Permanent link">&para;</a></h2>
+<p>An agent is a program and the interface Flux drives it with -- Claude Code's, Codex's or OpenCode's
+command line: its flags, how its output is read, its sessions, efforts and login files. The
+interface is told from the program itself: <code>&lt;bin&gt; --help</code> (no model call, no login, a short
+timeout, an environment of its own) names the flags and subcommands of one of the three, and
+Flux recognises them. The answer is kept per program as it is on disk (its path, target and
+file identity): an upgrade is asked again. <code>kind:</code> is an override; where neither tells --
+<code>--help</code> names no known interface -- the document is refused where it is read ("agents.X:
+... <code>--help</code> names no known interface (claude, codex, opencode); <code>kind: claude|codex|opencode</code> says
+it") and <code>flux agent test NAME --loop</code> fails its <code>interface</code> step, in a few words. A program that
+is not on the machine reading the document has its interface told where it runs (the loop runs
+its agent where the program is); that machine reads the definition as Claude Code's, with a
+warning, until it runs. A server's added agents (<a href="../../web/admin/#admin">Admin › Agents</a>) are
+told the same way; there and in VS Code the override is <strong>Interface</strong> under <strong>Fine-tune</strong>, its
+<strong>Default</strong> what the program says. The agent is shown everywhere by its own name and its
+program's version, never by the interface's name.</p>
+<h2 id="command-lines">Command lines<a class="headerlink" href="#command-lines" title="Permanent link">&para;</a></h2>
+<p>A <code>kind</code> agent runs its kind's command lines. A build of that CLI that takes other flags (a
+company's fork, a wrapper) may give its own: <code>argv</code> (a fresh turn), <code>resume</code> and <code>fork</code>, each the
+arguments after its program (<code>bin</code>). Everything else of its kind stays: how its output is read,
+its sessions, its Instructions, what it may not read or run (Claude Code's deny list follows each
+line), its test and login. <code>args</code>, <code>model</code> and <code>effort</code> are still added to each line: at its end,
+or before a last <code>{prompt}</code> that stands alone.</p>
+<div class="highlight"><pre><span></span><code><span class="nt">agents</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">codeagent</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">opencode</span>
+<span class="w">    </span><span class="nt">bin</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">~/.local/bin/codeagent</span>
+<span class="w">    </span><span class="nt">argv</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">run</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">--format</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">json</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">--dir</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">"{workdir}"</span><span class="p p-Indicator">]</span><span class="w">   </span><span class="c1"># OpenCode's, without --thinking</span>
+</code></pre></div>
+<ul>
+<li>An unsaid <code>resume</code> or <code>fork</code> that begins with its kind's <code>argv</code> (OpenCode's) begins with yours;
+  otherwise it stays its kind's, with a warning.</li>
+<li>Placeholders: <code>{workdir}</code>, <code>{prompt}</code>, <code>{prompt_file}</code>, <code>{artifact}</code>, <code>{name}</code>, <code>{python}</code>,
+  <code>{workbench}</code>, <code>{home}</code>, <code>{project}</code>; a resume also <code>{session}</code> (needed) and <code>{answer}</code>; a fork
+  its kind's (<code>{seed}</code>, OpenCode's <code>{forked}</code>, needed). Any other is refused when the document is
+  read; leaving out one its kind's line names (<code>{workdir}</code>) is a warning.</li>
+<li>The brief goes on stdin unless a line names <code>{prompt}</code> or <code>{prompt_file}</code>. In a resume they
+  carry its message (an answer, a repair, a nudge), as <code>{answer}</code> does.</li>
+<li>Checked where it is said: in <code>agents:</code> or on a box (an entry of Design's list too).</li>
+<li><code>flux agent test NAME --loop PATH</code> prints the lines a turn runs (<code>argv:</code>, <code>resume:</code>, <code>fork:</code>),
+  with its program, args and effort.</li>
+</ul>
+<p>Each kind's own, after its program (<code>flux agent test claude</code> prints them with Claude Code's
+deny list, <code>--allowedTools Bash --disallowedTools AskUserQuestion Bash(verilator:*) …</code>, after
+each):</p>
+<table>
+<thead>
+<tr>
+<th>Kind</th>
+<th><code>argv</code></th>
+<th><code>resume</code></th>
+<th><code>fork</code></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>claude</code></td>
+<td><code>-p --permission-mode acceptEdits --output-format stream-json --verbose --include-partial-messages</code></td>
+<td><code>-p --resume {session}</code> then <code>argv</code> after its <code>-p</code></td>
+<td><code>-p --resume {seed} --fork-session</code> then <code>argv</code> after its <code>-p</code></td>
+</tr>
+<tr>
+<td><code>codex</code></td>
+<td><code>exec --json --sandbox workspace-write --skip-git-repo-check -c features.apps=false -c features.plugins=false -c features.in_app_browser=false -</code></td>
+<td><code>exec resume {session} --json --skip-git-repo-check -c sandbox_mode="workspace-write"</code> and the same <code>-c</code>s, <code>-</code></td>
+<td><code>exec fork {seed}</code> then as <code>resume</code></td>
+</tr>
+<tr>
+<td><code>opencode</code></td>
+<td><code>run --format json --thinking --dir {workdir}</code></td>
+<td><code>argv</code> then <code>--session {session}</code></td>
+<td><code>argv</code> then <code>--session {forked}</code></td>
+</tr>
+</tbody>
+</table>
+<p>Flux never asks Claude Code to skip its permissions, on any turn: no
+<code>--dangerously-skip-permissions</code>, no <code>bypassPermissions</code> mode, and its <code>--settings</code> holds the
+hidden paths' <code>permissions.deny</code> alone. When an agent exits before its output begins, its failure
+ends with <code>Flux ran: &lt;the command line&gt;</code> and where each part came from: the program (<code>its bin</code>,
+<code>FLUX_&lt;NAME&gt;_BIN</code>, <code>FLUX_&lt;KIND&gt;_BIN</code>, <code>PATH</code>), its lines, <code>args</code> (the document's, or the agent's Extra arguments,
+<code>FLUX_&lt;NAME&gt;_ARGS</code>), model and effort. A refusal such as "--dangerously-skip-permissions cannot be
+used with root/sudo privileges" with no such word in that line comes from the program's own
+settings: its settings files (<code>permissions.defaultMode</code>), its environment, or a wrapper at <code>bin</code>.</p>
+<h2 id="what-an-agent-may-run">What an agent may run<a class="headerlink" href="#what-an-agent-may-run" title="Permanent link">&para;</a></h2>
+<ul>
+<li>By default an agent runs no compilers, simulators or test runners itself: it probes its file
+  against the loop's gate and stages.</li>
+<li><code>allow</code> gives tools back (<code>[yosys]</code>, or <code>all</code>). <code>probe: false</code> turns probes off.</li>
+<li>Probes wait for a <code>budget.tools_at_once</code> slot like the loop's own runs.</li>
+<li>Your own agent: <code>by: {run: [my-agent, "{prompt_file}", "{artifact}"]}</code>
+  (<a href="../commands/#agent-command">agent contract</a>).</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../search/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Searches">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Searches
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../commands/" class="md-footer__link md-footer__link--next" aria-label="Next: Document commands">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                Document commands
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">© 2026 Flux</div>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      <script id="__config" type="application/json">{"base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.footer", "content.code.copy", "content.code.annotate", "toc.follow", "search.suggest"], "search": "../../assets/javascripts/workers/search.973d3a69.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.f55a23d4.min.js"></script>
+      
+    
+  </body>
+</html>

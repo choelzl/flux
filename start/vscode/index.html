@@ -1,0 +1,1820 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Flux searches for better designs: it makes them with a script, a model or a coding agent, checks and measures them with real tools, and decides from your objectives.">
+      
+      
+      
+        <link rel="canonical" href="https://choelzl.github.io/flux/start/vscode/">
+      
+      
+        <link rel="prev" href="../ask/">
+      
+      
+        <link rel="next" href="../../preview/">
+      
+      
+      <link rel="icon" href="../../assets/app/logo.svg">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.6.23">
+    
+    
+      
+        <title>VS Code - Flux</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.84d31ad4.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.06af60db.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/flux-theme.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#vs-code" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="Flux" class="md-header__button md-logo" aria-label="Flux" data-md-component="logo">
+      <svg class="flux-logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" aria-label="Flux"><g fill="currentColor"><rect x="78" y="8" width="16" height="28" rx="8"/><rect x="120" y="8" width="16" height="28" rx="8"/><rect x="162" y="8" width="16" height="28" rx="8"/><rect x="120" y="220" width="16" height="28" rx="8"/><rect x="162" y="220" width="16" height="28" rx="8"/><rect x="8" y="78" width="28" height="16" rx="8"/><rect x="8" y="120" width="28" height="16" rx="8"/><rect x="8" y="162" width="28" height="16" rx="8"/><rect x="220" y="78" width="28" height="16" rx="8"/><rect x="220" y="120" width="28" height="16" rx="8"/><rect x="220" y="162" width="28" height="16" rx="8"/></g><rect x="78" y="208" width="16" height="40" rx="8" fill="#f66824"/><g fill="none" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"><rect x="40" y="40" width="176" height="176" rx="32" stroke="currentColor"/><path d="M86 248V118A32 32 0 0 1 118 86H174" stroke="#f66824"/><path d="M128 248V146A18 18 0 0 1 146 128H166" stroke="currentColor"/></g></svg>
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Flux
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              VS Code
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/choelzl/flux" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    choelzl/flux
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../install/" class="md-tabs__link">
+          
+  
+  
+  Start
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../guide/build-your-own/" class="md-tabs__link">
+          
+  
+  
+  Guide
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../web/" class="md-tabs__link">
+          
+  
+  
+  Web app
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../guide/parameters/" class="md-tabs__link">
+          
+  
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="Flux" class="md-nav__button md-logo" aria-label="Flux" data-md-component="logo">
+      <svg class="flux-logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" aria-label="Flux"><g fill="currentColor"><rect x="78" y="8" width="16" height="28" rx="8"/><rect x="120" y="8" width="16" height="28" rx="8"/><rect x="162" y="8" width="16" height="28" rx="8"/><rect x="120" y="220" width="16" height="28" rx="8"/><rect x="162" y="220" width="16" height="28" rx="8"/><rect x="8" y="78" width="28" height="16" rx="8"/><rect x="8" y="120" width="28" height="16" rx="8"/><rect x="8" y="162" width="28" height="16" rx="8"/><rect x="220" y="78" width="28" height="16" rx="8"/><rect x="220" y="120" width="28" height="16" rx="8"/><rect x="220" y="162" width="28" height="16" rx="8"/></g><rect x="78" y="208" width="16" height="40" rx="8" fill="#f66824"/><g fill="none" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"><rect x="40" y="40" width="176" height="176" rx="32" stroke="currentColor"/><path d="M86 248V118A32 32 0 0 1 118 86H174" stroke="#f66824"/><path d="M128 248V146A18 18 0 0 1 146 128H166" stroke="currentColor"/></g></svg>
+    </a>
+    Flux
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/choelzl/flux" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    choelzl/flux
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Home
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    Start
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            Start
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../install/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Install
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/tutorial/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    First loop
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ask/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Write a loop with an agent
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    VS Code
+    
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    VS Code
+    
+  </span>
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#install" class="md-nav__link">
+    <span class="md-ellipsis">
+      Install
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#your-agents" class="md-nav__link">
+    <span class="md-ellipsis">
+      Your agents
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sign-in" class="md-nav__link">
+    <span class="md-ellipsis">
+      Sign in
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#attach" class="md-nav__link">
+    <span class="md-ellipsis">
+      Attach
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-loop-in-the-sidebar" class="md-nav__link">
+    <span class="md-ellipsis">
+      The loop in the sidebar
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#create" class="md-nav__link">
+    <span class="md-ellipsis">
+      Create
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#start" class="md-nav__link">
+    <span class="md-ellipsis">
+      Start
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#chat" class="md-nav__link">
+    <span class="md-ellipsis">
+      Chat
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../preview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Preview app
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    Guide
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            Guide
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/build-your-own/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Configure
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/loop-shape/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Search and agents
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/knowledge/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Knowledge and skills
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/cookbook/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Recipes
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/run/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Run, stop, resume
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/models/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Models and agents
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    Web app
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            Web app
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../web/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Tour
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../web/live/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Live
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../web/results/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Results
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../web/files/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Files and settings
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../web/chat/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Chat
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../web/groups/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Groups and projects
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../web/admin/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Admin
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../web/machines/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Machines
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    Reference
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            Reference
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/parameters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Document
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/search/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Searches
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/agents/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Agent options
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/commands/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Document commands
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/presets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Presets
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/refusals/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Refusals
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/glossary/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Glossary
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#install" class="md-nav__link">
+    <span class="md-ellipsis">
+      Install
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#your-agents" class="md-nav__link">
+    <span class="md-ellipsis">
+      Your agents
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sign-in" class="md-nav__link">
+    <span class="md-ellipsis">
+      Sign in
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#attach" class="md-nav__link">
+    <span class="md-ellipsis">
+      Attach
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-loop-in-the-sidebar" class="md-nav__link">
+    <span class="md-ellipsis">
+      The loop in the sidebar
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#create" class="md-nav__link">
+    <span class="md-ellipsis">
+      Create
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#start" class="md-nav__link">
+    <span class="md-ellipsis">
+      Start
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#chat" class="md-nav__link">
+    <span class="md-ellipsis">
+      Chat
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="vs-code">VS Code<a class="headerlink" href="#vs-code" title="Permanent link">&para;</a></h1>
+<p>Run a loop <strong>on the folder you have open in VS Code</strong>, on your own machine, and keep it on the
+Flux server: Live, Results, notes and Stop work from the web as for any loop. The loop's agents
+use <strong>your machine's own logins</strong> (Claude Code, Codex, OpenCode as you have them).</p>
+<h2 id="install">Install<a class="headerlink" href="#install" title="Permanent link">&para;</a></h2>
+<p>The extension brings no Flux of its own: once you <a href="#sign-in">sign in</a>, it downloads the Flux that
+runs your loops, and the Python it runs on, from your Flux server. The machine where the folder is
+needs only:</p>
+<ul>
+<li>your coding agent (Claude Code, Codex or OpenCode), installed and logged in -- its <strong>VS Code
+  extension</strong> may be enough (<a href="#your-agents">below</a>);</li>
+<li>the tools your loop's checks run (compilers, simulators): its steps run on this machine, with
+  your own <code>PATH</code> -- a step's <code>python3</code> is yours; Flux adds only its own <code>flux</code> and <code>fluxpreset</code>.</li>
+</ul>
+<p>No Python, no Nix, no Podman, no containers: the machine is the loop's boundary. It runs Linux on
+x86_64 (x64) or aarch64 (Arm64) with glibc 2.27 or later -- most distributions, WSL, dev
+containers, a Remote-SSH host from VS Code on Windows or macOS; not Alpine (musl).</p>
+<ol>
+<li>On the Flux web, <strong>Account › Machines › VS Code extension</strong>: <strong>Download</strong>.</li>
+<li>In VS Code: <strong>Extensions › ⋯ › Install from VSIX…</strong> and pick that file.</li>
+<li><a href="#sign-in">Sign in</a>. The first time, a notification shows Flux downloading from the server
+   (some 45 MB).</li>
+</ol>
+<p>On a machine it does not run on, the Flux view says what it runs on.</p>
+<p>After the server is updated, the extension fetches the server's new Flux by itself and moves to
+it once no loop is running here (a window's folder or another's): a run in progress finishes on
+the one it started with. The move is one handover: the old worker ends, the new one starts and
+has 90 seconds to connect and stand; a new Flux that does not start, connect or stand gives way
+to the one before, which runs again, and the bottom line says why until <strong>Refresh</strong> tries it
+again. A worker that ended before the move is moved all the same: an update never leaves this
+machine without one. A run
+here never holds the server's update: while the server restarts the run goes on, and the run
+reaches the new server once it is back (its journal, its record, its end). Live says which Flux
+it runs: "runtime 3581a0c2". Without the server, the Flux it has keeps working. The line at the
+bottom of the Flux view says which code runs here: <strong>code 3581a0c ✓</strong> when it is the server's, <strong>updating to …</strong> while it moves to a new one.</p>
+<p>The extension updates itself too: install it by hand once, and after a server update it installs
+the server's new one and says <strong>Flux updated: Restart Flux to use it</strong>.</p>
+<p>To update now, use <strong>Refresh</strong> in the Flux view's <strong>⋯</strong> menu: it fetches the server's new Flux and extension at once
+and says <strong>Flux is up to date</strong> when there is nothing new.</p>
+<h2 id="your-agents">Your agents<a class="headerlink" href="#your-agents" title="Permanent link">&para;</a></h2>
+<p>Flux finds each agent's program on this machine, first found first:</p>
+<ol>
+<li>a program the loop's <code>problem.yaml</code> names for it (<code>bin</code>, or an <a href="../../guide/parameters/#your-own-agents">agent of its own</a>);</li>
+<li>the agent's <strong>VS Code extension</strong>, when it carries the agent's program: Flux uses that program;</li>
+<li>the program on the machine's <code>PATH</code>.</li>
+</ol>
+<p>Their sign-in is the agent's own: logging in from the Claude Code or Codex panel logs in the
+agent your loop runs. When neither is found, the graph's head and the agent's row in its box's
+section of <code>problem.yaml</code>'s form say so (hover it for how to install it). The row says where each
+agent was found ("Claude Code (VS Code extension)", <code>PATH</code>, this document's).</p>
+<p>FluxAgent is the server's: its steps ask the endpoint set on the server (Admin or Account ›
+Agents › FluxAgent) through the server, so nothing has to run on your machine for it.</p>
+<h2 id="sign-in">Sign in<a class="headerlink" href="#sign-in" title="Permanent link">&para;</a></h2>
+<ol>
+<li>On the Flux web, <strong>Account › Machines › New VS Code code</strong>: give it a name (this VS Code's,
+   such as <code>laptop</code>) and copy the code. It is shown once.</li>
+<li>In VS Code, open the <strong>Flux</strong> view: its <strong>Setup</strong> section says what is next. <strong>Set the server</strong>
+   opens <strong>Flux: Server</strong> (<code>flux.server</code>) in Settings: the server's address, such as
+   <code>http://flux.example:8080</code> (Settings marks an address that is not one).</li>
+<li><strong>Sign in with a VS Code code</strong> (in <strong>Setup</strong>, or from the Command Palette) and paste it.</li>
+</ol>
+<p>A code signs in one VS Code, once, and with it every folder you open in that VS Code: you sign
+in once. The code is used up (pasted again, it is refused); a code nobody used expires after a
+day.</p>
+<p>Once signed in, VS Code stays signed in -- across reloads, restarts, and in VS Code in a browser
+from any browser -- until you revoke it or sign out. It only attaches, creates, starts, stops and
+notes your own loops, and downloads the server's Flux; everything else stays on the web.</p>
+<p><strong>Account › Machines</strong> lists the codes not used yet (<strong>Revoke</strong> one you no longer need), and each
+signed-in VS Code as one machine under the code's name, tagged <strong>VS Code</strong>, its <strong>Loops</strong> column
+naming the loops attached there -- running, idle, or folder not open
+(<a href="../../web/machines/#the-machines-page">Machines</a>). <strong>Revoke</strong> on it signs that VS Code out and
+refuses its machine's key; its loops stay yours. <strong>Sign out</strong> in VS Code signs it out from there,
+for every folder; the machine stays.</p>
+<p>A machine revoked (or removed on the server) stops, and VS Code says so; revoked, VS Code is
+signed out there too. Sign in again and <strong>Attach</strong> (or the notice's <strong>Attach</strong>): it joins anew
+under the same name. Nothing to delete by hand.</p>
+<h2 id="attach">Attach<a class="headerlink" href="#attach" title="Permanent link">&para;</a></h2>
+<p>Open your project's folder and choose <strong>Attach this folder</strong> in <strong>Setup</strong> (or on the status bar).
+Its loop lives in the folder's
+<code>.flux/</code>: <code>problem.yaml</code>, the loop's scripts, its results and what its runs write. Its commands
+reach your project's files as <code>{project}/...</code> (<a href="../../guide/parameters/#files-and-loading">Document</a>).
+Flux:</p>
+<ul>
+<li>sends the <code>.flux</code> folder once to the server as a loop of yours, named after your folder;</li>
+<li>adds <code>/.flux/</code> to your folder's <code>.gitignore</code>: the loop stays out of your repository;</li>
+<li>adds this VS Code to <strong>Account › Machines</strong> as one machine named after your code (the first
+  folder attached joins it; the next ones use it), and makes it the loop's <strong>home</strong>: the loop runs
+  there from now on. The machine runs the loops of the folders open in your VS Code windows,
+  several at once (one run a loop); a window closed stops its loop's run, and the last window
+  closed ends the worker.</li>
+</ul>
+<p>Until the loop is attached, <strong>Setup</strong> offers <strong>Attach this folder</strong>; a folder with no loop yet
+offers <strong>New loop…</strong> (below); the status bar names the same step. The <strong>Loop</strong> view shows once Flux
+is on this machine (after you sign in), and once the loop is attached <strong>Setup</strong> goes. A folder whose <code>problem.yaml</code> is at
+its root offers to move it into <code>.flux/</code> (its commands then say <code>{project}/...</code> where they said
+<code>{home}/...</code>), or to attach it as it is.</p>
+<p>A loop that hides files from its agents which someone else may have hidden cannot be attached:
+on your machine they would not be hidden from you.</p>
+<p>The loop keeps its name in <code>.flux/</code>: rename your project's folder and it is still the same loop.
+To rename the loop itself, stop it and change its <strong>Name</strong> at the top of <code>problem.yaml</code>'s form (or
+choose <strong>Rename loop</strong> in the Flux view's menu): it is renamed on the server and in your folder,
+its results with it.</p>
+<h2 id="the-loop-in-the-sidebar">The loop in the sidebar<a class="headerlink" href="#the-loop-in-the-sidebar" title="Permanent link">&para;</a></h2>
+<p>The <strong>Flux</strong> view draws your folder's loop as one graph, top to bottom: Setup, Search, Design,
+<strong>Check</strong>, <strong>Measure</strong>, Choose, the <strong>Run</strong> strip and the <strong>Knowledge</strong> chips. <strong>AI</strong> marks a box an
+agent or FluxAgent works. Check and Measure are folded, as Live's graph draws them: one box with
+how many checks (or measurements) it holds and a thin bar for each -- in the box's colour when it
+passed in its latest run, red when it failed, amber when it passed after failing earlier in the
+pass, pulsing while it runs, grey while it waits or has not run yet, outlined when the checks
+stopped before it. Point at a bar for its check and its command; click it for its section of the
+form, or the box for the group's. The chevron (<strong>›</strong>) opens the group into its checks in order (or
+its stages, a stage's cutoff on the arrow after it), each with its own buttons and <strong>+</strong>; Flux
+remembers which groups you opened for each loop. A box's corner says how its last work went: a ✓
+or ✗, or a turning ring while it works.
+Its head says where the loop stands in one word, the same as the status bar -- <strong>Running</strong>,
+<strong>Stopping</strong>, <strong>Stopped</strong>, <strong>Ended</strong> or <strong>Failed</strong> (hover it for why) -- its pass (<strong>re-measure
+pass</strong> for an R pass, which is not counted among the passes), for how long,
+its lanes, and the best design so far against your first goal, with <strong>Results</strong> to open the loop's
+Results in your browser (every design, compare, star, accept). When designs were measured before a
+change to how a stage measures them -- you edited its script, say -- a line says how many and what
+changed, as the web's Overview does, with <strong>Re-measure…</strong>: it asks, then measures them again (by
+the running loop before its next pass, else by a run of its own). Under it, a line for each agent
+that is not ready here, every agent Design takes turns with included --
+"codex · not logged in here · Log in… · Test again" (hover it for the boxes that wait) -- <strong>Log
+in…</strong> opens a terminal running the agent's own login; it is tested again when the terminal closes.
+An agent is asked about its login by its own program -- the one your <code>agents:</code> names with <code>bin:</code>,
+so a build of OpenCode or Codex under another name counts once its own login works -- and the line
+says what is wrong in a few words: not installed, not logged in, or not answering; hover it for the
+agent's own words. The loop runs here as you, with your own logins, so Start waits only for a
+program that is missing or does not run: an agent whose own program says it is not logged in is
+said with <strong>Log in…</strong> and Start runs it anyway, and one whose login Flux cannot see is ready.</p>
+<p><a class="shot-link" href="../../assets/web/vscode-step-light.webp" data-only="light"><img alt="The Flux view's graph and problem.yaml as a form, at a check" src="../../assets/web/vscode-step-light.webp#only-light" /></a>
+<a class="shot-link" href="../../assets/web/vscode-step-dark.webp" data-only="dark"><img alt="The Flux view's graph and problem.yaml as a form, at a check" src="../../assets/web/vscode-step-dark.webp#only-dark" /></a></p>
+<p><code>problem.yaml</code> has two faces in one tab, as VS Code's Settings have: its text, and a form with
+every box as a section and their names down the side. <strong>Open as form</strong> (✎) and <strong>Open as text</strong>
+(<code>{ }</code>) in the editor's title bar switch between them, each landing where you were: on the box
+your cursor is in, or with the cursor at the lines of the section you were in. Click a box in the
+graph: the form opens at its section. The form writes <code>problem.yaml</code> in place -- your comments
+and the order of your keys stay -- and says <strong>saved to problem.yaml</strong> beside each change; what it
+does not edit it names under its fields, folded, with a link to its line. What you type or pick
+shows at once and stays while it is written; a change that cannot be written keeps your value
+and says why, beside the field. Undo, redo and the tab's unsaved dot are the editor's own; when the
+text has changes you have not saved, the form says so and shows them once you save. The text stays
+the default when you open <code>problem.yaml</code>; to open it as a form every time, set it in VS Code's
+<strong>Workbench › Editor Associations</strong> (<code>problem.yaml</code> → Flux form).</p>
+<ul>
+<li>The Problem, at the top: the loop's <strong>Name</strong> (renames it), the <strong>Statement</strong>, the <strong>Artifact</strong>
+  file, the <strong>Contract</strong> and the <strong>Environment</strong>: variables every process of the loop gets, its
+  steps and its agents (<code>env:</code>), a row each; one Flux will not set says why at its row.</li>
+<li><strong>Agents</strong>: the agents <code>problem.yaml</code> defines for itself (<code>agents:</code>), each a section under it --
+  its <strong>Program</strong> (typed, or picked with the folder button; a program of your own its <strong>Command</strong>)
+  with its state here beside it, and its <strong>Model</strong>. Under <strong>Fine-tune</strong> (folded): <strong>Interface</strong>
+  (how the program is driven -- <strong>Default</strong> is what it says to <code>--help</code>, the words beside it say
+  which, or why none; Claude Code, Codex, OpenCode an override; <strong>A program of my own</strong> turns it
+  into a <code>run:</code> command), <strong>Arguments</strong>, <strong>Effort</strong> and <strong>Thinking</strong> (<code>think</code>),
+  <strong>Timeout</strong> (seconds a turn), <strong>List command</strong> (<code>models: {run: ...}</code>, the command printing what
+  Model offers; a list of names stays in <code>problem.yaml</code>) and <strong>Instructions</strong> (<code>instructions:</code>, text
+  added to every brief the agent gets, after its kind's from Admin › Agents). <strong>+ add an agent</strong> adds one; the boxes then name it.</li>
+<li>
+<p><strong>Setup › Baseline</strong>: what is measured before pass 1 -- <strong>Off</strong>, <strong>The project as it is</strong>, <strong>A design file</strong> (picked
+  with the folder button, relative to the loop's folder), <strong>A command</strong> and its timeout, or <strong>Known values</strong> (a metric,
+  its value, its stage) -- and how its last run went: measured, failed and why, or standing unchanged.</p>
+</li>
+<li>
+<p>A check or a stage: its name, its command -- a line of your own, a <strong>Preset</strong> (Flux's own checks
+  and measurements that read the design's language and whose programs are on this machine, each
+  written with its defaults: no Verilator here, no RTL preset offered; the one the step runs stays
+  listed, and <code>flux task check</code> names a missing program), or one of your folder's <strong>VS Code tasks</strong>
+  or <strong>launch configurations</strong> -- and its timeout. A check's <strong>Failures</strong>: <strong>Count</strong>
+  (<code>count_re</code>: one capture group, the number of failures its output prints) or <strong>Each</strong> (<code>fail_re</code>:
+  one match a failure) and the pattern of the one chosen; switching drops the other's. A stage's
+  metrics and its <strong>Cutoffs</strong>, a row each (a metric, at least, at most or within a share of the
+  best, its value): each must pass, else the design stops there; <strong>+ cutoff</strong> adds one. <strong>+</strong> in
+  Check or Measure (in the graph or the form) adds one (between two, with the <strong>+</strong> between them).</p>
+</li>
+<li>Each box shows its own buttons when you point at it or reach it with <strong>Tab</strong>: edit, go to its
+  lines in <code>problem.yaml</code>, and remove (a check or a stage). <strong>Enter</strong> opens a box's section,
+  <strong>Delete</strong> removes a check or a stage; both ask first.</li>
+<li>Search, Design, Choose: who works it -- the rules, FluxAgent or an agent -- and, on the agent's
+  row, its state <strong>on this machine</strong> with <strong>Log in…</strong> and <strong>Test again</strong>; its <strong>Model</strong>. Under
+  <strong>Fine-tune</strong> (folded): <strong>Effort</strong> and <strong>Thinking</strong>; <strong>Timeout</strong>
+  (seconds a turn, 1800 unsaid) -- on Design with <strong>Continues</strong> (times the agent's work goes on past
+  it) and <strong>Grace</strong> (seconds of one last turn, a quarter of Timeout unsaid; <code>budget</code>'s) beside it --;
+  its <strong>Session</strong> (Setup's Plan, Search, Design, Choose): <strong>None</strong> (a new one each pass, on Design
+  each design), <strong>Keep</strong> (kept pass after pass), and on Design <strong>Seed</strong> with <strong>every</strong> (passes).
+  Design's <strong>Probe</strong>: whether its agent may try its file against the gate and the stages before
+  handing it in (hover it for how often).</li>
+<li>Design listing agents (<code>by: [...]</code>: a trunk's, or a passes' agents in turn) is a table, a row an
+  entry of the list -- <code>t1</code>, <code>t2</code> in trunk mode --: its <strong>Agent</strong>, <strong>Model</strong> (as any agent's: Default,
+  its list, Other…, ⟳), <strong>Effort</strong>, <strong>Thinking</strong>, a dot for its state on this machine (hover it for the
+  words), <strong>Test</strong> (⚗) and <strong>×</strong>. The same agent twice is two rows (two trunks). A change writes that
+  entry alone; what else the entry says (<code>timeout_s</code>, <code>session</code>, <code>provider</code>, …) stays as written and is counted on
+  its row (<code>+1</code>, hover it for the keys -- a provider with its name). <strong>+ agent</strong> lists the document's own agents, then the kinds
+  installed here, each with its dot; the one picked is added at the end by its name (never FluxAgent:
+  a list is coding agents'). The <strong>Fine-tune</strong> under the table is the box's own, every entry's
+  default: <strong>Timeout</strong>, <strong>Continues</strong>, <strong>Grace</strong>, and in passes mode <strong>Session</strong>.</li>
+<li>A <strong>Critic</strong> on Search, Check, Measure and Choose: <strong>Off</strong>, <strong>FluxAgent</strong> or an agent (picked as a
+  box's); Search's and Choose's <strong>Rounds</strong> (1 to 5: how often the box answers its objections).</li>
+<li>Choose's objectives: each metric higher or lower is better, or <strong>Tracked (not ranked)</strong> (no
+  <code>direction</code>: shown, never ranked; the graph's Choose says it without an arrow); its goal and unit.
+  A change rewrites that entry alone, its other keys (<code>aggregate</code>, <code>tie</code>, ...) kept.</li>
+<li>A <strong>Model</strong> lists the models the agent offers on this machine, as its turns would run it -- for
+  an agent of <code>problem.yaml</code>'s own, its <code>models:</code> names or what its List command prints; one with
+  its own <strong>Program</strong> and no <code>models:</code> lists none of its kind's, only (Claude Code's kind) its own
+  service's when its settings name one (<code>ANTHROPIC_BASE_URL</code> in its environment, the project's
+  <code>.claude/settings.local.json</code> or <code>.claude/settings.json</code>, or its <code>CLAUDE_CONFIG_DIR</code>'s). Beside
+  it, <strong>⟳</strong> asks again and a few words say how the listing went: <code>14 · 12:04</code> (how many, when), or
+  <code>no list · ANTHROPIC_BASE_URL unset</code> (hover it for the whole: where Flux looked, or what the
+  command said). <strong>Default</strong> writes none: the agent's definition's model, else your setting for its
+  kind (Account › Agents), else the agent's own choice. A model set on a box wins over the
+  definition's. <strong>Other…</strong> takes any name -- the agent answers for it at its first turn. A model the
+  list says is one provider's reads <code>GLM-V5.1 · wireless</code>: picking it writes <code>model:</code> and
+  <code>provider:</code> together (the agent's definition says the flag its CLI takes it by, <code>provider_flag:
+  --provider</code>; <a href="../../guide/parameters/#your-own-agents">Your own agents</a>); picking a model listed
+  with none removes <code>provider:</code>; <strong>Other…</strong> keeps whatever <code>provider:</code> is written; <strong>Default</strong>
+  clears both.</li>
+<li>Run: passes or trunk, <strong>Tools at once</strong> (the designs evaluated at once; unsaid, the agents + 1), passes,
+  repairs, <strong>Pipeline</strong> (on by default: the next design drafted while the ones before are checked and
+  measured; off writes <code>pipeline: false</code>, each session then waiting for its design's decision). Designs
+  drafted at once is Design's table: an agent listed twice is two sessions.
+  Knowledge: each part on or off, the paths hidden from the agents (hover a field for what it is).</li>
+<li>In trunk mode the form shows only what a trunk runs: no Plan, no Prototype, no Repairs per design;
+  Run says <strong>Designs</strong> for the hand-ins, and <strong>Pipeline</strong> as under Passes.</li>
+</ul>
+<p>In <code>problem.yaml</code>'s text, the box your cursor is in is selected in the graph -- in a folded group,
+the group and that check's bar -- and the editor's breadcrumb and <strong>Outline</strong> name it
+(<strong>Measure › synth</strong>).</p>
+<p><code>problem.yaml</code> stays yours: edit it by hand and the graph follows. Its mistakes show in
+<strong>Problems</strong> as you save. A part with a mistake is drawn in red with what is wrong; click it to
+go to its line. The head says how many problems there are, and <strong>Start</strong> waits until they are
+fixed. A new loop's graph is drawn before it is filled in: the head says what is left
+("Add the statement first", "Add a check first", each with <strong>Open it</strong> to its place in the form),
+and <strong>Start</strong> waits for it. With Red Hat's <strong>YAML</strong> extension installed, <code>problem.yaml</code> also
+completes its keys and explains them as you type.</p>
+<h2 id="create">Create<a class="headerlink" href="#create" title="Permanent link">&para;</a></h2>
+<p>A folder with no loop shows <strong>New loop…</strong> in <strong>Setup</strong>: pick where it starts -- the <strong>skeleton</strong>,
+your folder's <strong>VS Code tasks</strong> (pick which become checks and which stages), or <strong>describe it to an
+agent</strong> (say what the loop should make and how a design is checked and measured; the agent writes
+<code>problem.yaml</code> as <strong>New loop › Agent</strong> does). The server's New loop makes it, then it is brought
+into <code>.flux/</code> and attached, and <code>problem.yaml</code> opens as a form at its Problem, the statement to
+write. Each AI box's agent and its state on this machine are on that box's row of the form and
+under the graph's head: log in to each before you start. A loop of yours with your folder's name on
+the server already is offered to bring here instead.</p>
+<h2 id="start">Start<a class="headerlink" href="#start" title="Permanent link">&para;</a></h2>
+<p><strong>Start</strong> in the Flux view's title bar (or the loop's <strong>Start</strong> on the web) runs it here; it is
+greyed while an agent is not ready on this machine, and the view's head says which. It asks how:
+<strong>Until stopped</strong>, <strong>A number of passes…</strong> (a trunk's: designs), <strong>Re-measure what is asked first</strong>
+(the R pass alone), <strong>Rerun the baseline first</strong> (pass 0 measured again, then until stopped), or
+<strong>Re-evaluate…</strong>, which opens the loop's Settings on the web to tick which designs. While it runs, the same graph lights up: the box at work, the
+designs in it (hover Design for the drafts at work), each check's and stage's bar, the checks'
+runs passed and failed after Check and the stages' after Measure, the best so far on Choose, the pass and its lanes on the Run
+strip. When it ends a notification says so -- how many passes and the best, or why it failed with
+<strong>Journal</strong>. A check or a stage whose command did not run at all (not a design failing it) shows
+in <strong>Problems</strong> at its line of <code>problem.yaml</code> until it runs again. Click a design to see its change in VS Code's diff editor;
+the <strong>Flux journal</strong> panel lists the steps at work and those that ended, offline too -- a failed
+one with why (hover it for the whole message); click a row whose words are cut to read them
+whole, and again to close it. A seed on a machine without Landlock says so beside its time.
+Until the
+run's first step -- this machine taking it, the sandbox and tools getting ready -- the head says
+<strong>Starting</strong> with the run's latest words, and the journal its log so far; the view's <strong>…</strong> menu
+opens the loop's <strong>Overview</strong>, <strong>Results</strong> or <strong>Live</strong> in your browser. <strong>Stop</strong> and <strong>Note</strong> are in the view's title bar while it runs,
+<strong>Stop now</strong> in its <strong>…</strong> menu; they work from the web too.</p>
+<p><a class="shot-link" href="../../assets/web/vscode-run-light.webp" data-only="light"><img alt="The graph while the loop runs" src="../../assets/web/vscode-run-light.webp#only-light" /></a>
+<a class="shot-link" href="../../assets/web/vscode-run-dark.webp" data-only="dark"><img alt="The graph while the loop runs" src="../../assets/web/vscode-run-dark.webp#only-dark" /></a></p>
+<h2 id="chat">Chat<a class="headerlink" href="#chat" title="Permanent link">&para;</a></h2>
+<p>The loop's <a href="../../web/chat/#loop-chats">Chat</a> is a <strong>Flux</strong> tab in VS Code's agent panel, beside
+Claude Code or Codex. <strong>Chat about this loop</strong> in the Flux view's title bar opens it (the panel
+too, when it is closed); <strong>Ask Flux about this…</strong> among a box's or a step's buttons opens it on a
+new conversation about that box -- after a failed run, with how it failed. Ask, and the answer
+comes as on the web: the same agents, the same conversations (<strong>Open on the web</strong> in the tab's
+title bar), <em>claude is looking · 23 s · 12 commands</em> with <strong>Stop</strong> while it works.</p>
+<p>When the agent proposes a change to <code>problem.yaml</code>, its settings or a document under <code>library/</code>,
+its card has <strong>Show diff</strong> -- VS Code's own diff of your file and the proposal, with <strong>Accept</strong>
+and <strong>Reject</strong> in its title bar -- and <strong>Accept</strong>, which writes the change in your folder (your
+other edits and undo kept), then tells the server: the web shows it <strong>Done · applied on</strong> your
+machine. A proposal made on a text your file no longer has (you edited it since) is refused with
+<em>problem.yaml changed since this was proposed: nothing written -- ask for it again</em>.
+Other proposals -- a note, an idea, a design note -- are made by the server, as on the web.
+<strong>New chat</strong> and <strong>Earlier chats</strong> are in the tab's title bar.</p>
+<p>A loop living on your machine is answered <strong>here on</strong> your machine, its only place: the
+agents your <code>problem.yaml</code> defines (<code>agents:</code>), the agents installed here, and FluxAgent (its
+model is the server's). The agent works in your folder, as your loop's own agents do: your files
+as they are now, your <code>.venv</code>, your logins. <strong>Who answers</strong> lists them, with <strong>Default</strong> (the
+first) chosen until you pick one. Beside <strong>Think</strong>, <strong>Effort</strong> offers the agent's kind's levels
+(<strong>Default</strong>: its own).
+The answer says where it ran: <em>codeagent · 1 min 12 s · here on fern</em>. A reply asks the same
+agent. While your machine is offline (VS Code closed, the laptop asleep), or online with the
+loop's folder not open in any window, a question is refused at once -- <em>wordline lives on fern,
+which is offline …</em> or <em>… which is online, but the loop's folder is not open in VS Code there</em>;
+nothing waits to run later. A machine lost while it answers ends that answer, said in the
+conversation.</p>
+<p>While a loop lives on your machine:</p>
+<ul>
+<li>the web shows it <strong>on</strong> your machine, as any loop running on another machine;</li>
+<li>its files are changed in VS Code: the web's file edits say so. What the web and the agents
+  read follows your folder as you save -- a hand edit, a form, an accepted proposal, a file added
+  or removed -- not only when a run ends (never what the runs write: <code>out/</code>, <code>runs/</code>,
+  <code>workbench/</code>);</li>
+<li>a run goes on when your machine loses the server, and catches up once it is back;</li>
+<li>a Start waits for your machine to be online with the loop's folder open there (the Overview
+  says which: <em>open in VS Code now</em>, <em>online, its folder not open in VS Code</em>, <em>not heard for
+  3 h</em>). <strong>Settings › Name &amp; ownership › Take back</strong>
+  makes the loop the server's again (a run still on your machine is stopped and what it sends
+  late is set aside).</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../ask/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Write a loop with an agent">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Write a loop with an agent
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../../preview/" class="md-footer__link md-footer__link--next" aria-label="Next: Preview app">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                Preview app
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">© 2026 Flux</div>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      <script id="__config" type="application/json">{"base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.footer", "content.code.copy", "content.code.annotate", "toc.follow", "search.suggest"], "search": "../../assets/javascripts/workers/search.973d3a69.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.f55a23d4.min.js"></script>
+      
+    
+  </body>
+</html>
